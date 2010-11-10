@@ -9,12 +9,16 @@
 #  http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
 #  http://www.gnu.org/licenses/gpl-3.0.txt
 
-import struct
+import struct, sys
 
-print '#include "cameras.h"'
-print
-print "const struct caminit inits[] = {"
-for line in open("inits.txt"):
+fd = open(sys.argv[2], "w")
+
+count = 0;
+
+print >>fd, '#include "cameras.h"'
+print >>fd
+print >>fd, "const struct caminit inits[] = {"
+for line in open(sys.argv[1]):
 	line = line.replace("\n","")
 	if line == "":
 		continue
@@ -30,9 +34,13 @@ for line in open("inits.txt"):
 	hcdata = ", ".join(["0x%02x"%ord(x) for x in cdata])
 	hrdata = ", ".join(["0x%02x"%ord(x) for x in rdata])
 
-	print "\t{"
-	print "\t\t0x%02x, 0x%04x, %d, %d,"%(cmd, tag, len(cdata), len(rdata))
-	print "\t\t{%s},"%hcdata
-	print "\t\t{%s},"%hrdata
-	print "\t},"
-print "};"
+	print >>fd, "\t{"
+	print >>fd, "\t\t0x%02x, 0x%04x, %d, %d,"%(cmd, tag, len(cdata), len(rdata))
+	print >>fd, "\t\t{%s},"%hcdata
+	print >>fd, "\t\t{%s},"%hrdata
+	print >>fd, "\t},"
+	count += 1
+print >>fd, "};"
+print >>fd
+print >>fd, "const int num_inits = %d;"%count;
+print >>fd

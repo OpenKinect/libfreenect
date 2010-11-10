@@ -11,9 +11,9 @@ see:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
+#include "libfreenect.h"
 #include "cameras.h"
-#include "inits.h"
 
 #define DEPTH_LEN 1760
 #define RGB_LEN 1920
@@ -49,6 +49,9 @@ int depth_pos = 0;
 uint8_t rgb_buf[2*307200];
 uint8_t rgb_frame[640*480*3];
 int rgb_pos = 0;
+
+extern const struct caminit inits[];
+extern const int num_inits;
 
 static void depth_process(uint8_t *buf, size_t len)
 {
@@ -201,8 +204,7 @@ void send_init(void)
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
 	
-	int count = sizeof(inits)/sizeof(inits[0]);
-	for (i=0; i<count; i++) {
+	for (i=0; i<num_inits; i++) {
 		const struct caminit *ip = &inits[i];
 		chdr->cmd = ip->command;
 		chdr->tag = ip->tag;

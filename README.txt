@@ -7,7 +7,6 @@ called as libusb processes events.
 
 TODO:
 	- TONS of cleanup. I mean LOTS.
-	- Proper buildsystem (CMake probably)
 	- Determine exactly what the inits do
 	- Bayer to RGB conversion that doesn't suck
 	- Integrate support for the servo and accelerometer (which have already been

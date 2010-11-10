@@ -11,8 +11,8 @@ see:
 
 #include <stdio.h>
 #include <string.h>
-#include <libusb-1.0/libusb.h>
-#include "cameras.h"
+#include <libusb.h>
+#include "libfreenect.h"
 
 #include <pthread.h>
 
