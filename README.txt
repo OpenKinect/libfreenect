@@ -11,3 +11,12 @@ version 3; see:
  http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
  http://www.gnu.org/licenses/gpl-3.0.txt
 
+Credits:
+
+Adafruit, for providing the USB logs that I used to work out the initialization
+sequence and data format.
+
+bushing, for trying to provide USB logs, although he got preempted by Adafruit ;)
+
+A few other people who provided hints and encouragement along the way, you know
+who you are!
