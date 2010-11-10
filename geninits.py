@@ -18,6 +18,8 @@ for line in open("inits.txt"):
 	line = line.replace("\n","")
 	if line == "":
 		continue
+	if line[0] == "#":
+		continue
 	cmd,tag,cdata,rdata = line.split(",")
 	cmd = int(cmd,16)
 	tag = int(tag,16)
