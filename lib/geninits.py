@@ -19,7 +19,7 @@ print >>fd, '#include "cameras.h"'
 print >>fd
 print >>fd, "const struct caminit inits[] = {"
 for line in open(sys.argv[1]):
-	line = line.replace("\n","")
+	line = line.replace("\n","").replace("\r","")
 	if line == "":
 		continue
 	if line[0] == "#":
