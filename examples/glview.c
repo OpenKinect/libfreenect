@@ -11,6 +11,7 @@ see:
 
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 #include <libusb.h>
 #include "libfreenect.h"
 
@@ -139,6 +140,8 @@ void *gl_threadfunc(void *arg)
 	return NULL;
 }
 
+uint16_t t_gamma[2048];
+
 void depthimg(uint16_t *buf, int width, int height)
 {
 /*	FILE *f = fopen("depth.bin", "w");
@@ -149,13 +152,13 @@ void depthimg(uint16_t *buf, int width, int height)
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	for (i=0; i<640*480; i++) {
-		int pval = (buf[i]*8)/256;
+		int pval = t_gamma[buf[i]];
 		int lb = pval & 0xff;
 		switch (pval>>8) {
 			case 0:
 				gl_depth_back[3*i+0] = 255;
-				gl_depth_back[3*i+1] = lb;
-				gl_depth_back[3*i+2] = lb;
+				gl_depth_back[3*i+1] = 255-lb;
+				gl_depth_back[3*i+2] = 255-lb;
 				break;
 			case 1:
 				gl_depth_back[3*i+0] = 255;
@@ -208,6 +211,13 @@ int main(int argc, char **argv)
 	libusb_device_handle *dev;
 	printf("Kinect camera test\n");
 
+	int i;
+	for (i=0; i<2048; i++) {
+		float v = i/2048.0;
+		v = powf(v, 2)* 3;
+		t_gamma[i] = v*6*256;
+	}
+	
 	g_argc = argc;
 	g_argv = argv;
 	

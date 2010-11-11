@@ -11,4 +11,4 @@ include_directories(${USB_INCLUDE_DIRS})
 
 add_executable(glview glview.c)
 find_library (PTHREAD pthread)
-target_link_libraries(glview freenect GL GLU glut)
+target_link_libraries(glview freenect GL GLU glut m)

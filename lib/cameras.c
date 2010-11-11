@@ -84,7 +84,7 @@ static void depth_process(uint8_t *buf, size_t len)
 	for (i=0; i<(640*480); i++) {
 		int idx = (i*11)/8;
 		uint32_t word = (depth_buf[idx]<<16) | (depth_buf[idx+1]<<8) | depth_buf[idx+2];
-		depth_frame[i] = ((word >> (13-bitshift)) & 0x7ff) << 5;
+		depth_frame[i] = ((word >> (13-bitshift)) & 0x7ff);
 		bitshift = (bitshift + 11) % 8;
 	}
 
