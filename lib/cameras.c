@@ -265,7 +265,7 @@ void cams_init(libusb_device_handle *d, depthcb dcb, rgbcb rcb)
 	rgb_cb = rcb;
 	
 	for (i=0; i<NUM_XFERS; i++) {
-		printf("%d\n", i);
+		printf("Creating RGB and depth transfers #%d\n", i);
 		rgb_bufs[i] = malloc(RGB_LEN*PKTS_PER_XFER);
 		depth_bufs[i] = malloc(DEPTH_LEN*PKTS_PER_XFER);
 
@@ -278,8 +278,12 @@ void cams_init(libusb_device_handle *d, depthcb dcb, rgbcb rcb)
 		libusb_set_iso_packet_lengths(rgb_xfers[i], RGB_LEN);
 		libusb_set_iso_packet_lengths(depth_xfers[i], DEPTH_LEN);
 
-		libusb_submit_transfer(rgb_xfers[i]);
-		libusb_submit_transfer(depth_xfers[i]);
+		ret = libusb_submit_transfer(rgb_xfers[i]);
+		if (ret)
+			printf("Failed to submit RGB xfer %d: %d\n", i, ret);
+		ret = libusb_submit_transfer(depth_xfers[i]);
+		if (ret)
+			printf("Failed to submit Depth xfer %d: %d\n", i, ret);
 	}
 
 	send_init();
