@@ -18,7 +18,8 @@ see:
 #define DEPTH_LEN 1760
 #define RGB_LEN 1920
 
-#define NUM_XFERS 512
+#define PKTS_PER_XFER 16
+#define NUM_XFERS 32
 
 static struct libusb_transfer *depth_xfers[NUM_XFERS];
 static struct libusb_transfer *rgb_xfers[NUM_XFERS];
@@ -163,9 +164,14 @@ static void rgb_process(uint8_t *buf, size_t len)
 
 static void depth_callback(struct libusb_transfer *xfer)
 {
+	int i;
 	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		depth_process((void*)xfer->buffer, xfer->iso_packet_desc[0].actual_length);
-		libusb_set_iso_packet_lengths(xfer, DEPTH_LEN);
+		uint8_t *buf = (void*)xfer->buffer;
+		for (i=0; i<PKTS_PER_XFER; i++) {
+			//printf("DCB %p %d\n", buf, xfer->iso_packet_desc[i].actual_length);
+			depth_process(buf, xfer->iso_packet_desc[i].actual_length);
+			buf += DEPTH_LEN;
+		}
 		libusb_submit_transfer(xfer);
 	} else {
 		printf("Xfer error: %d\n", xfer->status);
@@ -174,9 +180,13 @@ static void depth_callback(struct libusb_transfer *xfer)
 
 static void rgb_callback(struct libusb_transfer *xfer)
 {
+	int i;
 	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		rgb_process((void*)xfer->buffer, xfer->iso_packet_desc[0].actual_length);
-		libusb_set_iso_packet_lengths(xfer, RGB_LEN);
+		uint8_t *buf = (void*)xfer->buffer;
+		for (i=0; i<PKTS_PER_XFER; i++) {
+			rgb_process(buf, xfer->iso_packet_desc[i].actual_length);
+			buf += RGB_LEN;
+		}
 		libusb_submit_transfer(xfer);
 	} else {
 		printf("Xfer error: %d\n", xfer->status);
@@ -255,14 +265,15 @@ void cams_init(libusb_device_handle *d, depthcb dcb, rgbcb rcb)
 	rgb_cb = rcb;
 	
 	for (i=0; i<NUM_XFERS; i++) {
-		rgb_bufs[i] = malloc(RGB_LEN);
-		depth_bufs[i] = malloc(DEPTH_LEN);
+		printf("%d\n", i);
+		rgb_bufs[i] = malloc(RGB_LEN*PKTS_PER_XFER);
+		depth_bufs[i] = malloc(DEPTH_LEN*PKTS_PER_XFER);
 
-		rgb_xfers[i] = libusb_alloc_transfer(1);
-		depth_xfers[i] = libusb_alloc_transfer(1);
+		rgb_xfers[i] = libusb_alloc_transfer(PKTS_PER_XFER);
+		depth_xfers[i] = libusb_alloc_transfer(PKTS_PER_XFER);
 
-		libusb_fill_iso_transfer(rgb_xfers[i], dev, 0x81, rgb_bufs[i], RGB_LEN, 1, rgb_callback, NULL, 0);
-		libusb_fill_iso_transfer(depth_xfers[i], dev, 0x82, depth_bufs[i], DEPTH_LEN, 1, depth_callback, NULL, 0);
+		libusb_fill_iso_transfer(rgb_xfers[i], dev, 0x81, rgb_bufs[i], PKTS_PER_XFER*RGB_LEN, PKTS_PER_XFER, rgb_callback, NULL, 0);
+		libusb_fill_iso_transfer(depth_xfers[i], dev, 0x82, depth_bufs[i], PKTS_PER_XFER*DEPTH_LEN, PKTS_PER_XFER, depth_callback, NULL, 0);
 
 		libusb_set_iso_packet_lengths(rgb_xfers[i], RGB_LEN);
 		libusb_set_iso_packet_lengths(depth_xfers[i], DEPTH_LEN);
