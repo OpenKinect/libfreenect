@@ -40,11 +40,22 @@ uint8_t gl_rgb_back[640*480*4];
 int gl_depth_tex;
 int gl_rgb_tex;
 
+pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
+
+int got_frames = 0;
+
 void DrawGLScene()
 {
+	static int fcnt = 0;
 	pthread_mutex_lock(&gl_backbuf_mutex);
+
+	while (got_frames < 2) {
+		pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
+	}
+
 	memcpy(gl_depth_front, gl_depth_back, sizeof(gl_depth_back));
 	memcpy(gl_rgb_front, gl_rgb_back, sizeof(gl_rgb_back));
+	got_frames = 0;
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -75,6 +86,7 @@ void DrawGLScene()
 	glEnd();
 
 	glutSwapBuffers();
+	printf("Frame %d\n", fcnt++);
 }
 
 void keyPressed(unsigned char key, int x, int y)
@@ -192,6 +204,8 @@ void depthimg(uint16_t *buf, int width, int height)
 				break;
 		}
 	}
+	got_frames++;
+	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
@@ -201,6 +215,8 @@ void rgbimg(uint8_t *buf, int width, int height)
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	memcpy(gl_rgb_back, buf, width*height*3);
+	got_frames++;
+	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
