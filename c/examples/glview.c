@@ -244,9 +244,6 @@ int main(int argc, char **argv)
 	g_argc = argc;
 	g_argv = argv;
 
-	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
-
-	
 	libusb_init(NULL);
 	//libusb_set_debug(0, 3);
 
