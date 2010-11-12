@@ -1,3 +1,37 @@
+== qDot's Readme
+
+I'm a code janitor!
+
+=== So you want to play with the kinect right now
+
+First off, the kinect code here is in such a massive amount of flux as to like, totally not even be funny. You are so amazingly on your own right now, but feel free to hit the #openkinect IRC channel on Freenode for questions.
+
+==== Linux
+
+Should "just work" if you have libusb installed. Since there's no udev rules yet, you'll need to run as root. Deal with it.
+
+==== OS X
+
+You will need to pull the libusb-1.0 repo head and patch using the files in platform/osx/. Just go to the root directory of the cloned libusb-1.0 repo and run
+
+patch -p0 < [path_to_OpenKinectRepo]/platform/osx/libusb-osx-kinect.diff
+
+Recompile libusb and put it wherever CMake will look (/usr/local/lib, /usr/lib, etc...). If you're using a package manager like fink, macports, or homebrew, I'm going to expect you know what your doing and can deal with this. If not, see IRC channel.
+
+==== Windows
+
+We're still working on that.
+
+=== And everyone else...
+
+Below is the readmes of the other repos I'm organizing this from. This currently consists of:
+
+- Marcan's original libfreenect repo (in the c directory here) - GPL'd.
+- ofTheo's OS X libfreenect patched (integrated by me, with libusb-1.0 patches in platform directory) - GPL'd
+- JoshBlake's C# OpenKinect (in the csharp directory, with inf files in platform directory) - Apache'd
+
+The aggregated READMEs are below.
+
 == Marcan's Readme
 
 Horribly hacky first take at a Kinect Camera driver. Does RGB and Depth.
@@ -46,6 +80,3 @@ The folder INF contains Windows drivers. Plug in Kinect and during the driver in
 
 The rest of the project is distributed under the Apache 2 license.
 
-== qDot's Readme
-
-I'm a code janitor!
