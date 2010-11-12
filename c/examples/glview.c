@@ -1,36 +1,22 @@
-/*  libfreenect - an open source Kinect driver
-
-Copyright (C) 2010  Hector Martin "marcan" <hector@marcansoft.com>
-
-This code is licensed to you under the terms of the GNU GPL, version 2 or version 3;
-see:
- http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
- http://www.gnu.org/licenses/gpl-3.0.txt
-*/
-
 
 #include <stdio.h>
-#include <stdint.h>
 #include <string.h>
 #include <usb.h>
+#include <stdint.h>
+
 #include "libfreenect.h"
 
-/*
+
 #include <pthread.h>
 
-#if defined(__APPLE__)
-#include <GLUT/glut.h>
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
-#else
-#include <GL/glut.h>
+//#include <glut.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
-#endif
-*/
 #include <math.h>
+#include <Windows.h>
 
-//pthread_t gl_thread;
+#ifdef PTHREAD_AND_GLUT
+pthread_t gl_thread;
 volatile int die = 0;
 
 int g_argc;
@@ -38,8 +24,8 @@ char **g_argv;
 
 int window;
 
-//pthread_mutex_t gl_backbuf_mutex = PTHREAD_MUTEX_INITIALIZER;
-/*
+pthread_mutex_t gl_backbuf_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 uint8_t gl_depth_front[640*480*4];
 uint8_t gl_depth_back[640*480*4];
 
@@ -160,17 +146,14 @@ void *gl_threadfunc(void *arg)
 	return NULL;
 }
 
-*/
-
 uint16_t t_gamma[2048];
 
 void depthimg(uint16_t *buf, int width, int height)
 {
+/*	FILE *f = fopen("depth.bin", "w");
+	fwrite(depth_frame, 640*480, 2, f);
+	fclose(f);*/
 
-	//	FILE *f = fopen("depth.bin", "w");
-	//fwrite(depth_frame, 640*480, 2, f);
-	//fclose(f);
-/*
 	int i;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
@@ -218,13 +201,11 @@ void depthimg(uint16_t *buf, int width, int height)
 	got_frames++;
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
-	*/
 }
-
 
 void rgbimg(uint8_t *buf, int width, int height)
 {
-/*
+
 	int i;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
@@ -232,151 +213,51 @@ void rgbimg(uint8_t *buf, int width, int height)
 	got_frames++;
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
-*/
-	}
+}
+
+#endif
 
 
 int main(int argc, char **argv)
 {
-	int device_count = 0;
-	struct usb_bus* bus = NULL;
-	struct usb_device* dev = NULL;
-	struct usb_dev_handle* s = NULL;
 	int res;
-	int i;
-	printf("Kinect camera test\n");
 
-	for (i=0; i<2048; i++) {
-		float v = i/2048.0;
-		v = powf(v, 3)* 6;
-		t_gamma[i] = v*6*256;
+	if(InitMotorDevice() != FREENECT_OK)
+	{
+			printf("Error, couldn't open the motor device.\n");
+			return -1;
 	}
-	
-	usb_init();
-	usb_find_busses();
-    usb_find_devices();
 
-	for (bus = usb_get_busses(); bus != 0; bus = bus->next) 
-	{			
-		for (dev = bus->devices; dev != 0; dev = dev->next) 
-		{	
-			if (dev->descriptor.idVendor == 0x45e && 
-				dev->descriptor.idProduct == 0x2ae)
-			{
-				s = usb_open(dev);
-				if (!s) 
-				{
-					printf("Can't open device!\n");
-					return 1;
-				}
-				break;
-			}
-		}
-	}	
-	if(!s)
+	// NOTE : the return of those functions won't be OK but it will actually work - have to check why the underlying libusb functions fail although they do the job
+	if(SetLED(Green) != FREENECT_OK)
 	{
-					printf("Can't query busses or find device!\n");
-					return 1;
+		printf("Error, couldn't write the LED status.\n");
 	}
-	if(usb_set_configuration(s, 1) < 0)
-	{
-		printf("Cna't set!\n");
-		return 1;
-	}
-	if(usb_claim_interface(s, 0) < 0)
-	{
-		printf("Cna't claim!\n");
-		return 1;
-	}
-	{
-		int ret;
-		uint8_t ibuf[0x2000];
-/*
-		char a[8] = {0x47, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x66, 0x12};
-		ret = usb_control_msg(s, 0x40, 0, 0, 0, a, 8, 10);
-		printf("First xfer: %d\n", ret);
-		
-		do {
-			ret = usb_control_msg(s, 0xc0, 0, 0, 0, ibuf, 0x200, 10);
-		} while (ret == 0);
-*/
-	}
-	cams_init(s, depthimg, rgbimg);
-	usb_close(s);
-	
-	//while(!die && libusb_handle_events(NULL) == 0 );
-	
-	printf("-- done!\n");
-	
-//	pthread_exit(NULL);
-/*
-	int device_count = 0;
-	struct usb_bus* bus = NULL;
-	struct usb_device* dev = NULL;
-	struct usb_dev_handle* s = NULL;
-	int res;
-	int i;
-	printf("Kinect camera test\n");
 
-	for (i=0; i<2048; i++) {
-		float v = i/2048.0;
-		v = powf(v, 3)* 6;
-		t_gamma[i] = v*6*256;
+	if(SetMotorTilt(128) != FREENECT_OK)
+	{
+		printf("Error, couldn't write the motor status.\n");
 	}
-	
-	usb_init();
-	usb_find_busses();
-    usb_find_devices();
 
-	for (bus = usb_get_busses(); bus != 0; bus = bus->next) 
-	{			
-		for (dev = bus->devices; dev != 0; dev = dev->next) 
-		{	
-			if (dev->descriptor.idVendor == 0x45e && 
-				dev->descriptor.idProduct == 0x2b0)
-			{
-				s = usb_open(dev);
-				if (!s) 
-				{
-					printf("Can't open device!\n");
-					return 1;
-				}
-				break;
-			}
-		}
-	}	
-	if(!s)
+	Sleep(3000);
+
+	if(SetMotorTilt(255) != FREENECT_OK)
 	{
-					printf("Can't query busses or find device!\n");
-					return 1;
+		printf("Error, couldn't write the motor status.\n");
 	}
-	if(usb_set_configuration(s, 1) < 0)
+
+	Sleep(3000);
+
+	if(SetMotorTilt(0) != FREENECT_OK)
 	{
-		printf("Cna't set!\n");
-		return 1;
+		printf("Error, couldn't write the motor status.\n");
 	}
-	if(usb_claim_interface(s, 0) < 0)
+
+	if(CloseMotorDevice() != FREENECT_OK)
 	{
-		printf("Cna't claim!\n");
-		return 1;
+		printf("Error, couldn't close the motor device.\n");
+		return -1;
 	}
-	//cams_init(s, depthimg, rgbimg);
-	{
-		int ret;
-			uint8_t ibuf[0x2000];
-		ret = usb_control_msg(s, 0xc0, 0x10, 0x0, 0, NULL, 0x0, 10);
-		printf("First xfer: %d\n", ret);
-		printf("%s\n", usb_strerror());
-		ret = usb_control_msg(s, 0x40, 0x06, 0x3, 0, NULL, 0x0, 10);
-		printf("First xfer: %d\n", ret);
-		printf("%s\n", usb_strerror());
-	}
-	usb_close(s);
-	
-	//while(!die && libusb_handle_events(NULL) == 0 );
-	
-	printf("-- done!\n");
-	
-//	pthread_exit(NULL);
-*/
+
+	return 0;
 }

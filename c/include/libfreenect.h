@@ -1,13 +1,3 @@
-/*  libfreenect - an open source Kinect driver
-
-Copyright (C) 2010  Hector Martin "marcan" <hector@marcansoft.com>
-
-This code is licensed to you under the terms of the GNU GPL, version 2 or version 3;
-see:
- http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
- http://www.gnu.org/licenses/gpl-3.0.txt
-*/
-
 #ifndef LIBFREENECT_H
 #define LIBFREENECT_H
 
@@ -16,6 +6,26 @@ see:
 typedef void (*depthcb)(uint16_t *buf, int width, int height);
 typedef void (*rgbcb)(uint8_t *buf, int width, int height);
 
-void cams_init(struct usb_dev_handle *d, depthcb depth_cb, rgbcb rgb_cb);
+enum LIBFREENECT_RETURN_CODE { FREENECT_ERROR_DEVICE_NOT_FOUND, FREENECT_ERROR_DEVICE_OPEN_FAILED, FREENECT_OK, 
+	FREENECT_DEVICE_ALREADY_OPEN, FREENECT_DEVICE_NOT_OPEN, FREENECT_ERROR_DEVICE_CLOSE_FAILED, FREENECT_ERROR_TRANSFER};
+
+enum KinectLEDStatus
+    {
+        Off = 0x0,
+        Green = 0x1,
+        Red = 0x2,
+        Yellow = 0x3,
+        BlinkingYellow = 0x4,
+        BlinkingGreen = 0x5,
+        AlternateRedYellow = 0x6,
+        AlternateRedGreen = 0x7
+    };
+
+
+enum LIBFREENECT_RETURN_CODE InitMotorDevice();
+enum LIBFREENECT_RETURN_CODE CloseMotorDevice();
+
+enum LIBFREENECT_RETURN_CODE SetLED(enum KinectLEDStatus status);
+enum LIBFREENECT_RETURN_CODE SetMotorTilt(byte tiltValue);
 
 #endif
