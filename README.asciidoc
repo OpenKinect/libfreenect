@@ -6,6 +6,17 @@ I'm a code janitor!
 
 First off, the kinect code here is in such a massive amount of flux as to like, totally not even be funny. You are so amazingly on your own right now, but feel free to hit the #openkinect IRC channel on Freenode for questions.
 
+==== Building with CMake
+
+To use CMake:
+
+- Make a directory somewhere. Like, say, c/build in your repo directory.
+- Go into that directory
+- Type cmake ..
+- Watch the magic happen
+- After this, just run make and you'll be fine.
+- If you want to use an IDE or whatever, well, you'll figure it out.
+
 ==== Linux
 
 Should "just work" if you have libusb installed. Since there's no udev rules yet, you'll need to run as root. Deal with it.
