@@ -252,13 +252,9 @@ int main(int argc, char **argv)
 		t_gamma[i] = v*6*256;
 	}
 	
-	g_argc = argc;
-	g_argv = argv;
-
-	usb_init(NULL);
+	usb_init();
 	usb_find_busses();
     usb_find_devices();
-	//libusb_set_debug(0, 3);
 
 	for (bus = usb_get_busses(); bus != 0; bus = bus->next) 
 	{			
@@ -282,26 +278,29 @@ int main(int argc, char **argv)
 					printf("Can't query busses or find device!\n");
 					return 1;
 	}
-
-	/*
-	dev = libusb_open_device_with_vid_pid(NULL, 0x45e, 0x2ae);
-	if (!dev) {
-		printf("Could not open device\n");
+	if(usb_set_configuration(s, 1) < 0)
+	{
+		printf("Cna't set!\n");
 		return 1;
 	}
-	*/
+	if(usb_claim_interface(s, 0) < 0)
+	{
+		printf("Cna't claim!\n");
+		return 1;
+	}
+	{
+		int ret;
+		uint8_t ibuf[0x2000];
 /*
-	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
-	if (res) {
-		printf("pthread_create failed\n");
-		return 1;
-	}
-*/	
-	usb_set_configuration(s, 1);
-	usb_claim_interface(s, 0);
+		char a[8] = {0x47, 0x4D, 0x00, 0x00, 0x00, 0x00, 0x66, 0x12};
+		ret = usb_control_msg(s, 0x40, 0, 0, 0, a, 8, 10);
+		printf("First xfer: %d\n", ret);
 		
-	//printf("device is %i\n", libusb_get_device_address(libusb_get_device(dev)));
-	
+		do {
+			ret = usb_control_msg(s, 0xc0, 0, 0, 0, ibuf, 0x200, 10);
+		} while (ret == 0);
+*/
+	}
 	cams_init(s, depthimg, rgbimg);
 	usb_close(s);
 	
@@ -310,4 +309,74 @@ int main(int argc, char **argv)
 	printf("-- done!\n");
 	
 //	pthread_exit(NULL);
+/*
+	int device_count = 0;
+	struct usb_bus* bus = NULL;
+	struct usb_device* dev = NULL;
+	struct usb_dev_handle* s = NULL;
+	int res;
+	int i;
+	printf("Kinect camera test\n");
+
+	for (i=0; i<2048; i++) {
+		float v = i/2048.0;
+		v = powf(v, 3)* 6;
+		t_gamma[i] = v*6*256;
+	}
+	
+	usb_init();
+	usb_find_busses();
+    usb_find_devices();
+
+	for (bus = usb_get_busses(); bus != 0; bus = bus->next) 
+	{			
+		for (dev = bus->devices; dev != 0; dev = dev->next) 
+		{	
+			if (dev->descriptor.idVendor == 0x45e && 
+				dev->descriptor.idProduct == 0x2b0)
+			{
+				s = usb_open(dev);
+				if (!s) 
+				{
+					printf("Can't open device!\n");
+					return 1;
+				}
+				break;
+			}
+		}
+	}	
+	if(!s)
+	{
+					printf("Can't query busses or find device!\n");
+					return 1;
+	}
+	if(usb_set_configuration(s, 1) < 0)
+	{
+		printf("Cna't set!\n");
+		return 1;
+	}
+	if(usb_claim_interface(s, 0) < 0)
+	{
+		printf("Cna't claim!\n");
+		return 1;
+	}
+	//cams_init(s, depthimg, rgbimg);
+	{
+		int ret;
+			uint8_t ibuf[0x2000];
+		ret = usb_control_msg(s, 0xc0, 0x10, 0x0, 0, NULL, 0x0, 10);
+		printf("First xfer: %d\n", ret);
+		printf("%s\n", usb_strerror());
+		ret = usb_control_msg(s, 0x40, 0x06, 0x3, 0, NULL, 0x0, 10);
+		printf("First xfer: %d\n", ret);
+		printf("%s\n", usb_strerror());
+	}
+	usb_close(s);
+	
+	//while(!die && libusb_handle_events(NULL) == 0 );
+	
+	printf("-- done!\n");
+	
+//	pthread_exit(NULL);
+*/
 }

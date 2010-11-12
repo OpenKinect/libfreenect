@@ -206,22 +206,23 @@ void send_init(void)
 	struct cam_hdr *chdr = (void*)obuf;
 	struct cam_hdr *rhdr = (void*)ibuf;
 
-	ret = usb_control_msg(dev, 0x80, 0x06, 0x3ee, 0, ibuf, 0x12, 0);
+	ret = usb_control_msg(dev, 0x80, 0x06, 0x3ee, 0, ibuf, 0x12, 1);
 	printf("First xfer: %d\n", ret);
-/*
+
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
 	
-	for (i=0; i<num_inits; i++) {
+	for (i=0; i < num_inits; i++) {
 		const struct caminit *ip = &inits[i];
+		ret = 0;
 		chdr->cmd = ip->command;
 		chdr->tag = ip->tag;
 		chdr->len = ip->cmdlen / 2;
 		memcpy(obuf+sizeof(*chdr), ip->cmddata, ip->cmdlen);
-		ret = usb_control_msg(dev, 0x40, 0, 0, 0, obuf, ip->cmdlen + sizeof(*chdr), 0);
+		ret = usb_control_msg(dev, 0x40, 0, 0, 0, obuf, ip->cmdlen + sizeof(*chdr), 30);
 		printf("CTL CMD %04x %04x = %d\n", chdr->cmd, chdr->tag, ret);
 		do {
-			ret = usb_control_msg(dev, 0xc0, 0, 0, 0, ibuf, 0x200, 0);
+			ret = usb_control_msg(dev, 0xc0, 0, 0, 0, ibuf, 0x200, 30);
 		} while (ret == 0);
 		printf("CTL RES = %d\n", ret);
 		if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
@@ -252,7 +253,6 @@ void send_init(void)
 			printf("\n");
 		}
 	}
-	*/
 }
 
 void cams_init(struct usb_dev_handle *d, depthcb dcb, rgbcb rcb)
@@ -285,7 +285,7 @@ void cams_init(struct usb_dev_handle *d, depthcb dcb, rgbcb rcb)
 		if (ret)
 			printf("Failed to submit Depth xfer %d: %d\n", i, ret);
 	}
-*/
+	*/
 	send_init();
 
 }
