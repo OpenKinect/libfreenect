@@ -14,12 +14,19 @@ see:
 #include <libusb.h>
 #include "libfreenect.h"
 #include "cameras.h"
+#include <unistd.h>
 
+#if defined(__APPLE__)
+#define DEPTH_LEN 2048
+#define RGB_LEN 2048
+#define PKTS_PER_XFER 256
+#define NUM_XFERS 8
+#else
 #define DEPTH_LEN 1760
 #define RGB_LEN 1920
-
 #define PKTS_PER_XFER 16
 #define NUM_XFERS 32
+#endif
 
 static struct libusb_transfer *depth_xfers[NUM_XFERS];
 static struct libusb_transfer *rgb_xfers[NUM_XFERS];
@@ -48,7 +55,12 @@ uint16_t depth_frame[640*480];
 int depth_pos = 0;
 
 uint8_t rgb_buf[2*307200];
+#if defined(__APPLE__)
+uint8_t rgb_frame[640*480*4];
+#else
 uint8_t rgb_frame[640*480*3];
+#endif
+
 int rgb_pos = 0;
 
 extern const struct caminit inits[];

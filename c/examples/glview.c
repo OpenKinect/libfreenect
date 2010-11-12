@@ -11,15 +11,22 @@ see:
 
 #include <stdio.h>
 #include <string.h>
-#include <math.h>
 #include <libusb.h>
 #include "libfreenect.h"
 
 #include <pthread.h>
 
+#if defined(__APPLE__)
+#include <GLUT/glut.h>
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#else
 #include <GL/glut.h>
 #include <GL/gl.h>
 #include <GL/glu.h>
+#endif
+
+#include <math.h>
 
 pthread_t gl_thread;
 volatile int die = 0;
@@ -37,11 +44,11 @@ uint8_t gl_depth_back[640*480*4];
 uint8_t gl_rgb_front[640*480*4];
 uint8_t gl_rgb_back[640*480*4];
 
-int gl_depth_tex;
-int gl_rgb_tex;
+GLuint gl_depth_tex;
+GLuint gl_rgb_tex;
+
 
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
-
 int got_frames = 0;
 
 void DrawGLScene()
@@ -86,7 +93,6 @@ void DrawGLScene()
 	glEnd();
 
 	glutSwapBuffers();
-	printf("Frame %d\n", fcnt++);
 }
 
 void keyPressed(unsigned char key, int x, int y)
@@ -211,6 +217,7 @@ void depthimg(uint16_t *buf, int width, int height)
 
 void rgbimg(uint8_t *buf, int width, int height)
 {
+
 	int i;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
@@ -236,23 +243,35 @@ int main(int argc, char **argv)
 	
 	g_argc = argc;
 	g_argv = argv;
+
+	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
+
 	
 	libusb_init(NULL);
+	//libusb_set_debug(0, 3);
 
 	dev = libusb_open_device_with_vid_pid(NULL, 0x45e, 0x2ae);
 	if (!dev) {
 		printf("Could not open device\n");
 		return 1;
 	}
-
 	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
 	if (res) {
 		printf("pthread_create failed\n");
 		return 1;
 	}
-
+	
+	libusb_claim_interface(dev, 0);
+		
+	//gl_threadfunc(&none);
+	
+	printf("device is %i\n", libusb_get_device_address(libusb_get_device(dev)));
+	
 	cams_init(dev, depthimg, rgbimg);
-
-	while(!die && libusb_handle_events(NULL) == 0);
+	
+	while(!die && libusb_handle_events(NULL) == 0 );
+	
+	printf("-- done!\n");
+	
 	pthread_exit(NULL);
 }
