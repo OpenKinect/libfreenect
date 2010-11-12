@@ -10,10 +10,12 @@ see:
 
 
 #include <stdio.h>
+#include <stdint.h>
 #include <string.h>
-#include <libusb.h>
+#include <usb.h>
 #include "libfreenect.h"
 
+/*
 #include <pthread.h>
 
 #if defined(__APPLE__)
@@ -25,10 +27,10 @@ see:
 #include <GL/gl.h>
 #include <GL/glu.h>
 #endif
-
+*/
 #include <math.h>
 
-pthread_t gl_thread;
+//pthread_t gl_thread;
 volatile int die = 0;
 
 int g_argc;
@@ -36,8 +38,8 @@ char **g_argv;
 
 int window;
 
-pthread_mutex_t gl_backbuf_mutex = PTHREAD_MUTEX_INITIALIZER;
-
+//pthread_mutex_t gl_backbuf_mutex = PTHREAD_MUTEX_INITIALIZER;
+/*
 uint8_t gl_depth_front[640*480*4];
 uint8_t gl_depth_back[640*480*4];
 
@@ -158,14 +160,17 @@ void *gl_threadfunc(void *arg)
 	return NULL;
 }
 
+*/
+
 uint16_t t_gamma[2048];
 
 void depthimg(uint16_t *buf, int width, int height)
 {
-/*	FILE *f = fopen("depth.bin", "w");
-	fwrite(depth_frame, 640*480, 2, f);
-	fclose(f);*/
 
+	//	FILE *f = fopen("depth.bin", "w");
+	//fwrite(depth_frame, 640*480, 2, f);
+	//fclose(f);
+/*
 	int i;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
@@ -213,11 +218,13 @@ void depthimg(uint16_t *buf, int width, int height)
 	got_frames++;
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
+	*/
 }
+
 
 void rgbimg(uint8_t *buf, int width, int height)
 {
-
+/*
 	int i;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
@@ -225,16 +232,20 @@ void rgbimg(uint8_t *buf, int width, int height)
 	got_frames++;
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
-}
+*/
+	}
 
 
 int main(int argc, char **argv)
 {
+	int device_count = 0;
+	struct usb_bus* bus = NULL;
+	struct usb_device* dev = NULL;
+	struct usb_dev_handle* s = NULL;
 	int res;
-	libusb_device_handle *dev;
+	int i;
 	printf("Kinect camera test\n");
 
-	int i;
 	for (i=0; i<2048; i++) {
 		float v = i/2048.0;
 		v = powf(v, 3)* 6;
@@ -244,31 +255,59 @@ int main(int argc, char **argv)
 	g_argc = argc;
 	g_argv = argv;
 
-	libusb_init(NULL);
+	usb_init(NULL);
+	usb_find_busses();
+    usb_find_devices();
 	//libusb_set_debug(0, 3);
 
+	for (bus = usb_get_busses(); bus != 0; bus = bus->next) 
+	{			
+		for (dev = bus->devices; dev != 0; dev = dev->next) 
+		{	
+			if (dev->descriptor.idVendor == 0x45e && 
+				dev->descriptor.idProduct == 0x2ae)
+			{
+				s = usb_open(dev);
+				if (!s) 
+				{
+					printf("Can't open device!\n");
+					return 1;
+				}
+				break;
+			}
+		}
+	}	
+	if(!s)
+	{
+					printf("Can't query busses or find device!\n");
+					return 1;
+	}
+
+	/*
 	dev = libusb_open_device_with_vid_pid(NULL, 0x45e, 0x2ae);
 	if (!dev) {
 		printf("Could not open device\n");
 		return 1;
 	}
+	*/
+/*
 	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
 	if (res) {
 		printf("pthread_create failed\n");
 		return 1;
 	}
-	
-	libusb_claim_interface(dev, 0);
+*/	
+	usb_set_configuration(s, 1);
+	usb_claim_interface(s, 0);
 		
-	//gl_threadfunc(&none);
+	//printf("device is %i\n", libusb_get_device_address(libusb_get_device(dev)));
 	
-	printf("device is %i\n", libusb_get_device_address(libusb_get_device(dev)));
+	cams_init(s, depthimg, rgbimg);
+	usb_close(s);
 	
-	cams_init(dev, depthimg, rgbimg);
-	
-	while(!die && libusb_handle_events(NULL) == 0 );
+	//while(!die && libusb_handle_events(NULL) == 0 );
 	
 	printf("-- done!\n");
 	
-	pthread_exit(NULL);
+//	pthread_exit(NULL);
 }

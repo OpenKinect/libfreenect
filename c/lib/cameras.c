@@ -11,10 +11,10 @@ see:
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <libusb.h>
+#include <usb.h>
 #include "libfreenect.h"
 #include "cameras.h"
-#include <unistd.h>
+
 
 #if defined(__APPLE__)
 #define DEPTH_LEN 2048
@@ -27,17 +27,17 @@ see:
 #define PKTS_PER_XFER 16
 #define NUM_XFERS 32
 #endif
-
+/*
 static struct libusb_transfer *depth_xfers[NUM_XFERS];
 static struct libusb_transfer *rgb_xfers[NUM_XFERS];
-
+*/
 static void *rgb_bufs[NUM_XFERS];
 static void *depth_bufs[NUM_XFERS];
-
+/*
 static depthcb depth_cb;
 static rgbcb rgb_cb;
-
-static libusb_device_handle *dev;
+*/
+struct usb_dev_handle *dev;
 
 struct frame_hdr {
 	uint8_t magic[2];
@@ -65,7 +65,7 @@ int rgb_pos = 0;
 
 extern const struct caminit inits[];
 extern const int num_inits;
-
+/*
 static void depth_process(uint8_t *buf, size_t len)
 {
 	int i;
@@ -160,20 +160,6 @@ static void rgb_process(uint8_t *buf, size_t len)
 	rgb_cb(rgb_frame, 640, 480);
 }
 
-/*static void rgb_process(uint8_t *buf, size_t len)
-{
-	int i;
-	if (len == 0)
-		return;
-
-	printf("RGB %ld %02x\n", len, buf[0]);
-
-	for (i=0; i<32; i++) {
-		printf("%02x ", buf[i]);
-	}
-	printf("\n");
-}*/
-
 static void depth_callback(struct libusb_transfer *xfer)
 {
 	int i;
@@ -204,7 +190,7 @@ static void rgb_callback(struct libusb_transfer *xfer)
 		printf("Xfer error: %d\n", xfer->status);
 	}
 }
-
+*/
 struct cam_hdr {
 	uint8_t magic[2];
 	uint16_t len;
@@ -220,9 +206,9 @@ void send_init(void)
 	struct cam_hdr *chdr = (void*)obuf;
 	struct cam_hdr *rhdr = (void*)ibuf;
 
-	ret = libusb_control_transfer(dev, 0x80, 0x06, 0x3ee, 0, ibuf, 0x12, 0);
+	ret = usb_control_msg(dev, 0x80, 0x06, 0x3ee, 0, ibuf, 0x12, 0);
 	printf("First xfer: %d\n", ret);
-
+/*
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
 	
@@ -232,10 +218,10 @@ void send_init(void)
 		chdr->tag = ip->tag;
 		chdr->len = ip->cmdlen / 2;
 		memcpy(obuf+sizeof(*chdr), ip->cmddata, ip->cmdlen);
-		ret = libusb_control_transfer(dev, 0x40, 0, 0, 0, obuf, ip->cmdlen + sizeof(*chdr), 0);
+		ret = usb_control_msg(dev, 0x40, 0, 0, 0, obuf, ip->cmdlen + sizeof(*chdr), 0);
 		printf("CTL CMD %04x %04x = %d\n", chdr->cmd, chdr->tag, ret);
 		do {
-			ret = libusb_control_transfer(dev, 0xc0, 0, 0, 0, ibuf, 0x200, 0);
+			ret = usb_control_msg(dev, 0xc0, 0, 0, 0, ibuf, 0x200, 0);
 		} while (ret == 0);
 		printf("CTL RES = %d\n", ret);
 		if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
@@ -266,16 +252,18 @@ void send_init(void)
 			printf("\n");
 		}
 	}
+	*/
 }
 
-void cams_init(libusb_device_handle *d, depthcb dcb, rgbcb rcb)
+void cams_init(struct usb_dev_handle *d, depthcb dcb, rgbcb rcb)
 {
+	
 	int i, ret;
 	dev = d;
 
-	depth_cb = dcb;
-	rgb_cb = rcb;
-	
+	//depth_cb = dcb;
+	//rgb_cb = rcb;
+	/*
 	for (i=0; i<NUM_XFERS; i++) {
 		printf("Creating RGB and depth transfers #%d\n", i);
 		rgb_bufs[i] = malloc(RGB_LEN*PKTS_PER_XFER);
@@ -297,7 +285,7 @@ void cams_init(libusb_device_handle *d, depthcb dcb, rgbcb rcb)
 		if (ret)
 			printf("Failed to submit Depth xfer %d: %d\n", i, ret);
 	}
-
+*/
 	send_init();
 
 }

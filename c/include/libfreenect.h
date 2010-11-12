@@ -11,9 +11,11 @@ see:
 #ifndef LIBFREENECT_H
 #define LIBFREENECT_H
 
+#include <stdint.h>
+
 typedef void (*depthcb)(uint16_t *buf, int width, int height);
 typedef void (*rgbcb)(uint8_t *buf, int width, int height);
 
-void cams_init(libusb_device_handle *d, depthcb depth_cb, rgbcb rgb_cb);
+void cams_init(struct usb_dev_handle *d, depthcb depth_cb, rgbcb rgb_cb);
 
 #endif
