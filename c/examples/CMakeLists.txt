@@ -17,3 +17,8 @@ IF(APPLE)
 ELSE()
   target_link_libraries(glview freenect GL GLU glut)
 ENDIF()
+
+IF(UNIX)
+	add_executable(kinect-network kinect-network.c)
+	target_link_libraries(kinect-network freenect)
+ENDIF()
