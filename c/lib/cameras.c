@@ -17,10 +17,15 @@ see:
 #include <unistd.h>
 
 #if defined(__APPLE__)
+/* OS X likes things on powers of 2 boundaries, and needs WAY larger
+   packets/xfers to deal with what it's getting. Feel free to play
+   with these numbers, but keep them in multiples of 8, otherwise you
+   may get weirdness only seen with USB Prober on level 4 or
+   higher. */
 #define DEPTH_LEN 2048
 #define RGB_LEN 2048
-#define PKTS_PER_XFER 256
-#define NUM_XFERS 8
+#define PKTS_PER_XFER 512
+#define NUM_XFERS 64
 #else
 #define DEPTH_LEN 1760
 #define RGB_LEN 1920
@@ -90,6 +95,19 @@ static void depth_process(uint8_t *buf, size_t len)
 	if (hdr->flag != 0x75)
 		return;
 
+#if defined(__APPLE__)
+	/* For some reason, we're getting two end (0x75/0x85) packets on OS
+	   X. This is causing the frame rendering function to fire twice,
+	   which makes things render glitchy. This needs to be debugged,
+	   but for the moment this patch fixes it.
+	*/
+	if (depth_pos != 422400)
+	{
+		printf("DROPPED DEPTH FRAME %d bytes\n", depth_pos);
+		return;
+	}
+#endif
+	
 	printf("GOT DEPTH FRAME, %d bytes\n", depth_pos);
 
 	int bitshift = 0;
@@ -127,6 +145,19 @@ static void rgb_process(uint8_t *buf, size_t len)
 	if (hdr->flag != 0x85)
 		return;
 
+#if defined(__APPLE__)
+	/* For some reason, we're getting two end (0x75/0x85) packets on OS
+	   X. This is causing the frame rendering function to fire twice,
+	   which makes things render glitchy. This needs to be debugged,
+	   but for the moment this patch fixes it.
+	*/
+	if (rgb_pos != 307200)
+	{
+		printf("DROPPED RGB FRAME %d bytes\n", depth_pos);
+		return;
+	}
+#endif
+	
 	printf("GOT RGB FRAME, %d bytes\n", rgb_pos);
 
 	// horrible bayer to RGB conversion, but does the job for now
