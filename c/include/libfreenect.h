@@ -14,6 +14,12 @@ see:
 typedef void (*depthcb)(uint16_t *buf, int width, int height);
 typedef void (*rgbcb)(uint8_t *buf, int width, int height);
 
-void cams_init(libusb_device_handle *d, depthcb depth_cb, rgbcb rgb_cb);
+#ifdef __cplusplus
+extern "C" {
+#endif
+	void cams_init(libusb_device_handle *d, depthcb depth_cb, rgbcb rgb_cb);
+#ifdef __cplusplus
+}
+#endif
 
 #endif
