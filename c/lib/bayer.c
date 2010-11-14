@@ -1,228 +1,139 @@
-/*
- *  bayer.c
- *  xcode-kinect
- *
- *  Created by Juan Carlos del Valle on 11/13/10.
- *  Copyright 2010 __MyCompanyName__. All rights reserved.
- *
- */
+/********************************* COPYRIGHT NOTICE *******************************\
+ Original code for Bayer->BGR/RGB conversion is provided by Dirk Schaefer
+ from MD-Mathematische Dienste GmbH. Below is the copyright notice:
+ 
+ IMPORTANT: READ BEFORE DOWNLOADING, COPYING, INSTALLING OR USING.
+ By downloading, copying, installing or using the software you agree
+ to this license. If you do not agree to this license, do not download,
+ install, copy or use the software.
+ 
+ Contributors License Agreement:
+ 
+ Copyright (c) 2002,
+ MD-Mathematische Dienste GmbH
+ Im Defdahl 5-10
+ 44141 Dortmund
+ Germany
+ www.md-it.de
+ 
+ Redistribution and use in source and binary forms,
+ with or without modification, are permitted provided
+ that the following conditions are met: 
+ 
+ Redistributions of source code must retain
+ the above copyright notice, this list of conditions and the following disclaimer. 
+ Redistributions in binary form must reproduce the above copyright notice,
+ this list of conditions and the following disclaimer in the documentation
+ and/or other materials provided with the distribution. 
+ The name of Contributor may not be used to endorse or promote products
+ derived from this software without specific prior written permission. 
+ 
+ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE CONTRIBUTORS BE LIABLE
+ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+ STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
+ ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
+ THE POSSIBILITY OF SUCH DAMAGE.
+ \**********************************************************************************/
+
+// Call this in rgb_process as Bayer2BGR( rgb_buf, 640, rgb_frame, 640*3, 640, 480);
+// Depending on whether the image is used in OpenCV or Glut, "blue" (see below) needs to be -1 (OpenCV) or 1 (Glut)
 
 #include "bayer.h"
 
-void ClearBorders(uint8_t *rgb, int sx, int sy, int w){
-	int i, j;
-    // black edges are added with a width w:
-    i = 3 * sx * w - 1;
-    j = 3 * sx * sy - 1;
-    while (i >= 0) {
-        rgb[i--] = 0;
-        rgb[j--] = 0;
-    }
-	
-    int low = sx * (w - 1) * 3 - 1 + w * 3;
-    i = low + sx * (sy - w * 2 + 1) * 3;
-    while (i > low) {
-        j = 6 * w;
-        while (j > 0) {
-            rgb[i--] = 0;
-            j--;
-        }
-        i -= (sx - 2 * w) * 3;
-    }
-}
-
-int dc1394_bayer_HQLinear(const uint8_t *bayer, uint8_t *rgb, int sx, int sy, int tile)
+void Bayer2BGR( const uint8_t *bayer0, int bayer_step, uint8_t *dst0, int dst_step, unsigned int width, unsigned int height)
 {
-    const int bayerStep = sx;
-    const int rgbStep = 3 * sx;
-    int width = sx;
-    int height = sy;
-    int blue = tile == DC1394_COLOR_FILTER_BGGR
-	|| tile == DC1394_COLOR_FILTER_GBRG ? -1 : 1;
-    int start_with_green = tile == DC1394_COLOR_FILTER_GBRG
-	|| tile == DC1394_COLOR_FILTER_GRBG;
+    int blue = 1;
+    int start_with_green = 1;
 	
-    if ((tile>DC1394_COLOR_FILTER_MAX)||(tile<DC1394_COLOR_FILTER_MIN))
-		return DC1394_INVALID_COLOR_FILTER;
+    memset( dst0, 0, width*3*sizeof(dst0[0]) );
+    memset( dst0 + (height - 1)*dst_step, 0, width*3*sizeof(dst0[0]) );
+    dst0 += dst_step + 3 + 1;
+    height -= 2;
+    width -= 2;
 	
-    ClearBorders(rgb, sx, sy, 2);
-    rgb += 2 * rgbStep + 6 + 1;
-    height -= 4;
-    width -= 4;
-	
-    /* We begin with a (+1 line,+1 column) offset with respect to bilinear decoding, so start_with_green is the same, but blue is opposite */
-    blue = -blue;
-	
-    for (; height--; bayer += bayerStep, rgb += rgbStep) {
+    for( ; height-- > 0; bayer0 += bayer_step, dst0 += dst_step )
+    {
         int t0, t1;
-        const uint8_t *bayerEnd = bayer + width;
-        const int bayerStep2 = bayerStep * 2;
-        const int bayerStep3 = bayerStep * 3;
-        const int bayerStep4 = bayerStep * 4;
+        const uint8_t* bayer = bayer0;
+        uint8_t* dst = dst0;
+        const uint8_t* bayer_end = bayer + width;
 		
-        if (start_with_green) {
-            /* at green pixel */
-            rgb[0] = bayer[bayerStep2 + 2];
-            t0 = rgb[0] * 5
-			+ ((bayer[bayerStep + 2] + bayer[bayerStep3 + 2]) << 2)
-			- bayer[2]
-			- bayer[bayerStep + 1]
-			- bayer[bayerStep + 3]
-			- bayer[bayerStep3 + 1]
-			- bayer[bayerStep3 + 3]
-			- bayer[bayerStep4 + 2]
-			+ ((bayer[bayerStep2] + bayer[bayerStep2 + 4] + 1) >> 1);
-            t1 = rgb[0] * 5 +
-			((bayer[bayerStep2 + 1] + bayer[bayerStep2 + 3]) << 2)
-			- bayer[bayerStep2]
-			- bayer[bayerStep + 1]
-			- bayer[bayerStep + 3]
-			- bayer[bayerStep3 + 1]
-			- bayer[bayerStep3 + 3]
-			- bayer[bayerStep2 + 4]
-			+ ((bayer[2] + bayer[bayerStep4 + 2] + 1) >> 1);
-            t0 = (t0 + 4) >> 3;
-            CLIP(t0, rgb[-blue]);
-            t1 = (t1 + 4) >> 3;
-            CLIP(t1, rgb[blue]);
+        dst[-4] = dst[-3] = dst[-2] = dst[width*3-1] =
+		dst[width*3] = dst[width*3+1] = 0;
+		
+        if( width <= 0 )
+            continue;
+		
+        if( start_with_green )
+        {
+            t0 = (bayer[1] + bayer[bayer_step*2+1] + 1) >> 1;
+            t1 = (bayer[bayer_step] + bayer[bayer_step+2] + 1) >> 1;
+            dst[-blue] = (uint8_t)t0;
+            dst[0] = bayer[bayer_step+1];
+            dst[blue] = (uint8_t)t1;
             bayer++;
-            rgb += 3;
+            dst += 3;
         }
 		
-        if (blue > 0) {
-            for (; bayer <= bayerEnd - 2; bayer += 2, rgb += 6) {
-                /* B at B */
-                rgb[1] = bayer[bayerStep2 + 2];
-                /* R at B */
-                t0 = ((bayer[bayerStep + 1] + bayer[bayerStep + 3] +
-                       bayer[bayerStep3 + 1] + bayer[bayerStep3 + 3]) << 1)
-				-
-				(((bayer[2] + bayer[bayerStep2] +
-				   bayer[bayerStep2 + 4] + bayer[bayerStep4 +
-												 2]) * 3 + 1) >> 1)
-				+ rgb[1] * 6;
-                /* G at B */
-                t1 = ((bayer[bayerStep + 2] + bayer[bayerStep2 + 1] +
-                       bayer[bayerStep2 + 3] + bayer[bayerStep3 + 2]) << 1)
-				- (bayer[2] + bayer[bayerStep2] +
-				   bayer[bayerStep2 + 4] + bayer[bayerStep4 + 2])
-				+ (rgb[1] << 2);
-                t0 = (t0 + 4) >> 3;
-                CLIP(t0, rgb[-1]);
-                t1 = (t1 + 4) >> 3;
-                CLIP(t1, rgb[0]);
-                /* at green pixel */
-                rgb[3] = bayer[bayerStep2 + 3];
-                t0 = rgb[3] * 5
-				+ ((bayer[bayerStep + 3] + bayer[bayerStep3 + 3]) << 2)
-				- bayer[3]
-				- bayer[bayerStep + 2]
-				- bayer[bayerStep + 4]
-				- bayer[bayerStep3 + 2]
-				- bayer[bayerStep3 + 4]
-				- bayer[bayerStep4 + 3]
-				+
-				((bayer[bayerStep2 + 1] + bayer[bayerStep2 + 5] +
-				  1) >> 1);
-                t1 = rgb[3] * 5 +
-				((bayer[bayerStep2 + 2] + bayer[bayerStep2 + 4]) << 2)
-				- bayer[bayerStep2 + 1]
-				- bayer[bayerStep + 2]
-				- bayer[bayerStep + 4]
-				- bayer[bayerStep3 + 2]
-				- bayer[bayerStep3 + 4]
-				- bayer[bayerStep2 + 5]
-				+ ((bayer[3] + bayer[bayerStep4 + 3] + 1) >> 1);
-                t0 = (t0 + 4) >> 3;
-                CLIP(t0, rgb[2]);
-                t1 = (t1 + 4) >> 3;
-                CLIP(t1, rgb[4]);
-            }
-        } else {
-            for (; bayer <= bayerEnd - 2; bayer += 2, rgb += 6) {
-                /* R at R */
-                rgb[-1] = bayer[bayerStep2 + 2];
-                /* B at R */
-                t0 = ((bayer[bayerStep + 1] + bayer[bayerStep + 3] +
-                       bayer[bayerStep3 + 1] + bayer[bayerStep3 + 3]) << 1)
-				-
-				(((bayer[2] + bayer[bayerStep2] +
-				   bayer[bayerStep2 + 4] + bayer[bayerStep4 +
-												 2]) * 3 + 1) >> 1)
-				+ rgb[-1] * 6;
-                /* G at R */
-                t1 = ((bayer[bayerStep + 2] + bayer[bayerStep2 + 1] +
-                       bayer[bayerStep2 + 3] + bayer[bayerStep * 3 +
-                                                     2]) << 1)
-				- (bayer[2] + bayer[bayerStep2] +
-				   bayer[bayerStep2 + 4] + bayer[bayerStep4 + 2])
-				+ (rgb[-1] << 2);
-                t0 = (t0 + 4) >> 3;
-                CLIP(t0, rgb[1]);
-                t1 = (t1 + 4) >> 3;
-                CLIP(t1, rgb[0]);
+        if( blue > 0 )
+        {
+            for( ; bayer <= bayer_end - 2; bayer += 2, dst += 6 )
+            {
+                t0 = (bayer[0] + bayer[2] + bayer[bayer_step*2] +
+                      bayer[bayer_step*2+2] + 2) >> 2;
+                t1 = (bayer[1] + bayer[bayer_step] +
+                      bayer[bayer_step+2] + bayer[bayer_step*2+1]+2) >> 2;
+                dst[-1] = (uint8_t)t0;
+                dst[0] = (uint8_t)t1;
+                dst[1] = bayer[bayer_step+1];
 				
-                /* at green pixel */
-                rgb[3] = bayer[bayerStep2 + 3];
-                t0 = rgb[3] * 5
-				+ ((bayer[bayerStep + 3] + bayer[bayerStep3 + 3]) << 2)
-				- bayer[3]
-				- bayer[bayerStep + 2]
-				- bayer[bayerStep + 4]
-				- bayer[bayerStep3 + 2]
-				- bayer[bayerStep3 + 4]
-				- bayer[bayerStep4 + 3]
-				+
-				((bayer[bayerStep2 + 1] + bayer[bayerStep2 + 5] +
-				  1) >> 1);
-                t1 = rgb[3] * 5 +
-				((bayer[bayerStep2 + 2] + bayer[bayerStep2 + 4]) << 2)
-				- bayer[bayerStep2 + 1]
-				- bayer[bayerStep + 2]
-				- bayer[bayerStep + 4]
-				- bayer[bayerStep3 + 2]
-				- bayer[bayerStep3 + 4]
-				- bayer[bayerStep2 + 5]
-				+ ((bayer[3] + bayer[bayerStep4 + 3] + 1) >> 1);
-                t0 = (t0 + 4) >> 3;
-                CLIP(t0, rgb[4]);
-                t1 = (t1 + 4) >> 3;
-                CLIP(t1, rgb[2]);
+                t0 = (bayer[2] + bayer[bayer_step*2+2] + 1) >> 1;
+                t1 = (bayer[bayer_step+1] + bayer[bayer_step+3] + 1) >> 1;
+                dst[2] = (uint8_t)t0;
+                dst[3] = bayer[bayer_step+2];
+                dst[4] = (uint8_t)t1;
+            }
+        }
+        else
+        {
+            for( ; bayer <= bayer_end - 2; bayer += 2, dst += 6 )
+            {
+                t0 = (bayer[0] + bayer[2] + bayer[bayer_step*2] +
+                      bayer[bayer_step*2+2] + 2) >> 2;
+                t1 = (bayer[1] + bayer[bayer_step] +
+                      bayer[bayer_step+2] + bayer[bayer_step*2+1]+2) >> 2;
+                dst[1] = (uint8_t)t0;
+                dst[0] = (uint8_t)t1;
+                dst[-1] = bayer[bayer_step+1];
+				
+                t0 = (bayer[2] + bayer[bayer_step*2+2] + 1) >> 1;
+                t1 = (bayer[bayer_step+1] + bayer[bayer_step+3] + 1) >> 1;
+                dst[4] = (uint8_t)t0;
+                dst[3] = bayer[bayer_step+2];
+                dst[2] = (uint8_t)t1;
             }
         }
 		
-        if (bayer < bayerEnd) {
-            /* B at B */
-            rgb[blue] = bayer[bayerStep2 + 2];
-            /* R at B */
-            t0 = ((bayer[bayerStep + 1] + bayer[bayerStep + 3] +
-                   bayer[bayerStep3 + 1] + bayer[bayerStep3 + 3]) << 1)
-			-
-			(((bayer[2] + bayer[bayerStep2] +
-			   bayer[bayerStep2 + 4] + bayer[bayerStep4 +
-											 2]) * 3 + 1) >> 1)
-			+ rgb[blue] * 6;
-            /* G at B */
-            t1 = (((bayer[bayerStep + 2] + bayer[bayerStep2 + 1] +
-                    bayer[bayerStep2 + 3] + bayer[bayerStep3 + 2])) << 1)
-			- (bayer[2] + bayer[bayerStep2] +
-			   bayer[bayerStep2 + 4] + bayer[bayerStep4 + 2])
-			+ (rgb[blue] << 2);
-            t0 = (t0 + 4) >> 3;
-            CLIP(t0, rgb[-blue]);
-            t1 = (t1 + 4) >> 3;
-            CLIP(t1, rgb[0]);
+        if( bayer < bayer_end )
+        {
+            t0 = (bayer[0] + bayer[2] + bayer[bayer_step*2] +
+                  bayer[bayer_step*2+2] + 2) >> 2;
+            t1 = (bayer[1] + bayer[bayer_step] +
+                  bayer[bayer_step+2] + bayer[bayer_step*2+1]+2) >> 2;
+            dst[-blue] = (uint8_t)t0;
+            dst[0] = (uint8_t)t1;
+            dst[blue] = bayer[bayer_step+1];
             bayer++;
-            rgb += 3;
+            dst += 3;
         }
-		
-        bayer -= width;
-        rgb -= width * 3;
 		
         blue = -blue;
         start_with_green = !start_with_green;
     }
-	
-    return 0;
-	
 }

@@ -161,7 +161,7 @@ static void rgb_process(uint8_t *buf, size_t len)
 	
 	printf("GOT RGB FRAME, %d bytes\n", rgb_pos);
 	
-	dc1394_bayer_HQLinear(rgb_buf, rgb_frame, 640, 480, DC1394_COLOR_FILTER_GRBG);
+	 Bayer2BGR( rgb_buf, 640, rgb_frame, 640*3, 640, 480);
 
 	rgb_cb(rgb_frame, 640, 480);
 }
