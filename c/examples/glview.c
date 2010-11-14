@@ -1,21 +1,39 @@
-
 #include <stdio.h>
 #include <string.h>
-#include <usb.h>
 #include <stdint.h>
-
 #include "libfreenect.h"
-
-
 #include <pthread.h>
+#include <time.h>
 
-//#include <glut.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
+#if defined(WIN32)
+#include <windows.h>
+#include <usb.h>
+#else
+
+
+#endif
+
 #include <math.h>
-#include <Windows.h>
+
+// COMMENT THIS LINE OUT FOR SIMPLE NON-PTHREAD/GLUT TRANSFER TEST
+#define PTHREAD_AND_GLUT
 
 #ifdef PTHREAD_AND_GLUT
+
+#if defined(__APPLE__)
+#include <GLUT/glut.h>
+#include <OpenGL/gl.h>
+#include <OpenGL/glu.h>
+#else
+#if defined(WIN32)
+#include <glut.h>
+#else
+#include <glut.h>
+#endif
+#include <GL/gl.h>
+#include <GL/glu.h>
+#endif
+
 pthread_t gl_thread;
 volatile int die = 0;
 
@@ -127,11 +145,13 @@ void *gl_threadfunc(void *arg)
 
 	glutInit(&g_argc, g_argv);
 
-	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
+		glutInitDisplayMode(GLUT_RGB | GLUT_DOUBLE | GLUT_DEPTH | GLUT_ALPHA );
 	glutInitWindowSize(1280, 480);
 	glutInitWindowPosition(0, 0);
 
 	window = glutCreateWindow("LibFreenect");
+
+	printf("window created!\n");
 
 	glutDisplayFunc(&DrawGLScene);
 	glutIdleFunc(&DrawGLScene);
@@ -142,6 +162,8 @@ void *gl_threadfunc(void *arg)
 
 	glutMainLoop();
 
+		printf("here!\n");
+
 	pthread_exit(NULL);
 	return NULL;
 }
@@ -150,10 +172,6 @@ uint16_t t_gamma[2048];
 
 void depthimg(uint16_t *buf, int width, int height)
 {
-/*	FILE *f = fopen("depth.bin", "w");
-	fwrite(depth_frame, 640*480, 2, f);
-	fclose(f);*/
-
 	int i;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
@@ -165,37 +183,37 @@ void depthimg(uint16_t *buf, int width, int height)
 				gl_depth_back[3*i+0] = 255;
 				gl_depth_back[3*i+1] = 255-lb;
 				gl_depth_back[3*i+2] = 255-lb;
-				break;
+			break;
 			case 1:
 				gl_depth_back[3*i+0] = 255;
 				gl_depth_back[3*i+1] = lb;
 				gl_depth_back[3*i+2] = 0;
-				break;
+			break;
 			case 2:
 				gl_depth_back[3*i+0] = 255-lb;
 				gl_depth_back[3*i+1] = 255;
 				gl_depth_back[3*i+2] = 0;
-				break;
+			break;
 			case 3:
 				gl_depth_back[3*i+0] = 0;
 				gl_depth_back[3*i+1] = 255;
 				gl_depth_back[3*i+2] = lb;
-				break;
+			break;
 			case 4:
 				gl_depth_back[3*i+0] = 0;
 				gl_depth_back[3*i+1] = 255-lb;
 				gl_depth_back[3*i+2] = 255;
-				break;
+			break;
 			case 5:
 				gl_depth_back[3*i+0] = 0;
 				gl_depth_back[3*i+1] = 0;
 				gl_depth_back[3*i+2] = 255-lb;
-				break;
+			break;
 			default:
 				gl_depth_back[3*i+0] = 0;
 				gl_depth_back[3*i+1] = 0;
 				gl_depth_back[3*i+2] = 0;
-				break;
+			break;
 		}
 	}
 	got_frames++;
@@ -220,44 +238,52 @@ void rgbimg(uint8_t *buf, int width, int height)
 
 int main(int argc, char **argv)
 {
-	int res;
+	int res, i;
+	int die = 0;
+	char c;
 
-	if(InitMotorDevice() != FREENECT_OK)
+	for (i=0; i<2048; i++) {	t_gamma[i] = powf(i/2048.0,3)*6*256;	}
+
+	if(init_camera_device() != FREENECT_OK)
 	{
-			printf("Error, couldn't open the motor device.\n");
+			printf("Error, couldn't open the camera device.\n");
 			return -1;
 	}
 
-	// NOTE : the return of those functions won't be OK but it will actually work - have to check why the underlying libusb functions fail although they do the job
-	if(SetLED(Green) != FREENECT_OK)
-	{
-		printf("Error, couldn't write the LED status.\n");
-	}
+	#if defined(PTHREAD_AND_GLUT)
+		g_argc = argc;
+		g_argv = argv;
 
-	if(SetMotorTilt(128) != FREENECT_OK)
-	{
-		printf("Error, couldn't write the motor status.\n");
-	}
-
+		res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
+		if (res) {
+			printf("pthread_create failed\n");
+			return 1;
+		}
+	#endif
+	#if defined(WIN32)
 	Sleep(3000);
+	#endif
 
-	if(SetMotorTilt(255) != FREENECT_OK)
-	{
-		printf("Error, couldn't write the motor status.\n");
-	}
 
-	Sleep(3000);
+	start_camera_device();
+	#if defined(PTHREAD_AND_GLUT)
+	prep_iso_transfers(depthimg, rgbimg);
+	#else
+	prep_iso_transfers(NULL, NULL);
+	#endif
 
-	if(SetMotorTilt(0) != FREENECT_OK)
-	{
-		printf("Error, couldn't write the motor status.\n");
-	}
+		while( die == 0 ){
 
-	if(CloseMotorDevice() != FREENECT_OK)
-	{
-		printf("Error, couldn't close the motor device.\n");
-		return -1;
-	}
+			//scanf("%c", &c);
+			update_isochronous_async();
+		}
+
+		printf("-- done!\n");
+
+	#if defined(PTHREAD_AND_GLUT)
+		pthread_exit(NULL);
+	#endif
 
 	return 0;
 }
+
