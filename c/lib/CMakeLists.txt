@@ -5,7 +5,7 @@ find_package(Threads REQUIRED)
 find_package(USB REQUIRED)
 include_directories(${USB_INCLUDE_DIRS})
 
-add_library (freenect cameras.c ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
+add_library (freenect cameras.c ${CMAKE_CURRENT_BINARY_DIR}/inits.c ${CMAKE_CURRENT_BINARY_DIR}/bayer.c)
 find_library (PTHREAD pthread)
 target_link_libraries (freenect ${CMAKE_THREAD_LIBS_INIT} ${USB_LIBRARIES})
 

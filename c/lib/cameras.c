@@ -14,6 +14,8 @@ see:
 #include <libusb.h>
 #include "libfreenect.h"
 #include "cameras.h"
+#include "bayer.h"
+
 #include <unistd.h>
 
 #if defined(__APPLE__)
@@ -123,7 +125,6 @@ static void depth_process(uint8_t *buf, size_t len)
 
 static void rgb_process(uint8_t *buf, size_t len)
 {
-	int x,y,i;
 	if (len == 0)
 		return;
 
@@ -160,33 +161,7 @@ static void rgb_process(uint8_t *buf, size_t len)
 	
 	printf("GOT RGB FRAME, %d bytes\n", rgb_pos);
 
-	// horrible bayer to RGB conversion, but does the job for now
-	for (y=0; y<480; y++) {
-		for (x=0; x<640; x++) {
-			i = y*640+x;
-			if (x&1) {
-				if (y&1) {
-					rgb_frame[3*i+1] = rgb_buf[i];
-					rgb_frame[3*i+4] = rgb_buf[i];
-				} else {
-					rgb_frame[3*i] = rgb_buf[i];
-					rgb_frame[3*i+3] = rgb_buf[i];
-					rgb_frame[3*(i-640)] = rgb_buf[i];
-					rgb_frame[3*(i-640)+3] = rgb_buf[i];
-				}
-			} else {
-				if (y&1) {
-					rgb_frame[3*i+2] = rgb_buf[i];
-					rgb_frame[3*i-1] = rgb_buf[i];
-					rgb_frame[3*(i+640)+2] = rgb_buf[i];
-					rgb_frame[3*(i+640)-1] = rgb_buf[i];
-				} else {
-					rgb_frame[3*i+1] = rgb_buf[i];
-					rgb_frame[3*i-2] = rgb_buf[i];
-				}
-			}
-		}
-	}
+	dc1394_bayer_HQLinear(rgb_buf, rgb_frame, 640, 480, DC1394_COLOR_FILTER_GRBG);
 
 	rgb_cb(rgb_frame, 640, 480);
 }
