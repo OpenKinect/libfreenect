@@ -119,7 +119,9 @@ static void depth_process(uint8_t *buf, size_t len)
 		depth_frame[i] = ((word >> (13-bitshift)) & 0x7ff);
 		bitshift = (bitshift + 11) % 8;
 	}
-
+	FILE *f = fopen("depth.bin", "w");
+	fwrite(rgb_buf, sizeof(rgb_buf), 1, f);
+	fclose(f);
 	depth_cb(depth_frame, 640, 480);
 }
 
@@ -160,6 +162,10 @@ static void rgb_process(uint8_t *buf, size_t len)
 #endif
 	
 	printf("GOT RGB FRAME, %d bytes\n", rgb_pos);
+	
+	FILE *f = fopen("rgb.bin", "w");
+	fwrite(rgb_buf, sizeof(rgb_buf), 1, f);
+	fclose(f);
 
 	dc1394_bayer_HQLinear(rgb_buf, rgb_frame, 640, 480, DC1394_COLOR_FILTER_GRBG);
 

@@ -162,9 +162,6 @@ uint16_t t_gamma[2048];
 
 void depthimg(uint16_t *buf, int width, int height)
 {
-/*	FILE *f = fopen("depth.bin", "w");
-	fwrite(depth_frame, 640*480, 2, f);
-	fclose(f);*/
 
 	int i;
 
