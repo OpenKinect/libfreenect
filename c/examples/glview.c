@@ -176,17 +176,13 @@ void *gl_threadfunc(void *arg)
 
 uint16_t t_gamma[2048];
 
-void depthimg(uint16_t *buf, int width, int height)
+void depth_cb(freenect_device *dev, freenect_depth *depth, uint32_t timestamp)
 {
-/*	FILE *f = fopen("depth.bin", "w");
-	fwrite(depth_frame, 640*480, 2, f);
-	fclose(f);*/
-
 	int i;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
-	for (i=0; i<640*480; i++) {
-		int pval = t_gamma[buf[i]];
+	for (i=0; i<FREENECT_FRAME_PIX; i++) {
+		int pval = t_gamma[depth[i]];
 		int lb = pval & 0xff;
 		switch (pval>>8) {
 			case 0:
@@ -231,23 +227,21 @@ void depthimg(uint16_t *buf, int width, int height)
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
-void rgbimg(uint8_t *buf, int width, int height)
+void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
 {
-
-	int i;
-
 	pthread_mutex_lock(&gl_backbuf_mutex);
-	memcpy(gl_rgb_back, buf, width*height*3);
 	got_frames++;
+	memcpy(gl_rgb_back, rgb, FREENECT_RGB_SIZE);
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
-
 int main(int argc, char **argv)
 {
 	int res;
-	libusb_device_handle *dev;
+	freenect_context *f_ctx;
+	freenect_device *f_dev;
+
 	printf("Kinect camera test\n");
 
 	int i;
@@ -260,31 +254,32 @@ int main(int argc, char **argv)
 	g_argc = argc;
 	g_argv = argv;
 
-	libusb_init(NULL);
-	//libusb_set_debug(0, 3);
+	if (freenect_init(&f_ctx, NULL) < 0) {
+		printf("freenect_init() failed\n");
+		return 1;
+	}
 
-	dev = libusb_open_device_with_vid_pid(NULL, 0x45e, 0x2ae);
-	if (!dev) {
+	if (freenect_open_device(f_ctx, &f_dev, 0) < 0) {
 		printf("Could not open device\n");
 		return 1;
 	}
+
+	freenect_set_depth_callback(f_dev, depth_cb);
+	freenect_set_rgb_callback(f_dev, rgb_cb);
+	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
+
 	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
 	if (res) {
 		printf("pthread_create failed\n");
 		return 1;
 	}
 	
-	libusb_claim_interface(dev, 0);
-		
-	//gl_threadfunc(&none);
-	
-	printf("device is %i\n", libusb_get_device_address(libusb_get_device(dev)));
-	
-	cams_init(dev, depthimg, rgbimg);
-	
-	while(!die && libusb_handle_events(NULL) == 0 );
-	
+	freenect_start_depth(f_dev);
+	freenect_start_rgb(f_dev);
+
+	while(!die && freenect_process_events(f_ctx) >= 0 );
+
 	printf("-- done!\n");
-	
+
 	pthread_exit(NULL);
 }
