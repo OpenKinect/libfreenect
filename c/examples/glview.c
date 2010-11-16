@@ -69,7 +69,6 @@ int got_frames = 0;
 
 void DrawGLScene()
 {
-	static int fcnt = 0;
 	pthread_mutex_lock(&gl_backbuf_mutex);
 
 	while (got_frames < 2) {
