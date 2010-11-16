@@ -88,7 +88,7 @@ static void iso_callback(struct libusb_transfer *xfer)
 		}
 		libusb_submit_transfer(xfer);
 	} else {
-		printf("Xfer error: %d\n", xfer->status);
+		err("Xfer error: %d\n", xfer->status);
 	}
 }
 
@@ -107,7 +107,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 	uint8_t *bufp = strm->buffer;
 
 	for (i=0; i<xfers; i++) {
-		printf("Creating EP %02x transfer #%d\n", ep, i);
+		dbg("Creating EP %02x transfer #%d\n", ep, i);
 		strm->xfers[i] = libusb_alloc_transfer(pkts);
 
 		libusb_fill_iso_transfer(strm->xfers[i], dev->dev, ep, bufp, pkts * len, pkts, iso_callback, strm, 0);
@@ -116,7 +116,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 
 		ret = libusb_submit_transfer(strm->xfers[i]);
 		if (ret < 0)
-			printf("Failed to submit xfer %d: %d\n", i, ret);
+			wrn("Failed to submit xfer %d: %d\n", i, ret);
 
 		bufp += pkts*len;
 	}

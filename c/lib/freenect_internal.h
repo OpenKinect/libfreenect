@@ -53,6 +53,34 @@ struct _freenect_context {
 #define DEPTH_PKTS_PER_FRAME ((DEPTH_RAW_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
 #define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
 
+#define inf(...) \
+	do { \
+		fprintf(stderr, "INF: "); \
+		fprintf(stderr, __VA_ARGS__); \
+	} while(0)
+
+#define wrn(...) \
+	do { \
+		fprintf(stderr, "WRN: "); \
+		fprintf(stderr, __VA_ARGS__); \
+	} while(0)
+
+#define err(...) \
+	do { \
+		fprintf(stderr, "ERR: "); \
+		fprintf(stderr, __VA_ARGS__); \
+	} while(0)
+
+#ifdef LIBFREENECT_DBG
+#define dbg(...) \
+	do { \
+		fprintf(stderr, "DBG: "); \
+		fprintf(stderr, __VA_ARGS__); \
+	} while(0)
+#else
+#define dbg(...)
+#endif
+
 typedef struct {
 	uint8_t flag;
 	int synced;
