@@ -32,3 +32,35 @@ set(CMAKE_C_FLAGS "-Wall -O3 -g")
 
 add_subdirectory (lib)
 add_subdirectory (examples)
+
+# Create Debian/RPM Packages
+# after make, use "fakeroot cpack" in the build Dir to complete
+
+IF ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+
+
+    set(CPACK_PACKAGE_DESCRIPTION "libfreenect for kinect")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
+    set(CPACK_PACKAGE_NAME "libfreenect-dev")
+    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0.0-dev")
+
+    set(CPACK_PACKAGE_CONTACT "Arne Bernin <arne@alamut.de>")
+    #set(CPACK_PACKAGE_VENDOR "")
+    set(CPACK_PACKAGE_VERSION_MAJOR "0")
+    set(CPACK_PACKAGE_VERSION_MINOR "0")
+    set(CPACK_PACKAGE_VERSION_PATCH "1")
+    set(VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
+
+    set(CPACK_GENERATOR "DEB;RPM;")
+    set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}-${CMAKE_SYSTEM_PROCESSOR}")
+
+    include(CPack)
+
+    INSTALL(FILES "${CMAKE_BINARY_DIR}/lib/libfreenect.a" DESTINATION lib)
+    INSTALL(FILES "include/libfreenect.h" DESTINATION include)
+    INSTALL(FILES "../APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
+    INSTALL(FILES "../GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
+    INSTALL(FILES "../README.asciidoc" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
+
+ENDIF ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+
