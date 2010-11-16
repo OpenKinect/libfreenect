@@ -53,7 +53,6 @@ int got_frames = 0;
 
 void DrawGLScene()
 {
-	static int fcnt = 0;
 	pthread_mutex_lock(&gl_backbuf_mutex);
 
 	while (got_frames < 2) {
@@ -217,9 +216,6 @@ void depthimg(uint16_t *buf, int width, int height)
 
 void rgbimg(uint8_t *buf, int width, int height)
 {
-
-	int i;
-
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	memcpy(gl_rgb_back, buf, width*height*3);
 	got_frames++;
