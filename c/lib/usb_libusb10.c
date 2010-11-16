@@ -68,10 +68,10 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	dev->usb_cam.parent = dev;
 	dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
-	libusb_claim_interface(dev->usb_cam.dev, 0);
 	if (!dev->usb_cam.dev) {
 		return -1;
 	}
+	libusb_claim_interface(dev->usb_cam.dev, 0);
 	return 0;
 }
 
