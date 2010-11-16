@@ -30,13 +30,22 @@
 #include <libusb.h>
 
 #if defined(__APPLE__)
-/* OS X likes things on powers of 2 boundaries, and needs WAY larger
-   packets/xfers to deal with what it's getting. Feel free to play
-   with these numbers, but keep them in multiples of 8, otherwise you
-   may get weirdness only seen with USB Prober on level 4 or
-   higher. */
-#define PKTS_PER_XFER 512
-#define NUM_XFERS 64
+/*
+  From Github Issue 22 by Roefer -
+  https://github.com/OpenKinect/libfreenect/issues/#issue/22
+
+  The current implementation still does not reach 30 Hz on MacOS. This
+  is due to bad scheduling of USB transfers in libusb (Ed Note: libusb
+  1.0.8). A fix can be found at
+  http://www.informatik.uni-bremen.de/~roefer/libusb/libusb-osx-kinect.diff
+
+  (Ed Note: patch applies to libusb repo at 7da756e09fd)
+
+  In camera.c, I use PKTS_PER_XFER = 128, NUM_XFERS = 4. There are a
+  few rules: PKTS_PER_XFER * NUM_XFERS <= 1000, PKTS_PER_XFER % 8 == 0.
+*/
+#define PKTS_PER_XFER 128
+#define NUM_XFERS 4
 #define DEPTH_PKTBUF 2048
 #define RGB_PKTBUF 2048
 #else

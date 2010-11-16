@@ -38,11 +38,15 @@ root. Deal with it.
 
 ==== OS X
 
+NOTE: AS OF 2010-11-16, WE HAVE UPDATED THIS PATCH. IF YOU HAVE
+ALREADY PATCHED, PLEASE REPATCH AND REINSTALL LIBUSB TO GET OS X
+WORKING AT FULL 30FPS.
+
 You will need to pull the libusb-1.0 repo head and patch using the
 files in platform/osx/. Just go to the root directory of the cloned
 libusb-1.0 repo and run
 
-patch -p0 < [path_to_OpenKinectRepo]/platform/osx/libusb-osx-kinect.diff
+patch -p1 < [path_to_OpenKinectRepo]/platform/osx/libusb-osx-kinect.diff
 
 Recompile libusb and put it wherever CMake will look (/usr/local/lib,
 /usr/lib, etc...). If you're using a package manager like fink,
