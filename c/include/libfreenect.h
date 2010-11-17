@@ -83,8 +83,9 @@ int freenect_start_rgb(freenect_device *dev);
 int freenect_stop_depth(freenect_device *dev);
 int freenect_stop_rgb(freenect_device *dev);
 
-int freenect_init_tilt_motor(freenect_device *dev);
+
 int freenect_set_tilt_in_degrees(freenect_device *dev, double angle);
+int freenect_set_tilt_in_radians(freenect_device *dev, double angle);
 
 #ifdef __cplusplus
 }
