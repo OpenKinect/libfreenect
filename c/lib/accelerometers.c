@@ -31,8 +31,9 @@
 #include <math.h>
 
 #include "freenect_internal.h"
+#define GRAVITY 9.80665
 
-int freenect_get_accelerometers(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z)
+int freenect_get_raw_accelerometers(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z)
 {
 	unsigned char buf[10];
 	uint16_t ux, uy, uz;
@@ -49,3 +50,19 @@ int freenect_get_accelerometers(freenect_device *dev, int16_t* x, int16_t* y, in
 	
 	return ret;
 }
+
+int freenect_get_mks_accelerometers(freenect_device *dev, double* x, double* y, double* z)
+{
+        //the documentation for the accelerometer (http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf) 
+        //states there are 819 counts/g  
+	int16_t ix, iy, iz;
+        int ret = freenect_get_raw_accelerometers(dev,&ix,&iy,&iz);
+
+	*x = (double)ix/FREENECT_COUNTS_PER_G*GRAVITY;
+	*y = (double)iy/FREENECT_COUNTS_PER_G*GRAVITY;
+	*z = (double)iz/FREENECT_COUNTS_PER_G*GRAVITY;
+
+	return ret;
+}
+
+
