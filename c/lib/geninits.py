@@ -15,7 +15,7 @@ fd = open(sys.argv[2], "w")
 
 count = 0;
 
-print >>fd, '#include "cameras.h"'
+print >>fd, '#include "freenect_internal.h"'
 print >>fd
 print >>fd, "const struct caminit inits[] = {"
 for line in open(sys.argv[1]):

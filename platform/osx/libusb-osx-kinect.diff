@@ -1,5 +1,5 @@
---- libusb/libusbi.h
-+++ libusb/libusbi.h
+--- a/libusb/libusbi.h
++++ b/libusb/libusbi.h
 @@ -288,13 +288,21 @@ struct libusb_device_handle {
  	unsigned char os_priv[0];
  };
@@ -24,8 +24,10 @@
  /* in-memory transfer layout:
   *
   * 1. struct usbi_transfer
---- libusb/os/darwin_usb.c
-+++ libusb/os/darwin_usb.c
+diff --git a/libusb/os/darwin_usb.c b/libusb/os/darwin_usb.c
+index 646c938..3900241 100644
+--- a/libusb/os/darwin_usb.c
++++ b/libusb/os/darwin_usb.c
 @@ -1137,6 +1137,8 @@ static int submit_bulk_transfer(struct usbi_transfer *itransfer) {
        ret = (*(cInterface->interface))->WritePipeAsync(cInterface->interface, pipeRef, transfer->buffer,
  						       transfer->length, darwin_async_io_callback, itransfer);
@@ -35,18 +37,29 @@
      if (is_read)
        ret = (*(cInterface->interface))->ReadPipeAsyncTO(cInterface->interface, pipeRef, transfer->buffer,
  							transfer->length, transfer->timeout, transfer->timeout,
-@@ -1200,7 +1202,9 @@ static int submit_iso_transfer(struct usbi_transfer *itransfer) {
-   }
+@@ -1198,9 +1200,11 @@ static int submit_iso_transfer(struct usbi_transfer *itransfer) {
  
+     return darwin_to_libusb (kresult);
+   }
+-
    /* schedule for a frame a little in the future */
 -  frame += 2;
-+  //printf("scheduling for frame += 2\n");
-+  //theo modded += 2 was too short 
-+  frame += 64;
++  frame += 4;
++
++  if(cInterface->frames[transfer->endpoint] && frame < cInterface->frames[transfer->endpoint])
++    frame = cInterface->frames[transfer->endpoint];
  
    /* submit the request */
    if (is_read)
-@@ -1243,6 +1247,8 @@ static int submit_control_transfer(struct usbi_transfer *itransfer) {
+@@ -1211,6 +1215,7 @@ static int submit_iso_transfer(struct usbi_transfer *itransfer) {
+     kresult = (*(cInterface->interface))->WriteIsochPipeAsync(cInterface->interface, pipeRef, transfer->buffer, frame,
+ 							      transfer->num_iso_packets, tpriv->isoc_framelist, darwin_async_io_callback,
+ 							      itransfer);
++  cInterface->frames[transfer->endpoint] = frame + transfer->num_iso_packets / 8;
+ 
+   if (kresult != kIOReturnSuccess) {
+     usbi_err (TRANSFER_CTX (transfer), "isochronous transfer failed (dir: %s): %s", is_read ? "In" : "Out",
+@@ -1243,6 +1248,8 @@ static int submit_control_transfer(struct usbi_transfer *itransfer) {
    tpriv->req.pData             = transfer->buffer + LIBUSB_CONTROL_SETUP_SIZE;
    tpriv->req.completionTimeout = transfer->timeout;
    tpriv->req.noDataTimeout     = transfer->timeout;
@@ -55,7 +68,7 @@
  
    /* all transfers in libusb-1.0 are async */
    kresult = (*(dpriv->device))->DeviceRequestAsyncTO(dpriv->device, &(tpriv->req), darwin_async_io_callback, itransfer);
-@@ -1358,6 +1364,9 @@ static void darwin_async_io_callback (void *refcon, IOReturn result, void *arg0)
+@@ -1358,6 +1365,9 @@ static void darwin_async_io_callback (void *refcon, IOReturn result, void *arg0)
  }
  
  static int darwin_transfer_status (struct usbi_transfer *itransfer, kern_return_t result) {
@@ -65,7 +78,7 @@
    switch (result) {
    case kIOReturnUnderrun:
    case kIOReturnSuccess:
-@@ -1372,6 +1381,7 @@ static int darwin_transfer_status (struct usbi_transfer *itransfer, kern_return_
+@@ -1372,6 +1382,7 @@ static int darwin_transfer_status (struct usbi_transfer *itransfer, kern_return_
      return LIBUSB_TRANSFER_OVERFLOW;
    case kIOUSBTransactionTimeout:
      usbi_err (ITRANSFER_CTX (itransfer), "transfer error: timed out");
@@ -73,3 +86,15 @@
      return LIBUSB_TRANSFER_TIMED_OUT;
    default:
      usbi_err (ITRANSFER_CTX (itransfer), "transfer error: %s (value = 0x%08x)", darwin_error_str (result), result);
+diff --git a/libusb/os/darwin_usb.h b/libusb/os/darwin_usb.h
+index a71d464..e3bdad8 100644
+--- a/libusb/os/darwin_usb.h
++++ b/libusb/os/darwin_usb.h
+@@ -139,6 +139,7 @@ struct darwin_device_handle_priv {
+     usb_interface_t    **interface;
+     uint8_t              num_endpoints;
+     CFRunLoopSourceRef   cfSource;
++    UInt64               frames[256];
+     uint8_t            endpoint_addrs[USB_MAXENDPOINTS];
+   } interfaces[USB_MAXINTERFACES];
+ };

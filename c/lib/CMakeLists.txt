@@ -6,7 +6,7 @@ find_package(USB REQUIRED)
 include_directories(${USB_INCLUDE_DIRS})
 
 if (NOT PROJECT_OS_WIN)
-	add_library (freenect SHARED cameras.c ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
+	add_library (freenect SHARED core.c cameras.c ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
 	set_target_properties ( freenect PROPERTIES
 		VERSION ${PROJECT_VER}
 		SOVERSION ${PROJECT_APIVER})	
@@ -14,7 +14,7 @@ if (NOT PROJECT_OS_WIN)
 		DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}")
 endif (NOT PROJECT_OS_WIN)
 
-add_library (freenectstatic STATIC cameras.c ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
+add_library (freenectstatic STATIC core.c cameras.c ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
 set_target_properties (freenectstatic PROPERTIES
 	OUTPUT_NAME freenect)
 install (TARGETS freenectstatic

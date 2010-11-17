@@ -4,7 +4,16 @@ I'm a code janitor!
 
 === So you want to play with the kinect right now
 
-First off, the kinect code here is in such a massive amount of flux as to like, totally not even be funny. You are so amazingly on your own right now, but feel free to hit the #openkinect IRC channel on Freenode for questions.
+First off, the kinect code here is in such a massive amount of flux as
+to like, totally not even be funny. You are so amazingly on your own
+right now, but feel free to hit the #openkinect IRC channel on
+Freenode for questions.
+
+What you'll get when compiling this branch:
+
+- the libfreenect library, not the it does a whole lot right now.
+- an executable called glview. glview will render depth data next to
+  rgb data in a glut window.
 
 ==== Building with CMake
 
@@ -19,27 +28,48 @@ To use CMake:
 
 ==== Linux
 
-Should "just work" if you have libusb installed. Since there's no udev rules yet, you'll need to run as root. Deal with it.
+Should "just work" if you have the following packages installed:
+
+- libusb-1.0-dev
+- freeglut3-dev (or whatever freeglut dev package your distro has)
+
+Since there's no udev rules yet, you'll need to run glview as
+root. Deal with it.
 
 ==== OS X
 
-You will need to pull the libusb-1.0 repo head and patch using the files in platform/osx/. Just go to the root directory of the cloned libusb-1.0 repo and run
+NOTE: AS OF 2010-11-16, WE HAVE UPDATED THIS PATCH. IF YOU HAVE
+ALREADY PATCHED, PLEASE REPATCH AND REINSTALL LIBUSB TO GET OS X
+WORKING AT FULL 30FPS.
 
-patch -p0 < [path_to_OpenKinectRepo]/platform/osx/libusb-osx-kinect.diff
+You will need to pull the libusb-1.0 repo head and patch using the
+files in platform/osx/. Just go to the root directory of the cloned
+libusb-1.0 repo and run
 
-Recompile libusb and put it wherever CMake will look (/usr/local/lib, /usr/lib, etc...). If you're using a package manager like fink, macports, or homebrew, I'm going to expect you know what your doing and can deal with this. If not, see IRC channel.
+patch -p1 < [path_to_OpenKinectRepo]/platform/osx/libusb-osx-kinect.diff
+
+Recompile libusb and put it wherever CMake will look (/usr/local/lib,
+/usr/lib, etc...). If you're using a package manager like fink,
+macports, or homebrew, I'm going to expect you know what your doing
+and can deal with this. If not, see IRC channel.
 
 ==== Windows
 
-We're still working on that.
+We're still working on that. This branch still does not work on
+windows. If you're jonesin' for windows, check out the win32-merge
+branch, though we'll be moving toward the new-api branch ASAP.
 
 === And everyone else...
 
-Below is the readmes of the other repos I'm organizing this from. This currently consists of:
+Below is the readmes of the other repos I'm organizing this from. This
+currently consists of:
 
-- Marcan's original libfreenect repo (in the c directory here) - GPL'd.
-- ofTheo's OS X libfreenect patched (integrated by me, with libusb-1.0 patches in platform directory) - GPL'd
-- JoshBlake's C# OpenKinect (in the csharp directory, with inf files in platform directory) - Apache'd
+- Marcan's original libfreenect repo (in the c directory here) -
+  GPL'd.
+- ofTheo's OS X libfreenect patched (integrated by me, with libusb-1.0
+  patches in platform directory) - GPL'd
+- JoshBlake's C# OpenKinect (in the csharp directory, with inf files
+  in platform directory) - Apache'd
 
 The aggregated READMEs are below.
 

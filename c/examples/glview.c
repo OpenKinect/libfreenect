@@ -1,12 +1,28 @@
-/*  libfreenect - an open source Kinect driver
-
-Copyright (C) 2010  Hector Martin "marcan" <hector@marcansoft.com>
-
-This code is licensed to you under the terms of the GNU GPL, version 2 or version 3;
-see:
- http://www.gnu.org/licenses/old-licenses/gpl-2.0.txt
- http://www.gnu.org/licenses/gpl-3.0.txt
-*/
+/*
+ * This file is part of the OpenKinect Project. http://www.openkinect.org
+ *
+ * Copyright (c) 2010 individual OpenKinect contributors. See the CONTRIB file
+ * for details.
+ *
+ * This code is licensed to you under the terms of the Apache License, version
+ * 2.0, or, at your option, the terms of the GNU General Public License,
+ * version 2.0. See the APACHE20 and GPL2 files for the text of the licenses,
+ * or the following URLs:
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.gnu.org/licenses/gpl-2.0.txt
+ *
+ * If you redistribute this file in source form, modified or unmodified, you
+ * may:
+ *   1) Leave this header intact and distribute it under the same terms,
+ *      accompanying it with the APACHE20 and GPL20 files, or
+ *   2) Delete the Apache 2.0 clause and accompany it with the GPL2 file, or
+ *   3) Delete the GPL v2 clause and accompany it with the APACHE20 file
+ * In all cases you must keep the copyright notice intact and include a copy
+ * of the CONTRIB file.
+ *
+ * Binary distributions must follow the binary distribution requirements of
+ * either License.
+ */
 
 
 #include <stdio.h>
@@ -53,7 +69,6 @@ int got_frames = 0;
 
 void DrawGLScene()
 {
-	static int fcnt = 0;
 	pthread_mutex_lock(&gl_backbuf_mutex);
 
 	while (got_frames < 2) {
@@ -160,17 +175,13 @@ void *gl_threadfunc(void *arg)
 
 uint16_t t_gamma[2048];
 
-void depthimg(uint16_t *buf, int width, int height)
+void depth_cb(freenect_device *dev, freenect_depth *depth, uint32_t timestamp)
 {
-/*	FILE *f = fopen("depth.bin", "w");
-	fwrite(depth_frame, 640*480, 2, f);
-	fclose(f);*/
-
 	int i;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
-	for (i=0; i<640*480; i++) {
-		int pval = t_gamma[buf[i]];
+	for (i=0; i<FREENECT_FRAME_PIX; i++) {
+		int pval = t_gamma[depth[i]];
 		int lb = pval & 0xff;
 		switch (pval>>8) {
 			case 0:
@@ -215,23 +226,21 @@ void depthimg(uint16_t *buf, int width, int height)
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
-void rgbimg(uint8_t *buf, int width, int height)
+void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
 {
-
-	int i;
-
 	pthread_mutex_lock(&gl_backbuf_mutex);
-	memcpy(gl_rgb_back, buf, width*height*3);
 	got_frames++;
+	memcpy(gl_rgb_back, rgb, FREENECT_RGB_SIZE);
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
-
 int main(int argc, char **argv)
 {
 	int res;
-	libusb_device_handle *dev;
+	freenect_context *f_ctx;
+	freenect_device *f_dev;
+
 	printf("Kinect camera test\n");
 
 	int i;
@@ -244,31 +253,32 @@ int main(int argc, char **argv)
 	g_argc = argc;
 	g_argv = argv;
 
-	libusb_init(NULL);
-	//libusb_set_debug(0, 3);
+	if (freenect_init(&f_ctx, NULL) < 0) {
+		printf("freenect_init() failed\n");
+		return 1;
+	}
 
-	dev = libusb_open_device_with_vid_pid(NULL, 0x45e, 0x2ae);
-	if (!dev) {
+	if (freenect_open_device(f_ctx, &f_dev, 0) < 0) {
 		printf("Could not open device\n");
 		return 1;
 	}
+
+	freenect_set_depth_callback(f_dev, depth_cb);
+	freenect_set_rgb_callback(f_dev, rgb_cb);
+	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
+
 	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
 	if (res) {
 		printf("pthread_create failed\n");
 		return 1;
 	}
 	
-	libusb_claim_interface(dev, 0);
-		
-	//gl_threadfunc(&none);
-	
-	printf("device is %i\n", libusb_get_device_address(libusb_get_device(dev)));
-	
-	cams_init(dev, depthimg, rgbimg);
-	
-	while(!die && libusb_handle_events(NULL) == 0 );
-	
+	freenect_start_depth(f_dev);
+	freenect_start_rgb(f_dev);
+
+	while(!die && freenect_process_events(f_ctx) >= 0 );
+
 	printf("-- done!\n");
-	
+
 	pthread_exit(NULL);
 }
