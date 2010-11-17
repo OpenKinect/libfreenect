@@ -104,4 +104,5 @@ int freenect_set_led(freenect_device *dev, freenect_led_options option);
 }
 #endif
 
-#endif
+#endif //
+
