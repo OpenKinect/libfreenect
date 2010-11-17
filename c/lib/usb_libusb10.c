@@ -67,6 +67,7 @@ int fnusb_process_events(fnusb_ctx *ctx)
 int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	dev->usb_cam.parent = dev;
+<<<<<<< HEAD
   // Search for 0x45e (Microsoft Corp.) and 0x02ae
 	//dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
 
@@ -97,11 +98,18 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 
   libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
-	libusb_claim_interface (dev->usb_cam.dev, 0);
+  // Claim the camera
 	if (!dev->usb_cam.dev) 
-  {
-		return -1;
-	}
+		return (-1);
+	libusb_claim_interface (dev->usb_cam.dev, 0);
+
+  // Claim the motor
+	dev->usb_motor.parent = dev;
+	dev->usb_motor.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2b0);
+	if (!dev->usb_motor.dev) 
+		return (-1);
+	libusb_claim_interface(dev->usb_motor.dev, 0);
+
 	return 0;
 }
 
