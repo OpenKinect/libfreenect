@@ -54,7 +54,8 @@ struct _freenect_context {
 #define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
 
 #define MS_MAGIC_VENDOR 0x45e
-#define MS_MAGIC_PRODUCT 0x02ae
+#define MS_MAGIC_CAMERA_PRODUCT 0x02ae
+#define MS_MAGIC_MOTOR_PRODUCT 0x02b0
 
 typedef struct {
 	uint8_t flag;

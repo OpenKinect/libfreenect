@@ -25,6 +25,7 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <libusb.h>
 #include "freenect_internal.h"
@@ -67,6 +68,7 @@ int fnusb_process_events(fnusb_ctx *ctx)
 int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	dev->usb_cam.parent = dev;
+
 	// Search for 0x45e (Microsoft Corp.) and 0x02ae
 	//dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
 
@@ -75,7 +77,9 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 	if (cnt < 0)
 		return (-1);
 
-	int i = 0, nr = 0;
+	bool start_cam = false, start_motor = false;
+
+	int i = 0, nr_cam = 0, nr_mot = 0;
 	struct libusb_device_descriptor desc;
 	for (i = 0; i < cnt; ++i)
 	{
@@ -83,34 +87,50 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 		if (r < 0)
 			continue;
 
-		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_PRODUCT)
+		// Search for the camera
+		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_CAMERA_PRODUCT && !start_cam)
 		{
 			// If the index given by the user matches our camera index
-			if (nr == index)
+			if (nr_cam == index)
 			{
-				dev->usb_cam.dev = devs[i];
-				break;
+				if (libusb_open (devs[i], &dev->usb_cam.dev) != 0)
+					return (-1);
+				// Claim the camera
+				if (!dev->usb_cam.dev) 
+					return (-1);
+				libusb_claim_interface (dev->usb_cam.dev, 0);
+				start_cam = true;
 			}
-			nr++;
+			else
+				nr_cam++;
+		}
+
+		// Search for the motor
+		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_MOTOR_PRODUCT && !start_motor)
+		{
+			// If the index given by the user matches our camera index
+			if (nr_mot == index)
+			{
+				//libusb_open_device_with_vid_pid (dev->parent->usb.ctx, MS_MAGIC_VENDOR, MS_MAGIC_MOTOR_PRODUCT);
+				if (libusb_open (devs[i], &dev->usb_motor.dev) != 0)
+					return (-1);
+				// Claim the motor
+				if (!dev->usb_motor.dev)
+					return (-1);
+				libusb_claim_interface (dev->usb_motor.dev, 0);
+				start_motor = true;
+			}
+			else
+				nr_mot++;
 		}
 	}
 
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
-	libusb_claim_interface (dev->usb_cam.dev, 0);
-	if (!dev->usb_cam.dev) 
-	{
-		return -1;
-	}
-	libusb_claim_interface(dev->usb_cam.dev, 0);
-
-	dev->usb_motor.parent = dev;
-	dev->usb_motor.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2b0);
-	if (!dev->usb_motor.dev) {
-		return -1;
-	}
-	libusb_claim_interface(dev->usb_motor.dev, 0);
-	return 0;
+	if (start_cam && start_motor)
+		return (0);
+	else
+		return (-1);
 }
 
 static void iso_callback(struct libusb_transfer *xfer)

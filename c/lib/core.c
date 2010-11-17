@@ -55,8 +55,6 @@ int freenect_process_events(freenect_context *ctx)
 
 int freenect_num_devices(freenect_context *ctx)
 {
-	//printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
-  //
   libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
   ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
   if (cnt < 0)
@@ -69,7 +67,7 @@ int freenect_num_devices(freenect_context *ctx)
     int r = libusb_get_device_descriptor (devs[i], &desc);
     if (r < 0)
       continue;
-    if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_PRODUCT)
+    if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_CAMERA_PRODUCT)
       nr++;
   }
 
