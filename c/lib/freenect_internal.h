@@ -92,6 +92,7 @@ struct _freenect_device {
 
 	// Audio
 	// Motor
+	fnusb_dev usb_motor;
 };
 
 struct caminit {
