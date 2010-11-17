@@ -93,6 +93,7 @@ struct _freenect_device {
 	// Audio
 	// Motor
 	fnusb_dev usb_motor;
+
 };
 
 struct caminit {
@@ -103,6 +104,9 @@ struct caminit {
 	uint8_t cmddata[1024];
 	uint8_t replydata[1024];
 };
+
+
+
 
 
 #endif
