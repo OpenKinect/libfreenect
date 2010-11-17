@@ -87,4 +87,5 @@ int freenect_stop_rgb(freenect_device *dev);
 }
 #endif
 
-#endif
+#endif //
+
