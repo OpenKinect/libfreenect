@@ -258,7 +258,13 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (freenect_open_device(f_ctx, &f_dev, 0) < 0) {
+  int nr_devices = freenect_num_devices (f_ctx);
+  printf ("Number of devices found: %d\n", nr_devices);
+
+  if (nr_devices < 1)
+    return 1;
+
+	if (freenect_open_device(f_ctx, &f_dev, atoi (argv[1])) < 0) {
 		printf("Could not open device\n");
 		return 1;
 	}

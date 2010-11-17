@@ -51,7 +51,7 @@ int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
 
 int fnusb_shutdown(fnusb_ctx *ctx)
 {
-	int res;
+	//int res;
 	if (ctx->should_free_ctx) {
 		libusb_exit(ctx->ctx);
 		ctx->ctx = NULL;
@@ -67,8 +67,39 @@ int fnusb_process_events(fnusb_ctx *ctx)
 int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	dev->usb_cam.parent = dev;
-	dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
-	if (!dev->usb_cam.dev) {
+	// Search for 0x45e (Microsoft Corp.) and 0x02ae
+	//dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
+
+	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
+	ssize_t cnt = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
+	if (cnt < 0)
+		return (-1);
+
+	int i = 0, nr = 0;
+	struct libusb_device_descriptor desc;
+	for (i = 0; i < cnt; ++i)
+	{
+		int r = libusb_get_device_descriptor (devs[i], &desc);
+		if (r < 0)
+			continue;
+
+		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_PRODUCT)
+		{
+			// If the index given by the user matches our camera index
+			if (nr == index)
+			{
+				dev->usb_cam.dev = devs[i];
+				break;
+			}
+			nr++;
+		}
+	}
+
+	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
+
+	libusb_claim_interface (dev->usb_cam.dev, 0);
+	if (!dev->usb_cam.dev) 
+	{
 		return -1;
 	}
 	libusb_claim_interface(dev->usb_cam.dev, 0);
@@ -114,7 +145,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 	uint8_t *bufp = strm->buffer;
 
 	for (i=0; i<xfers; i++) {
-		printf("Creating EP %02x transfer #%d\n", ep, i);
+		//printf("Creating EP %02x transfer #%d\n", ep, i);
 		strm->xfers[i] = libusb_alloc_transfer(pkts);
 
 		libusb_fill_iso_transfer(strm->xfers[i], dev->dev, ep, bufp, pkts * len, pkts, iso_callback, strm, 0);
