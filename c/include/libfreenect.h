@@ -100,6 +100,8 @@ int freenect_set_tilt_in_degrees(freenect_device *dev, double angle);
 int freenect_set_tilt_in_radians(freenect_device *dev, double angle);
 int freenect_set_led(freenect_device *dev, freenect_led_options option);
 
+int freenect_get_accelerometers(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z);
+
 #ifdef __cplusplus
 }
 #endif
