@@ -91,4 +91,5 @@ int freenect_set_tilt_in_radians(freenect_device *dev, double angle);
 }
 #endif
 
-#endif
+#endif //
+
