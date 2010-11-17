@@ -291,8 +291,10 @@ int main(int argc, char **argv)
 	while(!die && freenect_process_events(f_ctx) >= 0 )
 	{
 		int16_t ax,ay,az;
-		freenect_get_accelerometers(f_dev, &ax, &ay, &az);
-		printf("\racceleration: %4d %4d %4d   ", ax, ay, az);
+		freenect_get_raw_accelerometers(f_dev, &ax, &ay, &az);
+		double dx,dy,dz;
+		freenect_get_mks_accelerometers(f_dev, &dx, &dy, &dz);
+		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", ax, ay, az, dx, dy, dz);
 		fflush(stdout);
 	}
 
