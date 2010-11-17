@@ -258,11 +258,23 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if (freenect_open_device(f_ctx, &f_dev, 0) < 0) {
+	int nr_devices = freenect_num_devices (f_ctx);
+	printf ("Number of devices found: %d\n", nr_devices);
+	
+	int user_device_number = 0;
+	if (argc > 1)
+		user_device_number = atoi(argv[1]);
+	
+
+	if (nr_devices < 1)
+		return 1;
+
+	if (freenect_open_device(f_ctx, &f_dev, user_device_number) < 0) {
 		printf("Could not open device\n");
 		return 1;
 	}
-
+        freenect_set_tilt_in_degrees(f_dev,0);
+        freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_rgb_callback(f_dev, rgb_cb);
 	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
@@ -276,7 +288,15 @@ int main(int argc, char **argv)
 	freenect_start_depth(f_dev);
 	freenect_start_rgb(f_dev);
 
-	while(!die && freenect_process_events(f_ctx) >= 0 );
+	while(!die && freenect_process_events(f_ctx) >= 0 )
+	{
+		int16_t ax,ay,az;
+		freenect_get_raw_accelerometers(f_dev, &ax, &ay, &az);
+		double dx,dy,dz;
+		freenect_get_mks_accelerometers(f_dev, &dx, &dy, &dz);
+		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", ax, ay, az, dx, dy, dz);
+		fflush(stdout);
+	}
 
 	printf("-- done!\n");
 

@@ -53,6 +53,10 @@ struct _freenect_context {
 #define DEPTH_PKTS_PER_FRAME ((DEPTH_RAW_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
 #define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
 
+#define MS_MAGIC_VENDOR 0x45e
+#define MS_MAGIC_CAMERA_PRODUCT 0x02ae
+#define MS_MAGIC_MOTOR_PRODUCT 0x02b0
+
 typedef struct {
 	uint8_t flag;
 	int synced;
@@ -92,6 +96,8 @@ struct _freenect_device {
 
 	// Audio
 	// Motor
+	fnusb_dev usb_motor;
+
 };
 
 struct caminit {
@@ -102,6 +108,9 @@ struct caminit {
 	uint8_t cmddata[1024];
 	uint8_t replydata[1024];
 };
+
+
+
 
 
 #endif
