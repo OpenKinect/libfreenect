@@ -273,7 +273,7 @@ int main(int argc, char **argv)
 		printf("Could not open device\n");
 		return 1;
 	}
-
+        freenect_set_tilt_in_degrees(f_dev,0);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_rgb_callback(f_dev, rgb_cb);
 	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
