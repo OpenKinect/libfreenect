@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -47,13 +47,13 @@ namespace OpenKinect
             MyUsbDevice.ControlTransfer(ref setup, IntPtr.Zero, 0, out len);
         }
 
-        public void SetTilt(byte tiltValue)
+        public void SetTilt(sbyte tiltValue)
         {
             if (!MyUsbDevice.IsOpen)
             {
                 InitDevice();
             }
-            ushort mappedValue = (byte)(0xffd0 + tiltValue / 5);
+            ushort mappedValue = (ushort)(0xff00 | (byte)tiltValue);
 
             UsbSetupPacket setup = new UsbSetupPacket(0x40, 0x31, mappedValue, 0x0, 0x0);
             int len = 0;
