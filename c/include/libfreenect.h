@@ -59,7 +59,10 @@ typedef enum {
     LED_BLINK_RED_YELLOW = 6
 } freenect_led_options;
 
-
+typedef enum {	  
+	FREENECT_FORMAT_11_BIT = 0,
+	FREENECT_FORMAT_10_BIT = 1
+} freenect_depth_format;
 
 struct _freenect_context;
 typedef struct _freenect_context freenect_context;
@@ -90,6 +93,7 @@ typedef void (*freenect_rgb_cb)(freenect_device *dev, freenect_pixel *rgb, uint3
 void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);
 void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb);
 int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt);
+int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt);
 
 int freenect_start_depth(freenect_device *dev);
 int freenect_start_rgb(freenect_device *dev);

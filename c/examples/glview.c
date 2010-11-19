@@ -278,6 +278,7 @@ int main(int argc, char **argv)
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_rgb_callback(f_dev, rgb_cb);
 	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
+	freenect_set_depth_format(f_dev, FREENECT_FORMAT_11_BIT);
 
 	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
 	if (res) {

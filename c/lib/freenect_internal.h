@@ -39,7 +39,8 @@ struct _freenect_context {
 	fnusb_ctx usb;
 };
 
-#define DEPTH_RAW_SIZE 422400
+#define DEPTH_RAW_10_BIT_SIZE 384000
+#define DEPTH_RAW_11_BIT_SIZE 422400
 #define FRAME_H FREENECT_FRAME_H
 #define FRAME_W FREENECT_FRAME_W
 #define FRAME_PIX FREENECT_FRAME_PIX
@@ -50,7 +51,8 @@ struct _freenect_context {
 #define DEPTH_PKTDSIZE (DEPTH_PKTSIZE-12)
 #define RGB_PKTDSIZE (RGB_PKTSIZE-12)
 
-#define DEPTH_PKTS_PER_FRAME ((DEPTH_RAW_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
+#define DEPTH_PKTS_10_BIT_PER_FRAME ((DEPTH_RAW_10_BIT_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
+#define DEPTH_PKTS_11_BIT_PER_FRAME ((DEPTH_RAW_11_BIT_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
 #define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
 
 #define MS_MAGIC_VENDOR 0x45e
@@ -83,11 +85,12 @@ struct _freenect_device {
 	freenect_depth_cb depth_cb;
 	freenect_rgb_cb rgb_cb;
 	freenect_rgb_format rgb_format;
+	freenect_depth_format depth_format;
 
 	int cam_inited;
 
 	packet_stream depth_stream;
-	uint8_t depth_raw[DEPTH_RAW_SIZE];
+	uint8_t depth_raw[DEPTH_RAW_11_BIT_SIZE];
 	uint16_t depth_frame[FRAME_PIX];
 
 	packet_stream rgb_stream;
