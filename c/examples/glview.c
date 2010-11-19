@@ -63,6 +63,10 @@ uint8_t gl_rgb_back[640*480*4];
 GLuint gl_depth_tex;
 GLuint gl_rgb_tex;
 
+freenect_device *f_dev;
+int freenect_angle = 0;
+int freenect_led;
+
 
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
 int got_frames = 0;
@@ -113,10 +117,46 @@ void DrawGLScene()
 void keyPressed(unsigned char key, int x, int y)
 {
 	if (key == 27) {
-		die = 1;
 		glutDestroyWindow(window);
 		pthread_exit(NULL);
 	}
+	if (key == 'w') {
+		freenect_angle++;
+		if (freenect_angle > 30) {
+			freenect_angle = 30;
+		}
+	}
+	if (key == 's') {
+		freenect_angle = 0;
+	}
+	if (key == 'x') {
+		freenect_angle--;
+		if (freenect_angle < -30) {
+			freenect_angle = -30;
+		}
+	}
+	if (key == '1') {
+		freenect_set_led(f_dev,LED_GREEN);
+	}
+	if (key == '2') {
+		freenect_set_led(f_dev,LED_RED);
+	}
+	if (key == '3') {
+		freenect_set_led(f_dev,LED_YELLOW);
+	}
+	if (key == '4') {
+		freenect_set_led(f_dev,LED_BLINK_YELLOW);
+	}
+	if (key == '5') {
+		freenect_set_led(f_dev,LED_BLINK_GREEN);
+	}
+	if (key == '6') {
+		freenect_set_led(f_dev,LED_BLINK_RED_YELLOW);
+	}
+	if (key == '0') {
+		freenect_set_led(f_dev,LED_OFF);
+	}
+	freenect_set_tilt_degs(f_dev,freenect_angle);
 }
 
 void ReSizeGLScene(int Width, int Height)
@@ -239,7 +279,7 @@ int main(int argc, char **argv)
 {
 	int res;
 	freenect_context *f_ctx;
-	freenect_device *f_dev;
+	
 
 	printf("Kinect camera test\n");
 
@@ -275,8 +315,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	freenect_set_tilt_degs(f_dev, 0);
-	freenect_set_led(f_dev, LED_RED);
+
+	freenect_set_tilt_degs(f_dev,freenect_angle);
+	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_rgb_callback(f_dev, rgb_cb);
 	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
@@ -290,6 +331,8 @@ int main(int argc, char **argv)
 
 	freenect_start_depth(f_dev);
 	freenect_start_rgb(f_dev);
+
+	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
 
 	while(!die && freenect_process_events(f_ctx) >= 0 )
 	{
