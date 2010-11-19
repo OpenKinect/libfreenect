@@ -32,5 +32,5 @@ add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/inits.c
 	COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py ${CMAKE_CURRENT_SOURCE_DIR}/inits.txt ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
 
 # Install the header file
-install (FILES "../include/libfreenect.h"
+install (FILES "../include/libfreenect.h" "../include/libfreenect.hpp"
 	DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
