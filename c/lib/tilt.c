@@ -61,11 +61,14 @@ int freenect_set_led(freenect_device *dev, freenect_led_options option)
 
 int freenect_get_raw_accel(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z)
 {
+	freenect_context *ctx = dev->parent;
 	uint8_t buf[10];
 	uint16_t ux, uy, uz;
 	int ret = fnusb_control(&dev->usb_motor, 0xC0, 0x32, 0x0, 0x0, buf, 10);
-	if (ret != 10)
-		printf("Error in accelerometer reading, libusb_control_transfer returned %d\n", ret);
+	if (ret != 10) {
+		FN_ERROR("Error in accelerometer reading, libusb_control_transfer returned %d\n", ret);
+		return ret < 0 ? ret : -1;
+	}
 
 	ux = ((uint16_t)buf[2] << 8) | buf[3];
 	uy = ((uint16_t)buf[4] << 8) | buf[5];
@@ -84,9 +87,11 @@ int freenect_get_mks_accel(freenect_device *dev, double* x, double* y, double* z
 	int16_t ix, iy, iz;
 	int ret = freenect_get_raw_accel(dev,&ix,&iy,&iz);
 
-	*x = (double)ix/FREENECT_COUNTS_PER_G*GRAVITY;
-	*y = (double)iy/FREENECT_COUNTS_PER_G*GRAVITY;
-	*z = (double)iz/FREENECT_COUNTS_PER_G*GRAVITY;
+	if (ret >= 0) {
+		*x = (double)ix/FREENECT_COUNTS_PER_G*GRAVITY;
+		*y = (double)iy/FREENECT_COUNTS_PER_G*GRAVITY;
+		*z = (double)iz/FREENECT_COUNTS_PER_G*GRAVITY;
+	}
 
 	return ret;
 }

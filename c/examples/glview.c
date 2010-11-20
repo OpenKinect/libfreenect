@@ -258,6 +258,8 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	freenect_set_log_level(f_ctx, FREENECT_LOG_DEBUG);
+
 	int nr_devices = freenect_num_devices (f_ctx);
 	printf ("Number of devices found: %d\n", nr_devices);
 
@@ -295,7 +297,7 @@ int main(int argc, char **argv)
 		freenect_get_raw_accel(f_dev, &ax, &ay, &az);
 		double dx,dy,dz;
 		freenect_get_mks_accel(f_dev, &dx, &dy, &dz);
-		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", ax, ay, az, dx, dy, dz);
+		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f\r", ax, ay, az, dx, dy, dz);
 		fflush(stdout);
 	}
 

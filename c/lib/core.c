@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <unistd.h>
 
 #include "freenect_internal.h"
@@ -39,12 +40,13 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 
 	memset(*ctx, 0, sizeof(freenect_context));
 
+	(*ctx)->log_level = LL_WARNING;
 	return fnusb_init(&(*ctx)->usb, usb_ctx);
 }
 
 int freenect_shutdown(freenect_context *ctx)
 {
-	printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
@@ -101,7 +103,8 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 
 int freenect_close_device(freenect_device *dev)
 {
-	printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	freenect_context *ctx = dev->parent;
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
@@ -113,5 +116,38 @@ void freenect_set_user(freenect_device *dev, void *user)
 void *freenect_get_user(freenect_device *dev)
 {
 	return dev->user_data;
+}
+
+void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level)
+{
+	ctx->log_level = level;
+}
+
+void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb)
+{
+	ctx->log_cb = cb;
+}
+
+void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...)
+{
+	va_list ap;
+
+	if (level > ctx->log_level)
+		return;
+
+	if (ctx->log_cb) {
+		char msgbuf[1024];
+
+		va_start(ap, fmt);
+		vsnprintf(msgbuf, 1024, fmt, ap);
+		msgbuf[1023] = 0;
+		va_end(ap);
+
+		ctx->log_cb(ctx, level, msgbuf);
+	} else {
+		va_start(ap, fmt);
+		vfprintf(stderr, fmt, ap);
+		va_end(ap);
+	}
 }
 

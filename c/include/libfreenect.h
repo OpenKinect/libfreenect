@@ -75,8 +75,24 @@ typedef struct _freenect_device freenect_device;
 typedef libusb_context freenect_usb_context;
 //
 
+typedef enum {
+	FREENECT_LOG_FATAL = 0,
+	FREENECT_LOG_ERROR,
+	FREENECT_LOG_WARNING,
+	FREENECT_LOG_NOTICE,
+	FREENECT_LOG_INFO,
+	FREENECT_LOG_DEBUG,
+	FREENECT_LOG_SPEW,
+	FREENECT_LOG_FLOOD,
+} freenect_loglevel;
+
 int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx);
 int freenect_shutdown(freenect_context *ctx);
+
+typedef void (*freenect_log_cb)(freenect_context *dev, freenect_loglevel level, const char *msg);
+
+void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level);
+void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb);
 
 int freenect_process_events(freenect_context *ctx);
 
