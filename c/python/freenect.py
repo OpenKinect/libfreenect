@@ -38,7 +38,8 @@ LED_BLINK_RED_YELLOW = 6
 def _setup_shared_library():
     """Types all of the shared library functions
 
-    These headers are copied directly from libfreenect.h in order to simplify updating
+    These headers are copied directly from libfreenect.h in order to simplify
+    updating
 
     Returns:
         (fn, freenect_depth_cb, freenect_rgb_cb) where
@@ -46,13 +47,14 @@ def _setup_shared_library():
         freenect_depth_cb: ctypes callback wrapper for depth
         freenect_rgb_cb: ctypes callback wrapper for rgb
     """
+
     def mk(res, fun, arg):
         fun.restype = res
         fun.argtypes = arg
-    from ctypes import c_int, c_void_p, c_uint32, c_double, c_int16, POINTER, cdll, CFUNCTYPE
+    from ctypes import c_int, c_void_p, c_uint32, c_double, c_int16, POINTER
     c_int16_p = POINTER(c_int16)
     c_double_p = POINTER(c_double)
-    fn = cdll.LoadLibrary('./libfreenect.so')
+    fn = ctypes.cdll.LoadLibrary('./libfreenect.so')
     # int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx);
     mk(c_int, fn.freenect_init, [c_void_p, c_void_p])
     # int freenect_shutdown(freenect_context *ctx);
@@ -70,11 +72,11 @@ def _setup_shared_library():
     # void *freenect_get_user(freenect_device *dev);
     mk(c_void_p, fn.freenect_get_user, [c_void_p])
     # typedef void (*freenect_depth_cb)(freenect_device *dev, freenect_depth *depth, uint32_t timestamp);
-    freenect_depth_cb = CFUNCTYPE(None, c_void_p, c_void_p, c_uint32)
+    freenect_depth_cb = ctypes.CFUNCTYPE(None, c_void_p, c_void_p, c_uint32)
     # void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);
     mk(None, fn.freenect_set_depth_callback, [c_void_p, freenect_depth_cb])
     # typedef void (*freenect_rgb_cb)(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp);
-    freenect_rgb_cb = CFUNCTYPE(None, c_void_p, c_void_p, c_uint32)
+    freenect_rgb_cb = ctypes.CFUNCTYPE(None, c_void_p, c_void_p, c_uint32)
     # void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb);
     mk(None, fn.freenect_set_rgb_callback, [c_void_p, freenect_rgb_cb])
     # int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt);
@@ -118,7 +120,8 @@ def raw_accelerometers(dev):
         Tuple of (x, y, z) as ctype.c_int16 values
     """
     x, y, z = ctypes.c_int16(), ctypes.c_int16(), ctypes.c_int16()
-    freenect_get_raw_accelerometers(dev, ctypes.byref(x), ctypes.byref(y), ctypes.byref(z))
+    freenect_get_raw_accelerometers(dev, ctypes.byref(x), ctypes.byref(y),
+                                    ctypes.byref(z))
     return x, y, z
 
 
@@ -132,7 +135,8 @@ def mks_accelerometers(dev):
         Tuple of (x, y, z) as ctype.c_double values
     """
     x, y, z = ctypes.c_double(), ctypes.c_double(), ctypes.c_double()
-    freenect_get_mks_accelerometers(dev, ctypes.byref(x), ctypes.byref(y), ctypes.byref(z))
+    freenect_get_mks_accelerometers(dev, ctypes.byref(x), ctypes.byref(y),
+                                    ctypes.byref(z))
     return x, y, z
 
 
@@ -164,6 +168,7 @@ def runloop(depth_cb, rgb_cb):
     while freenect_process_events(ctx) >= 0:
         pass
 
+
 def depth_cb_factory(func):
     """Converts the raw depth data into a numpy array for your function
 
@@ -171,6 +176,7 @@ def depth_cb_factory(func):
         func: A function that takes (dev, data, timestamp), corresponding to C function
             except that data is a 2D numpy array corresponding to the data.
     """
+
     def depth_cb(dev, depth, timestamp):
         size, bytes = (480, 640), 614400  # 480 * 640 * 2
         data = _np.fromstring(ctypes.string_at(depth, bytes), dtype=_np.uint16)
@@ -186,6 +192,7 @@ def rgb_cb_factory(func):
         func: A function that takes (dev, data, timestamp), corresponding to C function
             except that data is a 2D numpy array corresponding to the data.
     """
+
     def rgb_cb(dev, rgb, timestamp):
         size, bytes = (480, 640, 3), 921600  # 480 * 640 * 3
         data = _np.fromstring(ctypes.string_at(rgb, bytes), dtype=_np.uint8)

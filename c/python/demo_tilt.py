@@ -4,6 +4,8 @@ import threading
 import random
 
 dev = None
+
+
 def tilt_and_sense():
     global dev
     while not dev:
@@ -18,6 +20,7 @@ def tilt_and_sense():
         print(raw_accelerometers(dev))
         print(mks_accelerometers(dev))
 threading.Thread(target=tilt_and_sense).start()
+
 
 def dev_getter(my_dev, *_):
     global dev

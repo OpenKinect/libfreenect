@@ -4,6 +4,7 @@ import numpy as np
 
 cv.NamedWindow('Depth')
 
+
 def display(dev, data, timestamp):
     data -= np.min(data.ravel())
     data *= 65536 / np.max(data.ravel())

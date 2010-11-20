@@ -1,8 +1,8 @@
 from freenect import *
 import cv
-import numpy as np
 
 cv.NamedWindow('RGB')
+
 
 def display(dev, data, timestamp):
     image = cv.CreateImageHeader((data.shape[1], data.shape[0]),
