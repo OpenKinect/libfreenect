@@ -49,7 +49,7 @@ add_subdirectory (examples)
 
 # Create an uninstall target
 configure_file(
-    "${CMAKE_SOURCE_DIR}/Modules/UninstallTarget.cmake.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/Modules/UninstallTarget.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake"
     IMMEDIATE @ONLY)
 
