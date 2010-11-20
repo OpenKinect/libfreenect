@@ -19,8 +19,8 @@
 #
 # Binary distributions must follow the binary distribution requirements of
 # either License.
-import ctypes
-import numpy as np
+import _ctypes
+import numpy as _np
 
 FREENECT_FORMAT_RGB = 0
 FREENECT_FORMAT_BAYER = 1
@@ -49,10 +49,10 @@ def _setup_shared_library():
     def mk(res, fun, arg):
         fun.restype = res
         fun.argtypes = arg
-    from ctypes import c_int, c_void_p, c_uint32, c_double, c_int16, POINTER
+    from ctypes import c_int, c_void_p, c_uint32, c_double, c_int16, POINTER, cdll, CFUNCTYPE
     c_int16_p = POINTER(c_int16)
     c_double_p = POINTER(c_int16)
-    fn = ctypes.cdll.LoadLibrary('./libfreenect.so')
+    fn = cdll.LoadLibrary('./libfreenect.so')
     # int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx);
     mk(c_int, fn.freenect_init, [c_void_p, c_void_p])
     # int freenect_shutdown(freenect_context *ctx);
@@ -70,11 +70,11 @@ def _setup_shared_library():
     # void *freenect_get_user(freenect_device *dev);
     mk(c_void_p, fn.freenect_get_user, [c_void_p])
     # typedef void (*freenect_depth_cb)(freenect_device *dev, freenect_depth *depth, uint32_t timestamp);
-    freenect_depth_cb = ctypes.CFUNCTYPE(None, c_void_p, c_void_p, c_uint32)
+    freenect_depth_cb = CFUNCTYPE(None, c_void_p, c_void_p, c_uint32)
     # void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);
     mk(None, fn.freenect_set_depth_callback, [c_void_p, freenect_depth_cb])
     # typedef void (*freenect_rgb_cb)(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp);
-    freenect_rgb_cb = ctypes.CFUNCTYPE(None, c_void_p, c_void_p, c_uint32)
+    freenect_rgb_cb = CFUNCTYPE(None, c_void_p, c_void_p, c_uint32)
     # void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb);
     mk(None, fn.freenect_set_rgb_callback, [c_void_p, freenect_rgb_cb])
     # int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt);
@@ -101,15 +101,19 @@ def _setup_shared_library():
     mk(c_int, fn.freenect_get_mks_accelerometers, [c_void_p, c_double_p, c_double_p, c_double_p])
     return fn, freenect_depth_cb, freenect_rgb_cb
 
-fn, freenect_depth_cb, freenect_rgb_cb = _setup_shared_library()
+# Populate module namespace to mimic C interface
+_fn, freenect_depth_cb, freenect_rgb_cb = _setup_shared_library()
+for x in dir(_fn):
+    if x.startswith('freenect_'):
+        globals()[x] = getattr(_fn, x)
 
 def runloop(depth_cb, rgb_cb):
     depth_cb = freenect_depth_cb(depth_cb)
     rgb_cb = freenect_rgb_cb(rgb_cb)
-    ctx = ctypes.c_void_p()
-    if fn.freenect_init(ctypes.byref(ctx), 0) < 0:
+    ctx = _ctypes.c_void_p()
+    if fn.freenect_init(_ctypes.byref(ctx), 0) < 0:
         print('Error: Cant open')
-    dev = ctypes.c_void_p()
+    dev = _ctypes.c_void_p()
     if fn.freenect_open_device(ctx, ctypes.byref(dev), 0) < 0:
         print('Error: Cant open')
     fn.freenect_set_depth_format(dev, 0)
@@ -124,7 +128,7 @@ def runloop(depth_cb, rgb_cb):
 def depth_cb_factory(func):
     def depth_cb(dev, depth, timestamp):
         size, bytes = (480, 640), 614400  # 480 * 640 * 2
-        data = np.fromstring(ctypes.string_at(depth, bytes), dtype=np.uint16)
+        data = _np.fromstring(_ctypes.string_at(depth, bytes), dtype=_np.uint16)
         data.resize(size)
         func(dev, data, timestamp)
     return depth_cb
@@ -133,7 +137,7 @@ def depth_cb_factory(func):
 def rgb_cb_factory(func):
     def rgb_cb(dev, rgb, timestamp):
         size, bytes = (480, 640, 3), 921600  # 480 * 640 * 3
-        data = np.fromstring(ctypes.string_at(rgb, bytes), dtype=np.uint8)
+        data = _np.fromstring(_ctypes.string_at(rgb, bytes), dtype=_np.uint8)
         data.resize(size)
         func(dev, data, timestamp)
     return rgb_cb
