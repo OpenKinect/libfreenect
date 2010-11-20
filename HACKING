@@ -2,7 +2,7 @@
 	--Eric Warmenhoven
 
 We're not terribly particular about coding style at this early stage. However,
-you should follow the following basic guidelines:
+you should try to follow the following basic guidelines:
 
 === INDENTATION ===
 
@@ -61,6 +61,9 @@ void foo(int a_thing, int something_else)
 {
 	...
 }
+
+No-args functions should be (void), and function arguments should be separated
+with a space after the comma, like this:
 
 void baz(void)
 {

@@ -265,7 +265,6 @@ int main(int argc, char **argv)
 	if (argc > 1)
 		user_device_number = atoi(argv[1]);
 
-
 	if (nr_devices < 1)
 		return 1;
 
@@ -273,8 +272,9 @@ int main(int argc, char **argv)
 		printf("Could not open device\n");
 		return 1;
 	}
-        freenect_set_tilt_degs(f_dev,0);
-        freenect_set_led(f_dev,LED_RED);
+
+	freenect_set_tilt_degs(f_dev, 0);
+	freenect_set_led(f_dev, LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_rgb_callback(f_dev, rgb_cb);
 	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
