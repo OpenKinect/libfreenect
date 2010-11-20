@@ -2,7 +2,7 @@
 - Brandyn White (bwhite@dappervision.com)
 
 - Description
-This wrapper can be used to write Python code to control the Kinect using the Freenect library.  This is simpler than a module as it does not need to be compiled.  The entire freenect library is exposed at the module level including enumerated constants and function pointer wrappers.
+This wrapper can be used to write Python code to control the Kinect using the Freenect library.  This is simpler than a module as it does not need to be compiled.  The entire freenect library is exposed at the module level including enumerated constants and function pointer wrappers.  Note that due to the C driver not having udev support, the python script must be run with root.
 
 - Requirements
 Python 2.5+
@@ -23,3 +23,5 @@ demo_tilt: Uses a thread to grab sensor data while tilting and changing the LED
 demo_cv_depth_show: Use opencv's ShowImage to display depth
 demo_cv_rgb_show: Use opencv's ShowImage to display RGB
 
+- How to run a demo
+sudo python demo_cv_depth_show.py

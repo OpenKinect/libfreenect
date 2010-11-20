@@ -12,4 +12,6 @@ def display(dev, data, timestamp):
     else:
         image = mp.imshow(data, interpolation='nearest', animated=True)
     mp.draw()
-runloop(depth_cb_factory(display), lambda *x: None)
+
+if __name__ == '__main__':
+    runloop(depth_cb_factory(display), lambda *x: None)
