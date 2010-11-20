@@ -96,7 +96,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 				if (libusb_open (devs[i], &dev->usb_cam.dev) != 0)
 					return (-1);
 				// Claim the camera
-				if (!dev->usb_cam.dev) 
+				if (!dev->usb_cam.dev)
 					return (-1);
 				libusb_claim_interface (dev->usb_cam.dev, 0);
 				start_cam = true;

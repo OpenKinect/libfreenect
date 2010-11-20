@@ -55,7 +55,6 @@
 #define RGB_PKTBUF 1920
 #endif
 
-
 typedef struct {
 	libusb_context *ctx;
 	int should_free_ctx;

@@ -55,23 +55,24 @@ int freenect_process_events(freenect_context *ctx)
 
 int freenect_num_devices(freenect_context *ctx)
 {
-  libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
-  ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
-  if (cnt < 0)
-    return (-1);
+	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
+	ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
 
-  int nr = 0, i = 0;
-  struct libusb_device_descriptor desc;
-  for (i = 0; i < cnt; ++i)
-  {
-    int r = libusb_get_device_descriptor (devs[i], &desc);
-    if (r < 0)
-      continue;
-    if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_CAMERA_PRODUCT)
-      nr++;
-  }
+	if (cnt < 0)
+		return (-1);
 
-  libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
+	int nr = 0, i = 0;
+	struct libusb_device_descriptor desc;
+	for (i = 0; i < cnt; ++i)
+	{
+		int r = libusb_get_device_descriptor (devs[i], &desc);
+		if (r < 0)
+			continue;
+		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_CAMERA_PRODUCT)
+			nr++;
+	}
+
+	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
 	return (nr);
 }
@@ -108,6 +109,7 @@ void freenect_set_user(freenect_device *dev, void *user)
 {
 	dev->user_data = user;
 }
+
 void *freenect_get_user(freenect_device *dev)
 {
 	return dev->user_data;

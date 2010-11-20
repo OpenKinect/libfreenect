@@ -284,7 +284,7 @@ static void send_init(freenect_device *dev)
 
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
-	
+
 	for (i=0; i<num_inits; i++) {
 		const struct caminit *ip = &inits[i];
 		chdr->cmd = ip->command;
@@ -353,6 +353,7 @@ int freenect_start_depth(freenect_device *dev)
 		send_init(dev);
 	return res;
 }
+
 int freenect_start_rgb(freenect_device *dev)
 {
 	int res;
@@ -375,6 +376,7 @@ int freenect_stop_depth(freenect_device *dev)
 	printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
+
 int freenect_stop_rgb(freenect_device *dev)
 {
 	printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);

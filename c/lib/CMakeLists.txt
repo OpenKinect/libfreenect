@@ -26,11 +26,10 @@ find_library (PTHREAD pthread)
 target_link_libraries (freenect ${CMAKE_THREAD_LIBS_INIT} ${USB_LIBRARIES})
 target_link_libraries (freenectstatic ${CMAKE_THREAD_LIBS_INIT} ${USB_LIBRARIES})
 
-
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/inits.c
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py
-    MAIN_DEPENDENCY inits.txt
-    COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py ${CMAKE_CURRENT_SOURCE_DIR}/inits.txt ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
+	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py
+	MAIN_DEPENDENCY inits.txt
+	COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py ${CMAKE_CURRENT_SOURCE_DIR}/inits.txt ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
 
 # Install the header file
 install (FILES "../include/libfreenect.h"

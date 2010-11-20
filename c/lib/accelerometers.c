@@ -53,10 +53,10 @@ int freenect_get_raw_accelerometers(freenect_device *dev, int16_t* x, int16_t* y
 
 int freenect_get_mks_accelerometers(freenect_device *dev, double* x, double* y, double* z)
 {
-        //the documentation for the accelerometer (http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf) 
-        //states there are 819 counts/g  
+	//the documentation for the accelerometer (http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf)
+	//states there are 819 counts/g
 	int16_t ix, iy, iz;
-        int ret = freenect_get_raw_accelerometers(dev,&ix,&iy,&iz);
+	int ret = freenect_get_raw_accelerometers(dev,&ix,&iy,&iz);
 
 	*x = (double)ix/FREENECT_COUNTS_PER_G*GRAVITY;
 	*y = (double)iy/FREENECT_COUNTS_PER_G*GRAVITY;

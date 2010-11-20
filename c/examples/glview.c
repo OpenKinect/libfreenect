@@ -249,7 +249,7 @@ int main(int argc, char **argv)
 		v = powf(v, 3)* 6;
 		t_gamma[i] = v*6*256;
 	}
-	
+
 	g_argc = argc;
 	g_argv = argv;
 
@@ -260,11 +260,11 @@ int main(int argc, char **argv)
 
 	int nr_devices = freenect_num_devices (f_ctx);
 	printf ("Number of devices found: %d\n", nr_devices);
-	
+
 	int user_device_number = 0;
 	if (argc > 1)
 		user_device_number = atoi(argv[1]);
-	
+
 
 	if (nr_devices < 1)
 		return 1;
@@ -285,7 +285,7 @@ int main(int argc, char **argv)
 		printf("pthread_create failed\n");
 		return 1;
 	}
-	
+
 	freenect_start_depth(f_dev);
 	freenect_start_rgb(f_dev);
 
