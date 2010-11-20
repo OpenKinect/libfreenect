@@ -100,12 +100,11 @@ int freenect_start_rgb(freenect_device *dev);
 int freenect_stop_depth(freenect_device *dev);
 int freenect_stop_rgb(freenect_device *dev);
 
-int freenect_set_tilt_in_degrees(freenect_device *dev, double angle);
-int freenect_set_tilt_in_radians(freenect_device *dev, double angle);
+int freenect_set_tilt_degs(freenect_device *dev, double angle);
 int freenect_set_led(freenect_device *dev, freenect_led_options option);
 
-int freenect_get_raw_accelerometers(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z);
-int freenect_get_mks_accelerometers(freenect_device *dev, double* x, double* y, double* z);
+int freenect_get_raw_accel(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z);
+int freenect_get_mks_accel(freenect_device *dev, double* x, double* y, double* z);
 
 #ifdef __cplusplus
 }

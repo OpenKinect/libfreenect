@@ -273,7 +273,7 @@ int main(int argc, char **argv)
 		printf("Could not open device\n");
 		return 1;
 	}
-        freenect_set_tilt_in_degrees(f_dev,0);
+        freenect_set_tilt_degs(f_dev,0);
         freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_rgb_callback(f_dev, rgb_cb);
@@ -292,9 +292,9 @@ int main(int argc, char **argv)
 	while(!die && freenect_process_events(f_ctx) >= 0 )
 	{
 		int16_t ax,ay,az;
-		freenect_get_raw_accelerometers(f_dev, &ax, &ay, &az);
+		freenect_get_raw_accel(f_dev, &ax, &ay, &az);
 		double dx,dy,dz;
-		freenect_get_mks_accelerometers(f_dev, &dx, &dy, &dz);
+		freenect_get_mks_accel(f_dev, &dx, &dy, &dz);
 		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", ax, ay, az, dx, dy, dz);
 		fflush(stdout);
 	}

@@ -5,7 +5,7 @@ find_package(Threads REQUIRED)
 find_package(USB REQUIRED)
 include_directories(${USB_INCLUDE_DIRS})
 
-SET(SRC motors.c accelerometers.c core.c cameras.c usb_libusb10.c)
+SET(SRC core.c tilt.c cameras.c usb_libusb10.c)
 
 if (NOT PROJECT_OS_WIN)
 	add_library (freenect SHARED ${SRC} ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
