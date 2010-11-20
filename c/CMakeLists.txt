@@ -47,10 +47,10 @@ add_subdirectory (lib)
 add_subdirectory (examples)
 
 # Create an uninstall target
-configure_file(
-    "${CMAKE_SOURCE_DIR}/Modules/UninstallTarget.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake"
-    IMMEDIATE @ONLY)
+#configure_file(
+#    "${CMAKE_SOURCE_DIR}/Modules/UninstallTarget.cmake.in"
+#    "${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake"
+#    IMMEDIATE @ONLY)
 
-add_custom_target(uninstall
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake)
+#add_custom_target(uninstall
+#    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake)
