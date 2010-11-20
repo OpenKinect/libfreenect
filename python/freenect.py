@@ -51,7 +51,7 @@ def _setup_shared_library():
         fun.argtypes = arg
     from ctypes import c_int, c_void_p, c_uint32, c_double, c_int16, POINTER, cdll, CFUNCTYPE
     c_int16_p = POINTER(c_int16)
-    c_double_p = POINTER(c_int16)
+    c_double_p = POINTER(c_double)
     fn = cdll.LoadLibrary('./libfreenect.so')
     # int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx);
     mk(c_int, fn.freenect_init, [c_void_p, c_void_p])
@@ -107,7 +107,46 @@ for x in dir(_fn):
     if x.startswith('freenect_'):
         globals()[x] = getattr(_fn, x)
 
+
+def raw_accelerometers(dev):
+    """Convinience wrapper for raw accelerometers
+
+    Args:
+        dev: ctypes dev pointer
+
+    Returns:
+        Tuple of (x, y, z) as ctype.c_int16 values
+    """
+    x, y, z = ctypes.c_int16(), ctypes.c_int16(), ctypes.c_int16()
+    freenect_get_raw_accelerometers(dev, ctypes.byref(x), ctypes.byref(y), ctypes.byref(z))
+    return x, y, z
+
+
+def mks_accelerometers(dev):
+    """Convinience wrapper for mks accelerometers
+
+    Args:
+        dev: ctypes dev pointer
+
+    Returns:
+        Tuple of (x, y, z) as ctype.c_double values
+    """
+    x, y, z = ctypes.c_double(), ctypes.c_double(), ctypes.c_double()
+    freenect_get_mks_accelerometers(dev, ctypes.byref(x), ctypes.byref(y), ctypes.byref(z))
+    return x, y, z
+
+
 def runloop(depth_cb, rgb_cb):
+    """Sets up the kinect and maintains a runloop
+
+    This is where most of the action happens.  You can get the dev pointer from the callback
+    and let this function do all of the setup for you.  You may want to use threads to perform
+    computation externally as the callbacks should really just be used for copying data.
+
+    Args:
+        depth_cb: A function that takes (dev, depth, timestamp), corresponding to C function.
+        rgb_cb: A function that takes (dev, rgb, timestamp), corresponding to C function.
+    """
     depth_cb = freenect_depth_cb(depth_cb)
     rgb_cb = freenect_rgb_cb(rgb_cb)
     ctx = ctypes.c_void_p()
@@ -126,6 +165,12 @@ def runloop(depth_cb, rgb_cb):
         pass
 
 def depth_cb_factory(func):
+    """Converts the raw depth data into a numpy array for your function
+
+    Args:
+        func: A function that takes (dev, data, timestamp), corresponding to C function
+            except that data is a 2D numpy array corresponding to the data.
+    """
     def depth_cb(dev, depth, timestamp):
         size, bytes = (480, 640), 614400  # 480 * 640 * 2
         data = _np.fromstring(ctypes.string_at(depth, bytes), dtype=_np.uint16)
@@ -135,6 +180,12 @@ def depth_cb_factory(func):
 
 
 def rgb_cb_factory(func):
+    """Converts the raw RGB data into a numpy array for your function
+
+    Args:
+        func: A function that takes (dev, data, timestamp), corresponding to C function
+            except that data is a 2D numpy array corresponding to the data.
+    """
     def rgb_cb(dev, rgb, timestamp):
         size, bytes = (480, 640, 3), 921600  # 480 * 640 * 3
         data = _np.fromstring(ctypes.string_at(rgb, bytes), dtype=_np.uint8)
