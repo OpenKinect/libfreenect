@@ -12,7 +12,9 @@ numpy
 opencv 2.1
 
 - Installation
-Compile freenect and then copy the shared library (e.g., .so) along with this module.
+Compile freenect by following the directions in README.asciidoc at the project root, copy the shared library (e.g., .so) along with this module.  At the time of this writing, this is accomplished by
+
+libfreenect/c/python$ cp ../build/lib/libfreenect.* .
 
 - Examples
 demo_mp_depth_show: Use matplotlib's imshow command to display the depth image
