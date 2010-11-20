@@ -45,7 +45,7 @@ struct pkt_hdr {
 extern const struct caminit inits[];
 extern const int num_inits;
 
-static int stream_process(packet_stream *strm, uint8_t *pkt, int len)
+static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *pkt, int len)
 {
 	if (len < 12)
 		return 0;
@@ -55,11 +55,12 @@ static int stream_process(packet_stream *strm, uint8_t *pkt, int len)
 	int datalen = len - sizeof(*hdr);
 
 	if (hdr->magic[0] != 'R' || hdr->magic[1] != 'B') {
-		printf("[Stream %02x] Invalid magic %02x%02x\n", strm->flag, hdr->magic[0], hdr->magic[1]);
+		// this is currently expected on init
+		FN_DEBUG("[Stream %02x] Invalid magic %02x%02x\n", strm->flag, hdr->magic[0], hdr->magic[1]);
 		return 0;
 	}
 
-	//printf("[Stream %02x] %02x\n", strm->flag, hdr->flag);
+	FN_FLOOD("[Stream %02x] Packet with flag: %02x\n", strm->flag, hdr->flag);
 
 	uint8_t sof = strm->flag|1;
 	uint8_t mof = strm->flag|2;
@@ -68,7 +69,7 @@ static int stream_process(packet_stream *strm, uint8_t *pkt, int len)
 	// sync if required, dropping packets until SOF
 	if (!strm->synced) {
 		if (hdr->flag != sof) {
-			//printf("[Stream %02x] not synced yet...\n", strm->flag);
+			FN_SPEW("[Stream %02x] Not synced yet...\n", strm->flag);
 			return 0;
 		}
 		strm->synced = 1;
@@ -83,9 +84,9 @@ static int stream_process(packet_stream *strm, uint8_t *pkt, int len)
 	// handle lost packets
 	if (strm->seq != hdr->seq) {
 		uint8_t lost = strm->seq - hdr->seq;
-		printf("[Stream %02x] lost %d packets\n", strm->flag, lost);
+		FN_INFO("[Stream %02x] Lost %d packets\n", strm->flag, lost);
 		if (lost > 5) {
-			printf("[Stream %02x] lost too many packets, resyncing...\n", strm->flag);
+			FN_NOTICE("[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
 			strm->synced = 0;
 			return 0;
 		}
@@ -106,7 +107,7 @@ static int stream_process(packet_stream *strm, uint8_t *pkt, int len)
 	if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
 	    !(strm->pkt_num == strm->pkts_per_frame-1 && hdr->flag == eof) &&
 	    !(strm->pkt_num > 0 && strm->pkt_num < strm->pkts_per_frame-1 && hdr->flag == mof)) {
-		printf("[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
+		FN_NOTICE("[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
 		       strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
 		strm->synced = 0;
 		return 0;
@@ -114,12 +115,12 @@ static int stream_process(packet_stream *strm, uint8_t *pkt, int len)
 
 	// copy data
 	if (datalen > strm->pkt_size) {
-		printf("[Stream %02x] Expected %d data bytes, but got %d. Dropping...\n", strm->flag, strm->pkt_size, datalen);
+		FN_WARNING("[Stream %02x] Expected %d data bytes, but got %d. Dropping...\n", strm->flag, strm->pkt_size, datalen);
 		return 0;
 	}
 
 	if (datalen != strm->pkt_size && hdr->flag != eof)
-		printf("[Stream %02x] Expected %d data bytes, but got only %d\n", strm->flag, strm->pkt_size, datalen);
+		FN_WARNING("[Stream %02x] Expected %d data bytes, but got only %d\n", strm->flag, strm->pkt_size, datalen);
 
 	uint8_t *dbuf = strm->buf + strm->pkt_num * strm->pkt_size;
 	memcpy(dbuf, data, datalen);
@@ -141,27 +142,39 @@ static int stream_process(packet_stream *strm, uint8_t *pkt, int len)
 	}
 }
 
+// Unpack buffer of (vw bit) data into padded 16bit buffer.
+#define CONVERT_PACKED_BUFFER_TO_16_BIT(depth_raw, depth_frame, vw) {\
+		const int mask = (1 << vw) - 1; \
+		int i; \
+		int bitshift = 0; \
+		for (i=0; i<(640*480); i++) { \
+			int idx = (i*vw)/8; \
+			uint32_t word = (depth_raw[idx]<<(16)) | (depth_raw[idx+1]<<8) | depth_raw[idx+2]; \
+			depth_frame[i] = ((word >> (((3*8)-vw)-bitshift)) & mask); \
+			bitshift = (bitshift + vw) % 8; \
+		} \
+}
+
 static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 {
-	int i;
+	freenect_context *ctx = dev->parent;
+
 	if (len == 0)
 		return;
 
-	int got_frame = stream_process(&dev->depth_stream, pkt, len);
+	int got_frame = stream_process(ctx, &dev->depth_stream, pkt, len);
 
 	if (!got_frame)
 		return;
 
-	printf("GOT DEPTH FRAME %d/%d packets arrived, TS %08x\n",
+
+	FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
 	       dev->depth_stream.valid_pkts, dev->depth_stream.pkts_per_frame, dev->depth_stream.timestamp);
 
-	int bitshift = 0;
-	for (i=0; i<(640*480); i++) {
-		int idx = (i*11)/8;
-		uint32_t word = (dev->depth_raw[idx]<<16) | (dev->depth_raw[idx+1]<<8) | dev->depth_raw[idx+2];
-		dev->depth_frame[i] = ((word >> (13-bitshift)) & 0x7ff);
-		bitshift = (bitshift + 11) % 8;
-	}
+	if( dev->depth_format == FREENECT_FORMAT_11_BIT )
+		CONVERT_PACKED_BUFFER_TO_16_BIT(dev->depth_raw, dev->depth_frame, 11)
+	else
+		CONVERT_PACKED_BUFFER_TO_16_BIT(dev->depth_raw, dev->depth_frame, 10)
 
 	if (dev->depth_cb)
 		dev->depth_cb(dev, dev->depth_frame, dev->depth_stream.timestamp);
@@ -169,16 +182,18 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 
 static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 {
+	freenect_context *ctx = dev->parent;
+
 	int x,y,i;
 	if (len == 0)
 		return;
 
-	int got_frame = stream_process(&dev->rgb_stream, pkt, len);
+	int got_frame = stream_process(ctx, &dev->rgb_stream, pkt, len);
 
 	if (!got_frame)
 		return;
 
-	printf("GOT RGB FRAME %d/%d packets arrived, TS %08x\n", dev->rgb_stream.valid_pkts,
+	FN_SPEW("Got RGB frame %d/%d packets arrived, TS %08x\n", dev->rgb_stream.valid_pkts,
 	       dev->rgb_stream.pkts_per_frame, dev->rgb_stream.timestamp);
 
 	uint8_t *rgb_frame = NULL;
@@ -264,6 +279,7 @@ struct cam_hdr {
 
 static void send_init(freenect_device *dev)
 {
+	freenect_context *ctx = dev->parent;
 	int i, j, ret;
 	uint8_t obuf[0x400];
 	uint8_t ibuf[0x200];
@@ -271,49 +287,57 @@ static void send_init(freenect_device *dev)
 	struct cam_hdr *rhdr = (void*)ibuf;
 
 	ret = fnusb_control(&dev->usb_cam, 0x80, 0x06, 0x3ee, 0, ibuf, 0x12);
-	printf("First xfer: %d\n", ret);
+	FN_SPEW("First CTL xfer: %d\n", ret);
 
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
-	
+
 	for (i=0; i<num_inits; i++) {
 		const struct caminit *ip = &inits[i];
 		chdr->cmd = ip->command;
 		chdr->tag = ip->tag;
 		chdr->len = ip->cmdlen / 2;
 		memcpy(obuf+sizeof(*chdr), ip->cmddata, ip->cmdlen);
+
+		if( i==6 ) {
+			// Choose 10bit or 11 bit depth output
+			obuf[sizeof(*chdr) + 2] = dev->depth_format == FREENECT_FORMAT_11_BIT ? 0x03 : 0x02;
+		}
+
 		ret = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, ip->cmdlen + sizeof(*chdr));
-		printf("CTL CMD %04x %04x = %d\n", chdr->cmd, chdr->tag, ret);
+		FN_DEBUG("Control cmd=%04x tag=%04x: %d\n", chdr->cmd, chdr->tag, ret);
+
 		do {
 			ret = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
 		} while (ret == 0);
-		printf("CTL RES = %d\n", ret);
+		FN_DEBUG("Control reply: %d\n", ret);
+
 		if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
-			printf("Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
+			FN_WARNING("Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
 			continue;
 		}
 		if (rhdr->cmd != chdr->cmd) {
-			printf("Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
+			FN_WARNING("Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
 			continue;
 		}
 		if (rhdr->tag != chdr->tag) {
-			printf("Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
+			FN_WARNING("Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
 			continue;
 		}
 		if (rhdr->len != (ret-sizeof(*rhdr))/2) {
-			printf("Bad len %04x != %04x\n", rhdr->len, (int)(ret-sizeof(*rhdr))/2);
+			FN_WARNING("Bad len %04x != %04x\n", rhdr->len, (int)(ret-sizeof(*rhdr))/2);
 			continue;
 		}
 		if (rhdr->len != (ip->replylen/2) || memcmp(ibuf+sizeof(*rhdr), ip->replydata, ip->replylen)) {
-			printf("Expected: ");
+			FN_SPEW("Expected: ");
 			for (j=0; j<ip->replylen; j++) {
-				printf("%02x ", ip->replydata[j]);
+				FN_SPEW("%02x ", ip->replydata[j]);
 			}
-			printf("\nGot:      ");
+			FN_SPEW("\nGot:      ");
 			for (j=0; j<(rhdr->len*2); j++) {
-				printf("%02x ", ibuf[j+sizeof(*rhdr)]);
+				FN_SPEW("%02x ", ibuf[j+sizeof(*rhdr)]);
 			}
-			printf("\n");
+			FN_SPEW("\n");
 		}
 	}
 	dev->cam_inited = 1;
@@ -324,7 +348,9 @@ int freenect_start_depth(freenect_device *dev)
 	int res;
 
 	dev->depth_stream.buf = dev->depth_raw;
-	dev->depth_stream.pkts_per_frame = DEPTH_PKTS_PER_FRAME;
+	dev->depth_stream.pkts_per_frame =
+			dev->depth_format == FREENECT_FORMAT_11_BIT ?
+			DEPTH_PKTS_11_BIT_PER_FRAME : DEPTH_PKTS_10_BIT_PER_FRAME;
 	dev->depth_stream.pkt_size = DEPTH_PKTDSIZE;
 	dev->depth_stream.synced = 0;
 	dev->depth_stream.flag = 0x70;
@@ -335,6 +361,7 @@ int freenect_start_depth(freenect_device *dev)
 		send_init(dev);
 	return res;
 }
+
 int freenect_start_rgb(freenect_device *dev)
 {
 	int res;
@@ -354,12 +381,15 @@ int freenect_start_rgb(freenect_device *dev)
 
 int freenect_stop_depth(freenect_device *dev)
 {
-	printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	freenect_context *ctx = dev->parent;
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
+
 int freenect_stop_rgb(freenect_device *dev)
 {
-	printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	freenect_context *ctx = dev->parent;
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
@@ -376,5 +406,11 @@ void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb)
 int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt)
 {
 	dev->rgb_format = fmt;
+	return 0;
+}
+
+int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
+{
+	dev->depth_format = fmt;
 	return 0;
 }

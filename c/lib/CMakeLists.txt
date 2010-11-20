@@ -5,8 +5,10 @@ find_package(Threads REQUIRED)
 find_package(USB REQUIRED)
 include_directories(${USB_INCLUDE_DIRS})
 
+SET(SRC core.c tilt.c cameras.c usb_libusb10.c)
+
 if (NOT PROJECT_OS_WIN)
-	add_library (freenect SHARED core.c cameras.c usb_libusb10.c ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
+	add_library (freenect SHARED ${SRC} ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
 	set_target_properties ( freenect PROPERTIES
 		VERSION ${PROJECT_VER}
 		SOVERSION ${PROJECT_APIVER})	
@@ -14,7 +16,7 @@ if (NOT PROJECT_OS_WIN)
 		DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}")
 endif (NOT PROJECT_OS_WIN)
 
-add_library (freenectstatic STATIC core.c cameras.c usb_libusb10.c ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
+add_library (freenectstatic STATIC ${SRC} ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
 set_target_properties (freenectstatic PROPERTIES
 	OUTPUT_NAME freenect)
 install (TARGETS freenectstatic
@@ -24,11 +26,10 @@ find_library (PTHREAD pthread)
 target_link_libraries (freenect ${CMAKE_THREAD_LIBS_INIT} ${USB_LIBRARIES})
 target_link_libraries (freenectstatic ${CMAKE_THREAD_LIBS_INIT} ${USB_LIBRARIES})
 
-
 add_custom_command(OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/inits.c
-    DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py
-    MAIN_DEPENDENCY inits.txt
-    COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py ${CMAKE_CURRENT_SOURCE_DIR}/inits.txt ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
+	DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py
+	MAIN_DEPENDENCY inits.txt
+	COMMAND python ${CMAKE_CURRENT_SOURCE_DIR}/geninits.py ${CMAKE_CURRENT_SOURCE_DIR}/inits.txt ${CMAKE_CURRENT_BINARY_DIR}/inits.c)
 
 # Install the header file
 install (FILES "../include/libfreenect.h"

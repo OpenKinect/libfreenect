@@ -25,6 +25,7 @@
  */
 
 #include <stdio.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <libusb.h>
 #include "freenect_internal.h"
@@ -51,7 +52,7 @@ int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
 
 int fnusb_shutdown(fnusb_ctx *ctx)
 {
-	int res;
+	//int res;
 	if (ctx->should_free_ctx) {
 		libusb_exit(ctx->ctx);
 		ctx->ctx = NULL;
@@ -67,12 +68,69 @@ int fnusb_process_events(fnusb_ctx *ctx)
 int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	dev->usb_cam.parent = dev;
-	dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
-	if (!dev->usb_cam.dev) {
-		return -1;
+
+	// Search for 0x45e (Microsoft Corp.) and 0x02ae
+	//dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
+
+	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
+	ssize_t cnt = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
+	if (cnt < 0)
+		return (-1);
+
+	bool start_cam = false, start_motor = false;
+
+	int i = 0, nr_cam = 0, nr_mot = 0;
+	struct libusb_device_descriptor desc;
+	for (i = 0; i < cnt; ++i)
+	{
+		int r = libusb_get_device_descriptor (devs[i], &desc);
+		if (r < 0)
+			continue;
+
+		// Search for the camera
+		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_CAMERA_PRODUCT && !start_cam)
+		{
+			// If the index given by the user matches our camera index
+			if (nr_cam == index)
+			{
+				if (libusb_open (devs[i], &dev->usb_cam.dev) != 0)
+					return (-1);
+				// Claim the camera
+				if (!dev->usb_cam.dev)
+					return (-1);
+				libusb_claim_interface (dev->usb_cam.dev, 0);
+				start_cam = true;
+			}
+			else
+				nr_cam++;
+		}
+
+		// Search for the motor
+		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_MOTOR_PRODUCT && !start_motor)
+		{
+			// If the index given by the user matches our camera index
+			if (nr_mot == index)
+			{
+				//libusb_open_device_with_vid_pid (dev->parent->usb.ctx, MS_MAGIC_VENDOR, MS_MAGIC_MOTOR_PRODUCT);
+				if (libusb_open (devs[i], &dev->usb_motor.dev) != 0)
+					return (-1);
+				// Claim the motor
+				if (!dev->usb_motor.dev)
+					return (-1);
+				libusb_claim_interface (dev->usb_motor.dev, 0);
+				start_motor = true;
+			}
+			else
+				nr_mot++;
+		}
 	}
-	libusb_claim_interface(dev->usb_cam.dev, 0);
-	return 0;
+
+	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
+
+	if (start_cam && start_motor)
+		return (0);
+	else
+		return (-1);
 }
 
 static void iso_callback(struct libusb_transfer *xfer)
@@ -88,12 +146,14 @@ static void iso_callback(struct libusb_transfer *xfer)
 		}
 		libusb_submit_transfer(xfer);
 	} else {
-		printf("Xfer error: %d\n", xfer->status);
+		freenect_context *ctx = strm->parent->parent->parent;
+		FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
 	}
 }
 
 int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, int ep, int xfers, int pkts, int len)
 {
+	freenect_context *ctx = dev->parent->parent;
 	int ret, i;
 
 	strm->parent = dev;
@@ -107,7 +167,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 	uint8_t *bufp = strm->buffer;
 
 	for (i=0; i<xfers; i++) {
-		printf("Creating EP %02x transfer #%d\n", ep, i);
+		FN_SPEW("Creating EP %02x transfer #%d\n", ep, i);
 		strm->xfers[i] = libusb_alloc_transfer(pkts);
 
 		libusb_fill_iso_transfer(strm->xfers[i], dev->dev, ep, bufp, pkts * len, pkts, iso_callback, strm, 0);
@@ -116,7 +176,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 
 		ret = libusb_submit_transfer(strm->xfers[i]);
 		if (ret < 0)
-			printf("Failed to submit xfer %d: %d\n", i, ret);
+			FN_WARNING("Failed to submit isochronous transfer %d: %d\n", i, ret);
 
 		bufp += pkts*len;
 	}
