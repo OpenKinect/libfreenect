@@ -1,0 +1,23 @@
+** Freenect Ctypes Wrapper **
+- Brandyn White (bwhite@dappervision.com)
+
+- Description
+This wrapper can be used to write Python code to control the Kinect using the Freenect library.  This is simpler than a module as it does not need to be compiled.  The entire freenect library is exposed at the module level including enumerated constants and function pointer wrappers.
+
+- Requirements
+Python 2.5+
+numpy
+
+- Optional Libraries
+opencv 2.1
+
+- Installation
+Compile freenect and then copy the shared library (e.g., .so) along with this module.
+
+- Examples
+demo_mp_depth_show: Use matplotlib's imshow command to display the depth image
+demo_mp_rgb_show: Use matplotlib's imshow command to display the RGB image
+demo_tilt: Uses a thread to grab sensor data while tilting and changing the LED
+demo_cv_depth_show: Use opencv's ShowImage to display depth
+demo_cv_rgb_show: Use opencv's ShowImage to display RGB
+
