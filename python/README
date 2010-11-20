@@ -14,3 +14,4 @@ Compile freenect and then copy the shared library (e.g., .so) along with this mo
 - Examples
 demo_mp_depth_show: Use matplotlib's imshow command to display the depth image
 demo_mp_rgb_show: Use matplotlib's imshow command to display the RGB image
+demo_tilt: Uses a thread to grab sensor data while tilting and changing the LED
