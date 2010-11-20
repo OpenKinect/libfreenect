@@ -19,7 +19,7 @@
 #
 # Binary distributions must follow the binary distribution requirements of
 # either License.
-import _ctypes
+import ctypes
 import numpy as _np
 
 FREENECT_FORMAT_RGB = 0
@@ -110,25 +110,25 @@ for x in dir(_fn):
 def runloop(depth_cb, rgb_cb):
     depth_cb = freenect_depth_cb(depth_cb)
     rgb_cb = freenect_rgb_cb(rgb_cb)
-    ctx = _ctypes.c_void_p()
-    if fn.freenect_init(_ctypes.byref(ctx), 0) < 0:
+    ctx = ctypes.c_void_p()
+    if freenect_init(ctypes.byref(ctx), 0) < 0:
         print('Error: Cant open')
-    dev = _ctypes.c_void_p()
-    if fn.freenect_open_device(ctx, ctypes.byref(dev), 0) < 0:
+    dev = ctypes.c_void_p()
+    if freenect_open_device(ctx, ctypes.byref(dev), 0) < 0:
         print('Error: Cant open')
-    fn.freenect_set_depth_format(dev, 0)
-    fn.freenect_set_depth_callback(dev, depth_cb)
-    fn.freenect_start_depth(dev)
-    fn.freenect_set_rgb_format(dev, FREENECT_FORMAT_RGB)
-    fn.freenect_set_rgb_callback(dev, rgb_cb)
-    fn.freenect_start_rgb(dev)
-    while fn.freenect_process_events(ctx) >= 0:
+    freenect_set_depth_format(dev, 0)
+    freenect_set_depth_callback(dev, depth_cb)
+    freenect_start_depth(dev)
+    freenect_set_rgb_format(dev, FREENECT_FORMAT_RGB)
+    freenect_set_rgb_callback(dev, rgb_cb)
+    freenect_start_rgb(dev)
+    while freenect_process_events(ctx) >= 0:
         pass
 
 def depth_cb_factory(func):
     def depth_cb(dev, depth, timestamp):
         size, bytes = (480, 640), 614400  # 480 * 640 * 2
-        data = _np.fromstring(_ctypes.string_at(depth, bytes), dtype=_np.uint16)
+        data = _np.fromstring(ctypes.string_at(depth, bytes), dtype=_np.uint16)
         data.resize(size)
         func(dev, data, timestamp)
     return depth_cb
@@ -137,7 +137,7 @@ def depth_cb_factory(func):
 def rgb_cb_factory(func):
     def rgb_cb(dev, rgb, timestamp):
         size, bytes = (480, 640, 3), 921600  # 480 * 640 * 3
-        data = _np.fromstring(_ctypes.string_at(rgb, bytes), dtype=_np.uint8)
+        data = _np.fromstring(ctypes.string_at(rgb, bytes), dtype=_np.uint8)
         data.resize(size)
         func(dev, data, timestamp)
     return rgb_cb
