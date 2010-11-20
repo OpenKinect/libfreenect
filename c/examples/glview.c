@@ -117,6 +117,7 @@ void DrawGLScene()
 void keyPressed(unsigned char key, int x, int y)
 {
 	if (key == 27) {
+		die = 1;
 		glutDestroyWindow(window);
 		pthread_exit(NULL);
 	}
