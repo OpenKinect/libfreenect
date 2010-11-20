@@ -141,9 +141,21 @@ static int stream_process(packet_stream *strm, uint8_t *pkt, int len)
 	}
 }
 
+// Unpack buffer of (vw bit) data into padded 16bit buffer.
+#define CONVERT_PACKED_BUFFER_TO_16_BIT(depth_raw, depth_frame, vw) {\
+		const int mask = (1 << vw) - 1; \
+		int i; \
+		int bitshift = 0; \
+		for (i=0; i<(640*480); i++) { \
+			int idx = (i*vw)/8; \
+			uint32_t word = (depth_raw[idx]<<(16)) | (depth_raw[idx+1]<<8) | depth_raw[idx+2]; \
+			depth_frame[i] = ((word >> (((3*8)-vw)-bitshift)) & mask); \
+			bitshift = (bitshift + vw) % 8; \
+		} \
+}
+
 static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 {
-	int i;
 	if (len == 0)
 		return;
 
@@ -155,13 +167,10 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	//printf("GOT DEPTH FRAME %d/%d packets arrived, TS %08x\n",
 	//      dev->depth_stream.valid_pkts, dev->depth_stream.pkts_per_frame, dev->depth_stream.timestamp);
 
-	int bitshift = 0;
-	for (i=0; i<(640*480); i++) {
-		int idx = (i*11)/8;
-		uint32_t word = (dev->depth_raw[idx]<<16) | (dev->depth_raw[idx+1]<<8) | dev->depth_raw[idx+2];
-		dev->depth_frame[i] = ((word >> (13-bitshift)) & 0x7ff);
-		bitshift = (bitshift + 11) % 8;
-	}
+	if( dev->depth_format == FREENECT_FORMAT_11_BIT )
+		CONVERT_PACKED_BUFFER_TO_16_BIT(dev->depth_raw, dev->depth_frame, 11)
+	else
+		CONVERT_PACKED_BUFFER_TO_16_BIT(dev->depth_raw, dev->depth_frame, 10)
 
 	if (dev->depth_cb)
 		dev->depth_cb(dev, dev->depth_frame, dev->depth_stream.timestamp);
@@ -282,6 +291,13 @@ static void send_init(freenect_device *dev)
 		chdr->tag = ip->tag;
 		chdr->len = ip->cmdlen / 2;
 		memcpy(obuf+sizeof(*chdr), ip->cmddata, ip->cmdlen);
+
+		if( i==6 )
+		{
+			// Choose 10bit or 11 bit depth output
+			obuf[sizeof(*chdr) + 2] = dev->depth_format == FREENECT_FORMAT_11_BIT ? 0x03 : 0x02;
+		}
+
 		ret = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, ip->cmdlen + sizeof(*chdr));
 		//printf("CTL CMD %04x %04x = %d\n", chdr->cmd, chdr->tag, ret);
 		do {
@@ -324,7 +340,9 @@ int freenect_start_depth(freenect_device *dev)
 	int res;
 
 	dev->depth_stream.buf = dev->depth_raw;
-	dev->depth_stream.pkts_per_frame = DEPTH_PKTS_PER_FRAME;
+	dev->depth_stream.pkts_per_frame =
+			dev->depth_format == FREENECT_FORMAT_11_BIT ?
+			DEPTH_PKTS_11_BIT_PER_FRAME : DEPTH_PKTS_10_BIT_PER_FRAME;
 	dev->depth_stream.pkt_size = DEPTH_PKTDSIZE;
 	dev->depth_stream.synced = 0;
 	dev->depth_stream.flag = 0x70;
@@ -376,5 +394,11 @@ void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb)
 int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt)
 {
 	dev->rgb_format = fmt;
+	return 0;
+}
+
+int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
+{
+	dev->depth_format = fmt;
 	return 0;
 }
