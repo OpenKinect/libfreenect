@@ -128,7 +128,7 @@ def _populate_namespace():
 
 
 def raw_accel(dev):
-    """Convinience wrapper for raw accelerometers
+    """Convenience wrapper for raw accelerometers
 
     Args:
         dev: ctypes dev pointer
@@ -143,7 +143,7 @@ def raw_accel(dev):
 
 
 def mks_accel(dev):
-    """Convinience wrapper for mks accelerometers
+    """Convenience wrapper for mks accelerometers
 
     Args:
         dev: ctypes dev pointer
