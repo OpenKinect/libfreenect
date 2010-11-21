@@ -2,7 +2,11 @@
 - Brandyn White (bwhite@dappervision.com)
 
 - Description
-This wrapper can be used to write Python code to control the Kinect using the Freenect library.  This is simpler than a module as it does not need to be compiled.  The entire freenect library is exposed at the module level including enumerated constants and function pointer wrappers.  Note that due to the C driver not having udev support, the python script must be run with root.
+This wrapper can be used to write Python code to control the Kinect using the
+Freenect library.  This is simpler than a module as it does not need to be
+compiled.  The entire freenect library is exposed at the module level including
+enumerated constants and function pointer wrappers.  Note that due to the C
+driver not having udev support, the python script must be run with root. 
 
 - Requirements
 Python 2.5+
@@ -13,9 +17,14 @@ matplotlib: sudo apt-get install python-matplotlib
 opencv 2.1:  sudo apt-get install libcv-dev libcv2.1 libcvaux2.1 python-opencv libhighgui2.1
 
 - Installation
-Compile freenect by following the directions in README.asciidoc at the project root.  This module should "just work" because it checks it's current directory and the build directory for the dynamic library (also checking for platform specific extensions).
+Compile freenect by following the directions in README.asciidoc at the project
+root.  This module should "just work" because it checks it's current directory
+and the build directory for the dynamic library (also checking for platform
+specific extensions). 
 
-If you want to use this script outside of it's directory copy the shared library (e.g., .so, .dynlib, .dll) along with this module.  At the time of this writing, this is accomplished by
+If you want to use this script outside of it's directory copy the shared library
+(e.g., .so, .dynlib, .dll) along with this module.  At the time of this writing,
+this is accomplished by 
 
 libfreenect/c/python$ cp ../build/lib/libfreenect.* .
 
@@ -37,4 +46,6 @@ depth_cb_string_factory + rgb_cb_string_factory
 depth_cb_array_factory + rgb_cb_array_factory
 depth_cb_np_factory + rgb_cb_np_factory
 
-They all have specific documentation in their docstring.  The general structure is that you make a function, pass it into a factory, and run the "runloop" with "rgb" and/or "depth" set the output of the factory you chose.
+They all have specific documentation in their docstring.  The general structure
+is that you make a function, pass it into a factory, and run the "runloop" with
+"rgb" and/or "depth" set the output of the factory you chose. 
