@@ -1,0 +1,40 @@
+** Freenect Ctypes Wrapper **
+- Brandyn White (bwhite@dappervision.com)
+
+- Description
+This wrapper can be used to write Python code to control the Kinect using the Freenect library.  This is simpler than a module as it does not need to be compiled.  The entire freenect library is exposed at the module level including enumerated constants and function pointer wrappers.  Note that due to the C driver not having udev support, the python script must be run with root.
+
+- Requirements
+Python 2.5+
+
+- Optional Libraries
+numpy: sudo apt-get install python-numpy  - Note: Not required but this is the recommended interface
+matplotlib: sudo apt-get install python-matplotlib
+opencv 2.1:  sudo apt-get install libcv-dev libcv2.1 libcvaux2.1 python-opencv libhighgui2.1
+
+- Installation
+Compile freenect by following the directions in README.asciidoc at the project root.  This module should "just work" because it checks it's current directory and the build directory for the dynamic library (also checking for platform specific extensions).
+
+If you want to use this script outside of it's directory copy the shared library (e.g., .so, .dynlib, .dll) along with this module.  At the time of this writing, this is accomplished by
+
+libfreenect/c/python$ cp ../build/lib/libfreenect.* .
+
+- Examples
+demo_mp_depth_show: Use matplotlib's imshow command to display the depth image. Requires: matplotlib and numpy
+demo_mp_rgb_show: Use matplotlib's imshow command to display the RGB image. Requires: matplotlib and numpy
+demo_tilt: Uses a thread to grab sensor data while tilting and changing the LED.  This works with just python.
+demo_cv_depth_show: Use opencv's ShowImage to display depth. Requires: Numpy and opencv (new python bindings)
+demo_cv_rgb_show: Use opencv's ShowImage to display RGB. Requires: Numpy and opencv (new python bindings)
+
+- How to run a demo
+sudo python demo_tilt.py
+sudo python demo_cv_depth_show.py
+sudo python demo_mp_depth_show.py
+
+- Callbacks
+There are 3 callback interfaced you can choose from.
+depth_cb_string_factory + rgb_cb_string_factory
+depth_cb_array_factory + rgb_cb_array_factory
+depth_cb_np_factory + rgb_cb_np_factory
+
+They all have specific documentation in their docstring.  The general structure is that you make a function, pass it into a factory, and run the "runloop" with "rgb" and/or "depth" set the output of the factory you chose.

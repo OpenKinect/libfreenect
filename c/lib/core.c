@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdarg.h>
 #include <unistd.h>
 
 #include "freenect_internal.h"
@@ -39,12 +40,13 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 
 	memset(*ctx, 0, sizeof(freenect_context));
 
+	(*ctx)->log_level = LL_WARNING;
 	return fnusb_init(&(*ctx)->usb, usb_ctx);
 }
 
 int freenect_shutdown(freenect_context *ctx)
 {
-	printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
@@ -55,23 +57,24 @@ int freenect_process_events(freenect_context *ctx)
 
 int freenect_num_devices(freenect_context *ctx)
 {
-  libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
-  ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
-  if (cnt < 0)
-    return (-1);
+	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
+	ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
 
-  int nr = 0, i = 0;
-  struct libusb_device_descriptor desc;
-  for (i = 0; i < cnt; ++i)
-  {
-    int r = libusb_get_device_descriptor (devs[i], &desc);
-    if (r < 0)
-      continue;
-    if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_CAMERA_PRODUCT)
-      nr++;
-  }
+	if (cnt < 0)
+		return (-1);
 
-  libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
+	int nr = 0, i = 0;
+	struct libusb_device_descriptor desc;
+	for (i = 0; i < cnt; ++i)
+	{
+		int r = libusb_get_device_descriptor (devs[i], &desc);
+		if (r < 0)
+			continue;
+		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_CAMERA_PRODUCT)
+			nr++;
+	}
+
+	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
 	return (nr);
 }
@@ -100,7 +103,8 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 
 int freenect_close_device(freenect_device *dev)
 {
-	printf("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	freenect_context *ctx = dev->parent;
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
@@ -108,8 +112,42 @@ void freenect_set_user(freenect_device *dev, void *user)
 {
 	dev->user_data = user;
 }
+
 void *freenect_get_user(freenect_device *dev)
 {
 	return dev->user_data;
+}
+
+void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level)
+{
+	ctx->log_level = level;
+}
+
+void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb)
+{
+	ctx->log_cb = cb;
+}
+
+void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...)
+{
+	va_list ap;
+
+	if (level > ctx->log_level)
+		return;
+
+	if (ctx->log_cb) {
+		char msgbuf[1024];
+
+		va_start(ap, fmt);
+		vsnprintf(msgbuf, 1024, fmt, ap);
+		msgbuf[1023] = 0;
+		va_end(ap);
+
+		ctx->log_cb(ctx, level, msgbuf);
+	} else {
+		va_start(ap, fmt);
+		vfprintf(stderr, fmt, ap);
+		va_end(ap);
+	}
 }
 

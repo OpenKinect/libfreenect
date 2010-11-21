@@ -50,16 +50,16 @@ typedef enum {
 } freenect_rgb_format;
 
 typedef enum {
-    LED_OFF    = 0,
-    LED_GREEN  = 1,
-    LED_RED    = 2,
-    LED_YELLOW = 3,
-    LED_BLINK_YELLOW = 4,
-    LED_BLINK_GREEN = 5,
-    LED_BLINK_RED_YELLOW = 6
+	LED_OFF    = 0,
+	LED_GREEN  = 1,
+	LED_RED    = 2,
+	LED_YELLOW = 3,
+	LED_BLINK_YELLOW = 4,
+	LED_BLINK_GREEN = 5,
+	LED_BLINK_RED_YELLOW = 6
 } freenect_led_options;
 
-typedef enum {	  
+typedef enum {
 	FREENECT_FORMAT_11_BIT = 0,
 	FREENECT_FORMAT_10_BIT = 1
 } freenect_depth_format;
@@ -75,8 +75,24 @@ typedef struct _freenect_device freenect_device;
 typedef libusb_context freenect_usb_context;
 //
 
+typedef enum {
+	FREENECT_LOG_FATAL = 0,
+	FREENECT_LOG_ERROR,
+	FREENECT_LOG_WARNING,
+	FREENECT_LOG_NOTICE,
+	FREENECT_LOG_INFO,
+	FREENECT_LOG_DEBUG,
+	FREENECT_LOG_SPEW,
+	FREENECT_LOG_FLOOD,
+} freenect_loglevel;
+
 int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx);
 int freenect_shutdown(freenect_context *ctx);
+
+typedef void (*freenect_log_cb)(freenect_context *dev, freenect_loglevel level, const char *msg);
+
+void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level);
+void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb);
 
 int freenect_process_events(freenect_context *ctx);
 
@@ -100,13 +116,11 @@ int freenect_start_rgb(freenect_device *dev);
 int freenect_stop_depth(freenect_device *dev);
 int freenect_stop_rgb(freenect_device *dev);
 
-
-int freenect_set_tilt_in_degrees(freenect_device *dev, double angle);
-int freenect_set_tilt_in_radians(freenect_device *dev, double angle);
+int freenect_set_tilt_degs(freenect_device *dev, double angle);
 int freenect_set_led(freenect_device *dev, freenect_led_options option);
 
-int freenect_get_raw_accelerometers(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z);
-int freenect_get_mks_accelerometers(freenect_device *dev, double* x, double* y, double* z);
+int freenect_get_raw_accel(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z);
+int freenect_get_mks_accel(freenect_device *dev, double* x, double* y, double* z);
 
 #ifdef __cplusplus
 }
