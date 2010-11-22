@@ -1,10 +1,8 @@
-#!/usr/bin/env python
 import freenect
 import cv
 import numpy as np
 
 cv.NamedWindow('Depth')
-
 
 def display(dev, data, timestamp):
     data -= np.min(data.ravel())
@@ -16,4 +14,4 @@ def display(dev, data, timestamp):
                data.dtype.itemsize * data.shape[1])
     cv.ShowImage('Depth', image)
     cv.WaitKey(5)
-freenect.runloop(depth=lambda *x: display(*freenect.depth_cb_np(*x)))
+freenect.runloop(lambda *x: display(*freenect.depth_cb_np(*x)))

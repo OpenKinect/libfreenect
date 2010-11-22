@@ -44,8 +44,8 @@ def _rgb_cb(dev, string, ts):
     rgbqueue = [string]
     rgbcond.notify()
 
-depth_cb = freenect.depth_cb_string_factory(_depth_cb)
-rgb_cb = freenect.rgb_cb_string_factory(_rgb_cb)
+depth_cb = lambda *x: _depth_cb(*freenect.depth_cb_np(*x))
+rgb_cb = lambda *x: _rgb_cb(*freenect.rgb_cb_np(*x))
 
 def get_depth():
   """Grabs a new depth frame, blocking until the background thread provides one.
@@ -84,6 +84,6 @@ def get_rgb():
 try:
   loopthread == ''
 except:
-  loopthread = Thread(target=freenect.runloop,kwargs=dict(depth=depth_cb,rgb=rgb_cb))
+  loopthread = Thread(target=freenect.runloop, kwargs=dict(depth=depth_cb, rgb=rgb_cb))
   loopthread.start()
   

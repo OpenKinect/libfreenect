@@ -75,7 +75,8 @@ currently consists of:
   patches in platform directory) - GPL'd
 - JoshBlake's C# OpenKinect (in the csharp directory, with inf files
   in platform directory) - Apache'd
-- Brandyn's Python bindings (in c/python, see README there)
+- Brandyn's Python bindings (Ctypes/Cython + Sync/Async)
+  in libfreenect/python. (see README there)
 
 The aggregated READMEs are below.
 

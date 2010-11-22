@@ -24,10 +24,10 @@
 import ctypes
 import array
 import itertools
-FREENECT_FORMAT_RGB = 0
-FREENECT_FORMAT_BAYER = 1
-FREENECT_FORMAT_11_BIT = 0
-FREENECT_FORMAT_10_BIT = 1
+FORMAT_RGB = 0
+FORMAT_BAYER = 1
+FORMAT_11_BIT = 0
+FORMAT_10_BIT = 1
 LED_OFF = 0
 LED_GREEN = 1
 LED_RED = 2
@@ -39,6 +39,10 @@ LED_BLINK_RED_YELLOW = 6
 
 def _try_load(paths, names, extensions):
     out_accum = []
+    try:
+        return _try_load_np(paths, names, extensions)
+    except ImportError, e:
+        out_accum.append(e)
     for x in itertools.product(paths, names, extensions):
         try:
             return ctypes.cdll.LoadLibrary('%s%s%s' % x)
@@ -49,6 +53,14 @@ def _try_load(paths, names, extensions):
         print(x)
     raise OSError("Couldn't find shared library, was it built properly?")
 
+
+def _try_load_np(paths, names, extensions):
+    import numpy as np
+    for path, name, extension in itertools.product(paths, names, extensions):
+        try:
+            return np.ctypeslib.load_library(name + extension, path)
+        except OSError:
+            pass
 
 def _setup_shared_library():
     """Types all of the shared library functions
@@ -70,7 +82,7 @@ def _setup_shared_library():
     c_int16_p = POINTER(c_int16)
     c_double_p = POINTER(c_double)
     # This shared library could be a few places, lets just try them
-    fn = _try_load(['', '../build/lib/', '/usr/local/lib/'],
+    fn = _try_load(['', '../c/build/lib/', '/usr/local/lib/'],
                    ['libfreenect'],
                    ['.so', '.dylib', '.dll'])
     # int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx);
@@ -122,11 +134,12 @@ def _setup_shared_library():
 
 # Populate module namespace to mimic C interface
 def _populate_namespace():
-    _fn, freenect_depth_cb, freenect_rgb_cb = _setup_shared_library()
+    _fn, depth_cb, rgb_cb = _setup_shared_library()
+    header = 'freenect_'
     for x in dir(_fn):
-        if x.startswith('freenect_'):
-            globals()[x] = getattr(_fn, x)
-    return freenect_depth_cb, freenect_rgb_cb
+        if x.startswith(header):
+            globals()[x[len(header):]] = getattr(_fn, x)
+    return depth_cb, rgb_cb
 
 
 def raw_accel(dev):
@@ -139,8 +152,8 @@ def raw_accel(dev):
         Tuple of (x, y, z) as ctype.c_int16 values
     """
     x, y, z = ctypes.c_int16(), ctypes.c_int16(), ctypes.c_int16()
-    freenect_get_raw_accel(dev, ctypes.byref(x), ctypes.byref(y),
-                           ctypes.byref(z))
+    get_raw_accel(dev, ctypes.byref(x), ctypes.byref(y),
+                  ctypes.byref(z))
     return x, y, z
 
 
@@ -154,7 +167,7 @@ def mks_accel(dev):
         Tuple of (x, y, z) as ctype.c_double values
     """
     x, y, z = ctypes.c_double(), ctypes.c_double(), ctypes.c_double()
-    freenect_get_mks_accel(dev, ctypes.byref(x), ctypes.byref(y),
+    get_mks_accel(dev, ctypes.byref(x), ctypes.byref(y),
                            ctypes.byref(z))
     return x, y, z
 
@@ -172,21 +185,21 @@ def runloop(depth=None, rgb=None):
         rgb: A function that takes (dev, rgb, timestamp), corresponding to C function.
             If None (default), then you won't get a callback for rgb.
     """
-    depth = freenect_depth_cb(depth if depth else lambda *x: None)
-    rgb = freenect_rgb_cb(rgb if rgb else lambda *x: None)
+    depth = depth_cb(depth if depth else lambda *x: None)
+    rgb = rgb_cb(rgb if rgb else lambda *x: None)
     ctx = ctypes.c_void_p()
-    if freenect_init(ctypes.byref(ctx), 0) < 0:
+    if init(ctypes.byref(ctx), 0) < 0:
         print('Error: Cant open')
     dev = ctypes.c_void_p()
-    if freenect_open_device(ctx, ctypes.byref(dev), 0) < 0:
+    if open_device(ctx, ctypes.byref(dev), 0) < 0:
         print('Error: Cant open')
-    freenect_set_depth_format(dev, 0)
-    freenect_set_depth_callback(dev, depth)
-    freenect_start_depth(dev)
-    freenect_set_rgb_format(dev, FREENECT_FORMAT_RGB)
-    freenect_set_rgb_callback(dev, rgb)
-    freenect_start_rgb(dev)
-    while freenect_process_events(ctx) >= 0:
+    set_depth_format(dev, 0)
+    set_depth_callback(dev, depth)
+    start_depth(dev)
+    set_rgb_format(dev, FORMAT_RGB)
+    set_rgb_callback(dev, rgb)
+    start_rgb(dev)
+    while process_events(ctx) >= 0:
         pass
 
 
@@ -199,95 +212,73 @@ def _load_numpy():
         raise e
 
 
-def depth_cb_string_factory(func):
-    """Converts the raw depth data into a python string for your function
+def depth_cb_decorator(func):
+    """Converts the raw depth data into a python string
 
     Args:
         func: A function that takes (dev, data, timestamp), corresponding to C function
             except that data is a python string corresponding to the data.
+
+    Returns:
+        Function that takes (dev, depth, timestamp) that returns output of func
     """
 
     def depth_cb(dev, depth, timestamp):
         nbytes = 614400  # 480 * 640 * 2
-        func(dev, ctypes.string_at(depth, nbytes), timestamp)
+        return func(dev, ctypes.string_at(depth, nbytes), timestamp)
     return depth_cb
 
 
-def rgb_cb_string_factory(func):
-    """Converts the raw RGB data into a python string for your function
+def rgb_cb_decorator(func):
+    """Converts the raw RGB data into a python string
 
     Args:
         func: A function that takes (dev, data, timestamp), corresponding to C function
             except that data is a python string corresponding to the data.
+
+    Returns:
+        Function that takes (dev, rgb, timestamp) that returns output of func
     """
 
     def rgb_cb(dev, rgb, timestamp):
         nbytes = 921600  # 480 * 640 * 3
-        func(dev, ctypes.string_at(rgb, nbytes), timestamp)
+        return func(dev, ctypes.string_at(rgb, nbytes), timestamp)
     return rgb_cb
 
 
-def depth_cb_np_factory(func):
-    """Converts the raw depth data into a numpy array for your function
+@depth_cb_decorator
+def depth_cb_np(dev, string, timestamp):
+   """Converts the raw depth data into a numpy array for your function
 
     Args:
-        func: A function that takes (dev, data, timestamp), corresponding to C function
-            except that data is a 2D numpy array corresponding to the data.
-    """
-    np = _load_numpy()
+        dev: DevPtr object
+        string: A python string with the depth data
+        timestamp: An int representing the time
 
-    def depth_cb(dev, string, timestamp):
-        data = np.fromstring(string, dtype=np.uint16)
-        data.resize((480, 640))
-        func(dev, data, timestamp)
-    return depth_cb_string_factory(depth_cb)
-
-
-def rgb_cb_np_factory(func):
-    """Converts the raw RGB data into a numpy array for your function
-
-    Args:
-        func: A function that takes (dev, data, timestamp), corresponding to C function
-            except that data is a 2D numpy array corresponding to the data.
-    """
-    np = _load_numpy()
-
-    def rgb_cb(dev, string, timestamp):
-        data = np.fromstring(string, dtype=np.uint8)
-        data.resize((480, 640, 3))
-        func(dev, data, timestamp)
-    return rgb_cb_string_factory(rgb_cb)
+    Returns:
+        (dev, data, timestamp) where data is a 2D numpy array
+   """
+   np = _load_numpy()
+   data = np.fromstring(string, dtype=np.uint16)
+   data.resize((480, 640))
+   return dev, data, timestamp
 
 
-def depth_cb_array_factory(func):
-    """Converts the raw depth data into a 1D python array (not numpy) for your function
+@rgb_cb_decorator
+def rgb_cb_np(dev, string, timestamp):
+   """Converts the raw depth data into a numpy array for your function
 
     Args:
-        func: A function that takes (dev, data, timestamp), corresponding to C function
-            except that data is a 1D python array corresponding to the data.
-    """
+        dev: DevPtr object
+        string: A python string with the RGB data
+        timestamp: An int representing the time
 
-    def depth_cb(dev, string, timestamp):
-        data = array.array('H')
-        assert(data.itemsize == 2)
-        data.fromstring(string)
-        func(dev, data, timestamp)
-    return depth_cb_string_factory(depth_cb)
+    Returns:
+        (dev, data, timestamp) where data is a 2D numpy array
+   """
+   np = _load_numpy()
+   data = np.fromstring(string, dtype=np.uint8)
+   data.resize((480, 640, 3))
+   return dev, data, timestamp
 
-
-def rgb_cb_array_factory(func):
-    """Converts the raw RGB data into a 1D python array (not numpy) for your function
-
-    Args:
-        func: A function that takes (dev, data, timestamp), corresponding to C function
-            except that data is a 1D python array corresponding to the data.
-    """
-
-    def rgb_cb(dev, string, timestamp):
-        data = array.array('B')
-        assert(data.itemsize == 1)
-        data.fromstring(string)
-        func(dev, data, timestamp)
-    return rgb_cb_string_factory(rgb_cb)
-
-freenect_depth_cb, freenect_rgb_cb = _populate_namespace()
+depth_cb, rgb_cb = _populate_namespace()

@@ -1,4 +1,4 @@
 #!/usr/bin/env python
-from freenect import *
+import freenect
 from demo_mp_depth_show import display
-runloop(rgb=rgb_cb_np_factory(display))
+freenect.runloop(rgb=lambda *x: display(*freenect.rgb_cb_np(*x)))

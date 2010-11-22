@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from freenect import *
+import freenect
 import matplotlib.pyplot as mp
 
 mp.ion()
@@ -15,4 +15,4 @@ def display(dev, data, timestamp):
     mp.draw()
 
 if __name__ == '__main__':
-    runloop(depth=depth_cb_np_factory(display))
+    freenect.runloop(depth=lambda *x: display(*freenect.depth_cb_np(*x)))

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from freenect import *
+import freenect
 import cv
 
 cv.NamedWindow('RGB')
@@ -14,4 +14,4 @@ def display(dev, data, timestamp):
                data.dtype.itemsize * 3 * data.shape[1])
     cv.ShowImage('RGB', image)
     cv.WaitKey(5)
-runloop(rgb=rgb_cb_np_factory(display))
+freenect.runloop(rgb=lambda *x: display(*freenect.rgb_cb_np(*x)))
