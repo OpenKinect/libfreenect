@@ -26,6 +26,7 @@
 
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <libusb.h>
 #include "libfreenect.h"
@@ -44,11 +45,13 @@
 
 #include <math.h>
 
-pthread_t gl_thread;
+pthread_t kin_thread;
 volatile int die = 0;
 
 int g_argc;
 char **g_argv;
+
+uint16_t t_gamma[2048];
 
 int window;
 
@@ -74,24 +77,24 @@ int got_frames = 0;
 void DrawGLScene()
 {
 	pthread_mutex_lock(&gl_backbuf_mutex);
-
+	
 	while (got_frames < 2) {
 		pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
 	}
-
+	
 	memcpy(gl_depth_front, gl_depth_back, sizeof(gl_depth_back));
 	memcpy(gl_rgb_front, gl_rgb_back, sizeof(gl_rgb_back));
 	got_frames = 0;
 	pthread_mutex_unlock(&gl_backbuf_mutex);
-
+	
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
-
+	
 	glEnable(GL_TEXTURE_2D);
-
+	
 	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
 	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, gl_depth_front);
-
+	
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
 	glTexCoord2f(0, 0); glVertex3f(0,0,0);
@@ -99,10 +102,10 @@ void DrawGLScene()
 	glTexCoord2f(1, 1); glVertex3f(640,480,0);
 	glTexCoord2f(0, 1); glVertex3f(0,480,0);
 	glEnd();
-
+	
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
 	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, gl_rgb_front);
-
+	
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
 	glTexCoord2f(0, 0); glVertex3f(640,0,0);
@@ -110,7 +113,7 @@ void DrawGLScene()
 	glTexCoord2f(1, 1); glVertex3f(1280,480,0);
 	glTexCoord2f(0, 1); glVertex3f(640,480,0);
 	glEnd();
-
+	
 	glutSwapBuffers();
 }
 
@@ -189,37 +192,10 @@ void InitGL(int Width, int Height)
 	ReSizeGLScene(Width, Height);
 }
 
-void *gl_threadfunc(void *arg)
-{
-	printf("GL thread\n");
-
-	glutInit(&g_argc, g_argv);
-
-	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
-	glutInitWindowSize(1280, 480);
-	glutInitWindowPosition(0, 0);
-
-	window = glutCreateWindow("LibFreenect");
-
-	glutDisplayFunc(&DrawGLScene);
-	glutIdleFunc(&DrawGLScene);
-	glutReshapeFunc(&ReSizeGLScene);
-	glutKeyboardFunc(&keyPressed);
-
-	InitGL(1280, 480);
-
-	glutMainLoop();
-
-	pthread_exit(NULL);
-	return NULL;
-}
-
-uint16_t t_gamma[2048];
-
 void depth_cb(freenect_device *dev, freenect_depth *depth, uint32_t timestamp)
 {
 	int i;
-
+	
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	for (i=0; i<FREENECT_FRAME_PIX; i++) {
 		int pval = t_gamma[depth[i]];
@@ -276,65 +252,52 @@ void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
-int main(int argc, char **argv)
+
+void *kin_threadfunc(void *arg)
 {
-	int res;
 	freenect_context *f_ctx;
 	
-
-	printf("Kinect camera test\n");
-
+	printf("Kinect thread\n");
+	
 	int i;
 	for (i=0; i<2048; i++) {
 		float v = i/2048.0;
 		v = powf(v, 3)* 6;
 		t_gamma[i] = v*6*256;
 	}
-
-	g_argc = argc;
-	g_argv = argv;
-
+	
 	if (freenect_init(&f_ctx, NULL) < 0) {
 		printf("freenect_init() failed\n");
-		return 1;
+		exit(1);
 	}
-
+	
 	freenect_set_log_level(f_ctx, FREENECT_LOG_DEBUG);
-
+	
 	int nr_devices = freenect_num_devices (f_ctx);
 	printf ("Number of devices found: %d\n", nr_devices);
-
-	int user_device_number = 0;
-	if (argc > 1)
-		user_device_number = atoi(argv[1]);
-
+	
+	int *user_device_number = (int *)(intptr_t)arg;
+	
 	if (nr_devices < 1)
-		return 1;
-
-	if (freenect_open_device(f_ctx, &f_dev, user_device_number) < 0) {
+		exit(1);
+	
+	if (freenect_open_device(f_ctx, &f_dev, *user_device_number) < 0) {
 		printf("Could not open device\n");
-		return 1;
+		exit(1);
 	}
-
-
+	
 	freenect_set_tilt_degs(f_dev,freenect_angle);
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_rgb_callback(f_dev, rgb_cb);
 	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
 	freenect_set_depth_format(f_dev, FREENECT_FORMAT_11_BIT);
-
-	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
-	if (res) {
-		printf("pthread_create failed\n");
-		return 1;
-	}
-
+	
 	freenect_start_depth(f_dev);
 	freenect_start_rgb(f_dev);
-
+	
 	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
-
+	
 	while(!die && freenect_process_events(f_ctx) >= 0 )
 	{
 		int16_t ax,ay,az;
@@ -344,8 +307,48 @@ int main(int argc, char **argv)
 		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f\r", ax, ay, az, dx, dy, dz);
 		fflush(stdout);
 	}
+	
+	return NULL;
+}
 
+int main(int argc, char **argv)
+{
+	int res;
+
+	printf("Kinect camera test\n");
+	
+	g_argc = argc;
+	g_argv = argv;
+	
+	int user_device_number = 0;
+	if (argc > 1)
+		user_device_number = atoi(argv[1]);
+		
+	res = pthread_create(&kin_thread, NULL, kin_threadfunc, &user_device_number);
+	if (res) {
+		printf("pthread_create failed\n");
+		return 1;
+	}
+	
+	glutInit(&g_argc, g_argv);
+	
+	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
+	glutInitWindowSize(1280, 480);
+	glutInitWindowPosition(0, 0);
+	
+	window = glutCreateWindow("LibFreenect");
+	
+	glutDisplayFunc(&DrawGLScene);
+	glutIdleFunc(&DrawGLScene);
+	glutReshapeFunc(&ReSizeGLScene);
+	glutKeyboardFunc(&keyPressed);
+	
+	InitGL(1280, 480);
+	
+	glutMainLoop();
+	
+		
 	printf("-- done!\n");
-
+	
 	pthread_exit(NULL);
 }
