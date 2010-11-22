@@ -1,5 +1,7 @@
+#!/usr/bin/env python
 #
 # Copyright (c) 2010 Brandyn White (bwhite@dappervision.com)
+#                    Andrew Miller (amiller@dappervision.com)
 #
 # This code is licensed to you under the terms of the Apache License, version
 # 2.0, or, at your option, the terms of the GNU General Public License,

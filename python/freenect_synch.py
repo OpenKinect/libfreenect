@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #
 # Copyright (c) 2010 Andrew Miller (amiller@dappervision.com)
 #
@@ -19,11 +20,6 @@
 #
 # Binary distributions must follow the binary distribution requirements of
 # either License.
-
-
-# The point of this script is to provide a 'synchronous' interface to the kinect,
-# like with OpenCV. It works by having a background thread pump the kinect events
-# and handle the callbacks. Ask for a new frame by calling get_rgb() or get_depth().
 
 import freenect
 import numpy as np

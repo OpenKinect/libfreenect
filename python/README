@@ -1,5 +1,6 @@
 ** Freenect Ctypes Wrapper **
 - Brandyn White (bwhite@dappervision.com)
+- Andrew Miller (amiller@dappervision.com)
 
 - Description
 This wrapper can be used to write Python code to control the Kinect using the
@@ -26,7 +27,7 @@ If you want to use this script outside of it's directory copy the shared library
 (e.g., .so, .dynlib, .dll) along with this module.  At the time of this writing,
 this is accomplished by 
 
-libfreenect/c/python$ cp ../build/lib/libfreenect.* .
+libfreenect/python$ cp ../c/build/lib/libfreenect.* .
 
 - Examples
 demo_mp_depth_show: Use matplotlib's imshow command to display the depth image. Requires: matplotlib and numpy

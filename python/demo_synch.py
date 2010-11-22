@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from freenect_synch import get_depth, get_rgb
 import cv  
 import numpy as np

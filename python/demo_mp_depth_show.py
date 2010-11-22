@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from freenect import *
 import matplotlib.pyplot as mp
 
