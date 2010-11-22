@@ -22,7 +22,7 @@ if (BUILD_EXAMPLES)
 	endif()
 	IF(UNIX)
 		add_executable(as3-server as3-server.c)
-		target_link_libraries(as3-server freenect JPEG)
+		target_link_libraries(as3-server freenect jpeg m)
 	ENDIF()
 	install (TARGETS glview
 		DESTINATION bin)
