@@ -55,8 +55,8 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	int datalen = len - sizeof(*hdr);
 
 	if (hdr->magic[0] != 'R' || hdr->magic[1] != 'B') {
-		// this is currently expected on init
-		FN_DEBUG("[Stream %02x] Invalid magic %02x%02x\n", strm->flag, hdr->magic[0], hdr->magic[1]);
+		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
+		       "[Stream %02x] Invalid magic %02x%02x\n", strm->flag, hdr->magic[0], hdr->magic[1]);
 		return 0;
 	}
 
@@ -84,9 +84,11 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	// handle lost packets
 	if (strm->seq != hdr->seq) {
 		uint8_t lost = strm->seq - hdr->seq;
-		FN_INFO("[Stream %02x] Lost %d packets\n", strm->flag, lost);
+		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_INFO, \
+		       "[Stream %02x] Lost %d packets\n", strm->flag, lost);
 		if (lost > 5) {
-			FN_NOTICE("[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
+			FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
+			       "[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
 			strm->synced = 0;
 			return 0;
 		}
@@ -98,6 +100,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 			strm->got_pkts = 0;
 			got_frame = 1;
 			strm->timestamp = strm->last_timestamp;
+			strm->valid_frames++;
 		} else {
 			strm->pkt_num += lost;
 		}
@@ -107,20 +110,23 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
 	    !(strm->pkt_num == strm->pkts_per_frame-1 && hdr->flag == eof) &&
 	    !(strm->pkt_num > 0 && strm->pkt_num < strm->pkts_per_frame-1 && hdr->flag == mof)) {
-		FN_NOTICE("[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
+		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
+		       "[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
 		       strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
 		strm->synced = 0;
-		return 0;
+		return got_frame;
 	}
 
 	// copy data
 	if (datalen > strm->pkt_size) {
-		FN_WARNING("[Stream %02x] Expected %d data bytes, but got %d. Dropping...\n", strm->flag, strm->pkt_size, datalen);
-		return 0;
+		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
+		       "[Stream %02x] Expected %d data bytes, but got %d. Dropping...\n", strm->flag, strm->pkt_size, datalen);
+		return got_frame;
 	}
 
 	if (datalen != strm->pkt_size && hdr->flag != eof)
-		FN_WARNING("[Stream %02x] Expected %d data bytes, but got only %d\n", strm->flag, strm->pkt_size, datalen);
+		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
+		       "[Stream %02x] Expected %d data bytes, but got only %d\n", strm->flag, strm->pkt_size, datalen);
 
 	uint8_t *dbuf = strm->buf + strm->pkt_num * strm->pkt_size;
 	memcpy(dbuf, data, datalen);
@@ -136,6 +142,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 		strm->valid_pkts = strm->got_pkts;
 		strm->got_pkts = 0;
 		strm->timestamp = hdr->timestamp;
+		strm->valid_frames++;
 		return 1;
 	} else {
 		return got_frame;
@@ -386,6 +393,7 @@ int freenect_start_depth(freenect_device *dev)
 	dev->depth_stream.pkt_size = DEPTH_PKTDSIZE;
 	dev->depth_stream.synced = 0;
 	dev->depth_stream.flag = 0x70;
+	dev->depth_stream.valid_frames = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->depth_isoc, depth_process, 0x82, NUM_XFERS, PKTS_PER_XFER, DEPTH_PKTBUF);
 	if (res < 0)
@@ -423,6 +431,7 @@ int freenect_start_rgb(freenect_device *dev)
 	dev->rgb_stream.pkt_size = RGB_PKTDSIZE;
 	dev->rgb_stream.synced = 0;
 	dev->rgb_stream.flag = 0x80;
+	dev->rgb_stream.valid_frames = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->rgb_isoc, rgb_process, 0x81, NUM_XFERS, PKTS_PER_XFER, RGB_PKTBUF);
 	if (res < 0)

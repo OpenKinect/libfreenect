@@ -92,6 +92,7 @@ typedef struct {
 	int pkts_per_frame;
 	int pkt_size;
 	int valid_pkts;
+	int valid_frames;
 	uint32_t last_timestamp;
 	uint32_t timestamp;
 	uint8_t *buf;
