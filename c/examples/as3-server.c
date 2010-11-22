@@ -299,10 +299,10 @@ void network_close()
 
 uint16_t t_gamma[2048];
 
-void depth_cb(freenect_device *dev, freenect_depth *depth, uint32_t timestamp)
+void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
-	
 	int i, n;
+	freenect_depth *depth = v_depth;
 	
 	pthread_mutex_lock(&depth_mutex);
 	for (i=0; i<FREENECT_FRAME_PIX; i++) {

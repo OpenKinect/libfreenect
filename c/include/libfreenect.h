@@ -34,6 +34,7 @@ extern "C" {
 #endif
 
 typedef uint16_t freenect_depth;
+typedef uint8_t freenect_packed_depth;
 typedef uint8_t freenect_pixel;
 
 #define FREENECT_FRAME_W 640
@@ -61,7 +62,9 @@ typedef enum {
 
 typedef enum {
 	FREENECT_FORMAT_11_BIT = 0,
-	FREENECT_FORMAT_10_BIT = 1
+	FREENECT_FORMAT_10_BIT = 1,
+	FREENECT_FORMAT_PACKED_11_BIT = 2,
+	FREENECT_FORMAT_PACKED_10_BIT = 3,
 } freenect_depth_format;
 
 struct _freenect_context;
@@ -103,7 +106,7 @@ int freenect_close_device(freenect_device *dev);
 void freenect_set_user(freenect_device *dev, void *user);
 void *freenect_get_user(freenect_device *dev);
 
-typedef void (*freenect_depth_cb)(freenect_device *dev, freenect_depth *depth, uint32_t timestamp);
+typedef void (*freenect_depth_cb)(freenect_device *dev, void *depth, uint32_t timestamp);
 typedef void (*freenect_rgb_cb)(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp);
 
 void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);

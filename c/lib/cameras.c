@@ -181,13 +181,23 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
 	       dev->depth_stream.valid_pkts, dev->depth_stream.pkts_per_frame, dev->depth_stream.timestamp);
 
-	if (dev->depth_format == FREENECT_FORMAT_11_BIT)
-		convert_packed_to_16bit(dev->depth_raw, dev->depth_frame, 11);
-	else
-		convert_packed_to_16bit(dev->depth_raw, dev->depth_frame, 10);
-
-	if (dev->depth_cb)
-		dev->depth_cb(dev, dev->depth_frame, dev->depth_stream.timestamp);
+	switch (dev->depth_format) {
+		case FREENECT_FORMAT_11_BIT:
+			convert_packed_to_16bit(dev->depth_raw, dev->depth_frame, 11);
+			if (dev->depth_cb)
+				dev->depth_cb(dev, dev->depth_frame, dev->depth_stream.timestamp);
+			break;
+		case FREENECT_FORMAT_10_BIT:
+			convert_packed_to_16bit(dev->depth_raw, dev->depth_frame, 10);
+			if (dev->depth_cb)
+				dev->depth_cb(dev, dev->depth_frame, dev->depth_stream.timestamp);
+			break;
+		case FREENECT_FORMAT_PACKED_10_BIT:
+		case FREENECT_FORMAT_PACKED_11_BIT:
+			if (dev->depth_cb)
+				dev->depth_cb(dev, dev->depth_raw, dev->depth_stream.timestamp);
+			break;
+	}
 }
 
 static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
@@ -402,9 +412,11 @@ int freenect_start_depth(freenect_device *dev)
 	write_register(dev, 0x06, 0x00); // reset depth stream
 	switch (dev->depth_format) {
 		case FREENECT_FORMAT_11_BIT:
+		case FREENECT_FORMAT_PACKED_11_BIT:
 			write_register(dev, 0x12, 0x03);
 			break;
 		case FREENECT_FORMAT_10_BIT:
+		case FREENECT_FORMAT_PACKED_10_BIT:
 			write_register(dev, 0x12, 0x02);
 			break;
 		default:
