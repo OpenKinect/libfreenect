@@ -20,7 +20,10 @@ if (BUILD_EXAMPLES)
 	else()
 		target_link_libraries(glview freenect GL GLU glut m)
 	endif()
-
+	IF(UNIX)
+		add_executable(as3-server as3-server.c)
+		target_link_libraries(as3-server freenect JPEG)
+	ENDIF()
 	install (TARGETS glview
 		DESTINATION bin)
 
