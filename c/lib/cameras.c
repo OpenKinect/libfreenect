@@ -162,6 +162,9 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (len == 0)
 		return;
 
+	if (!dev->depth_running)
+		return;
+
 	int got_frame = stream_process(ctx, &dev->depth_stream, pkt, len);
 
 	if (!got_frame)
@@ -183,9 +186,12 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 {
 	freenect_context *ctx = dev->parent;
-
 	int x,y,i;
+
 	if (len == 0)
+		return;
+
+	if (!dev->rgb_running)
 		return;
 
 	int got_frame = stream_process(ctx, &dev->rgb_stream, pkt, len);
@@ -270,82 +276,108 @@ static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 		dev->rgb_cb(dev, rgb_frame, dev->rgb_stream.timestamp);
 }
 
-struct cam_hdr {
+typedef struct {
 	uint8_t magic[2];
 	uint16_t len;
 	uint16_t cmd;
 	uint16_t tag;
-};
+} cam_hdr;
 
-static void send_init(freenect_device *dev)
+static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, unsigned int reply_len)
 {
 	freenect_context *ctx = dev->parent;
-	int i, j, ret;
+	int res, actual_len;
 	uint8_t obuf[0x400];
 	uint8_t ibuf[0x200];
-	struct cam_hdr *chdr = (void*)obuf;
-	struct cam_hdr *rhdr = (void*)ibuf;
+	cam_hdr *chdr = (void*)obuf;
+	cam_hdr *rhdr = (void*)ibuf;
 
-	ret = fnusb_control(&dev->usb_cam, 0x80, 0x06, 0x3ee, 0, ibuf, 0x12);
-	FN_SPEW("First CTL xfer: %d\n", ret);
+	if (cmd_len & 1 || cmd_len > (0x400 - sizeof(*chdr))) {
+		FN_ERROR("send_cmd: Invalid command length (0x%x)\n", cmd_len);
+		return -1;
+	}
 
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
+	chdr->cmd = cmd;
+	chdr->tag = dev->cam_tag;
+	chdr->len = cmd_len / 2;
 
-	for (i=0; i<num_inits; i++) {
-		const struct caminit *ip = &inits[i];
-		chdr->cmd = ip->command;
-		chdr->tag = ip->tag;
-		chdr->len = ip->cmdlen / 2;
-		memcpy(obuf+sizeof(*chdr), ip->cmddata, ip->cmdlen);
+	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
 
-		if( i==6 ) {
-			// Choose 10bit or 11 bit depth output
-			obuf[sizeof(*chdr) + 2] = dev->depth_format == FREENECT_FORMAT_11_BIT ? 0x03 : 0x02;
-		}
-
-		ret = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, ip->cmdlen + sizeof(*chdr));
-		FN_DEBUG("Control cmd=%04x tag=%04x: %d\n", chdr->cmd, chdr->tag, ret);
-
-		do {
-			ret = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
-		} while (ret == 0);
-		FN_DEBUG("Control reply: %d\n", ret);
-
-		if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
-			FN_WARNING("Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
-			continue;
-		}
-		if (rhdr->cmd != chdr->cmd) {
-			FN_WARNING("Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
-			continue;
-		}
-		if (rhdr->tag != chdr->tag) {
-			FN_WARNING("Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
-			continue;
-		}
-		if (rhdr->len != (ret-sizeof(*rhdr))/2) {
-			FN_WARNING("Bad len %04x != %04x\n", rhdr->len, (int)(ret-sizeof(*rhdr))/2);
-			continue;
-		}
-		if (rhdr->len != (ip->replylen/2) || memcmp(ibuf+sizeof(*rhdr), ip->replydata, ip->replylen)) {
-			FN_SPEW("Expected: ");
-			for (j=0; j<ip->replylen; j++) {
-				FN_SPEW("%02x ", ip->replydata[j]);
-			}
-			FN_SPEW("\nGot:      ");
-			for (j=0; j<(rhdr->len*2); j++) {
-				FN_SPEW("%02x ", ibuf[j+sizeof(*rhdr)]);
-			}
-			FN_SPEW("\n");
-		}
+	res = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, cmd_len + sizeof(*chdr));
+	FN_SPEW("Control cmd=%04x tag=%04x len=%04x: %d\n", cmd, dev->cam_tag, cmd_len, res);
+	if (res < 0) {
+		FN_ERROR("send_cmd: Output control transfer failed (%d)\n", res);
+		return res;
 	}
-	dev->cam_inited = 1;
+
+	do {
+		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
+	} while (actual_len == 0);
+	FN_SPEW("Control reply: %d\n", res);
+	if (actual_len < sizeof(*rhdr)) {
+		FN_ERROR("send_cmd: Input control transfer failed (%d)\n", res);
+		return res;
+	}
+	actual_len -= sizeof(*rhdr);
+
+	if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
+		FN_ERROR("send_cmd: Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
+		return -1;
+	}
+	if (rhdr->cmd != chdr->cmd) {
+		FN_ERROR("send_cmd: Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
+		return -1;
+	}
+	if (rhdr->tag != chdr->tag) {
+		FN_ERROR("send_cmd: Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
+		return -1;
+	}
+	if (rhdr->len != (actual_len/2)) {
+		FN_ERROR("send_cmd: Bad len %04x != %04x\n", rhdr->len, (int)(actual_len/2));
+		return -1;
+	}
+
+	if (actual_len > reply_len) {
+		FN_WARNING("send_cmd: Data buffer is %d bytes long, but got %d bytes\n", reply_len, actual_len);
+		memcpy(replybuf, ibuf+sizeof(*rhdr), reply_len);
+	} else {
+		memcpy(replybuf, ibuf+sizeof(*rhdr), actual_len);
+	}
+
+	dev->cam_tag++;
+
+	return actual_len;
+}
+
+static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
+{
+	freenect_context *ctx = dev->parent;
+	uint16_t reply[2];
+	uint16_t cmd[2];
+	int res;
+
+	cmd[0] = reg;
+	cmd[1] = data;
+
+	FN_DEBUG("Write Reg 0x%04x <= 0x%02x\n", reg, data);
+	res = send_cmd(dev, 0x03, cmd, 4, reply, 4);
+	if (res < 0)
+		return res;
+	if (res != 2) {
+		FN_WARNING("send_cmd returned %d [%04x %04x], 0000 expected\n", res, reply[0], reply[1]);
+	}
+	return 0;
 }
 
 int freenect_start_depth(freenect_device *dev)
 {
+	freenect_context *ctx = dev->parent;
 	int res;
+
+	if (dev->depth_running)
+		return -1;
 
 	dev->depth_stream.buf = dev->depth_raw;
 	dev->depth_stream.pkts_per_frame =
@@ -356,15 +388,35 @@ int freenect_start_depth(freenect_device *dev)
 	dev->depth_stream.flag = 0x70;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->depth_isoc, depth_process, 0x82, NUM_XFERS, PKTS_PER_XFER, DEPTH_PKTBUF);
+	if (res < 0)
+		return res;
 
-	if(!dev->cam_inited)
-		send_init(dev);
-	return res;
+	write_register(dev, 0x06, 0x00); // reset depth stream
+	switch (dev->depth_format) {
+		case FREENECT_FORMAT_11_BIT:
+			write_register(dev, 0x12, 0x03);
+			break;
+		case FREENECT_FORMAT_10_BIT:
+			write_register(dev, 0x12, 0x02);
+			break;
+		default:
+			FN_ERROR("Invalid depth format %d\n", dev->depth_format);
+			break;
+	}
+	write_register(dev, 0x13, 0x01);
+	write_register(dev, 0x14, 0x1e);
+	write_register(dev, 0x06, 0x02); // start depth stream
+
+	dev->depth_running = 1;
+	return 0;
 }
 
 int freenect_start_rgb(freenect_device *dev)
 {
 	int res;
+
+	if (dev->rgb_running)
+		return -1;
 
 	dev->rgb_stream.buf = dev->rgb_raw;
 	dev->rgb_stream.pkts_per_frame = RGB_PKTS_PER_FRAME;
@@ -373,10 +425,18 @@ int freenect_start_rgb(freenect_device *dev)
 	dev->rgb_stream.flag = 0x80;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->rgb_isoc, rgb_process, 0x81, NUM_XFERS, PKTS_PER_XFER, RGB_PKTBUF);
+	if (res < 0)
+		return res;
 
-	if(!dev->cam_inited)
-		send_init(dev);
-	return res;
+	write_register(dev, 0x05, 0x00); // reset rgb stream
+	write_register(dev, 0x0c, 0x00);
+	write_register(dev, 0x0d, 0x01);
+	write_register(dev, 0x0e, 0x1e); // 30Hz bayer
+	write_register(dev, 0x47, 0x00); // disable Hflip
+	write_register(dev, 0x05, 0x01); // start rgb stream
+
+	dev->rgb_running = 1;
+	return 0;
 }
 
 int freenect_stop_depth(freenect_device *dev)

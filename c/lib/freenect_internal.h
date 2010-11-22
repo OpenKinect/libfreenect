@@ -112,11 +112,14 @@ struct _freenect_device {
 	freenect_depth_format depth_format;
 
 	int cam_inited;
+	uint16_t cam_tag;
 
+	int depth_running;
 	packet_stream depth_stream;
 	uint8_t depth_raw[DEPTH_RAW_11_BIT_SIZE];
 	uint16_t depth_frame[FRAME_PIX];
 
+	int rgb_running;
 	packet_stream rgb_stream;
 	uint8_t rgb_raw[FRAME_PIX];
 	uint8_t rgb_frame[3*FRAME_PIX];
