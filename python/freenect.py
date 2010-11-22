@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 #
 # Copyright (c) 2010 Brandyn White (bwhite@dappervision.com)
 #
