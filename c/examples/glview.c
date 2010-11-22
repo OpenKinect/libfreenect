@@ -216,9 +216,10 @@ void *gl_threadfunc(void *arg)
 
 uint16_t t_gamma[2048];
 
-void depth_cb(freenect_device *dev, freenect_depth *depth, uint32_t timestamp)
+void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
 	int i;
+	freenect_depth *depth = v_depth;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	for (i=0; i<FREENECT_FRAME_PIX; i++) {
@@ -344,6 +345,11 @@ int main(int argc, char **argv)
 		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f\r", ax, ay, az, dx, dy, dz);
 		fflush(stdout);
 	}
+
+	printf("\nshutting down streams...\n");
+
+	freenect_stop_depth(f_dev);
+	freenect_stop_rgb(f_dev);
 
 	printf("-- done!\n");
 
