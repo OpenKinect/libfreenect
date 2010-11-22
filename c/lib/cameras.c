@@ -442,14 +442,40 @@ int freenect_start_rgb(freenect_device *dev)
 int freenect_stop_depth(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
-	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	int res;
+
+	if (!dev->depth_running)
+		return -1;
+
+	dev->depth_running = 0;
+	write_register(dev, 0x06, 0x00); // stop depth stream
+
+	res = fnusb_stop_iso(&dev->usb_cam, &dev->depth_isoc);
+	if (res < 0) {
+		FN_ERROR("Failed to stop depth isochronous stream: %d\n", res);
+		return res;
+	}
+
 	return 0;
 }
 
 int freenect_stop_rgb(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
-	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	int res;
+
+	if (!dev->rgb_running)
+		return -1;
+
+	dev->rgb_running = 0;
+	write_register(dev, 0x05, 0x00); // stop rgb stream
+
+	res = fnusb_stop_iso(&dev->usb_cam, &dev->rgb_isoc);
+	if (res < 0) {
+		FN_ERROR("Failed to stop RGB isochronous stream: %d\n", res);
+		return res;
+	}
+
 	return 0;
 }
 

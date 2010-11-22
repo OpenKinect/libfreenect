@@ -345,6 +345,11 @@ int main(int argc, char **argv)
 		fflush(stdout);
 	}
 
+	printf("\nshutting down streams...\n");
+
+	freenect_stop_depth(f_dev);
+	freenect_stop_rgb(f_dev);
+
 	printf("-- done!\n");
 
 	pthread_exit(NULL);

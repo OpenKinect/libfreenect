@@ -27,6 +27,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 #include <libusb.h>
 #include "freenect_internal.h"
 
@@ -138,6 +139,13 @@ static void iso_callback(struct libusb_transfer *xfer)
 	int i;
 	fnusb_isoc_stream *strm = xfer->user_data;
 
+	if (strm->dead) {
+		freenect_context *ctx = strm->parent->parent->parent;
+		strm->dead_xfers++;
+		FN_SPEW("EP %02x transfer complete, %d left\n", xfer->endpoint, strm->num_xfers - strm->dead_xfers);
+		return;
+	}
+
 	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
 		uint8_t *buf = (void*)xfer->buffer;
 		for (i=0; i<strm->pkts; i++) {
@@ -148,6 +156,7 @@ static void iso_callback(struct libusb_transfer *xfer)
 	} else {
 		freenect_context *ctx = strm->parent->parent->parent;
 		FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
+		strm->dead_xfers++;
 	}
 }
 
@@ -163,6 +172,8 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 	strm->len = len;
 	strm->buffer = malloc(xfers * pkts * len);
 	strm->xfers = malloc(sizeof(struct libusb_transfer*) * xfers);
+	strm->dead = 0;
+	strm->dead_xfers = 0;
 
 	uint8_t *bufp = strm->buffer;
 
@@ -183,6 +194,27 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 
 	return 0;
 
+}
+
+int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm)
+{
+	freenect_context *ctx = dev->parent->parent;
+	int i;
+
+	strm->dead = 1;
+
+	for (i=0; i<strm->num_xfers; i++)
+		libusb_cancel_transfer(strm->xfers[i]);
+
+	while (strm->dead_xfers < strm->num_xfers) {
+		libusb_handle_events(ctx->usb.ctx);
+	}
+
+	free(strm->buffer);
+	free(strm->xfers);
+
+	memset(strm, 0, sizeof(*strm));
+	return 0;
 }
 
 int fnusb_control(fnusb_dev *dev, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint8_t *data, uint16_t wLength)

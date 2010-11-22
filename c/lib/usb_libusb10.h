@@ -73,6 +73,8 @@ typedef struct {
 	int num_xfers;
 	int pkts;
 	int len;
+	int dead;
+	int dead_xfers;
 } fnusb_isoc_stream;
 
 int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx);
