@@ -6,7 +6,7 @@ if (BUILD_EXAMPLES)
 
 	find_package(Threads REQUIRED)
 	find_package(OpenGL REQUIRED)
-	include_directories(${OpenGL_INCLUDE_DIRS})
+	include_directories(${OPENGL_INCLUDE_DIRS})
 	find_package(GLUT REQUIRED)
 	include_directories(${GLUT_INCLUDE_DIRS})
 
