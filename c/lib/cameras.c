@@ -150,16 +150,17 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 }
 
 // Unpack buffer of (vw bit) data into padded 16bit buffer.
-#define CONVERT_PACKED_BUFFER_TO_16_BIT(depth_raw, depth_frame, vw) {\
-		const int mask = (1 << vw) - 1; \
-		int i; \
-		int bitshift = 0; \
-		for (i=0; i<(640*480); i++) { \
-			int idx = (i*vw)/8; \
-			uint32_t word = (depth_raw[idx]<<(16)) | (depth_raw[idx+1]<<8) | depth_raw[idx+2]; \
-			depth_frame[i] = ((word >> (((3*8)-vw)-bitshift)) & mask); \
-			bitshift = (bitshift + vw) % 8; \
-		} \
+static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw)
+{
+	int mask = (1 << vw) - 1;
+	int i;
+	int bitshift = 0;
+	for (i=0; i<(640*480); i++) {
+		int idx = (i*vw)/8;
+		uint32_t word = (raw[idx]<<(16)) | (raw[idx+1]<<8) | raw[idx+2];
+		frame[i] = ((word >> (((3*8)-vw)-bitshift)) & mask);
+		bitshift = (bitshift + vw) % 8;
+	}
 }
 
 static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
@@ -177,14 +178,13 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (!got_frame)
 		return;
 
-
 	FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
 	       dev->depth_stream.valid_pkts, dev->depth_stream.pkts_per_frame, dev->depth_stream.timestamp);
 
-	if( dev->depth_format == FREENECT_FORMAT_11_BIT )
-		CONVERT_PACKED_BUFFER_TO_16_BIT(dev->depth_raw, dev->depth_frame, 11)
+	if (dev->depth_format == FREENECT_FORMAT_11_BIT)
+		convert_packed_to_16bit(dev->depth_raw, dev->depth_frame, 11);
 	else
-		CONVERT_PACKED_BUFFER_TO_16_BIT(dev->depth_raw, dev->depth_frame, 10)
+		convert_packed_to_16bit(dev->depth_raw, dev->depth_frame, 10);
 
 	if (dev->depth_cb)
 		dev->depth_cb(dev, dev->depth_frame, dev->depth_stream.timestamp);
