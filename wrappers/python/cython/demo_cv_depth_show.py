@@ -2,16 +2,11 @@ import freenect
 import cv
 import numpy as np
 
-cv.NamedWindow('Depth')
+freenect.start()
 
-def display(dev, data, timestamp):
-    data -= np.min(data.ravel())
-    data *= 65536 / np.max(data.ravel())
-    image = cv.CreateImageHeader((data.shape[1], data.shape[0]),
-                                 cv.IPL_DEPTH_16U,
-                                 1)
-    cv.SetData(image, data.tostring(),
-               data.dtype.itemsize * data.shape[1])
-    cv.ShowImage('Depth', image)
-    cv.WaitKey(5)
-freenect.runloop(lambda *x: display(*freenect.depth_cb_np(*x)))
+cv.NamedWindow('Depth')    
+while 1:
+    depth = freenect.get_depth_np()
+    cv.ShowImage('Depth', depth.astype(np.uint8))
+    cv.WaitKey(10)
+
