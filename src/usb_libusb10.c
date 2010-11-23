@@ -28,7 +28,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include <libusb.h>
+#include <libusb-1.0/libusb.h>
 #include "freenect_internal.h"
 
 int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
