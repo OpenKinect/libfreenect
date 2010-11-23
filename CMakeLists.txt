@@ -50,6 +50,9 @@ set (PROJECT_APIVER
 
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
 OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
+IF(PROJECT_OS_LINUX)
+	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
+ENDIF(PROJECT_OS_LINUX)
 
 # Doesn't work on windows yet.
 IF(NOT UNIX)
@@ -109,7 +112,7 @@ add_custom_target(uninstall
 # Create Debian/RPM Packages
 # after make, use "fakeroot cpack" in the build Dir to complete
 
-IF ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+IF ( BUILD_CPACK )
   set(CPACK_PACKAGE_DESCRIPTION "libfreenect for kinect")
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
   set(CPACK_PACKAGE_NAME "libfreenect-dev")
@@ -127,12 +130,12 @@ IF ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
 
   include(CPack)
 
-  INSTALL(FILES "${CMAKE_BINARY_DIR}/lib/libfreenect.a" DESTINATION lib)
-  INSTALL(FILES "include/libfreenect.h" DESTINATION include)
+  INSTALL(FILES "${CMAKE_BINARY_DIR}/lib/libfreenect.a" DESTINATION ${PROJECT_LIBRARY_INSTALL_DIR})
+  INSTALL(FILES "include/libfreenect.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   INSTALL(FILES "APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "README.asciidoc" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "doc/kinect_protocol.asciidoc" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
 
-ENDIF ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
+ENDIF ( BUILD_CPACK )
 
