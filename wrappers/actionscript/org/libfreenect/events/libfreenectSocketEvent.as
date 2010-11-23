@@ -32,9 +32,9 @@ package org.libfreenect.events
 		public class libfreenectSocketEvent extends Event
 		{
 			
-		public static const LIBFREENECT_SOCKET_ONCONNECT:String = "LIBFREENECT_SOCKET_ONCONNECT";
-		public static const LIBFREENECT_SOCKET_ONDATA:String = "LIBFREENECT_SOCKET_ONDATA";
-		public static const LIBFREENECT_SOCKET_ONERROR:String = "LIBFREENECT_SOCKET_ONERROR";
+		public static const ONCONNECT:String = "ONCONNECT";
+		public static const ONDATA:String = "ONDATA";
+		public static const ONERROR:String = "ONERROR";
 		
 		public var data:*;
 		
