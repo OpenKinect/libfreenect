@@ -1,10 +1,10 @@
 require 'formula'
 
 class Libfreenect <Formula
-  url 'https://github.com/OpenKinect/libfreenect/tarball/bae0ec6a347936ffcb39a285d0f7bbe4780326aa'
-  version 'bae0ec6a347936ffcb39'
+  url 'https://github.com/OpenKinect/libfreenect/tarball/master'
+  version 'master'
   homepage 'http://openkinect.org'
-  md5 '3097944042d644e4d7276874271d3152'
+  md5 ''
   
   depends_on 'libusb-freenect'
   depends_on 'cmake'
