@@ -1,11 +1,21 @@
-include_directories (${CMAKE_SOURCE_DIR}/include)
-include_directories (${CMAKE_SOURCE_DIR}/lib)
+######################################################################################
+# Build for main library
+######################################################################################
 
-find_package(Threads REQUIRED)
-find_package(USB REQUIRED)
-include_directories(${USB_INCLUDE_DIRS})
+include_directories (${CMAKE_CURRENT_SOURCE_DIR})
 
-SET(SRC core.c tilt.c cameras.c usb_libusb10.c)
+# Catch all for OS X or Linux
+IF(UNIX)
+  set(CMAKE_C_FLAGS "-Wall")
+  find_package(Threads REQUIRED)
+  find_package(USB REQUIRED)
+  include_directories(${USB_INCLUDE_DIRS})
+  LIST(APPEND SRC usb_libusb10.c)
+ELSE()
+  MESSAGE(FATAL_ERROR "libfreenect is not currently supported on this platform")
+ENDIF()
+
+LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c)
 
 if (NOT PROJECT_OS_WIN)
   add_library (freenect SHARED ${SRC})

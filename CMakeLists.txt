@@ -1,3 +1,7 @@
+######################################################################################
+# License
+######################################################################################
+
 # This file is part of the OpenKinect Project. http://www.openkinect.org
 #
 # Copyright (c) 2010 individual OpenKinect contributors. See the CONTRIB file
@@ -22,7 +26,20 @@
 # Binary distributions must follow the binary distribution requirements of
 # either License.
 
+######################################################################################
+# CMake directives
+######################################################################################
+
+#Require 2.6 or higher. 
+
+cmake_minimum_required(VERSION 2.6)
+
+######################################################################################
+# Project declaration and options
+######################################################################################
+
 PROJECT(libfreenect)
+
 set (PROJECT_VER_MAJOR 0)
 set (PROJECT_VER_MINOR 0)
 set (PROJECT_VER_PATCH 1)
@@ -31,25 +48,37 @@ set (PROJECT_VER
 set (PROJECT_APIVER 
 	"${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
 
-cmake_minimum_required(VERSION 2.6)
+######################################################################################
+# CMake Modules
+######################################################################################
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/Modules/")
-
-set(CMAKE_C_FLAGS "-Wall -O3 -g")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
 
 # Find the host operating system and architecture
 include (FindOS)
 # Set up installation directories
 include (SetupDirectories)
 
-# Add source directories
-add_subdirectory (lib)
+######################################################################################
+# CMake 
+######################################################################################
+
+# Pretty much everyone is going to need the main includes
+include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# Add library project
+add_subdirectory (src)
+
+# Add examples
 add_subdirectory (examples)
 
+######################################################################################
+# Extras
+######################################################################################
 
 # Create an uninstall target
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/Modules/UninstallTarget.cmake.in"
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/UninstallTarget.cmake.in"
     "${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake"
     IMMEDIATE @ONLY)
 
@@ -60,8 +89,6 @@ add_custom_target(uninstall
 # after make, use "fakeroot cpack" in the build Dir to complete
 
 IF ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-
-
     set(CPACK_PACKAGE_DESCRIPTION "libfreenect for kinect")
     set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
     set(CPACK_PACKAGE_NAME "libfreenect-dev")
