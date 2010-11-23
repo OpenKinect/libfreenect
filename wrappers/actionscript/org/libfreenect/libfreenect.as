@@ -14,7 +14,7 @@
  * 
  * If you redistribute this file in source form, modified or unmodified, 
  * you may:
- * 1) Leave this header intact and distribute it under the same terms, 
+ * 1) Leave this header intact and distribute it under the same terms,
  * accompanying it with the APACHE20 and GPL20 files, or
  * 2) Delete the Apache 2.0 clause and accompany it with the GPL20 file, or
  * 3) Delete the GPL v2.0 clause and accompany it with the APACHE20 file
@@ -30,12 +30,15 @@ package org.libfreenect
 	public class libfreenect
 	{
 
-		public static const LIBFREENECT_SUCCESS:int = 0;
-		public static const LIBFREENECT_SIZE_ERROR:int = -1;
+		public static const SUCCESS:int = 0;
+		public static const ERROR:int = -1;
 		
-		public static const LIBFREENECT_CAMERA:int = 0;
-		public static const LIBFREENECT_MOTOR:int = 1;
-		public static const LIBFREENECT_MIC:int = 2;
+		public static const CAMERA_ID:int = 0;
+		public static const MOTOR_ID:int = 1;
+		public static const MIC_ID:int = 2;
 
+		public static const RAW_IMG_SIZE:int = 640 * 480 * 4;
+		public static const DATA_IN_SIZE:int = 3 * 2 + 3 * 8;
+		public static const DATA_OUT_SIZE:int = 6;
 	}
 }

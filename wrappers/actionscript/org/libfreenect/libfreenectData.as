@@ -45,11 +45,8 @@ package org.libfreenect
 			if ( !_singleton_lock ) throw new Error( 'Use libfreenectData.instance' );
 				
 			socket = new libfreenectSocket();
-			//Another initialization may be needed here
 			
-			//socket.addEventListener(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONCONNECT,onConnect);
-			//socket.addEventListener(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONERROR,onError);
-			socket.addEventListener(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONDATA,onDataReceived);
+			socket.addEventListener(libfreenectSocketEvent.ONDATA,onDataReceived);
 			
 			socket.connect("localhost", 6003);
 		}
