@@ -453,8 +453,8 @@ int freenect_start_rgb(freenect_device *dev)
 	write_register(dev, 0x0c, 0x00);
 	write_register(dev, 0x0d, 0x01);
 	write_register(dev, 0x0e, 0x1e); // 30Hz bayer
-	write_register(dev, 0x47, 0x00); // disable Hflip
 	write_register(dev, 0x05, 0x01); // start rgb stream
+	write_register(dev, 0x47, 0x00); // disable Hflip
 
 	dev->rgb_running = 1;
 	return 0;
