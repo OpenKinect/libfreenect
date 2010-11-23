@@ -44,9 +44,9 @@ set (PROJECT_VER_MAJOR 0)
 set (PROJECT_VER_MINOR 0)
 set (PROJECT_VER_PATCH 1)
 set (PROJECT_VER 
-	"${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
+  "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 set (PROJECT_APIVER 
-	"${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
+  "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
 
 ######################################################################################
 # CMake Modules
@@ -63,6 +63,10 @@ include (SetupDirectories)
 # CMake 
 ######################################################################################
 
+SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
+SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
+SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
+
 # Pretty much everyone is going to need the main includes
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 
@@ -78,39 +82,39 @@ add_subdirectory (examples)
 
 # Create an uninstall target
 configure_file(
-    "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/UninstallTarget.cmake.in"
-    "${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake"
-    IMMEDIATE @ONLY)
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/UninstallTarget.cmake.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake"
+  IMMEDIATE @ONLY)
 
 add_custom_target(uninstall
-    COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake)
+  COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake)
 
 # Create Debian/RPM Packages
 # after make, use "fakeroot cpack" in the build Dir to complete
 
 IF ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
-    set(CPACK_PACKAGE_DESCRIPTION "libfreenect for kinect")
-    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
-    set(CPACK_PACKAGE_NAME "libfreenect-dev")
-    set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0.0-dev")
+  set(CPACK_PACKAGE_DESCRIPTION "libfreenect for kinect")
+  set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
+  set(CPACK_PACKAGE_NAME "libfreenect-dev")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0.0-dev")
 
-    set(CPACK_PACKAGE_CONTACT "OpenKinect <openkinect@googlegroups.com>")
-    #set(CPACK_PACKAGE_VENDOR "")
-    set(CPACK_PACKAGE_VERSION_MAJOR PROJECT_VER_MAJOR)
-    set(CPACK_PACKAGE_VERSION_MINOR PROJECT_VER_MINOR)
-    set(CPACK_PACKAGE_VERSION_PATCH PROJECT_VER_PATCH)
-    set(VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
+  set(CPACK_PACKAGE_CONTACT "OpenKinect <openkinect@googlegroups.com>")
+  #set(CPACK_PACKAGE_VENDOR "")
+  set(CPACK_PACKAGE_VERSION_MAJOR PROJECT_VER_MAJOR)
+  set(CPACK_PACKAGE_VERSION_MINOR PROJECT_VER_MINOR)
+  set(CPACK_PACKAGE_VERSION_PATCH PROJECT_VER_PATCH)
+  set(VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
 
-    set(CPACK_GENERATOR "DEB;RPM;")
-    set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}-${CMAKE_SYSTEM_PROCESSOR}")
+  set(CPACK_GENERATOR "DEB;RPM;")
+  set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}-${CMAKE_SYSTEM_PROCESSOR}")
 
-    include(CPack)
+  include(CPack)
 
-    INSTALL(FILES "${CMAKE_BINARY_DIR}/lib/libfreenect.a" DESTINATION lib)
-    INSTALL(FILES "include/libfreenect.h" DESTINATION include)
-    INSTALL(FILES "../APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
-    INSTALL(FILES "../GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
-    INSTALL(FILES "../README.asciidoc" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
+  INSTALL(FILES "${CMAKE_BINARY_DIR}/lib/libfreenect.a" DESTINATION lib)
+  INSTALL(FILES "include/libfreenect.h" DESTINATION include)
+  INSTALL(FILES "../APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
+  INSTALL(FILES "../GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
+  INSTALL(FILES "../README.asciidoc" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
 
 ENDIF ("${CMAKE_SYSTEM_NAME}" MATCHES "Linux")
 
