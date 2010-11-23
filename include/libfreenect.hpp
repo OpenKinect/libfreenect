@@ -81,10 +81,10 @@ namespace Freenect {
 		// Do not call directly even in child
 		virtual void RGBCallback(freenect_pixel *rgb, uint32_t timestamp) = 0;
 		// Do not call directly even in child
-		virtual void DepthCallback(freenect_depth *depth, uint32_t timestamp) = 0;
+		virtual void DepthCallback(void *depth, uint32_t timestamp) = 0;
 	  private:
 		freenect_device *m_dev;
-		static void freenect_depth_callback(freenect_device *dev, freenect_depth *depth, uint32_t timestamp) {
+		static void freenect_depth_callback(freenect_device *dev, void *depth, uint32_t timestamp) {
 			FreenectDevice* device = static_cast<FreenectDevice*>(freenect_get_user(dev));
 			device->DepthCallback(depth, timestamp);
 		}
