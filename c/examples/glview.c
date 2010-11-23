@@ -44,7 +44,7 @@
 
 #include <math.h>
 
-pthread_t gl_thread;
+pthread_t freenect_thread;
 volatile int die = 0;
 
 int g_argc;
@@ -63,6 +63,7 @@ uint8_t gl_rgb_back[640*480*4];
 GLuint gl_depth_tex;
 GLuint gl_rgb_tex;
 
+freenect_context *f_ctx;
 freenect_device *f_dev;
 int freenect_angle = 0;
 int freenect_led;
@@ -118,6 +119,7 @@ void keyPressed(unsigned char key, int x, int y)
 {
 	if (key == 27) {
 		die = 1;
+		pthread_join(freenect_thread, NULL);
 		glutDestroyWindow(window);
 		pthread_exit(NULL);
 	}
@@ -210,7 +212,6 @@ void *gl_threadfunc(void *arg)
 
 	glutMainLoop();
 
-	pthread_exit(NULL);
 	return NULL;
 }
 
@@ -277,11 +278,43 @@ void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
+void *freenect_threadfunc(void *arg)
+{
+	freenect_set_tilt_degs(f_dev,freenect_angle);
+	freenect_set_led(f_dev,LED_RED);
+	freenect_set_depth_callback(f_dev, depth_cb);
+	freenect_set_rgb_callback(f_dev, rgb_cb);
+	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
+	freenect_set_depth_format(f_dev, FREENECT_FORMAT_11_BIT);
+
+	freenect_start_depth(f_dev);
+	freenect_start_rgb(f_dev);
+
+	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
+
+	while(!die && freenect_process_events(f_ctx) >= 0 )
+	{
+		int16_t ax,ay,az;
+		freenect_get_raw_accel(f_dev, &ax, &ay, &az);
+		double dx,dy,dz;
+		freenect_get_mks_accel(f_dev, &dx, &dy, &dz);
+		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f\r", ax, ay, az, dx, dy, dz);
+		fflush(stdout);
+	}
+
+	printf("\nshutting down streams...\n");
+
+	freenect_stop_depth(f_dev);
+	freenect_stop_rgb(f_dev);
+
+	printf("-- done!\n");
+	return NULL;
+}
+
+
 int main(int argc, char **argv)
 {
 	int res;
-	freenect_context *f_ctx;
-	
 
 	printf("Kinect camera test\n");
 
@@ -317,41 +350,14 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-
-	freenect_set_tilt_degs(f_dev,freenect_angle);
-	freenect_set_led(f_dev,LED_RED);
-	freenect_set_depth_callback(f_dev, depth_cb);
-	freenect_set_rgb_callback(f_dev, rgb_cb);
-	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
-	freenect_set_depth_format(f_dev, FREENECT_FORMAT_11_BIT);
-
-	res = pthread_create(&gl_thread, NULL, gl_threadfunc, NULL);
+	res = pthread_create(&freenect_thread, NULL, freenect_threadfunc, NULL);
 	if (res) {
 		printf("pthread_create failed\n");
 		return 1;
 	}
 
-	freenect_start_depth(f_dev);
-	freenect_start_rgb(f_dev);
+	// OS X requires GLUT to run on the main thread
+	gl_threadfunc(NULL);
 
-	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
-
-	while(!die && freenect_process_events(f_ctx) >= 0 )
-	{
-		int16_t ax,ay,az;
-		freenect_get_raw_accel(f_dev, &ax, &ay, &az);
-		double dx,dy,dz;
-		freenect_get_mks_accel(f_dev, &dx, &dy, &dz);
-		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f\r", ax, ay, az, dx, dy, dz);
-		fflush(stdout);
-	}
-
-	printf("\nshutting down streams...\n");
-
-	freenect_stop_depth(f_dev);
-	freenect_stop_rgb(f_dev);
-
-	printf("-- done!\n");
-
-	pthread_exit(NULL);
+	return 0;
 }
