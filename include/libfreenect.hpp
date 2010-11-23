@@ -40,6 +40,22 @@ namespace Freenect {
 		Noncopyable( const Noncopyable& );
 		const Noncopyable& operator=( const Noncopyable& );
 	};
+	
+	class FreenectDeviceState : Noncopyable {
+		friend class FreenectDevice;
+			FreenectDeviceState(freenect_raw_device_state *_state):
+				m_state(_state)
+			{}
+		public:
+			void getAccelerometers(double* x, double* y, double* z) {
+				freenect_get_mks_accel(m_state, x, y, z);
+			}
+			double getTiltDegs() {
+				return freenect_get_tilt_degs(m_state);
+			}
+		private:
+			freenect_raw_device_state *m_state;
+	};
 
 	class FreenectDevice : Noncopyable {
 	  public:
@@ -72,11 +88,11 @@ namespace Freenect {
 		void setLed(freenect_led_options _option) {
 			if(freenect_set_led(m_dev, _option) != 0) throw std::runtime_error("Cannot set led");
 		}
-		void getAccelerometers(double &_x, double &_y, double &_z) {
-			if(freenect_get_mks_accel(m_dev,&_x, &_y, &_z) != 0) throw std::runtime_error("Cannot get mks accemerometers");
+		void updateState() {
+			if (freenect_update_device_state(m_dev) != 0) throw std::runtime_error("Cannot update device state");
 		}
-		void getAccelerometers(int16_t &_x, int16_t &_y, int16_t &_z) {
-			if(freenect_get_raw_accel(m_dev,&_x, &_y, &_z) != 0) throw std::runtime_error("Cannot get raw accemerometers");
+		FreenectDeviceState getState() const {
+			return FreenectDeviceState(freenect_get_device_state(m_dev));
 		}
 		// Do not call directly even in child
 		virtual void RGBCallback(freenect_pixel *rgb, uint32_t timestamp) = 0;

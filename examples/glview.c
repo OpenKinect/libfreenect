@@ -293,11 +293,12 @@ void *freenect_threadfunc(void *arg)
 
 	while(!die && freenect_process_events(f_ctx) >= 0 )
 	{
-		int16_t ax,ay,az;
-		freenect_get_raw_accel(f_dev, &ax, &ay, &az);
+		freenect_raw_device_state* state;
+		freenect_update_device_state(f_dev);
+		state = freenect_get_device_state(f_dev);
 		double dx,dy,dz;
-		freenect_get_mks_accel(f_dev, &dx, &dy, &dz);
-		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f\r", ax, ay, az, dx, dy, dz);
+		freenect_get_mks_accel(state, &dx, &dy, &dz);
+		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
 		fflush(stdout);
 	}
 
@@ -309,7 +310,6 @@ void *freenect_threadfunc(void *arg)
 	printf("-- done!\n");
 	return NULL;
 }
-
 
 int main(int argc, char **argv)
 {

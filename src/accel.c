@@ -32,34 +32,13 @@
 
 #include "freenect_internal.h"
 
-// The kinect can tilt from +31 to -31 degrees in what looks like 1 degree increments
-// The control input looks like 2*desired_degrees
-#define MAX_TILT_ANGLE 31
-#define MIN_TILT_ANGLE (-31)
-
 #define GRAVITY 9.80665
 
-int freenect_set_tilt_degs(freenect_device *dev, double angle)
+void freenect_get_mks_accel(freenect_raw_device_state *state, double* x, double* y, double* z)
 {
-	int ret;
-	uint8_t empty[0x1];
-
-	angle = (angle<MIN_TILT_ANGLE) ? MIN_TILT_ANGLE : ((angle>MAX_TILT_ANGLE) ? MAX_TILT_ANGLE : angle);
-	angle = angle * 2;
-
-	ret = fnusb_control(&dev->usb_motor, 0x40, 0x31, (uint16_t)angle, 0x0, empty, 0x0);
-	return ret;
-}
-
-int freenect_set_led(freenect_device *dev, freenect_led_options option)
-{
-	int ret;
-	uint8_t empty[0x1];
-	ret = fnusb_control(&dev->usb_motor, 0x40, 0x06, (uint16_t)option, 0x0, empty, 0x0);
-	return ret;
-}
-
-double freenect_get_tilt_degs(freenect_raw_device_state *state)
-{
-	return ((double)state->tilt_angle) / 2.;
+	//the documentation for the accelerometer (http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf) 
+	//states there are 819 counts/g  
+	*x = (double)state->accelerometer_x/FREENECT_COUNTS_PER_G*GRAVITY;
+	*y = (double)state->accelerometer_y/FREENECT_COUNTS_PER_G*GRAVITY;
+	*z = (double)state->accelerometer_z/FREENECT_COUNTS_PER_G*GRAVITY;
 }
