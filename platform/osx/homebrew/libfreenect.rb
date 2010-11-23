@@ -10,7 +10,6 @@ class Libfreenect <Formula
   depends_on 'cmake'
 
   def install
-    cd "c"
     mkdir "build"
     cd "build"
     system "cmake .. #{std_cmake_parameters}"
