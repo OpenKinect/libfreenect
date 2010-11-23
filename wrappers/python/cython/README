@@ -1,0 +1,9 @@
+B1;2600;0cBrandyn White
+bwhite@dappervision.com
+
+**This is not completed yet, so if you are looking at it keep that in mind**
+
+To compile you need to copy libfreenect.a to this directory, then run the demo in this directory.  Nothing else has been tested.  The header files are in here for simplicity, when this is integrated with the build system they will be accessed directly.
+
+Build with (goes in this directory)
+python setup.py build_ext --inplace
