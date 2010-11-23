@@ -48,6 +48,14 @@ set (PROJECT_VER
 set (PROJECT_APIVER 
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
 
+OPTION(BUILD_EXAMPLES "Build example programs" ON)
+OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
+
+# Doesn't work on windows yet.
+IF(NOT UNIX)
+  MESSAGE(FATAL_ERROR "libfreenect is not currently supported on this platform")
+ENDIF()
+
 ######################################################################################
 # CMake Modules
 ######################################################################################
@@ -58,6 +66,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_mo
 include (FindOS)
 # Set up installation directories
 include (SetupDirectories)
+
+# Find packages needed to build library
+find_package(libusb-1.0 REQUIRED)
 
 ######################################################################################
 # CMake 
@@ -74,7 +85,13 @@ include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_subdirectory (src)
 
 # Add examples
-add_subdirectory (examples)
+IF(BUILD_EXAMPLES)
+  add_subdirectory (examples)
+ENDIF()
+
+IF(BUILD_AS3_SERVER)
+  add_subdirectory(wrappers/actionscript)
+ENDIF()
 
 ######################################################################################
 # Extras
