@@ -29,3 +29,10 @@ target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
 # Install the header file
 install (FILES "../include/libfreenect.h" "../include/libfreenect.hpp"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+
+IF(UNIX AND NOT APPLE)
+  # Produce a pkg-config file for linking against the shared lib
+  configure_file ("libfreenect.pc.in" "libfreenect.pc" @ONLY)
+  install (FILES "${CMAKE_CURRENT_BINARY_DIR}/libfreenect.pc"
+    DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/pkgconfig")
+ENDIF()
