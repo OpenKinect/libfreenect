@@ -28,7 +28,6 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-#include <libusb.h>
 #include "libfreenect.h"
 #include <pthread.h>
 #include <arpa/inet.h>
