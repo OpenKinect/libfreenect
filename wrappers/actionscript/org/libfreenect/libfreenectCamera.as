@@ -55,14 +55,6 @@ package org.libfreenect
 		public function libfreenectCamera()
 		{
 			if ( !_singleton_lock ) throw new Error( 'Use libfreenectCamera.instance' );
-				
-			//socket = new libfreenectSocket();
-			
-			//Another initialization may be needed here
-			
-			//socket.addEventListener(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONCONNECT,onConnect);
-			//socket.addEventListener(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONERROR,onError);
-			//socket.addEventListener(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONDATA,onDataReceived);
 		}
 		
 		private function onDepthReceived(event:libfreenectSocketEvent):void{
@@ -81,7 +73,7 @@ package org.libfreenect
 		
 		public function initRGBStream(container:Sprite):void{
 			socket_rgb = new libfreenectSocket();
-			socket_rgb.addEventListener(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONDATA,onRGBReceived);
+			socket_rgb.addEventListener(libfreenectSocketEvent.ONDATA,onRGBReceived);
 			if(!canvas_rgb) canvas_rgb = new BitmapData(640, 480, false, 0xFF000000);
 			rgb_bmp = new Bitmap(canvas_rgb);
 			container.addChild(rgb_bmp);
@@ -90,7 +82,7 @@ package org.libfreenect
 		
 		public function initDepthStream(container:Sprite):void{
 			socket_depth = new libfreenectSocket();
-			socket_depth.addEventListener(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONDATA,onDepthReceived);
+			socket_depth.addEventListener(libfreenectSocketEvent.ONDATA,onDepthReceived);
 			if(!canvas_depth) canvas_depth = new BitmapData(640, 480, false, 0xFF000000);
 			depth_bmp = new Bitmap(canvas_depth);
 			container.addChild(depth_bmp);

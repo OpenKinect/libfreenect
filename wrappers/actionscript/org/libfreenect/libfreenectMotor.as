@@ -40,28 +40,28 @@ package org.libfreenect
 		private static var _instance:libfreenectMotor;
 		
 		private var _current_position:Number;
-		public var inf:libfreenectData;
+		public var _info:libfreenectData;
 
 		public function libfreenectMotor()
 		{
 			if ( !_singleton_lock ) throw new Error( 'Use libfreenectMotor.instance' );
 				
-			inf = libfreenectData.instance;
-			inf.addEventListener(libfreenectDataEvent.DATA_RECEIVED, onDataReceived);
+			_info = libfreenectData.instance;
+			_info.addEventListener(libfreenectDataEvent.DATA_RECEIVED, onDataReceived);
 		}
 		
 		private function onDataReceived(event:libfreenectDataEvent):void{
-			var object:Object = event.data; // Acelerometer info so far
+			var object:Object = event.data; // Acelerometer _infoo so far
 		}
 		
 		public function set position(position:Number):void 
 		{
 			var data:ByteArray = new ByteArray;
-			data.writeByte(libfreenect.LIBFREENECT_MOTOR);
+			data.writeByte(libfreenect.MOTOR_ID);
 			data.writeByte(1); //MOVE MOTOR
 			data.writeInt(position);
-			if(inf.sendData(data) == libfreenect.LIBFREENECT_SUCCESS){
-				dispatchEvent(new libfreenectMotorEvent(libfreenectMotorEvent.LIBFREENECT_MOTOR_MOVED, position));
+			if(_info.sendData(data) == libfreenect.SUCCESS){
+				dispatchEvent(new libfreenectMotorEvent(libfreenectMotorEvent.MOVED, position));
 			} else {
 				throw new Error('Data was not complete');
 			}

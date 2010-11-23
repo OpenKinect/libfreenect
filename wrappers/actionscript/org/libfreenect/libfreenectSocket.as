@@ -43,89 +43,77 @@
 	 */
 	public class libfreenectSocket extends EventDispatcher
 	{
-		private static const _images_size:int = 640 * 480 * 4; //614400; //NEEDS DEFINITION (65536 * 9 = 589824) 640 * 480 * 2 = 614400
-		private static const _data_size:int = 3 * 2 + 3 * 8;
-		private static const _send_size:int = 6;
-		//private static var _singleton_lock:Boolean = false;
 		private static var _instance:libfreenectSocket;
-		private var _packages_received:Number = 0;
-		private var packet_size:Number;
-		private var socket:Socket;
-		private var buffer:ByteArray;
-		private var rawPackage:ByteArray;
+		private var _packet_size:Number;
+		private var _socket:Socket;
+		private var _buffer:ByteArray;
 		private var _port:Number;
-		private var byteArray:ByteArray;
 
 		public function libfreenectSocket()
-		{
-			//if ( !_singleton_lock ) throw new Error( 'Use libfreenectSocket.instance' );
-				
-			socket = new Socket();
-			buffer = new ByteArray();
-			rawPackage = new ByteArray();
-			
-			//Another initialization may be needed here
-			
-			socket.addEventListener(ProgressEvent.SOCKET_DATA, onSocketData);
-			socket.addEventListener(IOErrorEvent.IO_ERROR, onSocketError);
-			socket.addEventListener(Event.CONNECT, onSocketConnect);
+		{		
+			_socket = new Socket();
+			_buffer = new ByteArray();
+
+			_socket.addEventListener(ProgressEvent.SOCKET_DATA, onSocketData);
+			_socket.addEventListener(IOErrorEvent.IO_ERROR, onSocketError);
+			_socket.addEventListener(Event.CONNECT, onSocketConnect);
 		}
 		
-		//DEFAULT PORT NEEDS DEFINITION
-		public function connect(host:String = 'localhost', port:uint = 8000):void
+		public function connect(host:String = 'localhost', port:uint = 6003):void
 		{
 			_port = port;
-			packet_size = (_port == 6003) ? _data_size : _images_size;
+			_packet_size = (_port == 6003) ? libfreenect.DATA_IN_SIZE : libfreenect.RAW_IMG_SIZE;
 			if (!this.connected) 
-				socket.connect(host, port);
+				_socket.connect(host, port);
 			else
-				dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONCONNECT, null));
+				dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.ONCONNECT, null));
 		}
 		
 		public function get connected():Boolean
 		{
-			return socket.connected;
+			return _socket.connected;
 		}
 		
 		public function close():void
 		{
-			socket.close();
+			_socket.close();
 		}
 		
 		public function sendData(data:ByteArray):int{
-			if(data.length == _send_size){
+			if(data.length == libfreenect.DATA_OUT_SIZE){
 				trace("sendData");
-				socket.writeBytes(data, 0, _send_size);
-				socket.flush();
-				return libfreenect.LIBFREENECT_SUCCESS;
+				_socket.writeBytes(data, 0, libfreenect.DATA_OUT_SIZE);
+				_socket.flush();
+				return libfreenect.SUCCESS;
 			} else {
-				throw new Error( 'Incorrect data size (' + data.length + '). Expected: ' + _send_size);
-				return libfreenect.LIBFREENECT_SIZE_ERROR;
+				throw new Error( 'Incorrect data size (' + data.length + '). Expected: ' + libfreenect.DATA_OUT_SIZE);
+				return libfreenect.ERROR;
 			}
 		}
+		
 		private function onSocketData(event:ProgressEvent):void
 		{
-			if(socket.bytesAvailable == 237){
-				byteArray = new ByteArray();
-				socket.readBytes(byteArray, 0, socket.bytesAvailable);
+			if(_socket.bytesAvailable < 237){
+				var _byte_arr:ByteArray = new ByteArray();
+				_socket.readBytes(_byte_arr, 0, _socket.bytesAvailable);
 				trace("policy_file : " + byteArray);
 			}
-			if(socket.bytesAvailable > 0) {
-				if(socket.bytesAvailable >= packet_size){
-					socket.readBytes(rawPackage, 0, packet_size);
-					rawPackage.endian = Endian.LITTLE_ENDIAN;
-					rawPackage.position = 0;
-					dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONDATA, rawPackage));
+			if(_socket.bytesAvailable > 0) {
+				if(_socket.bytesAvailable >= _packet_size){
+					_socket.readBytes(_buffer, 0, _packet_size);
+					_buffer.endian = Endian.LITTLE_ENDIAN;
+					_buffer.position = 0;
+					dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.ONDATA, _buffer));
 				}
 			}
 		}
 		
 		private function onSocketError(event:IOErrorEvent):void{
-			dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONERROR, null));
+			dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.ONERROR, null));
 		}
 		
 		private function onSocketConnect(event:Event):void{
-			dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.LIBFREENECT_SOCKET_ONCONNECT, null));
+			dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.ONCONNECT, null));
 		}
 
 		public function set instance(instance:libfreenectSocket):void 
@@ -137,9 +125,7 @@
 		{
 			if ( _instance == null )
 			{
-				//_singleton_lock = true;
 				_instance = new libfreenectSocket();
-				//_singleton_lock = false;
 			}
 			return _instance;
 		}

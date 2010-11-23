@@ -32,7 +32,7 @@ package org.libfreenect.events
 		public class libfreenectMotorEvent extends Event
 		{
 			
-		public static const LIBFREENECT_MOTOR_MOVED:String = "LIBFREENECT_MOTOR_MOVED";
+		public static const MOVED:String = "MOVED";
 		
 		public var data:*;
 		
