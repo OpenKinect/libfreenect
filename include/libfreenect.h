@@ -67,6 +67,20 @@ typedef enum {
 	FREENECT_FORMAT_PACKED_10_BIT = 3,
 } freenect_depth_format;
 
+typedef enum {
+	TILT_STATUS_STOPPED = 0x00,
+	TILT_STATUS_LIMIT = 0x01,
+	TILT_STATUS_MOVING = 0x04
+} freenect_tilt_status_code;
+
+typedef struct {
+	int16_t accelerometer_x;
+	int16_t accelerometer_y;
+	int16_t accelerometer_z;
+	int8_t tilt_angle;
+	freenect_tilt_status_code tilt_status;
+} freenect_raw_device_state;
+
 struct _freenect_context;
 typedef struct _freenect_context freenect_context;
 
@@ -122,8 +136,10 @@ int freenect_stop_rgb(freenect_device *dev);
 int freenect_set_tilt_degs(freenect_device *dev, double angle);
 int freenect_set_led(freenect_device *dev, freenect_led_options option);
 
-int freenect_get_raw_accel(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z);
-int freenect_get_mks_accel(freenect_device *dev, double* x, double* y, double* z);
+int freenect_update_device_state(freenect_device *dev);
+freenect_raw_device_state* freenect_get_device_state(freenect_device *dev);
+void freenect_get_mks_accel(freenect_raw_device_state *state, double* x, double* y, double* z);
+double freenect_get_tilt_degs(freenect_raw_device_state *state);
 
 #ifdef __cplusplus
 }
