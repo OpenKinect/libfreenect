@@ -53,7 +53,7 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 
 int freenect_shutdown(freenect_context *ctx)
 {
-	//FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
@@ -86,7 +86,7 @@ int freenect_num_devices(freenect_context *ctx)
 
 	return (nr);
 	*/
-	//FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
@@ -115,7 +115,7 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 int freenect_close_device(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
-	//FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 

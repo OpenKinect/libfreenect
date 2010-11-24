@@ -204,6 +204,11 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 
 }
 
+int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm)
+{
+	return -1;
+}
+
 int fnusb_control(fnusb_dev *dev, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, char *data, uint16_t wLength)
 {
 	return usb_control_msg(dev->dev, bmRequestType, bRequest, wValue, wIndex, data, wLength, 160);
