@@ -74,14 +74,14 @@ struct _freenect_device;
 typedef struct _freenect_device freenect_device;
 
 // usb backend specific section
-#if _WIN32
-#include "usb_libusb_win32.h"
+#if defined(_WIN32)
+#include <usb.h>
+typedef void* freenect_usb_context;
 #else
-#include "usb_libusb10.h"
+#include <libusb.h>
+typedef libusb_context freenect_usb_context;
 #endif
 
-typedef libusb_context freenect_usb_context;
-//
 
 typedef enum {
 	FREENECT_LOG_FATAL = 0,

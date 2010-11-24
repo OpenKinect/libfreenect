@@ -54,6 +54,7 @@ struct _freenect_context {
 #define LL_SPEW FREENECT_LOG_SPEW
 #define LL_FLOOD FREENECT_LOG_FLOOD
 
+/*
 void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...) __attribute__ ((format (printf, 3, 4)));
 
 #define FN_LOG(level, ...) fn_log(ctx, level, __VA_ARGS__)
@@ -66,6 +67,7 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 #define FN_DEBUG(...) FN_LOG(LL_DEBUG, __VA_ARGS__)
 #define FN_SPEW(...) FN_LOG(LL_SPEW, __VA_ARGS__)
 #define FN_FLOOD(...) FN_LOG(LL_FLOOD, __VA_ARGS__)
+*/
 
 #define DEPTH_RAW_10_BIT_SIZE 384000
 #define DEPTH_RAW_11_BIT_SIZE 422400
