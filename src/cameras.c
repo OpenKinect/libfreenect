@@ -595,3 +595,9 @@ int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt)
 	dev->rgb_format = fmt;
 	return 0;
 }
+
+int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
+{
+	dev->depth_format = fmt;
+	return 0;
+}

@@ -294,8 +294,8 @@ void *freenect_threadfunc(void *arg)
 	while(!die && freenect_process_events(f_ctx) >= 0 )
 	{
 		int16_t ax,ay,az;
-		freenect_get_raw_accel(f_dev, &ax, &ay, &az);
 		double dx,dy,dz;
+		freenect_get_raw_accel(f_dev, &ax, &ay, &az);
 		freenect_get_mks_accel(f_dev, &dx, &dy, &dz);
 		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f\r", ax, ay, az, dx, dy, dz);
 		fflush(stdout);
@@ -314,10 +314,12 @@ void *freenect_threadfunc(void *arg)
 int main(int argc, char **argv)
 {
 	int res;
+	int i;
+	int nr_devices;
+	int user_device_number;
 
 	printf("Kinect camera test\n");
 
-	int i;
 	for (i=0; i<2048; i++) {
 		float v = i/2048.0;
 		v = powf(v, 3)* 6;
@@ -334,10 +336,10 @@ int main(int argc, char **argv)
 
 	freenect_set_log_level(f_ctx, FREENECT_LOG_DEBUG);
 
-	int nr_devices = freenect_num_devices (f_ctx);
+	nr_devices = freenect_num_devices (f_ctx);
 	printf ("Number of devices found: %d\n", nr_devices);
 
-	int user_device_number = 0;
+	user_device_number = 0;
 	if (argc > 1)
 		user_device_number = atoi(argv[1]);
 
