@@ -49,6 +49,7 @@ set (PROJECT_APIVER
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
 
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
+OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
@@ -90,6 +91,10 @@ add_subdirectory (src)
 # Add examples
 IF(BUILD_EXAMPLES)
   add_subdirectory (examples)
+ENDIF()
+
+IF(BUILD_FAKENECT)
+  add_subdirectory (fakenect)
 ENDIF()
 
 IF(BUILD_AS3_SERVER)
