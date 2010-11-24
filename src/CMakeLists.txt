@@ -8,7 +8,7 @@ set(CMAKE_C_FLAGS "-Wall")
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
 
 IF(PROJECT_OS_WIN)
-   SET(USB_SRC usb_libusb_win32.c)
+   SET(USB_SRC usb_libusb_win32.c inits.c)
 ELSE()
    SET(USB_SRC usb_libusb10.c)
 ENDIF()

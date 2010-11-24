@@ -28,7 +28,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+#if defined(_WIN32)
+#include <windows.h>
+#ifdef _MSC_VER
+typedef intptr_t ssize_t;
+#endif
+#else
 #include <unistd.h>
+#endif
 
 #include "freenect_internal.h"
 
@@ -46,7 +53,7 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 
 int freenect_shutdown(freenect_context *ctx)
 {
-	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	//FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
@@ -57,6 +64,7 @@ int freenect_process_events(freenect_context *ctx)
 
 int freenect_num_devices(freenect_context *ctx)
 {
+	/*
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
 
@@ -77,6 +85,9 @@ int freenect_num_devices(freenect_context *ctx)
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
 	return (nr);
+	*/
+	//FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	return 0;
 }
 
 int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
@@ -104,7 +115,7 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 int freenect_close_device(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
-	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	//FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
 	return 0;
 }
 
