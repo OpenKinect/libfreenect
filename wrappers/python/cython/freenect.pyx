@@ -134,7 +134,6 @@ cdef void depth_cb(void *dev, char *data, int timestamp):
     cdef DevPtr dev_out
     dev_out = DevPtr()
     dev_out._ptr = dev
-    print(timestamp)
     if _depth_cb:
        _depth_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
 
@@ -144,7 +143,6 @@ cdef void rgb_cb(void *dev, char *data, int timestamp):
     cdef DevPtr dev_out
     dev_out = DevPtr()
     dev_out._ptr = dev
-    print(timestamp)
     if _rgb_cb:
        _rgb_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
 

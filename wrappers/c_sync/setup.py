@@ -2,9 +2,10 @@ from distutils.core import setup
 from distutils.extension import Extension
 from Cython.Distutils import build_ext
 
-ext_modules = [Extension("freenect", ["freenect.pyx"],
-                         libraries=['usb-1.0', 'freenect'],
-                         extra_compile_args=['-fPIC', '-I', '../../../include/',
+ext_modules = [Extension("freenect", ["freenect.pyx", 'freenect_sync.c'],
+                         extra_objects=["../../build/lib/libfreenect.a"],
+                         libraries=['usb-1.0'],
+                         extra_compile_args=['-fPIC', '-I', '../../include/',
                                              '-I', '/usr/include/libusb-1.0/',
                                              '-I', '/usr/local/include/libusb-1.0',
                                              '-I', '/usr/local/include'])]
