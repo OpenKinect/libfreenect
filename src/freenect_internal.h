@@ -33,7 +33,11 @@
 
 typedef void (*fnusb_iso_cb)(freenect_device *dev, uint8_t *buf, int len);
 
+#if _WIN32
+#include "usb_libusb_win32.h"
+#else
 #include "usb_libusb10.h"
+#endif
 
 struct _freenect_context {
 	freenect_loglevel log_level;

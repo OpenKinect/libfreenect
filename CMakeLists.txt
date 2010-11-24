@@ -55,9 +55,9 @@ IF(PROJECT_OS_LINUX)
 ENDIF(PROJECT_OS_LINUX)
 
 # Doesn't work on windows yet.
-IF(NOT UNIX)
-  MESSAGE(FATAL_ERROR "libfreenect is not currently supported on this platform")
-ENDIF()
+#IF(NOT UNIX)
+#  MESSAGE(FATAL_ERROR "libfreenect is not currently supported on this platform")
+#ENDIF()
 
 ######################################################################################
 # CMake Modules
