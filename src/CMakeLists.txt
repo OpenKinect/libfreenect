@@ -6,7 +6,14 @@ include_directories (${CMAKE_CURRENT_SOURCE_DIR})
 
 set(CMAKE_C_FLAGS "-Wall")
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
-LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c)
+
+IF(PROJECT_OS_WIN)
+   SET(USB_SRC usb_libusb_win32.c)
+ELSE()
+   SET(USB_SRC usb_libusb10.c)
+ENDIF()
+
+LIST(APPEND SRC core.c tilt.c cameras.c ${USB_SRC})
 
 add_library (freenect SHARED ${SRC})
 set_target_properties ( freenect PROPERTIES
