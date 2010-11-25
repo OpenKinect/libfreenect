@@ -145,6 +145,11 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 	return 0;
 }
 
+int fnusb_close_subdevices(freenect_device *dev)
+{
+	return -2;//close not implemented
+}
+
 static void iso_callback(fnusb_isoc_stream *stream, int read)
 {
 	int i, j, ret;

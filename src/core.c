@@ -131,6 +131,8 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 int freenect_close_device(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
+	freenect_device *last = NULL;
+	freenect_device *cur = ctx->first;
 	int res;
 
 	// stop streams, if active
@@ -142,9 +144,6 @@ int freenect_close_device(freenect_device *dev)
 		FN_ERROR("fnusb_close_subdevices failed: %d\n", res);
 		return res;
 	}
-
-	freenect_device *last = NULL;
-	freenect_device *cur = ctx->first;
 
 	while (cur && cur != dev) {
 		last = cur;
