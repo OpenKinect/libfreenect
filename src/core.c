@@ -71,8 +71,9 @@ int freenect_process_events(freenect_context *ctx)
 int freenect_num_devices(freenect_context *ctx)
 {
 #ifdef _WIN32
-	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
-	return 0;
+	//HACK 1 Device always
+	//FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	return 1;
 #else
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
