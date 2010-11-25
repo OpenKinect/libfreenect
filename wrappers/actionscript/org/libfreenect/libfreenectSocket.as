@@ -93,10 +93,10 @@
 		
 		private function onSocketData(event:ProgressEvent):void
 		{
-			if(_socket.bytesAvailable < 237){
+			if(_socket.bytesAvailable == 237){
 				var _byte_arr:ByteArray = new ByteArray();
 				_socket.readBytes(_byte_arr, 0, _socket.bytesAvailable);
-				trace("policy_file : " + byteArray);
+				trace("policy_file : " + _byte_arr);
 			}
 			if(_socket.bytesAvailable > 0) {
 				if(_socket.bytesAvailable >= _packet_size){

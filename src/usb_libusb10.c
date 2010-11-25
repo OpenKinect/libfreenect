@@ -68,71 +68,105 @@ int fnusb_process_events(fnusb_ctx *ctx)
 
 int fnusb_open_subdevices(freenect_device *dev, int index)
 {
-	dev->usb_cam.parent = dev;
-	dev->usb_motor.parent = dev;
+	freenect_context *ctx = dev->parent;
 
-	// Search for 0x45e (Microsoft Corp.) and 0x02ae
-	//dev->usb_cam.dev = libusb_open_device_with_vid_pid(dev->parent->usb.ctx, 0x45e, 0x2ae);
+	dev->usb_cam.parent = dev;
+	dev->usb_cam.dev = NULL;
+	dev->usb_motor.parent = dev;
+	dev->usb_motor.dev = NULL;
 
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
 	if (cnt < 0)
-		return (-1);
-
-	bool start_cam = false, start_motor = false;
+		return -1;
 
 	int i = 0, nr_cam = 0, nr_mot = 0;
+	int res;
 	struct libusb_device_descriptor desc;
-	for (i = 0; i < cnt; ++i)
-	{
+
+	for (i = 0; i < cnt; i++) {
 		int r = libusb_get_device_descriptor (devs[i], &desc);
 		if (r < 0)
 			continue;
 
+		if (desc.idVendor != VID_MICROSOFT)
+			continue;
+
 		// Search for the camera
-		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_CAMERA_PRODUCT && !start_cam)
-		{
+		if (!dev->usb_cam.dev && desc.idProduct == PID_NUI_CAMERA) {
 			// If the index given by the user matches our camera index
-			if (nr_cam == index)
-			{
-				if (libusb_open (devs[i], &dev->usb_cam.dev) != 0)
-					return (-1);
-				// Claim the camera
-				if (!dev->usb_cam.dev)
-					return (-1);
-				libusb_claim_interface (dev->usb_cam.dev, 0);
-				start_cam = true;
-			}
-			else
+			if (nr_cam == index) {
+				res = libusb_open (devs[i], &dev->usb_cam.dev);
+				if (res < 0 || !dev->usb_cam.dev) {
+					FN_ERROR("Could not open camera: %d\n", res);
+					dev->usb_cam.dev = NULL;
+					break;
+				}
+				res = libusb_claim_interface (dev->usb_cam.dev, 0);
+				if (res < 0) {
+					FN_ERROR("Could not claim interface on camera: %d\n", res);
+					libusb_close(dev->usb_cam.dev);
+					dev->usb_cam.dev = NULL;
+					break;
+				}
+			} else {
 				nr_cam++;
+			}
 		}
 
 		// Search for the motor
-		if (desc.idVendor == MS_MAGIC_VENDOR && desc.idProduct == MS_MAGIC_MOTOR_PRODUCT && !start_motor)
-		{
+		if (!dev->usb_motor.dev && desc.idProduct == PID_NUI_MOTOR) {
 			// If the index given by the user matches our camera index
-			if (nr_mot == index)
-			{
-				//libusb_open_device_with_vid_pid (dev->parent->usb.ctx, MS_MAGIC_VENDOR, MS_MAGIC_MOTOR_PRODUCT);
-				if (libusb_open (devs[i], &dev->usb_motor.dev) != 0)
-					return (-1);
-				// Claim the motor
-				if (!dev->usb_motor.dev)
-					return (-1);
-				libusb_claim_interface (dev->usb_motor.dev, 0);
-				start_motor = true;
-			}
-			else
+			if (nr_mot == index) {
+				res = libusb_open (devs[i], &dev->usb_motor.dev);
+				if (res < 0 || !dev->usb_motor.dev) {
+					FN_ERROR("Could not open motor: %d\n", res);
+					dev->usb_motor.dev = NULL;
+					break;
+				}
+				res = libusb_claim_interface (dev->usb_motor.dev, 0);
+				if (res < 0) {
+					FN_ERROR("Could not claim interface on motor: %d\n", res);
+					libusb_close(dev->usb_motor.dev);
+					dev->usb_motor.dev = NULL;
+					break;
+				}
+			} else {
 				nr_mot++;
+			}
 		}
 	}
 
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
-	if (start_cam && start_motor)
-		return (0);
-	else
-		return (-1);
+	if (dev->usb_cam.dev && dev->usb_motor.dev) {
+		return 0;
+	} else {
+		if (dev->usb_cam.dev) {
+			libusb_release_interface(dev->usb_cam.dev, 0);
+			libusb_close(dev->usb_cam.dev);
+		}
+		if (dev->usb_motor.dev) {
+			libusb_release_interface(dev->usb_motor.dev, 0);
+			libusb_close(dev->usb_motor.dev);
+		}
+		return -1;
+	}
+}
+
+int fnusb_close_subdevices(freenect_device *dev)
+{
+	if (dev->usb_cam.dev) {
+		libusb_release_interface(dev->usb_cam.dev, 0);
+		libusb_close(dev->usb_cam.dev);
+		dev->usb_cam.dev = NULL;
+	}
+	if (dev->usb_motor.dev) {
+		libusb_release_interface(dev->usb_motor.dev, 0);
+		libusb_close(dev->usb_motor.dev);
+		dev->usb_motor.dev = NULL;
+	}
+	return 0;
 }
 
 static void iso_callback(struct libusb_transfer *xfer)

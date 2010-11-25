@@ -307,6 +307,9 @@ void *freenect_threadfunc(void *arg)
 	freenect_stop_depth(f_dev);
 	freenect_stop_rgb(f_dev);
 
+	freenect_close_device(f_dev);
+	freenect_shutdown(f_ctx);
+
 	printf("-- done!\n");
 	return NULL;
 }
