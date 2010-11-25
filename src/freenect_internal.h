@@ -43,6 +43,7 @@ struct _freenect_context {
 	freenect_loglevel log_level;
 	freenect_log_cb log_cb;
 	fnusb_ctx usb;
+	freenect_device *first;
 };
 
 #define LL_FATAL FREENECT_LOG_FATAL
@@ -90,9 +91,9 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 #define DEPTH_PKTS_11_BIT_PER_FRAME ((DEPTH_RAW_11_BIT_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
 #define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
 
-#define MS_MAGIC_VENDOR 0x45e
-#define MS_MAGIC_CAMERA_PRODUCT 0x02ae
-#define MS_MAGIC_MOTOR_PRODUCT 0x02b0
+#define VID_MICROSOFT 0x45e
+#define PID_NUI_CAMERA 0x02ae
+#define PID_NUI_MOTOR 0x02b0
 
 typedef struct {
 	uint8_t flag;
@@ -111,6 +112,7 @@ typedef struct {
 
 struct _freenect_device {
 	freenect_context *parent;
+	freenect_device *next;
 	void *user_data;
 
 	// Cameras
