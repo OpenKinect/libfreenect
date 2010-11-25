@@ -64,7 +64,10 @@ int freenect_process_events(freenect_context *ctx)
 
 int freenect_num_devices(freenect_context *ctx)
 {
-	/*
+#ifdef _WIN32
+	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
+	return 0;
+#else
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
 
@@ -85,9 +88,7 @@ int freenect_num_devices(freenect_context *ctx)
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
 	return (nr);
-	*/
-	FN_ERROR("%s NOT IMPLEMENTED YET\n", __FUNCTION__);
-	return 0;
+#endif
 }
 
 int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
