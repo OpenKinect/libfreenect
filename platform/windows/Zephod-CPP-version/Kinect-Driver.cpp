@@ -308,7 +308,7 @@ return;
 		}
 	};
 
-	void KinectInternalData::OpenDevice(usb_device_t *dev, usb_device_t *motordev)
+	void KinectInternalData::OpenDevice(struct usb_device *dev, struct usb_device *motordev)
 	{
 		mDeviceHandle = usb_open(dev);
 		if (!mDeviceHandle) 
