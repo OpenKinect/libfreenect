@@ -1,0 +1,56 @@
+
+#ifdef __GNUC__
+#define _WIN32_IE 0x0400
+#endif
+
+#define RC_VERSION 1,0,7,0
+#define RC_VERSION_STR "1.0.7.0"
+
+#ifndef _BENCHMARK_VER_ONLY
+
+#include <windows.h>
+#include <winver.h>
+
+#define RC_FILE_TYPE      VFT_APP
+#define RC_FILE_SUB_TYPE  VFT2_UNKNOWN
+#define RC_PRODUCT_STR    "Benchmark Application"
+#define RC_FILE_NAME_STR  "Benchmark.exe"
+
+#define RT_MANIFEST 24
+#define ID_MANIFEST 1
+#define ID_HELP_TEXT  10020
+#define ID_DOS_TEXT   300
+
+VS_VERSION_INFO VERSIONINFO
+FILEVERSION    RC_VERSION
+PRODUCTVERSION RC_VERSION
+FILEFLAGSMASK  0x3FL
+FILEFLAGS      0x0L
+FILEOS         VOS_NT_WINDOWS32
+FILETYPE       RC_FILE_TYPE
+FILESUBTYPE    RC_FILE_SUB_TYPE
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904b0"  
+        BEGIN
+            VALUE "CompanyName",     "Travis Robinson"
+            VALUE "FileDescription", RC_PRODUCT_STR
+            VALUE "FileVersion",     RC_VERSION_STR
+            VALUE "InternalName",    RC_FILE_NAME_STR
+            VALUE "LegalCopyright",  "Copyright (C) 2010 Travis Robinson"
+            VALUE "OriginalFilename",RC_FILE_NAME_STR
+            VALUE "ProductName",     RC_PRODUCT_STR
+            VALUE "ProductVersion",  RC_VERSION_STR
+        END
+    END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+ID_HELP_TEXT ID_DOS_TEXT "BenchmarkHelp.txt"
+
+#endif

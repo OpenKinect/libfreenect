@@ -1,0 +1,144 @@
+LibUsb-Win32 Change Log
+
+V1.2.2.0 (10/02/2010)
+=======================
+* Added install-filter-win.exe.  A gui installer for device filters.
+
+* Added new libusb0.dll function usb_install_np_rundll().  This function
+  is designed for rundll32.exe and takes the same parameters as
+  install-filter.exe.
+
+* Updated install-filter.exe.  This application has several new features.
+  Type "install-filter --help" for more details.
+
+* Updated libusb-win32-devel-filter package.  This package is once again
+  available for download as a setup.exe.
+
+* Updated libusb-win32 "bin" package format.  inf-wizard.exe has been moved
+  up one directory.
+
+* Updated driver_installer_template.iss example. This is an Inno Setup
+  Script showing how to create your own setup.exe for installing your
+  application and driver.
+
+* Fixed missing byte order marker in inf-wizard.exe .inf files. (libwdi)
+
+* Fixed auto-configuration issue when there is more than one driver in the
+  stack.
+
+* Fixed BSOD when using the filter driver with devices that are auto
+  suspended by other drivers in the stack.
+  
+* Fixed BSOD for devices with endpoints that have '0' for wMaxPacketSize.
+
+* Fixed BSOD when cancelling large transfers on high speed devices.
+
+  
+V1.2.1.0 (07/28/2010)
+=======================
+* Updated bulk.c to include async i/o example code.
+
+* Fixed usb_install_driver_np() issue with inf-wizard generated infs.
+
+* Fixed inf2cat.exe issue with inf-wizard generated infs.
+  
+* Added 'Install Now' feature to inf-wizard. (libwdi)
+
+* Added embedded libusb-win32 binaries to inf-wizard. (libwdi)
+
+* Added libwdi (http://www.libusb.org/wiki/libwdi) to inf-wizard. 
+
+* Added get cached configuration request to usb_open(). This is a new
+  control code that involves no device i/o and allows 
+  usb_set_configuration() to be omitted if the driver has already
+  configured it.
+
+* Fixed set_configuration() failure for devices that do not properly
+  support get_configuration().
+
+V1.2.0.0 (07/07/2010)
+=======================
+* First signed driver release! The libusb-win32 kernel driver (libusb0.sys)
+  can now be used on x64 Windows machines that require signed drivers. 
+
+* Fixed 2128187 reported by Tim Green. usb_get_descriptor() can fail
+  because the given buffer of 8 bytes is too small.
+
+* Fixed 2928293 reported by Tim Green. Sometimes the call to 
+  usb_fetch_and_parse_descriptors() in usb_find_devices() can fail. This 
+  patch moves the LIST_ADD to after a successful read of the device's 
+  configuration descriptors.
+
+* Fixed issue causing libusb-win32 to not act as power policy owner
+  when it should.
+
+* Fixed issue in which on rare occasion, a libusb-win32 filter device could
+  run as a "normal" device.
+  
+* Fixed filter driver issue for device using wudfr.sys.
+
+* Added large transfer splitting to driver (bulk, int, iso). NOTE:
+  The dll continues to break transfers in the same manner it always has.
+
+
+V1.1.14.3 (06/12/2010)
+=======================
+* Remove get_configuration() request from usb_open().  This caused claim
+  interface to fail when used as a filter driver.
+  
+V1.1.14.0 (06/01/2010)
+=======================
+* Updated logging functions and standardized log message display format.
+
+* Updated inf-wizard to use the new directory format for the libusb-win32
+  binaries.
+
+* Updated package directories to reflect the winddk BUILDARCH env variable.
+  (i64 := ia64, x64 := amd64)
+  
+* Added request to get the current configuration in usb_open().
+
+* Fixed 2960644 (reported by farthen) crash on shutdown with x64 based
+  systems while using inf files for each libusb device.
+
+* Added additional log message only included in debug/chk builds.
+  
+* Updated default log levels to highest verbose level for debug builds.
+
+* Added test signing support to the libusb-win32 make.cmd. This allows
+  libusb0.sys and libusb0.dll to be signed with a digital signature.
+  (see make.cmd for mmore details)
+
+* Added MSVC 2008 project files
+
+* Moved version defines to an include file (libusb_version.h)
+  This file is generated from libusb_version_h.in with "make.cmd makever"
+
+* Removed all "dist" commands from cyg/mingw makefile.  Instead use "make.cmd"
+  in the "ddk_make" directory.
+
+* Fixed filter setup not running in 64bit mode
+
+* Fixed 64bit inf-wizard, testlibusb-win builds
+
+* Added set initial config value #1 when the driver is not a filter.
+  optionally, the initial configuration value can be specified in the inf
+  file: HKR,,"InitialConfigValue",0x00010001,<your config value>
+
+* Added support for querying device registry keys 
+ (LIBUSB_IOCTL_GET_CUSTOM_REG_PROPERTY)
+
+* Added support for querying device properties 
+ (LIBUSB_IOCTL_GET_DEVICE_PROPERTY)
+
+* Fixed possible race condition in kernel add_device()
+
+* Updated default ddk build version number to 1.1.14.0 to facilitate
+  Microsoft WHQL submission.
+
+* Added DDK build distribution system.  Official libusb-win32 releases 
+ (after 0.1.12.2) are built using Microsoft's WinDDK.  (see make.cmd)
+
+* Fixed 2658937 (reported by Tim Roberts) The libusb-win32 driver always
+  acts as a power policy owner.
+
