@@ -38,8 +38,8 @@ freenect_depth_cb cur_depth_cb = NULL;
 freenect_rgb_cb cur_rgb_cb = NULL;
 char *input_path = NULL;
 FILE *index_fp = NULL;
-int16_t raw_accel[3] = {};
-double mks_accel[3] = {};
+freenect_raw_device_state state;
+int already_warned = 0;
 double playback_prev_time = 0.;
 double record_prev_time = 0.;
 
@@ -85,6 +85,14 @@ char *one_line(FILE *fp) {
     return out;
 }
 
+int get_data_size(FILE *fp) {
+    int orig = ftell(fp);
+    fseek(fp, 0L, SEEK_END);
+    int out = ftell(fp);
+    fseek(fp, orig, SEEK_SET);
+    return out;
+}
+
 int parse_line(char *type, double *cur_time, unsigned int *timestamp, unsigned int *data_size, char **data) {
     char *line = one_line(index_fp);
     if (!line) {
@@ -101,7 +109,8 @@ int parse_line(char *type, double *cur_time, unsigned int *timestamp, unsigned i
 	exit(1);
     }
     // Parse data from file name
-    sscanf(line, "%c-%lf-%u-%u.%*s", type, cur_time, timestamp, data_size);
+    *data_size = get_data_size(cur_fp);
+    sscanf(line, "%c-%lf-%u-%*s", type, cur_time, timestamp);
     *data = malloc(*data_size);
     fread(*data, *data_size, 1, cur_fp);
     fclose(cur_fp);
@@ -151,7 +160,7 @@ int freenect_process_events(freenect_context *ctx) {
     char type;
     double record_cur_time;
     unsigned int timestamp, data_size;
-    char *data;
+    char *data = NULL;
     if (parse_line(&type, &record_cur_time, &timestamp, &data_size, &data))
 	return -1;
     // Sleep an amount that compensates for the original and current delays
@@ -170,8 +179,12 @@ int freenect_process_events(freenect_context *ctx) {
 	    cur_rgb_cb(fake_dev, (freenect_pixel *)skip_line(data), timestamp);
 	break;
     case 'a':
-	memcpy(raw_accel, data, 3 * sizeof(int16_t));
-	memcpy(mks_accel, data + 3 * sizeof(int16_t), 3 * sizeof(double));
+	if (data_size == sizeof(state)) {
+	    memcpy(&state, data, sizeof(state));
+	} else if (!already_warned) {
+	    already_warned = 1;
+	    printf("Warning: Accelerometer data has an unexpected size [%d] instead of [%d].  The acceleration and tilt data will be substituted for dummy values.  This data was probably made with an older version of record (the upstream interface changes and we have to follow).\n", data_size, sizeof(state));
+	}
 	break;
     }
     free(data);
@@ -179,21 +192,17 @@ int freenect_process_events(freenect_context *ctx) {
     return 0;
 }
 
-int freenect_get_raw_accel(freenect_device *dev, int16_t* x, int16_t* y, int16_t* z) {
-    // Uses last accelerometer sample available
-    *x = raw_accel[0];
-    *y = raw_accel[1];
-    *z = raw_accel[2];
-    return 0;
+double freenect_get_tilt_degs(freenect_raw_device_state *state) {
+    // NOTE: This is duped from tilt.c, this is the only function we need from there 
+    return ((double)state->tilt_angle) / 2.;
 }
 
-int freenect_get_mks_accel(freenect_device *dev, double* x, double* y, double* z) {
-    // Uses last accelerometer sample available
-    *x = mks_accel[0];
-    *y = mks_accel[1];
-    *z = mks_accel[2];
-    return 0;
+freenect_raw_device_state* freenect_get_device_state(freenect_device *dev) {
+    return &state;;
 }
+
+// void freenect_get_mks_accel(freenect_raw_device_state *state, double* x, double* y, double* z);
+// NOTE: We use use the version of this function from accel.c
 
 void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb) {
     cur_depth_cb = cb;
@@ -232,4 +241,5 @@ int freenect_stop_depth(freenect_device *dev) {return 0;}
 int freenect_stop_rgb(freenect_device *dev) {return 0;}
 int freenect_set_tilt_degs(freenect_device *dev, double angle) {return 0;}
 int freenect_set_led(freenect_device *dev, freenect_led_options option) {return 0;}
+int freenect_update_device_state(freenect_device *dev) {return 0;}
 void *freenect_get_user(freenect_device *dev) {return NULL;}

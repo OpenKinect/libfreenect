@@ -56,9 +56,9 @@ void dump_rgb(FILE *fp, void *data, int data_size) {
 
 FILE *open_dump(char type, double cur_time, uint32_t timestamp, int data_size, const char *extension) {
     char *fn = malloc(strlen(out_dir) + 50);
-    sprintf(fn, "%c-%f-%u-%u.%s", type, cur_time, timestamp, data_size, extension);
+    sprintf(fn, "%c-%f-%u.%s", type, cur_time, timestamp, extension);
     fprintf(index_fp, "%s\n", fn);
-    sprintf(fn, "%s/%c-%f-%u-%u.%s", out_dir, type, cur_time, timestamp, data_size, extension);
+    sprintf(fn, "%s/%c-%f-%u.%s", out_dir, type, cur_time, timestamp, extension);
     FILE* fp = fopen(fn, "w");
     if (!fp) {
 	printf("Error: Cannot open file [%s]\n", fn);
@@ -101,14 +101,10 @@ void dump(char type, uint32_t timestamp, void *data, int data_size) {
 void snapshot_accel(freenect_device *dev) {
     if (!last_timestamp)
 	return;
-    int data_size = (sizeof(int16_t) + sizeof(double)) * 3;
-    int16_t *i = malloc(data_size);
-    double *d = (double *)(i + 3);
-    freenect_get_raw_accel(dev, i, i + 1, i + 2);
-    freenect_get_mks_accel(dev, d, d + 1, d + 2);
-    // NOTE: We just use the last timestamp that we were given
-    dump('a', last_timestamp, i, data_size);
-    free(i);
+    freenect_raw_device_state* state;
+    freenect_update_device_state(dev);
+    state = freenect_get_device_state(dev);
+    dump('a', last_timestamp, state, sizeof *state);
 }
 
 
