@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 #
+# This file is part of the OpenKinect Project. http://www.openkinect.org
+#
 # Copyright (c) 2010 Brandyn White (bwhite@dappervision.com)
 #                    Andrew Miller (amiller@dappervision.com)
 #
