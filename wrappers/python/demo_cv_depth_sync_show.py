@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import freenect
 import cv
 import numpy as np
