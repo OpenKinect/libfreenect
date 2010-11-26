@@ -38,7 +38,7 @@ freenect_depth_cb cur_depth_cb = NULL;
 freenect_rgb_cb cur_rgb_cb = NULL;
 char *input_path = NULL;
 FILE *index_fp = NULL;
-freenect_raw_device_state state;
+freenect_raw_device_state state = {};
 int already_warned = 0;
 double playback_prev_time = 0.;
 double record_prev_time = 0.;
@@ -183,7 +183,7 @@ int freenect_process_events(freenect_context *ctx) {
 	    memcpy(&state, data, sizeof(state));
 	} else if (!already_warned) {
 	    already_warned = 1;
-	    printf("Warning: Accelerometer data has an unexpected size [%d] instead of [%d].  The acceleration and tilt data will be substituted for dummy values.  This data was probably made with an older version of record (the upstream interface changes and we have to follow).\n", data_size, sizeof(state));
+	    printf("\n\nWarning: Accelerometer data has an unexpected size [%d] instead of [%d].  The acceleration and tilt data will be substituted for dummy values.  This data was probably made with an older version of record (the upstream interface changes and we have to follow).\n\n", data_size, sizeof state);
 	}
 	break;
     }
@@ -198,7 +198,7 @@ double freenect_get_tilt_degs(freenect_raw_device_state *state) {
 }
 
 freenect_raw_device_state* freenect_get_device_state(freenect_device *dev) {
-    return &state;;
+    return &state;
 }
 
 // void freenect_get_mks_accel(freenect_raw_device_state *state, double* x, double* y, double* z);
