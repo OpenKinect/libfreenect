@@ -32,8 +32,8 @@ cdef extern from "stdlib.h":
 
 
 cdef extern from "libfreenect_sync.h":
-    char *freenect_get_depth()
-    char *freenect_get_rgb()
+    int freenect_sync_get_rgb(char **rgb, unsigned int *timestamp) # NOTE: These were uint32_t
+    int freenect_sync_get_depth(char **depth, unsigned int *timestamp)
     void freenect_sync_stop()
 
 
@@ -45,27 +45,39 @@ def get_depth():
     """Get the next available depth frame from the kinect.
 
     Returns:
-        A python string for the 16 bit depth image (640*480*2 bytes)
+        (depth, timestamp) or None on error
+        depth: A python string for the 16 bit depth image (640*480*2 bytes)
+        timestamp: int representing the time
     """
-    cdef char* depth = freenect_get_depth()
+    cdef char* depth
+    cdef unsigned int timestamp
+    out = freenect_sync_get_depth(&depth, &timestamp)
+    if out:
+        return
     depth_str = PyString_FromStringAndSize(depth, DEPTH_BYTES)
     free(depth);
-    return depth_str
+    return depth_str, timestamp
 
 
 def get_rgb():
-    """Get the next available depth frame from the kinect.
+    """Get the next available rgb frame from the kinect.
 
     Returns:
-        A python string for the 16 bit depth image (640*480*2 bytes)
+        (rgb, timestamp) or None on error
+        rgb: A python string for the 8 bit rgb image (640*480*3 bytes)
+        timestamp: int representing the time
     """
-    cdef char* rgb = freenect_get_rgb()
+    cdef char* rgb
+    cdef unsigned int timestamp
+    out = freenect_sync_get_depth(&rgb, &timestamp)
+    if out:
+        return
     rgb_str = PyString_FromStringAndSize(rgb, RGB_BYTES)
     free(rgb);
-    return rgb_str
+    return rgb_str, timestamp
 
 
-def sync_stop():
+def stop():
     """Terminate the synchronous runloop if running, else this is a NOP
     """
     freenect_sync_stop()
@@ -84,23 +96,34 @@ def get_rgb_np():
     """Get the next available RGB frame from the kinect, as a numpy array.
 
     Returns:
-      A numpy array, shape:(640,480,3) dtype:np.uint8
+        (rgb, timestamp) or None on error
+        rgb: A numpy array, shape:(640,480,3) dtype:np.uint8
+        timestamp: int representing the time        
     """
     np = _load_numpy()
-    string = get_rgb()
+    try:
+        string, timestamp = get_rgb()
+    except TypeError:
+        return
     data = np.fromstring(string, dtype=np.uint8)
     data.resize((480, 640, 3))
-    return data
+    return data, timestamp
 
 
 def get_depth_np():
     """Get the next available depth frame from the kinect, as a numpy array.
 
     Returns:
-      A numpy array, shape:(640,480) dtype:np.uint16
+        (depth, timestamp) or None on error
+        depth: A numpy array, shape:(640,480) dtype:np.uint16
+        timestamp: int representing the time
+
     """
     np = _load_numpy()
-    string = get_depth()
+    try:
+        string, timestamp = get_depth()
+    except TypeError:
+        return
     data = np.fromstring(string, dtype=np.uint16)
     data.resize((480, 640))
-    return data
+    return data, timestamp

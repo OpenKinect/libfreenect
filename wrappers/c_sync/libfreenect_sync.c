@@ -9,22 +9,25 @@ pthread_mutex_t rgb_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t depth_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t rgb_cond = PTHREAD_COND_INITIALIZER;
 pthread_cond_t depth_cond = PTHREAD_COND_INITIALIZER;
-char depth_img[DEPTH_BYTES];
-char rgb_img[RGB_BYTES];
+char depth_img[FREENECT_DEPTH_SIZE];
+char rgb_img[FREENECT_RGB_SIZE];
+uint32_t depth_timestamp;
+uint32_t rgb_timestamp;
 int thread_running = 0;
 pthread_t thread;
 
 void depth_producer_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
     pthread_mutex_lock(&depth_mutex);
-    memcpy(depth_img, depth, DEPTH_BYTES);
+    memcpy(depth_img, depth, FREENECT_DEPTH_SIZE);
+    depth_timestamp = timestamp;
     pthread_cond_signal(&depth_cond);
     pthread_mutex_unlock(&depth_mutex);
 }
 
-
 void rgb_producer_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp) {
     pthread_mutex_lock(&rgb_mutex);
-    memcpy(rgb_img, rgb, RGB_BYTES);
+    memcpy(rgb_img, rgb, FREENECT_RGB_SIZE);
+    rgb_timestamp = timestamp;
     pthread_cond_signal(&rgb_cond);
     pthread_mutex_unlock(&rgb_mutex);
 }
@@ -49,34 +52,33 @@ void *init(void *unused) {
     return NULL;
 }
 
-
 void init_thread() {
     thread_running = 1;
     pthread_create(&thread, NULL, init, NULL);
 }
 
-
-char *freenect_get_depth() {
-    char *depth_out = malloc(DEPTH_BYTES);
+int freenect_sync_get_depth(char **depth, uint32_t *timestamp) {
+    *depth = malloc(FREENECT_DEPTH_SIZE);
     if (!thread_running)
 	init_thread();
     pthread_mutex_lock(&depth_mutex);
     pthread_cond_wait(&depth_cond, &depth_mutex);
-    memcpy(depth_out, depth_img, DEPTH_BYTES);
+    memcpy(*depth, depth_img, FREENECT_DEPTH_SIZE);
+    *timestamp = depth_timestamp;
     pthread_mutex_unlock(&depth_mutex);
-    return depth_out;
+    return 0;
 }
 
-
-char *freenect_get_rgb() {
-    char *rgb_out = malloc(RGB_BYTES);
+int freenect_sync_rgb_depth(char **rgb, uint32_t *timestamp) {
+    *rgb = malloc(FREENECT_RGB_SIZE);
     if (!thread_running)
 	init_thread();
     pthread_mutex_lock(&rgb_mutex);
     pthread_cond_wait(&rgb_cond, &rgb_mutex);
-    memcpy(rgb_out, rgb_img, RGB_BYTES);
+    memcpy(*rgb, rgb_img, FREENECT_RGB_SIZE);
+    *timestamp = rgb_timestamp;
     pthread_mutex_unlock(&rgb_mutex);
-    return rgb_out;
+    return 0;
 }
 
 void freenect_sync_stop() {
