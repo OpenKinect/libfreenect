@@ -3,7 +3,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <stdlib.h>
-#include "freenect_sync.h"
+#include "libfreenect_sync.h"
 
 pthread_mutex_t rgb_mutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t depth_mutex = PTHREAD_MUTEX_INITIALIZER;
