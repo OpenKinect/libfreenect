@@ -86,6 +86,9 @@ SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 # Pretty much everyone is going to need the main includes
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 
+# libfreenect.h includes libusb.h, so everyone needs this too
+include_directories(${LIBUSB_1_INCLUDE_DIRS})
+
 # Add library project
 add_subdirectory (src)
 
