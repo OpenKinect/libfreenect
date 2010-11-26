@@ -265,7 +265,7 @@ def sync_get_rgb():
     """
     cdef char* rgb
     cdef unsigned int timestamp
-    out = freenect_sync_get_depth(&rgb, &timestamp)
+    out = freenect_sync_get_rgb(&rgb, &timestamp)
     if out:
         return
     rgb_str = PyString_FromStringAndSize(rgb, RGB_BYTES)

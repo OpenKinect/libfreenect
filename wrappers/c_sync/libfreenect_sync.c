@@ -95,7 +95,7 @@ int freenect_sync_get_depth(char **depth, uint32_t *timestamp) {
     return 0;
 }
 
-int freenect_sync_rgb_depth(char **rgb, uint32_t *timestamp) {
+int freenect_sync_get_rgb(char **rgb, uint32_t *timestamp) {
     *rgb = malloc(FREENECT_RGB_SIZE);
     if (!thread_running)
 	init_thread();
