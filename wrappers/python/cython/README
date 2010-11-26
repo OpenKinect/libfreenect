@@ -7,3 +7,8 @@ python setup.py build_ext --inplace
 
 To use fakenect, use this to point at it's directory
 sudo LD_LIBRARY_PATH="../../../fakenect/" FAKENECT_PATH="thanksgiving0" python demo_cv_depth_show.py
+
+This provides a synchronous api in cython. It handles the kinect callback events in a background thread.
+See demo_cv_depth_sync_show.py for an example.
+
+sudo LD_LIBRARY_PATH="/usr/local/lib" python demo_cv_depth_sync_show.py
