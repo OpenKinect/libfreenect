@@ -8,10 +8,4 @@ python setup.py build_ext --inplace
 This provides a synchronous api in cython. It handles the kinect callback events in a background thread.
 See demo_cv_depth_show.py for an example.
 
-
-
-
-
-
-
-
+sudo LD_LIBRARY_PATH="/usr/local/lib" python demo_cv_depth_show.py
