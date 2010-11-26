@@ -2,7 +2,6 @@ import freenect
 import cv
 import numpy as np
 
-freenect.start()
 
 cv.NamedWindow('Depth')    
 while 1:
