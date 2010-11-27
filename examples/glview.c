@@ -115,14 +115,14 @@ void DrawGLScene()
 	glEnd();
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
+	glTexImage2D(GL_TEXTURE_2D, 0, 3, FREENECT_FRAME_W, FREENECT_FRAME_H, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
-	glTexCoord2f(0, 0); glVertex3f(640,0,0);
+	glTexCoord2f(0, 0); glVertex3f(1280,0,0);
 	glTexCoord2f(1, 0); glVertex3f(1280,0,0);
 	glTexCoord2f(1, 1); glVertex3f(1280,480,0);
-	glTexCoord2f(0, 1); glVertex3f(640,480,0);
+	glTexCoord2f(0, 1); glVertex3f(1280,1024,0);
 	glEnd();
 
 	glutSwapBuffers();
@@ -216,7 +216,7 @@ void *gl_threadfunc(void *arg)
 	glutInit(&g_argc, g_argv);
 
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
-	glutInitWindowSize(1280, 480);
+	glutInitWindowSize(FREENECT_FRAME_W + FREENECT_DEPTH_W , FREENECT_FRAME_H );
 	glutInitWindowPosition(0, 0);
 
 	window = glutCreateWindow("LibFreenect");
@@ -226,7 +226,7 @@ void *gl_threadfunc(void *arg)
 	glutReshapeFunc(&ReSizeGLScene);
 	glutKeyboardFunc(&keyPressed);
 
-	InitGL(1280, 480);
+	InitGL(FREENECT_FRAME_W  + FREENECT_DEPTH_W , FREENECT_FRAME_H );
 
 	glutMainLoop();
 
@@ -241,7 +241,7 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 	freenect_depth *depth = v_depth;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
-	for (i=0; i<FREENECT_FRAME_PIX; i++) {
+	for (i=0; i<FREENECT_DEPTH_PIX; i++) {
 		int pval = t_gamma[depth[i]];
 		int lb = pval & 0xff;
 		switch (pval>>8) {
@@ -346,9 +346,9 @@ int main(int argc, char **argv)
 
 	depth_mid = malloc(640*480*3);
 	depth_front = malloc(640*480*3);
-	rgb_back = malloc(640*480*3);
-	rgb_mid = malloc(640*480*3);
-	rgb_front = malloc(640*480*3);
+	rgb_back = malloc(FREENECT_FRAME_W*FREENECT_FRAME_H*3);
+	rgb_mid = malloc(FREENECT_FRAME_W*FREENECT_FRAME_H*3);
+	rgb_front = malloc(FREENECT_FRAME_W*FREENECT_FRAME_H*3);
 
 	printf("Kinect camera test\n");
 
