@@ -96,7 +96,7 @@ static int stream_process(freenect_context *ctx,packet_stream *strm, uint8_t *pk
 
 	// handle lost packets
 	if (strm->seq != hdr->seq) {
-		lost = strm->seq - hdr->seq;
+		lost = hdr->seq - strm->seq;
 		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_INFO, \
 		       "[Stream %02x] Lost %d packets\n", strm->flag, lost);
 		if (lost > 5) {
@@ -324,63 +324,6 @@ struct cam_hdr {
 };
 
 typedef struct cam_hdr cam_hdr;
-
-static void send_init(freenect_device *dev)
-{
-	int i, j, ret;
-	uint8_t obuf[0x400];
-	uint8_t ibuf[0x200];
-	struct cam_hdr *chdr = (void*)obuf;
-	struct cam_hdr *rhdr = (void*)ibuf;
-
-	ret = fnusb_control(&dev->usb_cam, 0x80, 0x06, 0x3ee, 0, ibuf, 0x12);
-	printf("First xfer: %d\n", ret);
-
-	chdr->magic[0] = 0x47;
-	chdr->magic[1] = 0x4d;
-	
-	for (i=0; i<num_inits; i++) {
-		const struct caminit *ip = &inits[i];
-		chdr->cmd = ip->command;
-		chdr->tag = ip->tag;
-		chdr->len = ip->cmdlen / 2;
-		memcpy(obuf+sizeof(*chdr), ip->cmddata, ip->cmdlen);
-		ret = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, ip->cmdlen + sizeof(*chdr));
-		printf("CTL CMD %04x %04x = %d\n", chdr->cmd, chdr->tag, ret);
-		do {
-			ret = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
-		} while (ret == 0);
-		printf("CTL RES = %d\n", ret);
-		if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
-			printf("Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
-			continue;
-		}
-		if (rhdr->cmd != chdr->cmd) {
-			printf("Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
-			continue;
-		}
-		if (rhdr->tag != chdr->tag) {
-			printf("Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
-			continue;
-		}
-		if (rhdr->len != (ret-sizeof(*rhdr))/2) {
-			printf("Bad len %04x != %04x\n", rhdr->len, (int)(ret-sizeof(*rhdr))/2);
-			continue;
-		}
-		if (rhdr->len != (ip->replylen/2) || memcmp(ibuf+sizeof(*rhdr), ip->replydata, ip->replylen)) {
-			printf("Expected: ");
-			for (j=0; j<ip->replylen; j++) {
-				printf("%02x ", ip->replydata[j]);
-			}
-			printf("\nGot:      ");
-			for (j=0; j<(rhdr->len*2); j++) {
-				printf("%02x ", ibuf[j+sizeof(*rhdr)]);
-			}
-			printf("\n");
-		}
-	}
-	dev->cam_inited = 1;
-}
 
 static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, unsigned int reply_len)
 {

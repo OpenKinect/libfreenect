@@ -13,7 +13,7 @@ ELSE()
    SET(USB_SRC usb_libusb10.c)
 ENDIF()
 
-LIST(APPEND SRC core.c tilt.c cameras.c ${USB_SRC})
+LIST(APPEND SRC core.c tilt.c cameras.c accel.c ${USB_SRC})
 
 add_library (freenect SHARED ${SRC})
 set_target_properties ( freenect PROPERTIES
