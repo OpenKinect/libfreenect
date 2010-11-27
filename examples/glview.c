@@ -119,10 +119,10 @@ void DrawGLScene()
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
-	glTexCoord2f(0, 0); glVertex3f(1280,0,0);
-	glTexCoord2f(1, 0); glVertex3f(1280,0,0);
-	glTexCoord2f(1, 1); glVertex3f(1280,480,0);
-	glTexCoord2f(0, 1); glVertex3f(1280,1024,0);
+	glTexCoord2f(0, 0); glVertex3f(FREENECT_DEPTH_W,0,0);
+	glTexCoord2f(1, 0); glVertex3f(FREENECT_FRAME_W+FREENECT_DEPTH_W,0,0);
+	glTexCoord2f(1, 1); glVertex3f(FREENECT_FRAME_W+FREENECT_DEPTH_W, FREENECT_DEPTH_H,0);
+	glTexCoord2f(0, 1); glVertex3f(FREENECT_FRAME_W, FREENECT_DEPTH_H,0);
 	glEnd();
 
 	glutSwapBuffers();
