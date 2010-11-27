@@ -23,8 +23,12 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
-
+#ifdef _WIN32
+#include "../../src/win32/libfreenect.h"
+#else
 #include <libfreenect.h>
+#endif
+
 #include <stdio.h>
 #include <pthread.h>
 #include <string.h>
