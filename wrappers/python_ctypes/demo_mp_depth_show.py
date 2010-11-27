@@ -1,1 +1,0 @@
-../python/demo_mp_depth_show.py

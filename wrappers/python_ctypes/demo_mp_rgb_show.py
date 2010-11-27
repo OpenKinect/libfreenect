@@ -1,1 +1,0 @@
-../python/demo_mp_rgb_show.py

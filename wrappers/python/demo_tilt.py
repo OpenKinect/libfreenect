@@ -16,10 +16,11 @@ def tilt_and_sense():
         led = random.randint(0, 6)
         tilt = random.randint(0, 30)
         print('Led[%d] Tilt[%d]' % (led, tilt))
-        freenect.set_led(dev, led)
-        freenect.set_tilt_degs(dev, tilt)
-        print(freenect.raw_accel(dev))
-        print(freenect.mks_accel(dev))
+        #freenect.set_led(dev, led)
+        print('LED Done')
+        #freenect.set_tilt_degs(dev, tilt)
+        print('Tilt Done')
+        print(freenect.get_accel(dev))
 threading.Thread(target=tilt_and_sense).start()
 
 
