@@ -89,7 +89,7 @@ typedef struct _freenect_device freenect_device;
 
 // usb backend specific section
 #if defined(_WIN32)
-#include <usb.h>
+#include <libusb/include/usb.h>
 typedef void* freenect_usb_context;
 #else
 #include <libusb.h>
