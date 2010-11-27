@@ -244,9 +244,9 @@ struct usb_ctrl_setup
 /* struct usb_device; */
 /* struct usb_bus; */
 
-struct usb_device_t
+struct usb_device
 {
-    struct usb_device_t *next, *prev;
+    struct usb_device *next, *prev;
 
     char filename[LIBUSB_PATH_MAX];
 
@@ -260,7 +260,7 @@ struct usb_device_t
     unsigned char devnum;
 
     unsigned char num_children;
-    struct usb_device_t **children;
+    struct usb_device **children;
 };
 
 struct usb_bus
@@ -269,10 +269,10 @@ struct usb_bus
 
     char dirname[LIBUSB_PATH_MAX];
 
-    struct usb_device_t *devices;
+    struct usb_device *devices;
     unsigned long location;
 
-    struct usb_device_t *root_dev;
+    struct usb_device *root_dev;
 };
 
 /* Version information, Windows specific */
@@ -307,9 +307,6 @@ typedef struct usb_dev_handle usb_dev_handle;
 
 #include <poppack.h>
 
-#ifndef USBAPIENTRY
-#define	USBAPIENTRY	__cdecl
-#endif
 
 #ifdef __cplusplus
 extern "C"
@@ -319,96 +316,96 @@ extern "C"
     /* Function prototypes */
 
     /* usb.c */
-    usb_dev_handle* USBAPIENTRY	usb_open(struct usb_device_t *dev);
-    int	USBAPIENTRY	usb_close(usb_dev_handle *dev);
-    int	USBAPIENTRY	usb_get_string(usb_dev_handle *dev, int index, int langid, char *buf,
+    usb_dev_handle *usb_open(struct usb_device *dev);
+    int usb_close(usb_dev_handle *dev);
+    int usb_get_string(usb_dev_handle *dev, int index, int langid, char *buf,
                        size_t buflen);
-    int	USBAPIENTRY	usb_get_string_simple(usb_dev_handle *dev, int index, char *buf,
+    int usb_get_string_simple(usb_dev_handle *dev, int index, char *buf,
                               size_t buflen);
 
     /* descriptors.c */
-    int	USBAPIENTRY	usb_get_descriptor_by_endpoint(usb_dev_handle *udev, int ep,
+    int usb_get_descriptor_by_endpoint(usb_dev_handle *udev, int ep,
                                        unsigned char type, unsigned char index,
                                        void *buf, int size);
-    int	USBAPIENTRY	usb_get_descriptor(usb_dev_handle *udev, unsigned char type,
+    int usb_get_descriptor(usb_dev_handle *udev, unsigned char type,
                            unsigned char index, void *buf, int size);
 
     /* <arch>.c */
-    int	USBAPIENTRY	usb_bulk_write(usb_dev_handle *dev, int ep, char *bytes, int size,
+    int usb_bulk_write(usb_dev_handle *dev, int ep, char *bytes, int size,
                        int timeout);
-    int	USBAPIENTRY	usb_bulk_read(usb_dev_handle *dev, int ep, char *bytes, int size,
+    int usb_bulk_read(usb_dev_handle *dev, int ep, char *bytes, int size,
                       int timeout);
-    int	USBAPIENTRY	usb_interrupt_write(usb_dev_handle *dev, int ep, char *bytes, int size,
+    int usb_interrupt_write(usb_dev_handle *dev, int ep, char *bytes, int size,
                             int timeout);
-    int	USBAPIENTRY	usb_interrupt_read(usb_dev_handle *dev, int ep, char *bytes, int size,
+    int usb_interrupt_read(usb_dev_handle *dev, int ep, char *bytes, int size,
                            int timeout);
-    int	USBAPIENTRY	usb_control_msg(usb_dev_handle *dev, int requesttype, int request,
+    int usb_control_msg(usb_dev_handle *dev, int requesttype, int request,
                         int value, int index, char *bytes, int size,
                         int timeout);
-    int	USBAPIENTRY	usb_set_configuration(usb_dev_handle *dev, int configuration);
-    int	USBAPIENTRY	usb_claim_interface(usb_dev_handle *dev, int interface);
-    int	USBAPIENTRY	usb_release_interface(usb_dev_handle *dev, int interface);
-    int	USBAPIENTRY	usb_set_altinterface(usb_dev_handle *dev, int alternate);
-    int	USBAPIENTRY	usb_resetep(usb_dev_handle *dev, unsigned int ep);
-    int	USBAPIENTRY	usb_clear_halt(usb_dev_handle *dev, unsigned int ep);
-    int	USBAPIENTRY	usb_reset(usb_dev_handle *dev);
+    int usb_set_configuration(usb_dev_handle *dev, int configuration);
+    int usb_claim_interface(usb_dev_handle *dev, int interface);
+    int usb_release_interface(usb_dev_handle *dev, int interface);
+    int usb_set_altinterface(usb_dev_handle *dev, int alternate);
+    int usb_resetep(usb_dev_handle *dev, unsigned int ep);
+    int usb_clear_halt(usb_dev_handle *dev, unsigned int ep);
+    int usb_reset(usb_dev_handle *dev);
 
-    char* USBAPIENTRY	usb_strerror(void);
+    char *usb_strerror(void);
 
-    void USBAPIENTRY	usb_init(void);
-    void USBAPIENTRY	usb_set_debug(int level);
-    int	USBAPIENTRY	usb_find_busses(void);
-    int	USBAPIENTRY	usb_find_devices(void);
-    struct usb_device_t*	USBAPIENTRY	usb_device(usb_dev_handle *dev);
-    struct usb_bus* 	USBAPIENTRY	usb_get_busses(void);
+    void usb_init(void);
+    void usb_set_debug(int level);
+    int usb_find_busses(void);
+    int usb_find_devices(void);
+    struct usb_device *usb_device(usb_dev_handle *dev);
+    struct usb_bus *usb_get_busses(void);
 
 
     /* Windows specific functions */
 
 #define LIBUSB_HAS_INSTALL_SERVICE_NP 1
-    int	USBAPIENTRY	usb_install_service_np(void);
+    int usb_install_service_np(void);
     void CALLBACK usb_install_service_np_rundll(HWND wnd, HINSTANCE instance,
             LPSTR cmd_line, int cmd_show);
 
 #define LIBUSB_HAS_UNINSTALL_SERVICE_NP 1
-    int	USBAPIENTRY	usb_uninstall_service_np(void);
+    int usb_uninstall_service_np(void);
     void CALLBACK usb_uninstall_service_np_rundll(HWND wnd, HINSTANCE instance,
             LPSTR cmd_line, int cmd_show);
 
 #define LIBUSB_HAS_INSTALL_DRIVER_NP 1
-    int	USBAPIENTRY	usb_install_driver_np(const char *inf_file);
+    int usb_install_driver_np(const char *inf_file);
     void CALLBACK usb_install_driver_np_rundll(HWND wnd, HINSTANCE instance,
             LPSTR cmd_line, int cmd_show);
 
 #define LIBUSB_HAS_TOUCH_INF_FILE_NP 1
-    int	USBAPIENTRY	usb_touch_inf_file_np(const char *inf_file);
+    int usb_touch_inf_file_np(const char *inf_file);
     void CALLBACK usb_touch_inf_file_np_rundll(HWND wnd, HINSTANCE instance,
             LPSTR cmd_line, int cmd_show);
 
 #define LIBUSB_HAS_INSTALL_NEEDS_RESTART_NP 1
-    int	USBAPIENTRY	usb_install_needs_restart_np(void);
+    int usb_install_needs_restart_np(void);
 
 #define LIBUSB_HAS_INSTALL_NP 1
-    int	USBAPIENTRY	usb_install_npW(HWND hwnd, HINSTANCE instance, LPCWSTR cmd_line, int starg_arg);
-    int	USBAPIENTRY	usb_install_npA(HWND hwnd, HINSTANCE instance, LPCSTR cmd_line, int starg_arg);
+    int usb_install_npW(HWND hwnd, HINSTANCE instance, LPCWSTR cmd_line, int starg_arg);
+    int usb_install_npA(HWND hwnd, HINSTANCE instance, LPCSTR cmd_line, int starg_arg);
 	#define usb_install_np usb_install_npA
     void CALLBACK usb_install_np_rundll(HWND wnd, HINSTANCE instance, 
             LPSTR cmd_line, int cmd_show);
 
-    const struct usb_version*	USBAPIENTRY	usb_get_version(void);
+    const struct usb_version *usb_get_version(void);
 
-    int	USBAPIENTRY	usb_isochronous_setup_async(usb_dev_handle *dev, void **context,
+    int usb_isochronous_setup_async(usb_dev_handle *dev, void **context,
                                     unsigned char ep, int pktsize);
-    int	USBAPIENTRY	usb_bulk_setup_async(usb_dev_handle *dev, void **context,
+    int usb_bulk_setup_async(usb_dev_handle *dev, void **context,
                              unsigned char ep);
-    int	USBAPIENTRY	usb_interrupt_setup_async(usb_dev_handle *dev, void **context,
+    int usb_interrupt_setup_async(usb_dev_handle *dev, void **context,
                                   unsigned char ep);
 
-    int USBAPIENTRY	usb_submit_async(void *context, char *bytes, int size);
-    int	USBAPIENTRY	usb_reap_async(void *context, int timeout);
-    int	USBAPIENTRY	usb_reap_async_nocancel(void *context, int timeout);
-    int	USBAPIENTRY	usb_cancel_async(void *context);
-    int	USBAPIENTRY	usb_free_async(void **context);
+    int usb_submit_async(void *context, char *bytes, int size);
+    int usb_reap_async(void *context, int timeout);
+    int usb_reap_async_nocancel(void *context, int timeout);
+    int usb_cancel_async(void *context);
+    int usb_free_async(void **context);
 
 
 #ifdef __cplusplus

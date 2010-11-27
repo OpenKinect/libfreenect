@@ -124,7 +124,7 @@ namespace Kinect
 		KinectFrameInput *mDepthInput;
 		KinectFrameInput *mRGBInput;
 
-		void OpenDevice(usb_device_t *dev,usb_device_t *motordev);
+		void OpenDevice(struct usb_device *dev,struct usb_device *motordev);
 		void CloseDevice();
 
 		void WriteCameraRegisters();
