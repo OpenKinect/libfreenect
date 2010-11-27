@@ -196,7 +196,7 @@ cdef void rgb_cb(void *dev, char *data, int timestamp):
        _rgb_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
 
 
-def runloop(depth=None, rgb=None):
+def runloop(depth=None, rgb=None, body=None):
     """Sets up the kinect and maintains a runloop
 
     This is where most of the action happens.  You can get the dev pointer from the callback
@@ -208,6 +208,7 @@ def runloop(depth=None, rgb=None):
             If None (default), then you won't get a callback for depth.
         rgb: A function that takes (dev, rgb, timestamp), corresponding to C function.
             If None (default), then you won't get a callback for rgb.
+        body: A function that takes (dev, ctx) and is called in the body of process_events
     """
     global _depth_cb, _rgb_cb
     if depth:
@@ -229,7 +230,8 @@ def runloop(depth=None, rgb=None):
     freenect_set_depth_callback(devp, depth_cb)
     freenect_set_rgb_callback(devp, rgb_cb)
     while freenect_process_events(ctxp) >= 0:
-        pass
+       if body:
+          body(dev, ctx)
 
 
 def _load_numpy():

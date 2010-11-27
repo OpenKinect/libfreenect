@@ -3,28 +3,20 @@ import freenect
 import time
 import threading
 import random
+import time
 
-dev = None
-
-
-def tilt_and_sense():
-    global dev
-    while not dev:
-        time.sleep(1)
-    while 1:
-        time.sleep(3)
-        led = random.randint(0, 6)
-        tilt = random.randint(0, 30)
-        print('Led[%d] Tilt[%d]' % (led, tilt))
-        freenect.set_led(dev, led)
-        print('LED Done')
-        freenect.set_tilt_degs(dev, tilt)
-        print('Tilt Done')
-        print(freenect.get_accel(dev))
-threading.Thread(target=tilt_and_sense).start()
+last_time = 0
 
 
-def dev_getter(my_dev, *_):
-    global dev
-    dev = my_dev
-freenect.runloop(depth=lambda *x: dev_getter(*freenect.depth_cb_np(*x)))
+def body(dev, ctx):
+    global last_time
+    if time.time() - last_time < 3:
+        return
+    last_time = time.time()
+    led = random.randint(0, 6)
+    tilt = random.randint(0, 30)
+    freenect.set_led(dev, led)
+    freenect.set_tilt_degs(dev, tilt)
+    print('led[%d] tilt[%d] accel[%s]' % (led, tilt, freenect.get_accel(dev)))
+
+freenect.runloop(body=body)
