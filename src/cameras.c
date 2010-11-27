@@ -270,7 +270,7 @@ static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 						uint8_t gt = dev->rgb_raw[i-640];
 						uint8_t gb = y == 479 ? gt : dev->rgb_raw[i+640];
 						uint8_t rtr = dev->rgb_raw[i-639];
-						uint8_t rbr = y == 479 ? rtr : dev->rgb_raw[i-641];
+						uint8_t rbr = y == 479 ? rtr : dev->rgb_raw[i+641];
 						uint8_t rtl = x == 0 ? rtr : dev->rgb_raw[i-641];
 						uint8_t rbl = x == 0 ? rbr : y == 479 ? rtl : dev->rgb_raw[i+639];
 						rgb_frame[3*i+0] = (rbl+rtl+rbr+rtr)>>2;
