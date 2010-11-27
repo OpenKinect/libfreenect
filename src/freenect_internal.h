@@ -95,6 +95,9 @@ typedef struct {
 	int valid_frames;
 	uint32_t last_timestamp;
 	uint32_t timestamp;
+	int split_bufs;
+	void *lib_buf;
+	void *usr_buf;
 	uint8_t *raw_buf;
 	void *proc_buf;
 } packet_stream;

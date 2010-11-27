@@ -149,6 +149,60 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	}
 }
 
+static void stream_initbufs(freenect_context *ctx, packet_stream *strm, int rlen, int plen)
+{
+	if (strm->usr_buf) {
+		strm->lib_buf = NULL;
+		strm->proc_buf = strm->usr_buf;
+	} else {
+		strm->lib_buf = malloc(plen);
+		strm->proc_buf = strm->lib_buf;
+	}
+
+	if (rlen == 0) {
+		strm->split_bufs = 0;
+		strm->raw_buf = strm->proc_buf;
+	} else {
+		strm->split_bufs = 1;
+		strm->raw_buf = malloc(rlen);
+	}
+}
+
+static void stream_freebufs(freenect_context *ctx, packet_stream *strm)
+{
+	if (strm->split_bufs)
+		free(strm->raw_buf);
+	if (strm->lib_buf)
+		free(strm->lib_buf);
+
+	strm->raw_buf = NULL;
+	strm->proc_buf = NULL;
+	strm->lib_buf = NULL;
+}
+
+static int stream_setbuf(freenect_context *ctx, packet_stream *strm, void *pbuf)
+{
+	if (!strm->running) {
+		strm->usr_buf = pbuf;
+		return 0;
+	} else {
+		if (!pbuf && !strm->lib_buf) {
+			FN_ERROR("Attempted to set buffer to NULL but stream was started with no internal buffer\n");
+			return -1;
+		}
+		strm->usr_buf = pbuf;
+
+		if (!pbuf)
+			strm->proc_buf = strm->lib_buf;
+		else
+			strm->proc_buf = pbuf;
+
+		if (!strm->split_bufs)
+			strm->raw_buf = strm->proc_buf;
+		return 0;
+	}
+}
+
 // Unpack buffer of (vw bit) data into padded 16bit buffer.
 static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw)
 {
@@ -187,20 +241,16 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	switch (dev->depth_format) {
 		case FREENECT_FORMAT_11_BIT:
 			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 11);
-			if (dev->depth_cb)
-				dev->depth_cb(dev, dev->depth.proc_buf, dev->depth.timestamp);
 			break;
 		case FREENECT_FORMAT_10_BIT:
 			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 10);
-			if (dev->depth_cb)
-				dev->depth_cb(dev, dev->depth.proc_buf, dev->depth.timestamp);
 			break;
 		case FREENECT_FORMAT_PACKED_10_BIT:
 		case FREENECT_FORMAT_PACKED_11_BIT:
-			if (dev->depth_cb)
-				dev->depth_cb(dev, dev->depth.proc_buf, dev->depth.timestamp);
 			break;
 	}
+	if (dev->depth_cb)
+		dev->depth_cb(dev, dev->depth.proc_buf, dev->depth.timestamp);
 }
 
 static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
@@ -390,6 +440,7 @@ static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
 
 int freenect_start_depth(freenect_device *dev)
 {
+	freenect_context *ctx = dev->parent;
 	int res;
 
 	if (dev->depth.running)
@@ -397,23 +448,19 @@ int freenect_start_depth(freenect_device *dev)
 
 	switch (dev->depth_format) {
 		case FREENECT_FORMAT_11_BIT:
-			dev->depth.raw_buf = malloc(FREENECT_PACKED_DEPTH_11_SIZE);
-			dev->depth.proc_buf = malloc(FREENECT_DEPTH_SIZE);
+			stream_initbufs(ctx, &dev->depth, FREENECT_PACKED_DEPTH_11_SIZE, FREENECT_DEPTH_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_11_BIT_PER_FRAME;
 			break;
 		case FREENECT_FORMAT_10_BIT:
-			dev->depth.raw_buf = malloc(FREENECT_PACKED_DEPTH_10_SIZE);
-			dev->depth.proc_buf = malloc(FREENECT_DEPTH_SIZE);
+			stream_initbufs(ctx, &dev->depth, FREENECT_PACKED_DEPTH_10_SIZE, FREENECT_DEPTH_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_10_BIT_PER_FRAME;
 			break;
 		case FREENECT_FORMAT_PACKED_11_BIT:
-			dev->depth.raw_buf = malloc(FREENECT_PACKED_DEPTH_11_SIZE);
-			dev->depth.proc_buf = dev->depth.raw_buf;
+			stream_initbufs(ctx, &dev->depth, 0, FREENECT_PACKED_DEPTH_11_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_11_BIT_PER_FRAME;
 			break;
 		case FREENECT_FORMAT_PACKED_10_BIT:
-			dev->depth.raw_buf = malloc(FREENECT_PACKED_DEPTH_10_SIZE);
-			dev->depth.proc_buf = dev->depth.raw_buf;
+			stream_initbufs(ctx, &dev->depth, 0, FREENECT_PACKED_DEPTH_10_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_10_BIT_PER_FRAME;
 			break;
 	}
@@ -448,16 +495,16 @@ int freenect_start_depth(freenect_device *dev)
 
 int freenect_start_rgb(freenect_device *dev)
 {
+	freenect_context *ctx = dev->parent;
 	int res;
 
 	if (dev->rgb.running)
 		return -1;
 
-	dev->rgb.raw_buf = malloc(FREENECT_BAYER_SIZE);
 	if (dev->rgb_format == FREENECT_FORMAT_RGB)
-		dev->rgb.proc_buf = malloc(FREENECT_RGB_SIZE);
+		stream_initbufs(ctx, &dev->rgb, FREENECT_BAYER_SIZE, FREENECT_RGB_SIZE);
 	else
-		dev->rgb.proc_buf = dev->rgb.raw_buf;
+		stream_initbufs(ctx, &dev->rgb, 0, FREENECT_BAYER_SIZE);
 
 	dev->rgb.pkts_per_frame = RGB_PKTS_PER_FRAME;
 	dev->rgb.pkt_size = RGB_PKTDSIZE;
@@ -497,12 +544,7 @@ int freenect_stop_depth(freenect_device *dev)
 		return res;
 	}
 
-	if (dev->depth.proc_buf != dev->depth.raw_buf)
-		free(dev->depth.proc_buf);
-	dev->depth.proc_buf = NULL;
-	free(dev->depth.raw_buf);
-	dev->depth.raw_buf = NULL;
-
+	stream_freebufs(ctx, &dev->depth);
 	return 0;
 }
 
@@ -523,12 +565,7 @@ int freenect_stop_rgb(freenect_device *dev)
 		return res;
 	}
 
-	if (dev->rgb.proc_buf != dev->rgb.raw_buf)
-		free(dev->rgb.proc_buf);
-	dev->rgb.proc_buf = NULL;
-	free(dev->rgb.raw_buf);
-	dev->rgb.raw_buf = NULL;
-
+	stream_freebufs(ctx, &dev->rgb);
 	return 0;
 }
 
@@ -580,4 +617,14 @@ int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
 			return -1;
 	}
 	return 0;
+}
+
+int freenect_set_depth_buffer(freenect_device *dev, void *buf)
+{
+	return stream_setbuf(dev->parent, &dev->depth, buf);
+}
+
+int freenect_set_rgb_buffer(freenect_device *dev, freenect_pixel *buf)
+{
+	return stream_setbuf(dev->parent, &dev->rgb, buf);
 }

@@ -127,8 +127,12 @@ typedef void (*freenect_rgb_cb)(freenect_device *dev, freenect_pixel *rgb, uint3
 
 void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);
 void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb);
-int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt);
+
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt);
+int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt);
+
+int freenect_set_depth_buffer(freenect_device *dev, void *buf);
+int freenect_set_rgb_buffer(freenect_device *dev, freenect_pixel *buf);
 
 int freenect_start_depth(freenect_device *dev);
 int freenect_start_rgb(freenect_device *dev);
