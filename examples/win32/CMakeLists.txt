@@ -1,0 +1,2 @@
+ADD_EXECUTABLE(freenect_min_demo Freenect-MinimalSample.cpp)
+TARGET_LINK_LIBRARIES(freenect_min_demo libfreenectstatic)

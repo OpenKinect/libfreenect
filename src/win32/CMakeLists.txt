@@ -1,0 +1,18 @@
+FILE(GLOB FREENECT_WIN32_SRCS *.cpp)
+FILE(GLOB FREENECT_WIN32_HDRS *.h)
+
+FIND_PATH(LIBUSB_1_INCLUDE_DIR
+NAMES libusb/include/usb.h
+PATHS ../../platform/windows/Zephod-CPP-version/)
+
+FIND_LIBRARY(LIBUSB_1_LIBRARY
+NAMES libusb.lib
+PATHS ../../platform/windows/Zephod-CPP-version/libusb/lib)
+
+INCLUDE_DIRECTORIES(${LIBUSB_1_INCLUDE_DIR})
+
+ADD_LIBRARY(libfreenect SHARED ${FREENECT_WIN32_SRCS})
+ADD_LIBRARY(libfreenectstatic STATIC ${FREENECT_WIN32_SRCS})
+
+TARGET_LINK_LIBRARIES(libfreenect ${LIBUSB_1_LIBRARY})
+TARGET_LINK_LIBRARIES(libfreenectstatic ${LIBUSB_1_LIBRARY})
