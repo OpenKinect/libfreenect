@@ -35,34 +35,26 @@ LED_BLINK_YELLOW = 4
 LED_BLINK_GREEN = 5
 LED_BLINK_RED_YELLOW = 6
 
-cdef extern from "stdlib.h":
-    void memcpy(void *s1, void *s2, int n) nogil
+DEPTH_BYTES = 614400 # 480 * 640 * 2
+RGB_BYTES = 921600  # 480 * 640 * 3
 
-cdef extern from "pthread.h":
-    ctypedef struct pthread_mutex_t:
-        pass
-    
-    ctypedef struct pthread_cond_t:
-        pass
-    
-    int pthread_mutex_init(pthread_mutex_t *, void *)
-    int pthread_mutex_lock(pthread_mutex_t *) nogil
-    int pthread_mutex_unlock(pthread_mutex_t *) nogil
-    
-    int pthread_cond_init(pthread_cond_t *, void *)
-    int pthread_cond_destroy(pthread_cond_t *)
-    int pthread_cond_signal(pthread_cond_t *) nogil
-    int pthread_cond_wait(pthread_cond_t *, pthread_mutex_t *) nogil
+cdef extern from "stdlib.h":
+    void free(void *ptr)
 
 cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t len)
+
+cdef extern from "libfreenect_sync.h":
+    int freenect_sync_get_rgb(char **rgb, unsigned int *timestamp) # NOTE: These were uint32_t
+    int freenect_sync_get_depth(char **depth, unsigned int *timestamp)
+    void freenect_sync_stop()
 
 cdef extern from "libfreenect.h":
     ctypedef void (*freenect_depth_cb)(void *dev, char *depth, int timestamp) # was u_int32
     ctypedef void (*freenect_rgb_cb)(void *dev, char *rgb, int timestamp) # was u_int32
     int freenect_init(void **ctx, int usb_ctx) # changed from void * as usb_ctx is always NULL
     int freenect_shutdown(void *ctx)
-    int freenect_process_events(void *ctx) nogil
+    int freenect_process_events(void *ctx)
     int freenect_num_devices(void *ctx)
     int freenect_open_device(void *ctx, void **dev, int index)
     int freenect_close_device(void *dev)
@@ -80,6 +72,7 @@ cdef extern from "libfreenect.h":
     int freenect_set_led(void *dev, int option)
     int freenect_get_raw_accel(void *dev, short int* x, short int* y, short int* z) # had to make these short int
     int freenect_get_mks_accel(void *dev, double* x, double* y, double* z)
+
 
 cdef class DevPtr:
    cdef void* _ptr 
@@ -147,75 +140,42 @@ cdef open_device(CtxPtr ctx, int index):
 
 _depth_cb, _rgb_cb = None, None
 
-cdef depth_bytes = 614400 # 480 * 640 * 2
-cdef rgb_bytes = 921600  # 480 * 640 * 3
-cdef char depth_im[614400] 
-cdef char rgb_im[921600]
+cdef void depth_cb(void *dev, char *data, int timestamp):
+    nbytes = 614400  # 480 * 640 * 2
+    cdef DevPtr dev_out
+    dev_out = DevPtr()
+    dev_out._ptr = dev
+    if _depth_cb:
+       _depth_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
 
-def get_depth():
-    """Get the next available depth frame from the kinect.
 
-    Returns:
-      A python string for the 16 bit depth image (640*480*2 bytes)
+cdef void rgb_cb(void *dev, char *data, int timestamp):
+    nbytes = 921600  # 480 * 640 * 3
+    cdef DevPtr dev_out
+    dev_out = DevPtr()
+    dev_out._ptr = dev
+    if _rgb_cb:
+       _rgb_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
+
+
+def runloop(depth=None, rgb=None):
+    """Sets up the kinect and maintains a runloop
+
+    This is where most of the action happens.  You can get the dev pointer from the callback
+    and let this function do all of the setup for you.  You may want to use threads to perform
+    computation externally as the callbacks should really just be used for copying data.
+
+    Args:
+        depth: A function that takes (dev, depth, timestamp), corresponding to C function.
+            If None (default), then you won't get a callback for depth.
+        rgb: A function that takes (dev, rgb, timestamp), corresponding to C function.
+            If None (default), then you won't get a callback for rgb.
     """
-    with nogil:
-        pthread_mutex_lock(&depth_mutex)
-        pthread_cond_wait(&depth_cond, &depth_mutex)
-    string = PyString_FromStringAndSize(depth_im, depth_bytes)
-    pthread_mutex_unlock(&depth_mutex)
-    return string
-    
-def get_rgb():
-    """Get the next available RGB frame from the kinect.
-
-    Returns:
-      A python string for the 8 bit 3 channel depth image (640*480*3 bytes)
-    """
-    with nogil:
-        pthread_mutex_lock(&rgb_mutex)
-        pthread_cond_wait(&rgb_cond, &rgb_mutex)
-    string = PyString_FromStringAndSize(rgb_im, rgb_bytes)
-    pthread_mutex_unlock(&rgb_mutex)
-    return string
-
-
-cdef void depth_cb(void *dev, char *data, int timestamp) nogil:
-    global depth_im
-    pthread_mutex_lock(&depth_mutex)
-    pthread_cond_signal(&depth_cond)
-    memcpy(depth_im, data, depth_bytes)
-    pthread_mutex_unlock(&depth_mutex)
-
-cdef void rgb_cb(void *dev, char *data, int timestamp) nogil:
-    global rgb_im
-    pthread_mutex_lock(&rgb_mutex)
-    pthread_cond_signal(&rgb_cond)
-    memcpy(rgb_im, data, rgb_bytes)
-    pthread_mutex_unlock(&rgb_mutex)
-
-cdef pthread_mutex_t rgb_mutex
-cdef pthread_mutex_t depth_mutex
-cdef pthread_cond_t rgb_cond
-cdef pthread_cond_t depth_cond
-
-from threading import Thread
-runloop_thread = Thread(target=runloop)
-
-def is_running():
-    """Check if the kinect background processing is still running
-  
-    Returns:
-      True if the background thread is alive
-    """
-    return runloop_thread.is_alive()
-
-def start():
-    """Sets up the kinect and runs a background thread. Has no effect if start() has already been called.
-
-    """
-    if not is_running(): runloop_thread.start()
-
-def runloop():
+    global _depth_cb, _rgb_cb
+    if depth:
+       _depth_cb = depth
+    if rgb:
+       _rgb_cb = rgb
     cdef DevPtr dev
     cdef CtxPtr ctx
     cdef void* devp
@@ -230,13 +190,9 @@ def runloop():
     freenect_start_rgb(devp)
     freenect_set_depth_callback(devp, depth_cb)
     freenect_set_rgb_callback(devp, rgb_cb)
-    pthread_mutex_init(&rgb_mutex, NULL)
-    pthread_mutex_init(&depth_mutex, NULL)
-    pthread_cond_init(&rgb_cond, NULL)
-    pthread_cond_init(&depth_cond, NULL)
-    with nogil:
-      while freenect_process_events(ctxp) >= 0:
-          pass
+    while freenect_process_events(ctxp) >= 0:
+        pass
+
 
 def _load_numpy():
     try:
@@ -245,28 +201,115 @@ def _load_numpy():
     except ImportError, e:
         print('You need the numpy library to use this function')
         raise e
+
+
+def depth_cb_np(dev, string, timestamp):
+   """Converts the raw depth data into a numpy array for your function
+
+    Args:
+        dev: DevPtr object
+        string: A python string with the depth data
+        timestamp: An int representing the time
+
+    Returns:
+        (dev, data, timestamp) where data is a 2D numpy array
+   """
+   np = _load_numpy()
+   data = np.fromstring(string, dtype=np.uint16)
+   data.resize((480, 640))
+   return dev, data, timestamp
+
+
+def rgb_cb_np(dev, string, timestamp):
+   """Converts the raw depth data into a numpy array for your function
+
+    Args:
+        dev: DevPtr object
+        string: A python string with the RGB data
+        timestamp: An int representing the time
+
+    Returns:
+        (dev, data, timestamp) where data is a 2D numpy array
+   """
+   np = _load_numpy()
+   data = np.fromstring(string, dtype=np.uint8)
+   data.resize((480, 640, 3))
+   return dev, data, timestamp
+
+
+def sync_get_depth():
+    """Get the next available depth frame from the kinect.
+
+    Returns:
+        (depth, timestamp) or None on error
+        depth: A python string for the 16 bit depth image (640*480*2 bytes)
+        timestamp: int representing the time
+    """
+    cdef char* depth
+    cdef unsigned int timestamp
+    out = freenect_sync_get_depth(&depth, &timestamp)
+    if out:
+        return
+    depth_str = PyString_FromStringAndSize(depth, DEPTH_BYTES)
+    free(depth);
+    return depth_str, timestamp
+
+
+def sync_get_rgb():
+    """Get the next available rgb frame from the kinect.
+
+    Returns:
+        (rgb, timestamp) or None on error
+        rgb: A python string for the 8 bit rgb image (640*480*3 bytes)
+        timestamp: int representing the time
+    """
+    cdef char* rgb
+    cdef unsigned int timestamp
+    out = freenect_sync_get_rgb(&rgb, &timestamp)
+    if out:
+        return
+    rgb_str = PyString_FromStringAndSize(rgb, RGB_BYTES)
+    free(rgb);
+    return rgb_str, timestamp
+
+
+def sync_stop():
+    """Terminate the synchronous runloop if running, else this is a NOP
+    """
+    freenect_sync_stop()
+
         
-def get_rgb_np():
+def sync_get_rgb_np():
     """Get the next available RGB frame from the kinect, as a numpy array.
 
     Returns:
-      A numpy array, shape:(640,480,3) dtype:np.uint8
+        (rgb, timestamp) or None on error
+        rgb: A numpy array, shape:(640,480,3) dtype:np.uint8
+        timestamp: int representing the time        
     """
     np = _load_numpy()
-    string = get_rgb()
+    try:
+        string, timestamp = sync_get_rgb()
+    except TypeError:
+        return
     data = np.fromstring(string, dtype=np.uint8)
     data.resize((480, 640, 3))
-    return data
+    return data, timestamp
 
-def get_depth_np():
+
+def sync_get_depth_np():
     """Get the next available depth frame from the kinect, as a numpy array.
 
     Returns:
-      A numpy array, shape:(640,480) dtype:np.uint16
+        (depth, timestamp) or None on error
+        depth: A numpy array, shape:(640,480) dtype:np.uint16
+        timestamp: int representing the time
     """
     np = _load_numpy()
-    string = get_depth()
+    try:
+        string, timestamp = sync_get_depth()
+    except TypeError:
+        return
     data = np.fromstring(string, dtype=np.uint16)
     data.resize((480, 640))
-    return data
-
+    return data, timestamp
