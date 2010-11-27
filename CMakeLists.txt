@@ -57,11 +57,6 @@ IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
 
-# Doesn't work on windows yet.
-IF(NOT UNIX)
-  MESSAGE(FATAL_ERROR "libfreenect is not currently supported on this platform")
-ENDIF()
-
 ######################################################################################
 # CMake Modules
 ######################################################################################
