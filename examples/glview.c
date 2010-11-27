@@ -27,6 +27,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <assert.h>
 #include "libfreenect.h"
 
 #include <pthread.h>
@@ -53,11 +54,11 @@ int window;
 
 pthread_mutex_t gl_backbuf_mutex = PTHREAD_MUTEX_INITIALIZER;
 
-uint8_t gl_depth_front[640*480*4];
-uint8_t gl_depth_back[640*480*4];
-
-uint8_t gl_rgb_front[640*480*4];
-uint8_t gl_rgb_back[640*480*4];
+// back: owned by libfreenect (implicit for depth)
+// mid: owned by callbacks, "latest frame ready"
+// front: owned by GL, "currently being drawn"
+uint8_t *depth_mid, *depth_front;
+uint8_t *rgb_back, *rgb_mid, *rgb_front;
 
 GLuint gl_depth_tex;
 GLuint gl_rgb_tex;
@@ -69,19 +70,32 @@ int freenect_led;
 
 
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
-int got_frames = 0;
+int got_rgb = 0;
+int got_depth = 0;
 
 void DrawGLScene()
 {
 	pthread_mutex_lock(&gl_backbuf_mutex);
 
-	while (got_frames < 2) {
+	while (!got_depth || !got_rgb) {
 		pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
 	}
 
-	memcpy(gl_depth_front, gl_depth_back, sizeof(gl_depth_back));
-	memcpy(gl_rgb_front, gl_rgb_back, sizeof(gl_rgb_back));
-	got_frames = 0;
+	void *tmp;
+
+	if (got_depth) {
+		tmp = depth_front;
+		depth_front = depth_mid;
+		depth_mid = tmp;
+		got_depth = 0;
+	}
+	if (got_rgb) {
+		tmp = rgb_front;
+		rgb_front = rgb_mid;
+		rgb_mid = tmp;
+		got_rgb = 0;
+	}
+
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -90,7 +104,7 @@ void DrawGLScene()
 	glEnable(GL_TEXTURE_2D);
 
 	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, gl_depth_front);
+	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, depth_front);
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
@@ -101,7 +115,7 @@ void DrawGLScene()
 	glEnd();
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, gl_rgb_front);
+	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
@@ -120,6 +134,11 @@ void keyPressed(unsigned char key, int x, int y)
 		die = 1;
 		pthread_join(freenect_thread, NULL);
 		glutDestroyWindow(window);
+		free(depth_mid);
+		free(depth_front);
+		free(rgb_back);
+		free(rgb_mid);
+		free(rgb_front);
 		pthread_exit(NULL);
 	}
 	if (key == 'w') {
@@ -227,43 +246,43 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 		int lb = pval & 0xff;
 		switch (pval>>8) {
 			case 0:
-				gl_depth_back[3*i+0] = 255;
-				gl_depth_back[3*i+1] = 255-lb;
-				gl_depth_back[3*i+2] = 255-lb;
+				depth_mid[3*i+0] = 255;
+				depth_mid[3*i+1] = 255-lb;
+				depth_mid[3*i+2] = 255-lb;
 				break;
 			case 1:
-				gl_depth_back[3*i+0] = 255;
-				gl_depth_back[3*i+1] = lb;
-				gl_depth_back[3*i+2] = 0;
+				depth_mid[3*i+0] = 255;
+				depth_mid[3*i+1] = lb;
+				depth_mid[3*i+2] = 0;
 				break;
 			case 2:
-				gl_depth_back[3*i+0] = 255-lb;
-				gl_depth_back[3*i+1] = 255;
-				gl_depth_back[3*i+2] = 0;
+				depth_mid[3*i+0] = 255-lb;
+				depth_mid[3*i+1] = 255;
+				depth_mid[3*i+2] = 0;
 				break;
 			case 3:
-				gl_depth_back[3*i+0] = 0;
-				gl_depth_back[3*i+1] = 255;
-				gl_depth_back[3*i+2] = lb;
+				depth_mid[3*i+0] = 0;
+				depth_mid[3*i+1] = 255;
+				depth_mid[3*i+2] = lb;
 				break;
 			case 4:
-				gl_depth_back[3*i+0] = 0;
-				gl_depth_back[3*i+1] = 255-lb;
-				gl_depth_back[3*i+2] = 255;
+				depth_mid[3*i+0] = 0;
+				depth_mid[3*i+1] = 255-lb;
+				depth_mid[3*i+2] = 255;
 				break;
 			case 5:
-				gl_depth_back[3*i+0] = 0;
-				gl_depth_back[3*i+1] = 0;
-				gl_depth_back[3*i+2] = 255-lb;
+				depth_mid[3*i+0] = 0;
+				depth_mid[3*i+1] = 0;
+				depth_mid[3*i+2] = 255-lb;
 				break;
 			default:
-				gl_depth_back[3*i+0] = 0;
-				gl_depth_back[3*i+1] = 0;
-				gl_depth_back[3*i+2] = 0;
+				depth_mid[3*i+0] = 0;
+				depth_mid[3*i+1] = 0;
+				depth_mid[3*i+2] = 0;
 				break;
 		}
 	}
-	got_frames++;
+	got_depth++;
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
@@ -271,8 +290,14 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
 {
 	pthread_mutex_lock(&gl_backbuf_mutex);
-	got_frames++;
-	memcpy(gl_rgb_back, rgb, FREENECT_RGB_SIZE);
+
+	// swap buffers
+	assert (rgb_back == rgb);
+	rgb_back = rgb_mid;
+	freenect_set_rgb_buffer(dev, rgb_back);
+	rgb_mid = rgb;
+
+	got_rgb++;
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
@@ -285,6 +310,7 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_rgb_callback(f_dev, rgb_cb);
 	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
 	freenect_set_depth_format(f_dev, FREENECT_FORMAT_11_BIT);
+	freenect_set_rgb_buffer(f_dev, rgb_back);
 
 	freenect_start_depth(f_dev);
 	freenect_start_rgb(f_dev);
@@ -317,6 +343,12 @@ void *freenect_threadfunc(void *arg)
 int main(int argc, char **argv)
 {
 	int res;
+
+	depth_mid = malloc(640*480*3);
+	depth_front = malloc(640*480*3);
+	rgb_back = malloc(640*480*3);
+	rgb_mid = malloc(640*480*3);
+	rgb_front = malloc(640*480*3);
 
 	printf("Kinect camera test\n");
 
