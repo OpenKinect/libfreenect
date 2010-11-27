@@ -512,12 +512,16 @@ void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb)
 
 int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt)
 {
+	if (dev->rgb_running)
+		return -1;
 	dev->rgb_format = fmt;
 	return 0;
 }
 
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
 {
+	if (dev->depth_running)
+		return -1;
 	dev->depth_format = fmt;
 	return 0;
 }
