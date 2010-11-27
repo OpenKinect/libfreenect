@@ -245,6 +245,9 @@ int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm)
 		libusb_handle_events(ctx->usb.ctx);
 	}
 
+	for (i=0; i<strm->num_xfers; i++)
+		libusb_free_transfer(strm->xfers[i]);
+
 	free(strm->buffer);
 	free(strm->xfers);
 
