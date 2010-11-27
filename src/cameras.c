@@ -157,7 +157,9 @@ static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw
 	int bitshift = 0;
 	for (i=0; i<(640*480); i++) {
 		int idx = (i*vw)/8;
-		uint32_t word = (raw[idx]<<(16)) | (raw[idx+1]<<8) | raw[idx+2];
+		uint32_t word = (raw[idx]<<(16)) | (raw[idx+1]<<8);
+		if (bitshift > (16-vw))
+			word |= raw[idx+2];
 		frame[i] = ((word >> (((3*8)-vw)-bitshift)) & mask);
 		bitshift = (bitshift + vw) % 8;
 	}
