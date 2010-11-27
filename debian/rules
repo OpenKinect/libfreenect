@@ -1,0 +1,16 @@
+#!/usr/bin/make -f
+
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/cmake.mk
+include /usr/share/cdbs/1/rules/simple-patchsys.mk
+
+DEB_CMAKE_EXTRA_FLAGS = -DBUILD_EXAMPLES:BOOL=OFF -DLIB_SUFFIX:STRING=
+
+install/libfreenect0::
+	mkdir -p debian/libfreenect0/etc/udev/rules.d
+	cp platform/linux/udev/51-kinect.rules debian/libfreenect0/etc/udev/rules.d
+
+install/libfreenect-dev::
+	mkdir -p debian/libfreenect-dev/usr/share/doc/libfreenect-dev/examples
+	cp examples/glview.c debian/libfreenect-dev/usr/share/doc/libfreenect-dev/examples
+

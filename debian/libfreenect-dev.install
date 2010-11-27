@@ -1,0 +1,5 @@
+usr/include/libfreenect/*
+usr/lib/lib*.a
+usr/lib/lib*.so
+usr/lib/openkinect/fakenect/lib*.so
+usr/lib/pkgconfig/*
