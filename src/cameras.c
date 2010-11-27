@@ -33,12 +33,9 @@
 
 struct pkt_hdr {
 	uint8_t magic[2];
-	uint8_t pad;
-	uint8_t flag;
-	uint8_t unk1;
-	uint8_t seq;
-	uint8_t unk2;
-	uint8_t unk3;
+	uint16_t flag;
+	uint16_t seq;
+	uint16_t size;
 	uint32_t timestamp;
 };
 
@@ -53,6 +50,8 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	struct pkt_hdr *hdr = (void*)pkt;
 	uint8_t *data = pkt + sizeof(*hdr);
 	int datalen = len - sizeof(*hdr);
+
+	//fprintf(stderr, "header: type=%x seq=%x size=%x time=%x length=%x\n", hdr->flag, hdr->seq, hdr->size, hdr->timestamp, datalen);
 
 	if (hdr->magic[0] != 'R' || hdr->magic[1] != 'B') {
 		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
@@ -124,7 +123,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 		return got_frame;
 	}
 
-	if (datalen != strm->pkt_size && hdr->flag != eof)
+	if ((hdr->size != datalen) || (datalen != strm->pkt_size && hdr->flag != eof))
 		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
 		       "[Stream %02x] Expected %d data bytes, but got only %d\n", strm->flag, strm->pkt_size, datalen);
 
@@ -617,9 +616,9 @@ int freenect_start_rgb(freenect_device *dev)
 		return res;
 
 	write_register(dev, 0x05, 0x00); // reset rgb stream
-	write_register(dev, 0x0c, 0x00);
+	write_register(dev, 0x0c, 0x00); // bayer image format
 	write_register(dev, 0x0d, 0x01);
-	write_register(dev, 0x0e, 0x1e); // 30Hz bayer
+	write_register(dev, 0x0e, 30); // 30Hz bayer
 	write_register(dev, 0x05, 0x01); // start rgb stream
 	write_register(dev, 0x47, 0x00); // disable Hflip
 
