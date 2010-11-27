@@ -64,8 +64,6 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 #define FN_SPEW(...) FN_LOG(LL_SPEW, __VA_ARGS__)
 #define FN_FLOOD(...) FN_LOG(LL_FLOOD, __VA_ARGS__)
 
-#define DEPTH_RAW_10_BIT_SIZE 384000
-#define DEPTH_RAW_11_BIT_SIZE 422400
 #define FRAME_H FREENECT_FRAME_H
 #define FRAME_W FREENECT_FRAME_W
 #define FRAME_PIX FREENECT_FRAME_PIX
@@ -76,8 +74,8 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 #define DEPTH_PKTDSIZE (DEPTH_PKTSIZE-12)
 #define RGB_PKTDSIZE (RGB_PKTSIZE-12)
 
-#define DEPTH_PKTS_10_BIT_PER_FRAME ((DEPTH_RAW_10_BIT_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
-#define DEPTH_PKTS_11_BIT_PER_FRAME ((DEPTH_RAW_11_BIT_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
+#define DEPTH_PKTS_10_BIT_PER_FRAME ((FREENECT_PACKED_DEPTH_10_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
+#define DEPTH_PKTS_11_BIT_PER_FRAME ((FREENECT_PACKED_DEPTH_11_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
 #define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
 
 #define VID_MICROSOFT 0x45e
@@ -119,7 +117,7 @@ struct _freenect_device {
 
 	int depth_running;
 	packet_stream depth_stream;
-	uint8_t depth_raw[DEPTH_RAW_11_BIT_SIZE];
+	uint8_t depth_raw[FREENECT_PACKED_DEPTH_11_SIZE];
 	uint16_t depth_frame[FRAME_PIX];
 
 	int rgb_running;
