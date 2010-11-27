@@ -29,6 +29,7 @@
 #include <string.h>
 #include <unistd.h>
 
+
 #include "freenect_internal.h"
 
 struct pkt_hdr {
@@ -83,7 +84,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 
 	// handle lost packets
 	if (strm->seq != hdr->seq) {
-		uint8_t lost = hdr->seq - strm->seq;
+		uint8_t lost = strm->seq - hdr->seq;
 		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_INFO, \
 		       "[Stream %02x] Lost %d packets\n", strm->flag, lost);
 		if (lost > 5) {
@@ -203,7 +204,7 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 {
 	freenect_context *ctx = dev->parent;
-	int x,y,i;
+	int x,y;
 
 	if (len == 0)
 		return;
@@ -232,61 +233,196 @@ static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 		 * B G B G B G B G
 		 * G R G R G R G R
 		 * B G B G B G B G
+		 *
+		 * To convert a Bayer-pattern into RGB you have to handle four pattern 
+		 * configurations:
+         * 1)         2)         3)         4)
+		 *      B1      B1 G1 B2   R1 G1 R2      R1       <- previous line
+		 *   R1 G1 R2   G2 R1 G3   G2 B1 G3   B1 G1 B2    <- current line
+		 *      B2      B3 G4 B4   R3 G4 R4      R2       <- next line
+         *   ^  ^  ^
+		 *   |  |  next pixel 
+		 *   |  current pixel
+		 *   previous pixel
+		 *
+         * The RGB values (r,g,b) for each configuration are calculated as 
+         * follows:
+         *
+         * 1) r = (R1 + R2) / 2  
+         *    g =  G1
+         *    b = (B1 + B2) / 2
+		 *
+		 * 2) r =  R1
+		 *    g = (G1 + G2 + G3 + G4) / 4
+		 *    b = (B1 + B2 + B3 + B4) / 4
+		 *
+		 * 3) r = (R1 + R2 + R3 + R4) / 4
+		 *    g = (G1 + G2 + G3 + G4) / 4
+		 *    b =  B1
+         *
+		 * 4) r = (R1 + R2) / 2
+		 *    g =  G1
+		 *    b = (B1 + B2) / 2
+		 *
+		 * To efficiently calculate these values, two 32bit integers are used
+		 * as "shift-buffers". One integer to store the 3 horizontal bayer pixel 
+         * values (previous, current, next) of the current line. The other 
+         * integer to store the vertical average value of the bayer pixels 
+         * (previous, current, next) of the previous and next line.
+		 * 
+         * The boundary conditions for the first and last line and the first
+         * and last column are solved via mirroring the second and second last
+         * line and the second and second last column.
+         *
+         * To reduce slow memory access, the values of a rgb pixel are packet 
+         * into a 32bit variable and transfered together. 
 		 */
-		for (y=0; y<480; y++) {
-			for (x=0; x<640; x++) {
-				i = (y*640+x);
-				if ((y&1) == 0) {
-					if ((x&1) == 0) {
-						// topleft G pixel
-						uint8_t rr = dev->rgb_raw[i+1];
-						uint8_t rl = x == 0 ? rr : dev->rgb_raw[i-1];
-						uint8_t bb = dev->rgb_raw[i+640];
-						uint8_t bt = y == 0 ? bb : dev->rgb_raw[i-640];
-						rgb_frame[3*i+0] = (rl+rr)>>1;
-						rgb_frame[3*i+1] = dev->rgb_raw[i];
-						rgb_frame[3*i+2] = (bt+bb)>>1;
+
+		uint8_t *dst = rgb_frame; // pointer to destination
+
+		uint8_t *prevLine;        // pointer to previous, current and next line
+		uint8_t *curLine;         // of the source bayer pattern
+		uint8_t *nextLine;        
+
+		// storing horizontal values in hVals: 
+        // previous << 16, current << 8, next
+		uint32_t hVals;
+		// storing vertical averages in vSums: 
+        // previous << 16, current << 8, next
+		uint32_t vSums;
+
+		// init curLine and nextLine pointers
+		curLine  = dev->rgb_raw;
+		nextLine = curLine + 640;
+		for (y = 0; y < 480; ++y) {
+
+			if ((y > 0) && (y < 479))
+				prevLine = curLine - 640; // normal case
+			else if (y == 0)
+				prevLine = nextLine;      // top boundary case
+			else
+				nextLine = prevLine;      // bottom boundary case
+
+			// init horizontal shift-buffer with current value
+			hVals  = (*(curLine++) << 8); 
+			// handle left column boundary case
+			hVals |= (*curLine << 16);
+			// init vertical average shift-buffer with current values average
+			vSums = ((*(prevLine++) + *(nextLine++)) << 7) & 0xFF00;
+			// handle left column boundary case
+			vSums |= ((*prevLine + *nextLine) << 15) & 0xFF0000;
+			
+			// store if line is odd or not
+			uint8_t yOdd = y & 1;
+			// the right column boundary case is not handled inside this loop
+			// thus the "639"
+			for (x = 0; x < 639; ++x) {
+				// place next value in shift buffers
+				hVals |= *(curLine++);
+				vSums |= (*(prevLine++) + *(nextLine++)) >> 1;
+
+				// calculate the horizontal sum as this sum is needed in 
+                // any configuration
+				uint8_t hSum = ((uint8_t)(hVals >> 16) + (uint8_t)(hVals)) >> 1;
+
+				// we pack the rgb colors in this 32bit int
+                // r, g << 8, b << 16
+				uint32_t color = 0;
+
+				if (yOdd == 0) {
+					if ((x & 1) == 0) {
+						// Configuration 1
+						color = hSum |                     // r-value 
+                                (hVals & 0xFF00) |         // g-value
+                                ((vSums << 8) & 0xFF0000); // b-value
+
 					} else {
-						// R pixel
-						uint8_t gl = dev->rgb_raw[i-1];
-						uint8_t gr = x == 639 ? gl : dev->rgb_raw[i+1];
-						uint8_t gb = dev->rgb_raw[i+640];
-						uint8_t gt = y == 0 ? gb : dev->rgb_raw[i-640];
-						uint8_t bbl = dev->rgb_raw[i+639];
-						uint8_t btl = y == 0 ? bbl : dev->rgb_raw[i-641];
-						uint8_t bbr = x == 639 ? bbl : dev->rgb_raw[i+641];
-						uint8_t btr = x == 639 ? btl : y == 0 ? bbr : dev->rgb_raw[i-639];
-						rgb_frame[3*i+0] = dev->rgb_raw[i];
-						rgb_frame[3*i+1] = (gl+gr+gb+gt)>>2;
-						rgb_frame[3*i+2] = (bbl+btl+bbr+btr)>>2;
+						// Configuration 2
+						color = (uint8_t)(hVals >> 8) |                     // r
+						  (((hSum + (uint8_t)(vSums >> 8)) << 7) & 0xFF00)| // g
+						  ((((uint8_t)(vSums >> 16) +                       // b
+                             (uint8_t)(vSums)         ) << 15) & 0xFF0000);
+                        // ^^^ The shift left 7 and shift left 15 instead of
+                        // shift left 8/16 compensate for the division 
+                        // by 2 (>> 1) in the average calculation
 					}
 				} else {
-					if ((x&1) == 0) {
-						// B pixel
-						uint8_t gr = dev->rgb_raw[i+1];
-						uint8_t gl = x == 0 ? gr : dev->rgb_raw[i-1];
-						uint8_t gt = dev->rgb_raw[i-640];
-						uint8_t gb = y == 479 ? gt : dev->rgb_raw[i+640];
-						uint8_t rtr = dev->rgb_raw[i-639];
-						uint8_t rbr = y == 479 ? rtr : dev->rgb_raw[i-641];
-						uint8_t rtl = x == 0 ? rtr : dev->rgb_raw[i-641];
-						uint8_t rbl = x == 0 ? rbr : y == 479 ? rtl : dev->rgb_raw[i+639];
-						rgb_frame[3*i+0] = (rbl+rtl+rbr+rtr)>>2;
-						rgb_frame[3*i+1] = (gl+gr+gb+gt)>>2;
-						rgb_frame[3*i+2] = dev->rgb_raw[i];
+					if ((x & 1) == 0) {
+						// Configuration 3
+						color = (uint8_t)(((uint8_t)(vSums >> 16) +         // r
+                                           (uint8_t)(vSums)) >> 1) |
+						  (((hSum + (uint8_t)(vSums >> 8)) << 7) & 0xFF00)| // g
+						  ((hVals << 8) & 0xFF0000);                        // b
 					} else {
-						// botright G pixel
-						uint8_t bl = dev->rgb_raw[i-1];
-						uint8_t br = x == 639 ? bl : dev->rgb_raw[i+1];
-						uint8_t rt = dev->rgb_raw[i-640];
-						uint8_t rb = y == 479 ? rt : dev->rgb_raw[i+640];
-						rgb_frame[3*i+0] = (rt+rb)>>1;
-						rgb_frame[3*i+1] = dev->rgb_raw[i];
-						rgb_frame[3*i+2] = (bl+br)>>1;
+						// Configuration 4
+						color = (uint8_t)(vSums >> 8) |     // r-value 
+                                (hVals & 0xFF00) |          // g-value 
+                                (hSum << 16);               // b-value 
+
 					}
 				}
+				
+				// this cast to a 32bit-pointer and transfer of all three color
+                // values at once is a little bit faster than writing single
+                // bytes. As the right column boundary case is handled outside
+                // this loop, we do not have to fear to violate memory boundary
+                // with the last pixel
+				*((uint32_t*)(dst)) = color;
+				dst += 3;
+
+				// shift the shift-buffers
+				hVals <<= 8;
+				vSums <<= 8;
+			} // end of for x loop
+			// right column boundary case, mirroring second last column
+			hVals |= (uint8_t)(hVals >> 16);
+			vSums |= (uint8_t)(vSums >> 16);
+
+			// the horizontal sum simplifies to the second last column value
+			uint8_t hSum = (uint8_t)(hVals);
+
+			// packing the rgb-values into an int depending on configuration
+            // see above... due to the mirroring the calculations here 
+            // simplify too
+			uint32_t color = 0;
+			if (yOdd == 0) {
+				if ((x & 1) == 0) {
+					color = hSum | 
+                            (hVals & 0xFF00) | 
+                            ((vSums << 8) & 0xFF0000);
+
+				} else {
+					color = (uint8_t)(hVals >> 8) |
+						    (((hSum + (uint8_t)(vSums >> 8)) << 7) & 0xFF00) |
+							(vSums & 0xFF0000);
+				}
+			} else {
+				if ((x & 1) == 0) {
+					color = (uint8_t)(vSums) |
+							(((hSum + (uint8_t)(vSums >> 8)) << 7) & 0xFF00) |
+							((hVals << 8) & 0xFF0000);
+				} else {
+					color = (uint8_t)(vSums >> 8) | (hVals & 0xFF00) | 
+                            (hSum << 16);
+
+				}
 			}
-		}
+
+			// if we are not in the last line, we can use the 32bit-pointer,
+            // but in the last line we have to be careful not to violate the
+            // memory boundaries
+			if (y < 479) {
+				*((uint32_t*)(dst)) = color;
+				dst += 3;
+			} else {
+				*(dst++) = color & 0xFF;
+				*(dst++) = (color >> 8) & 0xFF;
+				*(dst++) = (color >> 16) & 0xFF;
+			}
+
+
+		} // end of for y loop
+
 	}
 
 	if (dev->rgb_cb)
