@@ -154,14 +154,17 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw)
 {
 	int mask = (1 << vw) - 1;
-	int i;
-	int bitshift = 0;
-	for (i=0; i<(640*480); i++) {
-		int idx = (i*vw)/8;
-		uint32_t word = (raw[idx]<<(16)) | (raw[idx+1]<<8) | raw[idx+2];
-		frame[i] = ((word >> (((3*8)-vw)-bitshift)) & mask);
-		bitshift = (bitshift + vw) % 8;
-	}
+	int j = 640*480;
+	uint32_t buffer = 0;
+	int bitsIn = 0;
+	while (j--) {
+		while (bitsIn < vw) {
+			buffer = (buffer << 8) | *(raw++);
+			bitsIn += 8;
+		}
+		bitsIn -= vw;
+		*(frame++) = (buffer >> bitsIn) & mask;
+	}	
 }
 
 static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
