@@ -28,5 +28,5 @@ def display_rgb(dev, data, timestamp):
     cv.ShowImage('RGB', image)
     cv.WaitKey(5)
 
-freenect.runloop(depth=lambda *x: display_depth(*freenect.depth_cb_np(*x)),
-                 rgb=lambda *x: display_rgb(*freenect.rgb_cb_np(*x)))
+freenect.runloop(depth=display_depth,
+                 rgb=display_rgb)

@@ -184,7 +184,7 @@ cdef void depth_cb(void *dev, char *data, int timestamp):
     dev_out = DevPtr()
     dev_out._ptr = dev
     if _depth_cb:
-       _depth_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
+       _depth_cb(*_depth_cb_np(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp))
 
 
 cdef void rgb_cb(void *dev, char *data, int timestamp):
@@ -193,7 +193,11 @@ cdef void rgb_cb(void *dev, char *data, int timestamp):
     dev_out = DevPtr()
     dev_out._ptr = dev
     if _rgb_cb:
-       _rgb_cb(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp)
+       _rgb_cb(*_rgb_cb_np(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp))
+
+
+class Kill(Exception):
+   """This kills the runloop, raise from the body only"""
 
 
 def runloop(depth=None, rgb=None, body=None):
@@ -229,9 +233,16 @@ def runloop(depth=None, rgb=None, body=None):
     freenect_start_rgb(devp)
     freenect_set_depth_callback(devp, depth_cb)
     freenect_set_rgb_callback(devp, rgb_cb)
-    while freenect_process_events(ctxp) >= 0:
-       if body:
-          body(dev, ctx)
+    try:
+       while freenect_process_events(ctxp) >= 0:
+          if body:
+             body(dev, ctx)
+    except Kill:
+       pass
+    freenect_stop_depth(devp)
+    freenect_stop_rgb(devp)
+    freenect_close_device(devp)
+    freenect_shutdown(ctxp)
 
 
 def _load_numpy():
@@ -243,7 +254,7 @@ def _load_numpy():
         raise e
 
 
-def depth_cb_np(dev, string, timestamp):
+def _depth_cb_np(dev, string, timestamp):
    """Converts the raw depth data into a numpy array for your function
 
     Args:
@@ -260,7 +271,7 @@ def depth_cb_np(dev, string, timestamp):
    return dev, data, timestamp
 
 
-def rgb_cb_np(dev, string, timestamp):
+def _rgb_cb_np(dev, string, timestamp):
    """Converts the raw depth data into a numpy array for your function
 
     Args:
@@ -277,7 +288,7 @@ def rgb_cb_np(dev, string, timestamp):
    return dev, data, timestamp
 
 
-def sync_get_depth():
+def _sync_get_depth_str():
     """Get the next available depth frame from the kinect.
 
     Returns:
@@ -295,7 +306,7 @@ def sync_get_depth():
     return depth_str, timestamp
 
 
-def sync_get_rgb():
+def _sync_get_rgb_str():
     """Get the next available rgb frame from the kinect.
 
     Returns:
@@ -319,7 +330,7 @@ def sync_stop():
     freenect_sync_stop()
 
         
-def sync_get_rgb_np():
+def sync_get_rgb():
     """Get the next available RGB frame from the kinect, as a numpy array.
 
     Returns:
@@ -329,7 +340,7 @@ def sync_get_rgb_np():
     """
     np = _load_numpy()
     try:
-        string, timestamp = sync_get_rgb()
+        string, timestamp = _sync_get_rgb_str()
     except TypeError:
         return
     data = np.fromstring(string, dtype=np.uint8)
@@ -337,7 +348,7 @@ def sync_get_rgb_np():
     return data, timestamp
 
 
-def sync_get_depth_np():
+def sync_get_depth():
     """Get the next available depth frame from the kinect, as a numpy array.
 
     Returns:
@@ -347,9 +358,10 @@ def sync_get_depth_np():
     """
     np = _load_numpy()
     try:
-        string, timestamp = sync_get_depth()
+        string, timestamp = _sync_get_depth_str()
     except TypeError:
         return
     data = np.fromstring(string, dtype=np.uint16)
     data.resize((480, 640))
     return data, timestamp
+
