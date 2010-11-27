@@ -83,6 +83,7 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 #define PID_NUI_MOTOR 0x02b0
 
 typedef struct {
+	int running;
 	uint8_t flag;
 	int synced;
 	uint8_t seq;
@@ -94,7 +95,8 @@ typedef struct {
 	int valid_frames;
 	uint32_t last_timestamp;
 	uint32_t timestamp;
-	uint8_t *buf;
+	uint8_t *raw_buf;
+	void *proc_buf;
 } packet_stream;
 
 struct _freenect_device {
@@ -115,15 +117,8 @@ struct _freenect_device {
 	int cam_inited;
 	uint16_t cam_tag;
 
-	int depth_running;
-	packet_stream depth_stream;
-	uint8_t depth_raw[FREENECT_PACKED_DEPTH_11_SIZE];
-	uint16_t depth_frame[FRAME_PIX];
-
-	int rgb_running;
-	packet_stream rgb_stream;
-	uint8_t rgb_raw[FRAME_PIX];
-	uint8_t rgb_frame[3*FRAME_PIX];
+	packet_stream depth;
+	packet_stream rgb;
 
 	// Audio
 	// Motor
