@@ -4,6 +4,8 @@
 #include "libusb\include\usb.h"
 namespace Kinect
 {
+    typedef struct usb_device usb_device;
+
 	enum
 	{
 
@@ -124,7 +126,7 @@ namespace Kinect
 		KinectFrameInput *mDepthInput;
 		KinectFrameInput *mRGBInput;
 
-		void OpenDevice(usb_device_t *dev,usb_device_t *motordev);
+		void OpenDevice(usb_device *dev,usb_device *motordev);
 		void CloseDevice();
 
 		void WriteCameraRegisters();

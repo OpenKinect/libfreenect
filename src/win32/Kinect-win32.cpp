@@ -19,7 +19,7 @@ namespace Kinect
 
 		while (CurrentBus)
 		{
-			usb_device_t * CurrentDev = CurrentBus->devices;
+			usb_device * CurrentDev = CurrentBus->devices;
 			while (CurrentDev)
 			{
 				if (CurrentDev->descriptor.idVendor == 0x045E &&
@@ -98,7 +98,7 @@ namespace Kinect
 	{
 		InitializeCriticalSection(&mListenersLock);
 		mInternalData = new KinectInternalData(this);
-		mInternalData->OpenDevice( (usb_device_t *)internaldata, (usb_device_t *)internalmotordata );
+		mInternalData->OpenDevice( (usb_device *)internaldata, (usb_device *)internalmotordata );
 	};
 
 	Kinect::~Kinect()
