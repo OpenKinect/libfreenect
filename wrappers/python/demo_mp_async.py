@@ -26,5 +26,5 @@ def display_rgb(dev, data, timestamp):
         image_rgb = mp.imshow(data, interpolation='nearest', animated=True)
     mp.draw()
 
-freenect.runloop(depth=display_depth),
+freenect.runloop(depth=display_depth,
                  rgb=display_rgb)
