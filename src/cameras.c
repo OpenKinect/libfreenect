@@ -83,7 +83,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 
 	// handle lost packets
 	if (strm->seq != hdr->seq) {
-		uint8_t lost = strm->seq - hdr->seq;
+		uint8_t lost = hdr->seq - strm->seq;
 		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_INFO, \
 		       "[Stream %02x] Lost %d packets\n", strm->flag, lost);
 		if (lost > 5) {
