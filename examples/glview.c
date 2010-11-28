@@ -68,6 +68,8 @@ freenect_device *f_dev;
 int freenect_angle = 0;
 int freenect_led;
 
+freenect_video_format requested_format = FREENECT_VIDEO_RGB;
+freenect_video_format current_format = FREENECT_VIDEO_RGB;
 
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
 int got_rgb = 0;
@@ -79,6 +81,11 @@ void DrawGLScene()
 
 	while (!got_depth || !got_rgb) {
 		pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
+	}
+
+	if (requested_format != current_format) {
+		pthread_mutex_unlock(&gl_backbuf_mutex);
+		return;
 	}
 
 	void *tmp;
@@ -119,7 +126,10 @@ void DrawGLScene()
 	glEnd();
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
+	if (current_format == FREENECT_VIDEO_RGB)
+		glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
+	else
+		glTexImage2D(GL_TEXTURE_2D, 0, 1, 640, 480, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front+640*4);
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
@@ -157,6 +167,12 @@ void keyPressed(unsigned char key, int x, int y)
 	}
 	if (key == 's') {
 		freenect_angle = 0;
+	}
+	if (key == 'f') {
+		if (requested_format == FREENECT_VIDEO_IR_8BIT)
+			requested_format = FREENECT_VIDEO_RGB;
+		else
+			requested_format = FREENECT_VIDEO_IR_8BIT;
 	}
 	if (key == 'x') {
 		freenect_angle--;
@@ -316,14 +332,14 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_video_callback(f_dev, rgb_cb);
-	freenect_set_video_format(f_dev, FREENECT_VIDEO_RGB);
+	freenect_set_video_format(f_dev, current_format);
 	freenect_set_depth_format(f_dev, FREENECT_DEPTH_11BIT);
 	freenect_set_video_buffer(f_dev, rgb_back);
 
 	freenect_start_depth(f_dev);
 	freenect_start_video(f_dev);
 
-	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
+	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format\n");
 
 	while (!die && freenect_process_events(f_ctx) >= 0) {
 		freenect_raw_tilt_state* state;
@@ -333,6 +349,13 @@ void *freenect_threadfunc(void *arg)
 		freenect_get_mks_accel(state, &dx, &dy, &dz);
 		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
 		fflush(stdout);
+
+		if (requested_format != current_format) {
+			freenect_stop_video(f_dev);
+			freenect_set_video_format(f_dev, requested_format);
+			freenect_start_video(f_dev);
+			current_format = requested_format;
+		}
 	}
 
 	printf("\nshutting down streams...\n");
