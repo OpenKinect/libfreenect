@@ -204,19 +204,33 @@ static int stream_setbuf(freenect_context *ctx, packet_stream *strm, void *pbuf)
 }
 
 // Unpack buffer of (vw bit) data into padded 16bit buffer.
-static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw)
+static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw, int len)
 {
 	int mask = (1 << vw) - 1;
-	int j = 640*480;
 	uint32_t buffer = 0;
 	int bitsIn = 0;
-	while (j--) {
+	while (len--) {
 		while (bitsIn < vw) {
 			buffer = (buffer << 8) | *(raw++);
 			bitsIn += 8;
 		}
 		bitsIn -= vw;
 		*(frame++) = (buffer >> bitsIn) & mask;
+	}
+}
+
+// Unpack buffer of (vw bit) data into 8bit buffer, dropping LSBs
+static inline void convert_packed_to_8bit(uint8_t *raw, uint8_t *frame, int vw, int len)
+{
+	uint32_t buffer = 0;
+	int bitsIn = 0;
+	while (len--) {
+		while (bitsIn < vw) {
+			buffer = (buffer << 8) | *(raw++);
+			bitsIn += 8;
+		}
+		bitsIn -= vw;
+		*(frame++) = buffer >> (bitsIn+vw-8);
 	}
 }
 
@@ -240,10 +254,10 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
-			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 11);
+			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 11, FREENECT_FRAME_PIX);
 			break;
 		case FREENECT_DEPTH_10BIT:
-			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 10);
+			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 10, FREENECT_FRAME_PIX);
 			break;
 		case FREENECT_DEPTH_10BIT_PACKED:
 		case FREENECT_DEPTH_11BIT_PACKED:
@@ -435,8 +449,20 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 	FN_SPEW("Got RGB frame %d/%d packets arrived, TS %08x\n", dev->video.valid_pkts,
 	       dev->video.pkts_per_frame, dev->video.timestamp);
 
-	if (dev->video_format == FREENECT_VIDEO_RGB) {
-		convert_bayer_to_rgb(dev->video.raw_buf, dev->video.proc_buf);
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+			convert_bayer_to_rgb(dev->video.raw_buf, dev->video.proc_buf);
+			break;
+		case FREENECT_VIDEO_BAYER:
+			break;
+		case FREENECT_VIDEO_IR_10BIT:
+			convert_packed_to_16bit(dev->video.raw_buf, dev->video.proc_buf, 10, FREENECT_IR_FRAME_PIX);
+			break;
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			break;
+		case FREENECT_VIDEO_IR_8BIT:
+			convert_packed_to_8bit(dev->video.raw_buf, dev->video.proc_buf, 10, FREENECT_IR_FRAME_PIX);
+			break;
 	}
 
 	if (dev->video_cb)
@@ -601,12 +627,29 @@ int freenect_start_video(freenect_device *dev)
 	if (dev->video.running)
 		return -1;
 
-	if (dev->video_format == FREENECT_VIDEO_RGB)
-		stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_BAYER_SIZE, FREENECT_VIDEO_RGB_SIZE);
-	else
-		stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_BAYER_SIZE);
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_BAYER_SIZE, FREENECT_VIDEO_RGB_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME;
+			break;
+		case FREENECT_VIDEO_BAYER:
+			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_BAYER_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME;
+			break;
+		case FREENECT_VIDEO_IR_8BIT:
+			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_IR_8BIT_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			break;
+		case FREENECT_VIDEO_IR_10BIT:
+			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_BAYER_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			break;
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			break;
+	}
 
-	dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME;
 	dev->video.pkt_size = VIDEO_PKTDSIZE;
 	dev->video.synced = 0;
 	dev->video.flag = 0x80;
@@ -620,7 +663,17 @@ int freenect_start_video(freenect_device *dev)
 	write_register(dev, 0x0c, 0x00);
 	write_register(dev, 0x0d, 0x01);
 	write_register(dev, 0x0e, 0x1e); // 30Hz bayer
-	write_register(dev, 0x05, 0x01); // start video stream
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+		case FREENECT_VIDEO_BAYER:
+			write_register(dev, 0x05, 0x01); // start video stream
+			break;
+		case FREENECT_VIDEO_IR_8BIT:
+		case FREENECT_VIDEO_IR_10BIT:
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			write_register(dev, 0x05, 0x03); // start video stream
+			break;
+	}
 	write_register(dev, 0x47, 0x00); // disable Hflip
 
 	dev->video.running = 1;
@@ -690,6 +743,9 @@ int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt)
 	switch (fmt) {
 		case FREENECT_VIDEO_RGB:
 		case FREENECT_VIDEO_BAYER:
+		case FREENECT_VIDEO_IR_8BIT:
+		case FREENECT_VIDEO_IR_10BIT:
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
 			dev->video_format = fmt;
 			return 0;
 		default:
