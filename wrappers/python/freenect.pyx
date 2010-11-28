@@ -58,8 +58,6 @@ cdef extern from "libfreenect.h":
     int freenect_num_devices(void *ctx)
     int freenect_open_device(void *ctx, void **dev, int index)
     int freenect_close_device(void *dev)
-    #void freenect_set_user(void *dev, void *user)
-    #void *freenect_get_user(void *dev)
     void freenect_set_depth_callback(void *dev, freenect_depth_cb cb)
     void freenect_set_rgb_callback(void *dev, freenect_rgb_cb cb)
     int freenect_set_rgb_format(void *dev, int fmt)

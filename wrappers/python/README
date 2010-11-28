@@ -1,14 +1,44 @@
 Brandyn White
 bwhite@dappervision.com
 
+This is the Cython-based libfreenect Python wrappers.  This provides async (e.g., using callbacks) and sync (e.g., simple function calls) interfaces to libfreenect.  The majority of the runloop is abstracted so that later upstream modifications will have minimal impact on your code; however, you are free to implement your own runloop and access all available functionality.
+
+
+Why Cython
+I wrote several iterations of these wrappers in Pure C, Ctypes, and Cython.  Cython is by far the easiest to maintain (as the main lib changes regularly) while maintaining C-like speed.  It does require Cython to install the C code; however, this is available for all supported platforms.  If this becomes a burden we can easily include the generated C code in the repo.  The other dependencies are the same for pure C python extensions.
+
+Install
+- Get cython, python-dev, python-numpy
+- Optional, get opencv (2.1+ with python wrappers), Matplotlib
+- Global Install: sudo python setup.py install
+- Local Directory Install: python setup.py build_ext --inplace
+
+Do you need to run everything with root?
+No.  Use the udev drivers available in the project main directory.
+
+Differences From C Library
+Things that are intentially different to be more Pythonic
+- init/open_device: Different calling style (returns the new value as opposed to using a double pointer)
+- Names: Everything is in the freenect module.  Since all freenect functions are of the form freenect_blah, we use freenect.blah to refer to them.  This is also true for the synchronous calls.
+
+Things not implemented (though could be added)
+- get/set user: Not implemented
+- Dev/Ctx/State: Opaque classes wrapping void *'s (you can't access struct elements)
+- Log functionality and callback
+
+Additional Features
+- get_accel: A helper function that simplifies the accelerometer handling
+- runloop: An abstraction that takes in depth, rgb, and body callbacks.  The body is called in the 'freenect_process_events' loop. Depth and RGB callbacks are given numpy arrays of the returned data.
+- Integration with the c_sync wrapper: Provides sync_get_depth (get the depth without needed a callback) and sync_get_rgb (same for rgb
+- Kill exception to stop the runloop from within the body)
+
 
 Build with (goes in this directory)
 python setup.py build_ext --inplace
 
 To use fakenect, use this to point at it's directory
-sudo LD_PRELOAD="/usr/local/lib/fakenect/libfreenect.so" FAKENECT_PATH="thanksgiving0" python demo_cv_depth_show.py
+LD_PRELOAD="/usr/local/lib/fakenect/libfreenect.so" FAKENECT_PATH="../../build/utils/legos0/" ./demo_cv_sync.py
 
-This provides a synchronous api in cython. It handles the kinect callback events in a background thread.
-See demo_cv_depth_sync_show.py for an example.
-
-sudo LD_LIBRARY_PATH="/usr/local/lib" python demo_cv_depth_sync_show.py
+The synchronous calls are performed using the c_sync wrapper (no threading is done in Python).
+Run this for an example
+./demo_cv_sync.py
