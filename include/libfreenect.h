@@ -37,8 +37,8 @@ typedef uint16_t freenect_depth;
 typedef uint8_t freenect_packed_depth;
 typedef uint8_t freenect_pixel;
 
-#define FREENECT_FRAME_W 1280
-#define FREENECT_FRAME_H 1024
+#define FREENECT_FRAME_W 640
+#define FREENECT_FRAME_H 480
 #define FREENECT_FRAME_PIX (FREENECT_FRAME_H*FREENECT_FRAME_W)
 #define FREENECT_RGB_SIZE (FREENECT_FRAME_PIX*3)
 #define FREENECT_BAYER_SIZE (FREENECT_FRAME_PIX)
