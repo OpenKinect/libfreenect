@@ -239,14 +239,14 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	       dev->depth.valid_pkts, dev->depth.pkts_per_frame, dev->depth.timestamp);
 
 	switch (dev->depth_format) {
-		case FREENECT_FORMAT_11_BIT:
+		case FREENECT_DEPTH_11BIT:
 			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 11);
 			break;
-		case FREENECT_FORMAT_10_BIT:
+		case FREENECT_DEPTH_10BIT:
 			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 10);
 			break;
-		case FREENECT_FORMAT_PACKED_10_BIT:
-		case FREENECT_FORMAT_PACKED_11_BIT:
+		case FREENECT_DEPTH_10BIT_PACKED:
+		case FREENECT_DEPTH_11BIT_PACKED:
 			break;
 	}
 	if (dev->depth_cb)
@@ -435,7 +435,7 @@ static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 	FN_SPEW("Got RGB frame %d/%d packets arrived, TS %08x\n", dev->rgb.valid_pkts,
 	       dev->rgb.pkts_per_frame, dev->rgb.timestamp);
 
-	if (dev->rgb_format == FREENECT_FORMAT_RGB) {
+	if (dev->rgb_format == FREENECT_VIDEO_RGB) {
 		convert_bayer_to_rgb(dev->rgb.raw_buf, dev->rgb.proc_buf);
 	}
 
@@ -547,20 +547,20 @@ int freenect_start_depth(freenect_device *dev)
 		return -1;
 
 	switch (dev->depth_format) {
-		case FREENECT_FORMAT_11_BIT:
-			stream_initbufs(ctx, &dev->depth, FREENECT_PACKED_DEPTH_11_SIZE, FREENECT_DEPTH_SIZE);
+		case FREENECT_DEPTH_11BIT:
+			stream_initbufs(ctx, &dev->depth, FREENECT_DEPTH_11BIT_PACKED_SIZE, FREENECT_DEPTH_11BIT_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_11_BIT_PER_FRAME;
 			break;
-		case FREENECT_FORMAT_10_BIT:
-			stream_initbufs(ctx, &dev->depth, FREENECT_PACKED_DEPTH_10_SIZE, FREENECT_DEPTH_SIZE);
+		case FREENECT_DEPTH_10BIT:
+			stream_initbufs(ctx, &dev->depth, FREENECT_DEPTH_10BIT_PACKED_SIZE, FREENECT_DEPTH_10BIT_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_10_BIT_PER_FRAME;
 			break;
-		case FREENECT_FORMAT_PACKED_11_BIT:
-			stream_initbufs(ctx, &dev->depth, 0, FREENECT_PACKED_DEPTH_11_SIZE);
+		case FREENECT_DEPTH_11BIT_PACKED:
+			stream_initbufs(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_11_BIT_PER_FRAME;
 			break;
-		case FREENECT_FORMAT_PACKED_10_BIT:
-			stream_initbufs(ctx, &dev->depth, 0, FREENECT_PACKED_DEPTH_10_SIZE);
+		case FREENECT_DEPTH_10BIT_PACKED:
+			stream_initbufs(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_10_BIT_PER_FRAME;
 			break;
 	}
@@ -576,12 +576,12 @@ int freenect_start_depth(freenect_device *dev)
 
 	write_register(dev, 0x06, 0x00); // reset depth stream
 	switch (dev->depth_format) {
-		case FREENECT_FORMAT_11_BIT:
-		case FREENECT_FORMAT_PACKED_11_BIT:
+		case FREENECT_DEPTH_11BIT:
+		case FREENECT_DEPTH_11BIT_PACKED:
 			write_register(dev, 0x12, 0x03);
 			break;
-		case FREENECT_FORMAT_10_BIT:
-		case FREENECT_FORMAT_PACKED_10_BIT:
+		case FREENECT_DEPTH_10BIT:
+		case FREENECT_DEPTH_10BIT_PACKED:
 			write_register(dev, 0x12, 0x02);
 			break;
 	}
@@ -601,10 +601,10 @@ int freenect_start_rgb(freenect_device *dev)
 	if (dev->rgb.running)
 		return -1;
 
-	if (dev->rgb_format == FREENECT_FORMAT_RGB)
-		stream_initbufs(ctx, &dev->rgb, FREENECT_BAYER_SIZE, FREENECT_RGB_SIZE);
+	if (dev->rgb_format == FREENECT_VIDEO_RGB)
+		stream_initbufs(ctx, &dev->rgb, FREENECT_VIDEO_BAYER_SIZE, FREENECT_VIDEO_RGB_SIZE);
 	else
-		stream_initbufs(ctx, &dev->rgb, 0, FREENECT_BAYER_SIZE);
+		stream_initbufs(ctx, &dev->rgb, 0, FREENECT_VIDEO_BAYER_SIZE);
 
 	dev->rgb.pkts_per_frame = RGB_PKTS_PER_FRAME;
 	dev->rgb.pkt_size = RGB_PKTDSIZE;
@@ -679,7 +679,7 @@ void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb)
 	dev->rgb_cb = cb;
 }
 
-int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt)
+int freenect_set_rgb_format(freenect_device *dev, freenect_video_format fmt)
 {
 	freenect_context *ctx = dev->parent;
 	if (dev->rgb.running) {
@@ -688,8 +688,8 @@ int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt)
 	}
 
 	switch (fmt) {
-		case FREENECT_FORMAT_RGB:
-		case FREENECT_FORMAT_BAYER:
+		case FREENECT_VIDEO_RGB:
+		case FREENECT_VIDEO_BAYER:
 			dev->rgb_format = fmt;
 			return 0;
 		default:
@@ -706,10 +706,10 @@ int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
 		return -1;
 	}
 	switch (fmt) {
-		case FREENECT_FORMAT_11_BIT:
-		case FREENECT_FORMAT_10_BIT:
-		case FREENECT_FORMAT_PACKED_11_BIT:
-		case FREENECT_FORMAT_PACKED_10_BIT:
+		case FREENECT_DEPTH_11BIT:
+		case FREENECT_DEPTH_10BIT:
+		case FREENECT_DEPTH_11BIT_PACKED:
+		case FREENECT_DEPTH_10BIT_PACKED:
 			dev->depth_format = fmt;
 			return 0;
 		default:

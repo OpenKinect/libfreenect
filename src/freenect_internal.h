@@ -88,8 +88,8 @@ static inline uint32_t fn_le32(uint32_t d)
 #define DEPTH_PKTDSIZE (DEPTH_PKTSIZE-12)
 #define RGB_PKTDSIZE (RGB_PKTSIZE-12)
 
-#define DEPTH_PKTS_10_BIT_PER_FRAME ((FREENECT_PACKED_DEPTH_10_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
-#define DEPTH_PKTS_11_BIT_PER_FRAME ((FREENECT_PACKED_DEPTH_11_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
+#define DEPTH_PKTS_10_BIT_PER_FRAME ((FREENECT_DEPTH_10BIT_PACKED_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
+#define DEPTH_PKTS_11_BIT_PER_FRAME ((FREENECT_DEPTH_11BIT_PACKED_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
 #define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
 
 #define VID_MICROSOFT 0x45e
@@ -128,7 +128,7 @@ struct _freenect_device {
 
 	freenect_depth_cb depth_cb;
 	freenect_rgb_cb rgb_cb;
-	freenect_rgb_format rgb_format;
+	freenect_video_format rgb_format;
 	freenect_depth_format depth_format;
 
 	int cam_inited;

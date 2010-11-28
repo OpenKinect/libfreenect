@@ -308,8 +308,8 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_rgb_callback(f_dev, rgb_cb);
-	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
-	freenect_set_depth_format(f_dev, FREENECT_FORMAT_11_BIT);
+	freenect_set_rgb_format(f_dev, FREENECT_VIDEO_RGB);
+	freenect_set_depth_format(f_dev, FREENECT_DEPTH_11BIT);
 	freenect_set_rgb_buffer(f_dev, rgb_back);
 
 	freenect_start_depth(f_dev);
