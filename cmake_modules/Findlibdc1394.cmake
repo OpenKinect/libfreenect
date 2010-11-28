@@ -1,0 +1,31 @@
+#
+#
+#
+
+
+find_path( LIBDC1394_INCLUDE_DIR
+  NAMES 
+    dc1394/dc1394.h
+  PATHS
+    /usr/include
+    /usr/local/include
+)
+
+find_library( LIBDC1394_LIBRARY
+  NAMES
+    dc1394
+  PATHS
+    /usr/lib
+    /usr/local/lib
+)
+
+set(LIBDC1394_INCLUDE_DIRS ${LIBDC1394_INCLUDE_DIR})
+set(LIBDC1394_LIBRARIES ${LIBDC1394_LIBRARY})
+
+if(LIBDC1394_INCLUDE_DIRS  AND LIBDC1394_LIBRARIES)
+  set(LIBDC1394_FOUND TRUE)
+  message(STATUS "Found libdc1394")
+  message(STATUS " - Includes: ${LIBDC1394_INCLUDE_DIRS}")
+  message(STATUS " - Libraries: ${LIBDC1394_LIBRARIES}")
+endif(LIBDC1394_INCLUDE_DIRS  AND LIBDC1394_LIBRARIES)
+

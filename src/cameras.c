@@ -28,6 +28,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <dc1394/dc1394.h>
 
 #include "freenect_internal.h"
 
@@ -458,60 +459,7 @@ static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 		 * G R G R G R G R
 		 * B G B G B G B G
 		 */
-		for (y=0; y<FREENECT_FRAME_H; y++) {
-			for (x=0; x<FREENECT_FRAME_W; x++) {
-				i = (y*FREENECT_FRAME_W+x);
-				if ((y&1) == 0) {
-					if ((x&1) == 0) {
-						// topleft G pixel
-						uint8_t rr = dev->rgb_raw[i+1];
-						uint8_t rl = x == 0 ? rr : dev->rgb_raw[i-1];
-						uint8_t bb = dev->rgb_raw[i+FREENECT_FRAME_W];
-						uint8_t bt = y == 0 ? bb : dev->rgb_raw[i-FREENECT_FRAME_W];
-						rgb_frame[3*i+0] = (rl+rr)>>1;
-						rgb_frame[3*i+1] = dev->rgb_raw[i];
-						rgb_frame[3*i+2] = (bt+bb)>>1;
-					} else {
-						// R pixel
-						uint8_t gl = dev->rgb_raw[i-1];
-						uint8_t gr = x == (FREENECT_FRAME_W-1) ? gl : dev->rgb_raw[i+1];
-						uint8_t gb = dev->rgb_raw[i+FREENECT_FRAME_W];
-						uint8_t gt = y == 0 ? gb : dev->rgb_raw[i-FREENECT_FRAME_W];
-						uint8_t bbl = dev->rgb_raw[i+FREENECT_FRAME_W-1];
-						uint8_t btl = y == 0 ? bbl : dev->rgb_raw[i-FREENECT_FRAME_W+1];
-						uint8_t bbr = x == (FREENECT_FRAME_W-1) ? bbl : dev->rgb_raw[i+FREENECT_FRAME_W+1];
-						uint8_t btr = x == (FREENECT_FRAME_W-1) ? btl : y == 0 ? bbr : dev->rgb_raw[i-FREENECT_FRAME_W-1];
-						rgb_frame[3*i+0] = dev->rgb_raw[i];
-						rgb_frame[3*i+1] = (gl+gr+gb+gt)>>2;
-						rgb_frame[3*i+2] = (bbl+btl+bbr+btr)>>2;
-					}
-				} else {
-					if ((x&1) == 0) {
-						// B pixel
-						uint8_t gr = dev->rgb_raw[i+1];
-						uint8_t gl = x == 0 ? gr : dev->rgb_raw[i-1];
-						uint8_t gt = dev->rgb_raw[i-FREENECT_FRAME_W];
-						uint8_t gb = y == (FREENECT_FRAME_H-1)  ? gt : dev->rgb_raw[i+FREENECT_FRAME_W];
-						uint8_t rtr = dev->rgb_raw[i-FREENECT_FRAME_W-1];
-						uint8_t rbr = y == (FREENECT_FRAME_H-1)  ? rtr : dev->rgb_raw[i-FREENECT_FRAME_W+1];
-						uint8_t rtl = x == 0 ? rtr : dev->rgb_raw[i-FREENECT_FRAME_W+1];
-						uint8_t rbl = x == 0 ? rbr : y == FREENECT_FRAME_H-1  ? rtl : dev->rgb_raw[i+FREENECT_FRAME_W-1];
-						rgb_frame[3*i+0] = (rbl+rtl+rbr+rtr)>>2;
-						rgb_frame[3*i+1] = (gl+gr+gb+gt)>>2;
-						rgb_frame[3*i+2] = dev->rgb_raw[i];
-					} else {
-						// botright G pixel
-						uint8_t bl = dev->rgb_raw[i-1];
-						uint8_t br = x == (FREENECT_FRAME_W-1) ? bl : dev->rgb_raw[i+1];
-						uint8_t rt = dev->rgb_raw[i-FREENECT_FRAME_W];
-						uint8_t rb = y == (FREENECT_FRAME_H-1)  ? rt : dev->rgb_raw[i+FREENECT_FRAME_W];
-						rgb_frame[3*i+0] = (rt+rb)>>1;
-						rgb_frame[3*i+1] = dev->rgb_raw[i];
-						rgb_frame[3*i+2] = (bl+br)>>1;
-					}
-				}
-			}
-		}
+    dc1394_bayer_decoding_8bit( dev->rgb_raw, rgb_frame, FREENECT_FRAME_W, FREENECT_FRAME_H, DC1394_COLOR_FILTER_GRBG, DC1394_BAYER_METHOD_BILINEAR );
 	}
 
 	if (dev->rgb_cb)
@@ -694,7 +642,7 @@ int freenect_start_rgb(freenect_device *dev)
 	write_register(dev, 0x05, 0x00); // reset rgb stream
 	write_register(dev, 0x0c, 0x00); // bayer image format
 	write_register(dev, 0x0d, 0x01); // set resolution 1=640x480 2=1280x1024 3=1600x1200
-	write_register(dev, 0x0e, 10); // 30Hz bayer
+	write_register(dev, 0x0e, 30); // 30Hz bayer
 	write_register(dev, 0x05, 0x01); // start rgb stream
 	write_register(dev, 0x47, 0x00); // disable Hflip
 
