@@ -33,9 +33,6 @@
 extern "C" {
 #endif
 
-typedef uint16_t freenect_depth;
-typedef uint8_t freenect_packed_depth;
-
 #define FREENECT_FRAME_W 640
 #define FREENECT_FRAME_H 480
 #define FREENECT_FRAME_PIX (FREENECT_FRAME_H*FREENECT_FRAME_W)
@@ -43,7 +40,7 @@ typedef uint8_t freenect_packed_depth;
 #define FREENECT_VIDEO_RGB_SIZE (FREENECT_FRAME_PIX*3)
 #define FREENECT_VIDEO_BAYER_SIZE (FREENECT_FRAME_PIX)
 
-#define FREENECT_DEPTH_11BIT_SIZE (FREENECT_FRAME_PIX*sizeof(freenect_depth))
+#define FREENECT_DEPTH_11BIT_SIZE (FREENECT_FRAME_PIX*sizeof(uint16_t))
 #define FREENECT_DEPTH_10BIT_SIZE FREENECT_DEPTH_11BIT_SIZE
 #define FREENECT_DEPTH_11BIT_PACKED_SIZE 422400
 #define FREENECT_DEPTH_10BIT_PACKED_SIZE 384000
