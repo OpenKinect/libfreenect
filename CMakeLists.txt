@@ -74,6 +74,7 @@ include (SetupDirectories)
 
 # Find packages needed to build library
 find_package(libusb-1.0 REQUIRED)
+find_package(libdc1394 REQUIRED)
 
 ######################################################################################
 # CMake 
@@ -87,7 +88,7 @@ SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 # libfreenect.h includes libusb.h, so everyone needs this too
-include_directories(${LIBUSB_1_INCLUDE_DIRS})
+include_directories(${LIBUSB_1_INCLUDE_DIRS} ${LIBDC1394_INCLUDE_DIRS})
 
 # Add library project
 add_subdirectory (src)
@@ -130,6 +131,7 @@ IF ( BUILD_CPACK )
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
   set(CPACK_PACKAGE_NAME "libfreenect-dev")
   set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0.0-dev")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "libdc1394-22-dev")
 
   set(CPACK_PACKAGE_CONTACT "OpenKinect <openkinect@googlegroups.com>")
   #set(CPACK_PACKAGE_VENDOR "")
