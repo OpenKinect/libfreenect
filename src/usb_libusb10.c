@@ -76,7 +76,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 	dev->usb_motor.dev = NULL;
 
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
-	ssize_t cnt = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
+	ssize_t cnt = libusb_get_device_list(dev->parent->usb.ctx, &devs);  //get the list of devices
 	if (cnt < 0)
 		return -1;
 
@@ -85,7 +85,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 	struct libusb_device_descriptor desc;
 
 	for (i = 0; i < cnt; i++) {
-		int r = libusb_get_device_descriptor (devs[i], &desc);
+		int r = libusb_get_device_descriptor(devs[i], &desc);
 		if (r < 0)
 			continue;
 
@@ -96,13 +96,13 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 		if (!dev->usb_cam.dev && desc.idProduct == PID_NUI_CAMERA) {
 			// If the index given by the user matches our camera index
 			if (nr_cam == index) {
-				res = libusb_open (devs[i], &dev->usb_cam.dev);
+				res = libusb_open(devs[i], &dev->usb_cam.dev);
 				if (res < 0 || !dev->usb_cam.dev) {
 					FN_ERROR("Could not open camera: %d\n", res);
 					dev->usb_cam.dev = NULL;
 					break;
 				}
-				res = libusb_claim_interface (dev->usb_cam.dev, 0);
+				res = libusb_claim_interface(dev->usb_cam.dev, 0);
 				if (res < 0) {
 					FN_ERROR("Could not claim interface on camera: %d\n", res);
 					libusb_close(dev->usb_cam.dev);
@@ -118,13 +118,13 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 		if (!dev->usb_motor.dev && desc.idProduct == PID_NUI_MOTOR) {
 			// If the index given by the user matches our camera index
 			if (nr_mot == index) {
-				res = libusb_open (devs[i], &dev->usb_motor.dev);
+				res = libusb_open(devs[i], &dev->usb_motor.dev);
 				if (res < 0 || !dev->usb_motor.dev) {
 					FN_ERROR("Could not open motor: %d\n", res);
 					dev->usb_motor.dev = NULL;
 					break;
 				}
-				res = libusb_claim_interface (dev->usb_motor.dev, 0);
+				res = libusb_claim_interface(dev->usb_motor.dev, 0);
 				if (res < 0) {
 					FN_ERROR("Could not claim interface on motor: %d\n", res);
 					libusb_close(dev->usb_motor.dev);
@@ -137,7 +137,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 		}
 	}
 
-	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
+	libusb_free_device_list(devs, 1);   // free the list, unref the devices in it
 
 	if (dev->usb_cam.dev && dev->usb_motor.dev) {
 		return 0;
@@ -181,7 +181,7 @@ static void iso_callback(struct libusb_transfer *xfer)
 		return;
 	}
 
-	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
+	if (xfer->status == LIBUSB_TRANSFER_COMPLETED) {
 		uint8_t *buf = (void*)xfer->buffer;
 		for (i=0; i<strm->pkts; i++) {
 			strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
