@@ -108,10 +108,14 @@ void DrawGLScene()
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
-	glTexCoord2f(0, 0); glVertex3f(0,0,0);
-	glTexCoord2f(1, 0); glVertex3f(640,0,0);
-	glTexCoord2f(1, 1); glVertex3f(640,480,0);
-	glTexCoord2f(0, 1); glVertex3f(0,480,0);
+	glTexCoord2f(0, 0);
+	glVertex3f(0,0,0);
+	glTexCoord2f(1, 0);
+	glVertex3f(640,0,0);
+	glTexCoord2f(1, 1);
+	glVertex3f(640,480,0);
+	glTexCoord2f(0, 1);
+	glVertex3f(0,480,0);
 	glEnd();
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
@@ -119,10 +123,14 @@ void DrawGLScene()
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
-	glTexCoord2f(0, 0); glVertex3f(640,0,0);
-	glTexCoord2f(1, 0); glVertex3f(1280,0,0);
-	glTexCoord2f(1, 1); glVertex3f(1280,480,0);
-	glTexCoord2f(0, 1); glVertex3f(640,480,0);
+	glTexCoord2f(0, 0);
+	glVertex3f(640,0,0);
+	glTexCoord2f(1, 0);
+	glVertex3f(1280,0,0);
+	glTexCoord2f(1, 1);
+	glVertex3f(1280,480,0);
+	glTexCoord2f(0, 1);
+	glVertex3f(640,480,0);
 	glEnd();
 
 	glutSwapBuffers();
@@ -185,7 +193,7 @@ void ReSizeGLScene(int Width, int Height)
 	glViewport(0,0,Width,Height);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho (0, 1280, 480, 0, -1.0f, 1.0f);
+	glOrtho(0, 1280, 480, 0, -1.0f, 1.0f);
 	glMatrixMode(GL_MODELVIEW);
 }
 
@@ -196,7 +204,7 @@ void InitGL(int Width, int Height)
 	glDepthFunc(GL_LESS);
 	glDisable(GL_DEPTH_TEST);
 	glEnable(GL_BLEND);
-	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glShadeModel(GL_SMOOTH);
 	glGenTextures(1, &gl_depth_tex);
 	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
@@ -317,8 +325,7 @@ void *freenect_threadfunc(void *arg)
 
 	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
 
-	while(!die && freenect_process_events(f_ctx) >= 0 )
-	{
+	while (!die && freenect_process_events(f_ctx) >= 0) {
 		freenect_raw_device_state* state;
 		freenect_update_device_state(f_dev);
 		state = freenect_get_device_state(f_dev);
@@ -369,8 +376,8 @@ int main(int argc, char **argv)
 
 	freenect_set_log_level(f_ctx, FREENECT_LOG_DEBUG);
 
-	int nr_devices = freenect_num_devices (f_ctx);
-	printf ("Number of devices found: %d\n", nr_devices);
+	int nr_devices = freenect_num_devices(f_ctx);
+	printf("Number of devices found: %d\n", nr_devices);
 
 	int user_device_number = 0;
 	if (argc > 1)
