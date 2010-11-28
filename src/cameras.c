@@ -45,117 +45,191 @@ extern const int num_inits;
 
 static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *pkt, int len)
 {
-	if (len < 12)
+	if (len < 2)
 		return 0;
 
-	struct pkt_hdr *hdr = (void*)pkt;
-	uint8_t *data = pkt + sizeof(*hdr);
-	int datalen = len - sizeof(*hdr);
+  uint8_t* end = pkt + len; //mark the end
+  int got_frame = 0;
+
+  while( pkt < end )
+  {
+    switch(strm->state)
+    {
+      case 0: //looking for magic
+        {
+          if (pkt[1] == 'B' && pkt[0] == 'R')  //Found a match
+          {
+            strm->state = 1; //next state
+            //fprintf(stderr,"got magic\n");
+          }
+          else
+          {
+            pkt++;
+            //pkt++;
+          }
+        }
+        break;
+
+      case 1: //Got a magic match
+        {
+          // Pull out the header info, hope that is complete
+
+          struct pkt_hdr *hdr = (void*)pkt;
+          //uint8_t *data = pkt + sizeof(*hdr);
+          //int datalen = len - sizeof(*hdr);
 
 
-	if (hdr->magic[0] != 'R' || hdr->magic[1] != 'B') {
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
-		       "[Stream %02x] Invalid magic %02x%02x\n", strm->flag, hdr->magic[0], hdr->magic[1]);
-		return 0;
-	}
+          if (hdr->magic[0] != 'R' || hdr->magic[1] != 'B') {
+            FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
+                   "Invalid magic %02x%02x\n", hdr->magic[0], hdr->magic[1]);
+            //return 0;
+            continue;
+          }
 
-  hdr->flag = hdr->flag >> 8 | hdr->flag << 8;
-  hdr->seq = hdr->seq >> 8 | hdr->seq << 8;
-  hdr->size = hdr->size >> 8 | hdr->size << 8;
-	//fprintf(stderr, "header: type=%x seq=%x size=%x time=%x length=%x\n", hdr->flag, hdr->seq, hdr->size, hdr->timestamp, datalen);
+          hdr->flag = hdr->flag >> 8 | hdr->flag << 8;
+          hdr->seq = hdr->seq >> 8 | hdr->seq << 8;
+          hdr->size = hdr->size >> 8 | hdr->size << 8;
+          strm->flag = hdr->flag;
+          //fprintf(stderr, "header: flag=%x seq=%x size=%x time=%x \n", hdr->flag, hdr->seq, hdr->size, hdr->timestamp);
+          if((hdr->flag & 0xF) == 0x1)
+          {
+            //fprintf(stderr,"==> START <==\n");
+            strm->buf_ptr = strm->buf;  //reset to beginning
+          }
 
-	FN_FLOOD("[Stream %02x] Packet with flag: %02x\n", strm->flag, hdr->flag);
+          //FN_FLOOD("Packet with flag: %02x\n", hdr->flag);
 
-	uint8_t sof = strm->flag|1;
-	uint8_t mof = strm->flag|2;
-	uint8_t eof = strm->flag|5;
+          strm->bytes_left = hdr->size - sizeof(struct pkt_hdr); // count down until we get all the bytes
+          strm->state = 2;
+#if 0
+          uint8_t sof = strm->flag|1;
+          uint8_t mof = strm->flag|2;
+          uint8_t eof = strm->flag|5;
 
 
-	// sync if required, dropping packets until SOF
-	if (!strm->synced) {
-		if (hdr->flag != sof) {
-			FN_SPEW("[Stream %02x] Not synced yet...\n", strm->flag);
-			return 0;
-		}
-		strm->synced = 1;
-		strm->seq = hdr->seq;
-		strm->pkt_num = 0;
-		strm->valid_pkts = 0;
-		strm->got_pkts = 0;
-	}
+          // sync if required, dropping packets until SOF
+          if (!strm->synced) {
+            if (hdr->flag != sof) {
+              FN_SPEW("[Stream %02x] Not synced yet...\n", strm->flag);
+              //return 0;
+              continue;
+            }
+            strm->synced = 1;
+            strm->seq = hdr->seq;
+            strm->pkt_num = 0;
+            strm->valid_pkts = 0;
+            strm->got_pkts = 0;
+          }
 
-	int got_frame = 0;
 
-	// handle lost packets
-	if (strm->seq != hdr->seq) {
-		uint8_t lost = hdr->seq - strm->seq;
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_INFO, \
-		       "[Stream %02x] Lost %d packets\n", strm->flag, lost);
-		if (lost > 5) {
-			FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
-			       "[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
-			strm->synced = 0;
-			return 0;
-		}
-		strm->seq = hdr->seq;
-		int left = strm->pkts_per_frame - strm->pkt_num;
-		if (left <= lost) {
-			strm->pkt_num = lost - left;
-			strm->valid_pkts = strm->got_pkts;
-			strm->got_pkts = 0;
-			got_frame = 1;
-			strm->timestamp = strm->last_timestamp;
-			strm->valid_frames++;
-		} else {
-			strm->pkt_num += lost;
-		}
-	}
+          // handle lost packets
+          if (strm->seq != hdr->seq) {
+            uint8_t lost = hdr->seq - strm->seq;
+            FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_INFO, \
+                   "[Stream %02x] Lost %d packets\n", strm->flag, lost);
+            if (lost > 5) {
+              FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
+                     "[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
+              strm->synced = 0;
+              //return 0;
+              continue;
+            }
+            strm->seq = hdr->seq;
+            int left = strm->pkts_per_frame - strm->pkt_num;
+            if (left <= lost) {
+              strm->pkt_num = lost - left;
+              strm->valid_pkts = strm->got_pkts;
+              strm->got_pkts = 0;
+              got_frame = 1;
+              strm->timestamp = strm->last_timestamp;
+              strm->valid_frames++;
+            } else {
+              strm->pkt_num += lost;
+            }
+          }
 
-	// check the header to make sure it's what we expect
-	if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
-	    !(strm->pkt_num == strm->pkts_per_frame-1 && hdr->flag == eof) &&
-	    !(strm->pkt_num > 0 && strm->pkt_num < strm->pkts_per_frame-1 && hdr->flag == mof)) {
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
-		       "[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
-		       strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
-		strm->synced = 0;
-		return got_frame;
-	}
+          // check the header to make sure it's what we expect
+          if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
+              !(strm->pkt_num == strm->pkts_per_frame-1 && hdr->flag == eof) &&
+              !(strm->pkt_num > 0 && strm->pkt_num < strm->pkts_per_frame-1 && hdr->flag == mof)) {
+            FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
+                   "[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
+                   strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
+            strm->synced = 0;
+            //return got_frame;
+            continue;
+          }
 
-	// copy data
-	if (datalen > strm->pkt_size) {
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
-		       "[Stream %02x] Expected %d data bytes, but got %d. Dropping...\n", strm->flag, strm->pkt_size, datalen);
-		return got_frame;
-	}
+          // copy data
+          if (datalen > strm->pkt_size) {
+            FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
+                   "[Stream %02x] Expected %d data bytes, but got %d. Dropping...\n", strm->flag, strm->pkt_size, datalen);
+            //return got_frame;
+            continue;
+          }
 
-	if (hdr->size - sizeof(struct pkt_hdr) != datalen)
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
-		       "[Stream %02x] Expected %d data bytes, but header reports only %d\n", strm->flag, datalen, hdr->size);
+          if (hdr->size - sizeof(struct pkt_hdr) != datalen)
+            FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
+                   "[Stream %02x] Expected %d data bytes, but header reports only %d\n", strm->flag, datalen, hdr->size);
 
-	if (datalen != strm->pkt_size && hdr->flag != eof)
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
-		       "[Stream %02x] Expected %d data bytes, but got only %d\n", strm->flag, strm->pkt_size, datalen);
+          if (datalen != strm->pkt_size && hdr->flag != eof)
+            FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
+                   "[Stream %02x] Expected %d data bytes, but got only %d\n", strm->flag, strm->pkt_size, datalen);
 
-	uint8_t *dbuf = strm->raw_buf + strm->pkt_num * strm->pkt_size;
-	memcpy(dbuf, data, datalen);
+          uint8_t *dbuf = strm->buf + strm->pkt_num * strm->pkt_size;
+          memcpy(dbuf, data, datalen);
 
-	strm->pkt_num++;
-	strm->seq++;
-	strm->got_pkts++;
+          strm->pkt_num++;
+          strm->seq++;
+          strm->got_pkts++;
 
-	strm->last_timestamp = hdr->timestamp;
+          strm->last_timestamp = hdr->timestamp;
 
-	if (strm->pkt_num == strm->pkts_per_frame) {
-		strm->pkt_num = 0;
-		strm->valid_pkts = strm->got_pkts;
-		strm->got_pkts = 0;
-		strm->timestamp = hdr->timestamp;
-		strm->valid_frames++;
-		return 1;
-	} else {
-		return got_frame;
-	}
+          if (strm->pkt_num == strm->pkts_per_frame) {
+            strm->pkt_num = 0;
+            strm->valid_pkts = strm->got_pkts;
+            strm->got_pkts = 0;
+            strm->timestamp = hdr->timestamp;
+            strm->valid_frames++;
+            //return 1;
+            continue;
+          } else {
+            //return got_frame;
+            continue;
+          }
+#endif
+          pkt += sizeof(struct pkt_hdr);
+        }
+        break;
+
+      case 2: // get the data
+        {
+          uint8_t *data = pkt;
+
+          size_t bytes_to_copy = ((end-data) < strm->bytes_left ? (end-data):strm->bytes_left);
+          //uint8_t *dbuf = strm->buf + (FRAME_PIX - strm->bytes_left);
+          uint8_t *dbuf = strm->buf_ptr;
+          memcpy(dbuf, data, bytes_to_copy);
+          strm->bytes_left -= bytes_to_copy;
+          strm->buf_ptr += bytes_to_copy;
+          //fprintf(stderr,"Copy %d bytes with bytes_left=%d\n", bytes_to_copy, strm->bytes_left);
+          pkt += bytes_to_copy;
+
+          if(strm->bytes_left == 0)
+          {
+            strm->state = 0;
+            if(((strm->flag & 0x0F) == 0x05))  //marks end
+            {
+              fprintf(stderr,"==> END <==\n");
+              got_frame = 1;
+            }
+          }
+        }
+        break;
+    }
+  }
+
+  return got_frame;
 }
 
 static void stream_initbufs(freenect_context *ctx, packet_stream *strm, int rlen, int plen)
@@ -244,8 +318,8 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (!got_frame)
 		return;
 
-	FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
-	       dev->depth.valid_pkts, dev->depth.pkts_per_frame, dev->depth.timestamp);
+	//FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
+	       //dev->depth_stream.valid_pkts, dev->depth_stream.pkts_per_frame, dev->depth_stream.timestamp);
 
 	switch (dev->depth_format) {
 		case FREENECT_FORMAT_11_BIT:
@@ -592,6 +666,8 @@ int freenect_start_depth(freenect_device *dev)
 	dev->depth.synced = 0;
 	dev->depth.flag = 0x70;
 	dev->depth.valid_frames = 0;
+	dev->depth_stream.buf = dev->depth_raw;
+  dev->depth_stream.state = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->depth_isoc, depth_process, 0x82, NUM_XFERS, PKTS_PER_XFER, DEPTH_PKTBUF);
 	if (res < 0)
@@ -634,6 +710,8 @@ int freenect_start_rgb(freenect_device *dev)
 	dev->rgb.synced = 0;
 	dev->rgb.flag = 0x80;
 	dev->rgb.valid_frames = 0;
+	dev->rgb_stream.buf = dev->rgb_raw;
+  dev->rgb_stream.state = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->rgb_isoc, rgb_process, 0x81, NUM_XFERS, PKTS_PER_XFER, RGB_PKTBUF);
 	if (res < 0)
