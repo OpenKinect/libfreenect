@@ -209,7 +209,7 @@ static void iso_callback(struct libusb_transfer *xfer)
 		//uint8_t *buf = (void*)xfer->buffer;
 		//for (i=0; i<strm->pkts; i++) {
 		for (i=0; i<xfer->num_iso_packets; i++) {
-      if(xfer->iso_packet_desc[i].status == LIBUSB_TRANSFER_COMPLETED)
+      if((xfer->iso_packet_desc[i].status == LIBUSB_TRANSFER_COMPLETED) && (xfer->iso_packet_desc[i].actual_length != 0))
       {
         uint8_t *buf = libusb_get_iso_packet_buffer_simple(xfer, i);
         strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
@@ -236,7 +236,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
   uint32_t allowed_max = (transactions + 1) * packet_size;
   uint32_t bufferSize = 32 * allowed_max;
   int num_xfers =  bufferSize / allowed_max;
-  fprintf(stderr, "max_packet_size=%d transactions=%d packet_size=%d allowed_max=%d num_xfers=%d bufferSize=%d\n", max_packet_size, transactions, packet_size, allowed_max, num_xfers, bufferSize );
+  //fprintf(stderr, "max_packet_size=%d transactions=%d packet_size=%d allowed_max=%d num_xfers=%d bufferSize=%d\n", max_packet_size, transactions, packet_size, allowed_max, num_xfers, bufferSize );
 
 
 	strm->parent = dev;

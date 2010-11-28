@@ -65,7 +65,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
           else
           {
             pkt++;
-            //pkt++;
+            pkt++;
           }
         }
         break;
@@ -220,7 +220,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
             strm->state = 0;
             if(((strm->flag & 0x0F) == 0x05))  //marks end
             {
-              fprintf(stderr,"==> END <==\n");
+              //fprintf(stderr,"==> END <==\n");
               got_frame = 1;
             }
           }
@@ -318,8 +318,8 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (!got_frame)
 		return;
 
-	//FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
-	       //dev->depth_stream.valid_pkts, dev->depth_stream.pkts_per_frame, dev->depth_stream.timestamp);
+	FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
+	       dev->depth_stream.valid_pkts, dev->depth_stream.pkts_per_frame, dev->depth_stream.timestamp);
 
 	switch (dev->depth_format) {
 		case FREENECT_FORMAT_11_BIT:
@@ -666,7 +666,7 @@ int freenect_start_depth(freenect_device *dev)
 	dev->depth.synced = 0;
 	dev->depth.flag = 0x70;
 	dev->depth.valid_frames = 0;
-	dev->depth_stream.buf = dev->depth_raw;
+  dev->depth_stream.buf_ptr = dev->depth_stream.buf = dev->depth_raw;
   dev->depth_stream.state = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->depth_isoc, depth_process, 0x82, NUM_XFERS, PKTS_PER_XFER, DEPTH_PKTBUF);
@@ -710,7 +710,7 @@ int freenect_start_rgb(freenect_device *dev)
 	dev->rgb.synced = 0;
 	dev->rgb.flag = 0x80;
 	dev->rgb.valid_frames = 0;
-	dev->rgb_stream.buf = dev->rgb_raw;
+	dev->rgb_stream.buf_ptr = dev->rgb_stream.buf = dev->rgb_raw;
   dev->rgb_stream.state = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->rgb_isoc, rgb_process, 0x81, NUM_XFERS, PKTS_PER_XFER, RGB_PKTBUF);
