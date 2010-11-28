@@ -109,12 +109,12 @@ void snapshot_accel(freenect_device *dev) {
 
 
 void depth_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
-    dump('d', timestamp, depth, FREENECT_DEPTH_SIZE);
+    dump('d', timestamp, depth, FREENECT_DEPTH_11BIT_SIZE);
 }
 
 
 void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp) {
-    dump('r', timestamp, rgb, FREENECT_RGB_SIZE);
+    dump('r', timestamp, rgb, FREENECT_VIDEO_RGB_SIZE);
 }
 
 void init() {
@@ -129,9 +129,9 @@ void init() {
 	printf("Error: Cannot get device\n");
 	return;
     }
-    freenect_set_depth_format(dev, 0);
+    freenect_set_depth_format(dev, FREENECT_DEPTH_11BIT);
     freenect_start_depth(dev);
-    freenect_set_rgb_format(dev, FREENECT_FORMAT_RGB);
+    freenect_set_rgb_format(dev, FREENECT_VIDEO_RGB);
     freenect_start_rgb(dev);
     freenect_set_depth_callback(dev, depth_cb);
     freenect_set_rgb_callback(dev, rgb_cb);

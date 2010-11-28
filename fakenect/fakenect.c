@@ -266,7 +266,7 @@ void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level) {}
 void freenect_set_user(freenect_device *dev, void *user) {}
 int freenect_shutdown(freenect_context *ctx) {return 0;}
 int freenect_close_device(freenect_device *dev) {return 0;}
-int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt) {return 0;}
+int freenect_set_rgb_format(freenect_device *dev, freenect_video_format fmt) {return 0;}
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt) {return 0;}
 int freenect_start_depth(freenect_device *dev) {return 0;}
 int freenect_start_rgb(freenect_device *dev) {return 0;}

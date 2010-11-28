@@ -40,17 +40,21 @@ typedef uint8_t freenect_pixel;
 #define FREENECT_FRAME_W 640
 #define FREENECT_FRAME_H 480
 #define FREENECT_FRAME_PIX (FREENECT_FRAME_H*FREENECT_FRAME_W)
-#define FREENECT_RGB_SIZE (FREENECT_FRAME_PIX*3)
-#define FREENECT_BAYER_SIZE (FREENECT_FRAME_PIX)
-#define FREENECT_DEPTH_SIZE (FREENECT_FRAME_PIX*sizeof(freenect_depth))
-#define FREENECT_PACKED_DEPTH_10_SIZE 384000
-#define FREENECT_PACKED_DEPTH_11_SIZE 422400
+
+#define FREENECT_VIDEO_RGB_SIZE (FREENECT_FRAME_PIX*3)
+#define FREENECT_VIDEO_BAYER_SIZE (FREENECT_FRAME_PIX)
+
+#define FREENECT_DEPTH_11BIT_SIZE (FREENECT_FRAME_PIX*sizeof(freenect_depth))
+#define FREENECT_DEPTH_10BIT_SIZE FREENECT_DEPTH_11BIT_SIZE
+#define FREENECT_DEPTH_11BIT_PACKED_SIZE 422400
+#define FREENECT_DEPTH_10BIT_PACKED_SIZE 384000
+
 #define FREENECT_COUNTS_PER_G 819
 
 typedef enum {
-	FREENECT_FORMAT_RGB = 0,
-	FREENECT_FORMAT_BAYER = 1,
-} freenect_rgb_format;
+	FREENECT_VIDEO_RGB = 0,
+	FREENECT_VIDEO_BAYER = 1,
+} freenect_video_format;
 
 typedef enum {
 	LED_OFF    = 0,
@@ -63,10 +67,10 @@ typedef enum {
 } freenect_led_options;
 
 typedef enum {
-	FREENECT_FORMAT_11_BIT = 0,
-	FREENECT_FORMAT_10_BIT = 1,
-	FREENECT_FORMAT_PACKED_11_BIT = 2,
-	FREENECT_FORMAT_PACKED_10_BIT = 3,
+	FREENECT_DEPTH_11BIT = 0,
+	FREENECT_DEPTH_10BIT = 1,
+	FREENECT_DEPTH_11BIT_PACKED = 2,
+	FREENECT_DEPTH_10BIT_PACKED = 3,
 } freenect_depth_format;
 
 typedef enum {
@@ -129,7 +133,7 @@ void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);
 void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb);
 
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt);
-int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt);
+int freenect_set_rgb_format(freenect_device *dev, freenect_video_format fmt);
 
 int freenect_set_depth_buffer(freenect_device *dev, void *buf);
 int freenect_set_rgb_buffer(freenect_device *dev, freenect_pixel *buf);

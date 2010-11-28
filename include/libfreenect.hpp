@@ -62,8 +62,8 @@ namespace Freenect {
 		FreenectDevice(freenect_context *_ctx, int _index) {
 			if(freenect_open_device(_ctx, &m_dev, _index) != 0) throw std::runtime_error("Cannot open Kinect");
 			freenect_set_user(m_dev, this);
-			freenect_set_rgb_format(m_dev, FREENECT_FORMAT_RGB);
-			freenect_set_depth_format(m_dev, FREENECT_FORMAT_11_BIT);
+			freenect_set_rgb_format(m_dev, FREENECT_VIDEO_RGB);
+			freenect_set_depth_format(m_dev, FREENECT_DEPTH_11BIT);
 			freenect_set_depth_callback(m_dev, freenect_depth_callback);
 			freenect_set_rgb_callback(m_dev, freenect_rgb_callback);
 		}
