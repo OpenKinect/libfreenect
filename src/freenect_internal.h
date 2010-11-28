@@ -101,6 +101,10 @@ typedef struct {
 	void *usr_buf;
 	uint8_t *raw_buf;
 	void *proc_buf;
+	uint8_t *buf;
+  uint8_t *buf_ptr; //current location in buffer
+  int state;  //need a statemachine to decode data coming in
+	uint32_t bytes_left;  //how many bytes are we waiting for
 } packet_stream;
 
 struct _freenect_device {
