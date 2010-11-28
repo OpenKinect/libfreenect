@@ -109,6 +109,29 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 					dev->usb_cam.dev = NULL;
 					break;
 				}
+
+        struct libusb_config_descriptor* config;
+        if( libusb_get_active_config_descriptor( devs[i], &config) == 0)
+        {
+          fprintf(stderr, "Got config\n  Number of Interfaces=%d\n", config->bNumInterfaces);
+          uint16_t packetSize = config->interface[0].altsetting[0].endpoint[0].wMaxPacketSize;
+          uint16_t transactions = packetSize >> 11;
+          uint16_t size = packetSize & 0x7ff;
+          packetSize = (transactions +1) * size;
+          
+          fprintf(stderr, "  numberOfTransactions=%d PacketSize=%d MaxPacketSize=%d\n", transactions, size, packetSize );
+
+          int xx;
+          for( xx = 0; xx < config->interface[0].altsetting[0].bNumEndpoints; ++xx)
+          {
+            int endpoint = config->interface[0].altsetting[0].endpoint[xx].bEndpointAddress;
+            enum libusb_transfer_type transfer_type = config->interface[0].altsetting[0].endpoint[xx].bmAttributes;
+            fprintf(stderr, "  endpoint=%x transfer_type=%d\n", endpoint, transfer_type);
+          }
+
+          libusb_free_config_descriptor(config);
+        }
+
 			} else {
 				nr_cam++;
 			}
@@ -181,13 +204,20 @@ static void iso_callback(struct libusb_transfer *xfer)
 		return;
 	}
 
+  for (i=0; i<xfer->num_iso_packets; i++) 
+    libusb_submit_transfer(xfer);
+
 	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		uint8_t *buf = (void*)xfer->buffer;
-		for (i=0; i<strm->pkts; i++) {
-			strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
-			buf += strm->len;
+		//uint8_t *buf = (void*)xfer->buffer;
+		//for (i=0; i<strm->pkts; i++) {
+		for (i=0; i<xfer->num_iso_packets; i++) {
+      if( xfer->iso_packet_desc[i].status == LIBUSB_TRANSFER_COMPLETED && xfer->iso_packet_desc[i].actual_length != 0)
+      {
+        uint8_t *buf = libusb_get_iso_packet_buffer_simple(xfer, i);
+        strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
+			//buf += strm->len;
+      }
 		}
-		libusb_submit_transfer(xfer);
 	} else {
 		freenect_context *ctx = strm->parent->parent->parent;
 		FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
@@ -198,27 +228,37 @@ static void iso_callback(struct libusb_transfer *xfer)
 int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, int ep, int xfers, int pkts, int len)
 {
 	freenect_context *ctx = dev->parent->parent;
-	int ret, i;
+	int ret, i, xx;
+
+  uint32_t max_packet_size = libusb_get_max_packet_size(libusb_get_device(dev->dev), 0x81);
+
+  uint32_t transactions = max_packet_size >> 11;
+  uint32_t packet_size = max_packet_size & 0x7ff;
+  uint32_t allowed_max = (transactions + 1) * packet_size;
+  uint32_t bufferSize = 32 * allowed_max;
+  int num_xfers =  bufferSize / allowed_max;
+  fprintf(stderr, "max_packet_size=%d transactions=%d packet_size=%d allowed_max=%d num_xfers=%d bufferSize=%d\n", max_packet_size, transactions, packet_size, allowed_max, num_xfers, bufferSize );
+
 
 	strm->parent = dev;
 	strm->cb = cb;
 	strm->num_xfers = xfers;
-	strm->pkts = pkts;
-	strm->len = len;
-	strm->buffer = malloc(xfers * pkts * len);
-	strm->xfers = malloc(sizeof(struct libusb_transfer*) * xfers);
+	strm->pkts = num_xfers;
+	strm->len = bufferSize;
+	//strm->buffer = malloc(bufferSize);
+	strm->xfers = malloc(sizeof(struct libusb_transfer*) * num_xfers);
 	strm->dead = 0;
 	strm->dead_xfers = 0;
 
-	uint8_t *bufp = strm->buffer;
 
 	for (i=0; i<xfers; i++) {
 		FN_SPEW("Creating EP %02x transfer #%d\n", ep, i);
-		strm->xfers[i] = libusb_alloc_transfer(pkts);
+		strm->xfers[i] = libusb_alloc_transfer(num_xfers);
 
-		libusb_fill_iso_transfer(strm->xfers[i], dev->dev, ep, bufp, pkts * len, pkts, iso_callback, strm, 0);
+    uint8_t *bufp = (uint8_t*)malloc(bufferSize);
+		libusb_fill_iso_transfer(strm->xfers[i], dev->dev, ep, bufp, bufferSize, num_xfers, iso_callback, strm, 0);
 
-		libusb_set_iso_packet_lengths(strm->xfers[i], len);
+		libusb_set_iso_packet_lengths(strm->xfers[i], allowed_max);
 
 		ret = libusb_submit_transfer(strm->xfers[i]);
 		if (ret < 0)
