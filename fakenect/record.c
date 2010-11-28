@@ -113,7 +113,7 @@ void depth_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
 }
 
 
-void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp) {
+void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
     dump('r', timestamp, rgb, FREENECT_VIDEO_RGB_SIZE);
 }
 
@@ -131,14 +131,14 @@ void init() {
     }
     freenect_set_depth_format(dev, FREENECT_DEPTH_11BIT);
     freenect_start_depth(dev);
-    freenect_set_rgb_format(dev, FREENECT_VIDEO_RGB);
-    freenect_start_rgb(dev);
+    freenect_set_video_format(dev, FREENECT_VIDEO_RGB);
+    freenect_start_video(dev);
     freenect_set_depth_callback(dev, depth_cb);
-    freenect_set_rgb_callback(dev, rgb_cb);
+    freenect_set_video_callback(dev, rgb_cb);
     while(running && freenect_process_events(ctx) >= 0)
 	snapshot_accel(dev);
     freenect_stop_depth(dev);
-    freenect_stop_rgb(dev);
+    freenect_stop_video(dev);
     freenect_close_device(dev);
     freenect_shutdown(ctx);
 }

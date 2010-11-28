@@ -287,14 +287,14 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 }
 
-void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
+void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 {
 	pthread_mutex_lock(&gl_backbuf_mutex);
 
 	// swap buffers
 	assert (rgb_back == rgb);
 	rgb_back = rgb_mid;
-	freenect_set_rgb_buffer(dev, rgb_back);
+	freenect_set_video_buffer(dev, rgb_back);
 	rgb_mid = rgb;
 
 	got_rgb++;
@@ -307,13 +307,13 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_tilt_degs(f_dev,freenect_angle);
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
-	freenect_set_rgb_callback(f_dev, rgb_cb);
-	freenect_set_rgb_format(f_dev, FREENECT_VIDEO_RGB);
+	freenect_set_video_callback(f_dev, rgb_cb);
+	freenect_set_video_format(f_dev, FREENECT_VIDEO_RGB);
 	freenect_set_depth_format(f_dev, FREENECT_DEPTH_11BIT);
-	freenect_set_rgb_buffer(f_dev, rgb_back);
+	freenect_set_video_buffer(f_dev, rgb_back);
 
 	freenect_start_depth(f_dev);
-	freenect_start_rgb(f_dev);
+	freenect_start_video(f_dev);
 
 	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
 
@@ -330,7 +330,7 @@ void *freenect_threadfunc(void *arg)
 	printf("\nshutting down streams...\n");
 
 	freenect_stop_depth(f_dev);
-	freenect_stop_rgb(f_dev);
+	freenect_stop_video(f_dev);
 
 	freenect_close_device(f_dev);
 	freenect_shutdown(f_ctx);

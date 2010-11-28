@@ -35,7 +35,6 @@ extern "C" {
 
 typedef uint16_t freenect_depth;
 typedef uint8_t freenect_packed_depth;
-typedef uint8_t freenect_pixel;
 
 #define FREENECT_FRAME_W 640
 #define FREENECT_FRAME_H 480
@@ -127,21 +126,21 @@ void freenect_set_user(freenect_device *dev, void *user);
 void *freenect_get_user(freenect_device *dev);
 
 typedef void (*freenect_depth_cb)(freenect_device *dev, void *depth, uint32_t timestamp);
-typedef void (*freenect_rgb_cb)(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp);
+typedef void (*freenect_video_cb)(freenect_device *dev, void *video, uint32_t timestamp);
 
 void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);
-void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb);
+void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb);
 
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt);
-int freenect_set_rgb_format(freenect_device *dev, freenect_video_format fmt);
+int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt);
 
 int freenect_set_depth_buffer(freenect_device *dev, void *buf);
-int freenect_set_rgb_buffer(freenect_device *dev, freenect_pixel *buf);
+int freenect_set_video_buffer(freenect_device *dev, void *buf);
 
 int freenect_start_depth(freenect_device *dev);
-int freenect_start_rgb(freenect_device *dev);
+int freenect_start_video(freenect_device *dev);
 int freenect_stop_depth(freenect_device *dev);
-int freenect_stop_rgb(freenect_device *dev);
+int freenect_stop_video(freenect_device *dev);
 
 int freenect_update_tilt_state(freenect_device *dev);
 freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev);

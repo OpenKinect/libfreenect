@@ -83,14 +83,14 @@ static inline uint32_t fn_le32(uint32_t d)
 #define FRAME_PIX FREENECT_FRAME_PIX
 
 #define DEPTH_PKTSIZE 1760
-#define RGB_PKTSIZE 1920
+#define VIDEO_PKTSIZE 1920
 
 #define DEPTH_PKTDSIZE (DEPTH_PKTSIZE-12)
-#define RGB_PKTDSIZE (RGB_PKTSIZE-12)
+#define VIDEO_PKTDSIZE (VIDEO_PKTSIZE-12)
 
 #define DEPTH_PKTS_10_BIT_PER_FRAME ((FREENECT_DEPTH_10BIT_PACKED_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
 #define DEPTH_PKTS_11_BIT_PER_FRAME ((FREENECT_DEPTH_11BIT_PACKED_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
-#define RGB_PKTS_PER_FRAME ((FRAME_PIX+RGB_PKTDSIZE-1)/RGB_PKTDSIZE)
+#define VIDEO_PKTS_PER_FRAME ((FRAME_PIX+VIDEO_PKTDSIZE-1)/VIDEO_PKTDSIZE)
 
 #define VID_MICROSOFT 0x45e
 #define PID_NUI_CAMERA 0x02ae
@@ -124,18 +124,18 @@ struct _freenect_device {
 	// Cameras
 	fnusb_dev usb_cam;
 	fnusb_isoc_stream depth_isoc;
-	fnusb_isoc_stream rgb_isoc;
+	fnusb_isoc_stream video_isoc;
 
 	freenect_depth_cb depth_cb;
-	freenect_rgb_cb rgb_cb;
-	freenect_video_format rgb_format;
+	freenect_video_cb video_cb;
+	freenect_video_format video_format;
 	freenect_depth_format depth_format;
 
 	int cam_inited;
 	uint16_t cam_tag;
 
 	packet_stream depth;
-	packet_stream rgb;
+	packet_stream video;
 
 	// Audio
 	// Motor

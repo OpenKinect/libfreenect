@@ -50,7 +50,7 @@ void depth_producer_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
     pthread_mutex_unlock(&depth_mutex);
 }
 
-void rgb_producer_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp) {
+void rgb_producer_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
     pthread_mutex_lock(&rgb_mutex);
     memcpy(rgb_img, rgb, FREENECT_VIDEO_RGB_SIZE);
     rgb_timestamp = timestamp;
@@ -65,14 +65,14 @@ void *init(void *unused) {
     freenect_open_device(ctx, &dev, 0);
     freenect_set_depth_format(dev, FREENECT_DEPTH_11BIT);
     freenect_start_depth(dev);
-    freenect_set_rgb_format(dev, FREENECT_VIDEO_RGB);
-    freenect_start_rgb(dev);
+    freenect_set_video_format(dev, FREENECT_VIDEO_RGB);
+    freenect_start_video(dev);
     freenect_set_depth_callback(dev, depth_producer_cb);
-    freenect_set_rgb_callback(dev, rgb_producer_cb);
+    freenect_set_video_callback(dev, rgb_producer_cb);
     while(thread_running && freenect_process_events(ctx) >= 0)
 	{}
     freenect_stop_depth(dev);
-    freenect_stop_rgb(dev);
+    freenect_stop_video(dev);
     freenect_close_device(dev);
     freenect_shutdown(ctx);
     return NULL;

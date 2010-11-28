@@ -123,7 +123,7 @@ int freenect_close_device(freenect_device *dev)
 
 	// stop streams, if active
 	freenect_stop_depth(dev);
-	freenect_stop_rgb(dev);
+	freenect_stop_video(dev);
 
 	res = fnusb_close_subdevices(dev);
 	if (res < 0) {
