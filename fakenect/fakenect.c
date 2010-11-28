@@ -38,7 +38,7 @@
 static freenect_device *fake_dev = (freenect_device *)1234;
 static freenect_context *fake_ctx = (freenect_context *)5678;
 static freenect_depth_cb cur_depth_cb = NULL;
-static freenect_rgb_cb cur_rgb_cb = NULL;
+static freenect_video_cb cur_rgb_cb = NULL;
 static char *input_path = NULL;
 static FILE *index_fp = NULL;
 static freenect_raw_tilt_state state = {};
@@ -46,7 +46,7 @@ static int already_warned = 0;
 static double playback_prev_time = 0.;
 static double record_prev_time = 0.;
 static void *depth_buffer = NULL;
-static freenect_pixel *rgb_buffer = NULL;
+static void *rgb_buffer = NULL;
 
 static void sleep_highres(double tm) {
     int sec = floor(tm);
@@ -179,7 +179,7 @@ int freenect_process_events(freenect_context *ctx) {
 	if (cur_depth_cb) {
 	    void *cur_depth = skip_line(data);
 	    if (depth_buffer) {
-		memcpy(depth_buffer, cur_depth, FREENECT_DEPTH_SIZE);
+		memcpy(depth_buffer, cur_depth, FREENECT_DEPTH_11BIT_SIZE);
 		cur_depth = depth_buffer;
 	    }
 	    cur_depth_cb(fake_dev, cur_depth, timestamp);
@@ -187,9 +187,9 @@ int freenect_process_events(freenect_context *ctx) {
 	break;
     case 'r':
 	if (cur_rgb_cb) {
-	    freenect_pixel *cur_rgb = (freenect_pixel *)skip_line(data);
+	    void *cur_rgb = skip_line(data);
 	    if (rgb_buffer) {
-		memcpy(rgb_buffer, cur_rgb, FREENECT_RGB_SIZE);
+		memcpy(rgb_buffer, cur_rgb, FREENECT_VIDEO_RGB_SIZE);
 		cur_rgb = rgb_buffer;
 	    }
 	    cur_rgb_cb(fake_dev, cur_rgb, timestamp);
@@ -200,7 +200,7 @@ int freenect_process_events(freenect_context *ctx) {
 	    memcpy(&state, data, sizeof(state));
 	} else if (!already_warned) {
 	    already_warned = 1;
-	    printf("\n\nWarning: Accelerometer data has an unexpected size [%d] instead of [%d].  The acceleration and tilt data will be substituted for dummy values.  This data was probably made with an older version of record (the upstream interface changes and we have to follow).\n\n", data_size, sizeof state);
+	    printf("\n\nWarning: Accelerometer data has an unexpected size [%d] instead of [%ld].  The acceleration and tilt data will be substituted for dummy values.  This data was probably made with an older version of record (the upstream interface changes and we have to follow).\n\n", data_size, sizeof state);
 	}
 	break;
     }
@@ -231,7 +231,7 @@ void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb) {
     cur_depth_cb = cb;
 }
 
-void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb) {
+void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb) {
     cur_rgb_cb = cb;
 }
 
@@ -256,7 +256,7 @@ int freenect_set_depth_buffer(freenect_device *dev, void *buf) {
     return 0;
 }
 
-int freenect_set_rgb_buffer(freenect_device *dev, freenect_pixel *buf) {
+int freenect_set_rgb_buffer(freenect_device *dev, void *buf) {
     rgb_buffer = buf;
     return 0;
 }
@@ -266,12 +266,12 @@ void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level) {}
 void freenect_set_user(freenect_device *dev, void *user) {}
 int freenect_shutdown(freenect_context *ctx) {return 0;}
 int freenect_close_device(freenect_device *dev) {return 0;}
-int freenect_set_rgb_format(freenect_device *dev, freenect_video_format fmt) {return 0;}
+int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt) {return 0;}
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt) {return 0;}
 int freenect_start_depth(freenect_device *dev) {return 0;}
-int freenect_start_rgb(freenect_device *dev) {return 0;}
+int freenect_start_video(freenect_device *dev) {return 0;}
 int freenect_stop_depth(freenect_device *dev) {return 0;}
-int freenect_stop_rgb(freenect_device *dev) {return 0;}
+int freenect_stop_video(freenect_device *dev) {return 0;}
 int freenect_set_tilt_degs(freenect_device *dev, double angle) {return 0;}
 int freenect_set_led(freenect_device *dev, freenect_led_options option) {return 0;}
 int freenect_update_tilt_state(freenect_device *dev) {return 0;}
