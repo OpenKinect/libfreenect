@@ -204,19 +204,18 @@ static void iso_callback(struct libusb_transfer *xfer)
 		return;
 	}
 
-  for (i=0; i<xfer->num_iso_packets; i++) 
-    libusb_submit_transfer(xfer);
 
 	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
 		//uint8_t *buf = (void*)xfer->buffer;
 		//for (i=0; i<strm->pkts; i++) {
 		for (i=0; i<xfer->num_iso_packets; i++) {
-      if( xfer->iso_packet_desc[i].status == LIBUSB_TRANSFER_COMPLETED && xfer->iso_packet_desc[i].actual_length != 0)
+      if(xfer->iso_packet_desc[i].status == LIBUSB_TRANSFER_COMPLETED)
       {
         uint8_t *buf = libusb_get_iso_packet_buffer_simple(xfer, i);
         strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
-			//buf += strm->len;
+        //buf += strm->len;
       }
+      libusb_submit_transfer(xfer);
 		}
 	} else {
 		freenect_context *ctx = strm->parent->parent->parent;
