@@ -238,7 +238,7 @@ uint16_t t_gamma[2048];
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
 	int i;
-	freenect_depth *depth = v_depth;
+	uint16_t *depth = v_depth;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	for (i=0; i<FREENECT_FRAME_PIX; i++) {
