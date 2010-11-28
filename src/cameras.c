@@ -236,7 +236,7 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 		return;
 
 	FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
-	       dev->depth.valid_pkts, dev->depth.pkts_per_frame, dev->depth.timestamp);
+	        dev->depth.valid_pkts, dev->depth.pkts_per_frame, dev->depth.timestamp);
 
 	switch (dev->depth_format) {
 		case FREENECT_FORMAT_11_BIT:
@@ -433,7 +433,7 @@ static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 		return;
 
 	FN_SPEW("Got RGB frame %d/%d packets arrived, TS %08x\n", dev->rgb.valid_pkts,
-	       dev->rgb.pkts_per_frame, dev->rgb.timestamp);
+	        dev->rgb.pkts_per_frame, dev->rgb.timestamp);
 
 	if (dev->rgb_format == FREENECT_FORMAT_RGB) {
 		convert_bayer_to_rgb(dev->rgb.raw_buf, dev->rgb.proc_buf);

@@ -71,8 +71,7 @@ int freenect_num_devices(freenect_context *ctx)
 
 	int nr = 0, i = 0;
 	struct libusb_device_descriptor desc;
-	for (i = 0; i < cnt; ++i)
-	{
+	for (i = 0; i < cnt; ++i) {
 		int r = libusb_get_device_descriptor (devs[i], &desc);
 		if (r < 0)
 			continue;
@@ -211,16 +210,16 @@ int freenect_update_device_state(freenect_device *dev)
 		FN_ERROR("Error in accelerometer reading, libusb_control_transfer returned %d\n", ret);
 		return ret < 0 ? ret : -1;
 	}
-	
+
 	ux = ((uint16_t)buf[2] << 8) | buf[3];
 	uy = ((uint16_t)buf[4] << 8) | buf[5];
 	uz = ((uint16_t)buf[6] << 8) | buf[7];
-	
+
 	dev->raw_state.accelerometer_x = (int16_t)ux;
 	dev->raw_state.accelerometer_y = (int16_t)uy;
 	dev->raw_state.accelerometer_z = (int16_t)uz;
 	dev->raw_state.tilt_angle = (int8_t)buf[8];
 	dev->raw_state.tilt_status = buf[9];
-	
+
 	return ret;
 }
