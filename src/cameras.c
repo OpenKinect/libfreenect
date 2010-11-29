@@ -59,11 +59,11 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
     {
       case 0: //looking for magic
         {
-fprintf(stderr,".");
+//fprintf(stderr,".");
           if (pkt[1] == 'B' && pkt[0] == 'R')  //Found a match
           {
             strm->state = 1; //next state
-            fprintf(stderr,"got magic\n");
+            //fprintf(stderr,"got magic\n");
           }
           else
           {
@@ -89,7 +89,7 @@ fprintf(stderr,".");
           fprintf(stderr, "header: flag=%x seq=%x size=%x time=%x \n", hdr->flag, hdr->seq, hdr->size, hdr->timestamp);
           if((hdr->flag & 0xF) == 0x1)
           {
-            fprintf(stderr,"==> START <==\n");
+            //fprintf(stderr,"==> START <==\n");
             strm->buf_ptr = strm->buf;  //reset to beginning
             total_bytes = 0;
           }
@@ -110,7 +110,7 @@ fprintf(stderr,".");
           strm->bytes_left -= bytes_to_copy;
           strm->buf_ptr += bytes_to_copy;
           total_bytes += bytes_to_copy;
-          fprintf(stderr,"Copy %d bytes with bytes_left=%d total_bytes=%d\n", bytes_to_copy, strm->bytes_left, total_bytes);
+          //fprintf(stderr,"Copy %d bytes with bytes_left=%d total_bytes=%d\n", bytes_to_copy, strm->bytes_left, total_bytes);
           pkt += bytes_to_copy;
 
           if(strm->bytes_left == 0)
@@ -118,7 +118,7 @@ fprintf(stderr,".");
             strm->state = 0;
             if(((strm->flag & 0x0F) == 0x05))  //marks end
             {
-              fprintf(stderr,"==> END <==\n");
+              fprintf(stderr,"==> END <== total bytes=%d\n", total_bytes);
               got_frame = 1;
             }
           }
@@ -437,8 +437,8 @@ static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 		 * G R G R G R G R
 		 * B G B G B G B G
 		 */
-    //dc1394_bayer_decoding_8bit( dev->rgb_raw, rgb_frame, FREENECT_FRAME_W, FREENECT_FRAME_H, DC1394_COLOR_FILTER_GRBG, DC1394_BAYER_METHOD_BILINEAR );
-    dc1394_convert_to_RGB8( dev->rgb_raw, rgb_frame, FREENECT_FRAME_W, FREENECT_FRAME_H, DC1394_BYTE_ORDER_YUYV, DC1394_COLOR_CODING_YUV422, 8 );
+    dc1394_bayer_decoding_8bit( dev->rgb_raw, rgb_frame, FREENECT_FRAME_W, FREENECT_FRAME_H, DC1394_COLOR_FILTER_GRBG, DC1394_BAYER_METHOD_BILINEAR );
+    //dc1394_convert_to_RGB8( dev->rgb_raw, rgb_frame, 640, 480, DC1394_BYTE_ORDER_UYVY, DC1394_COLOR_CODING_YUV422, 16 );
 	}
 
 	if (dev->rgb_cb)
