@@ -32,18 +32,20 @@
 #include <time.h>
 
 // The dev and ctx are just faked with these numbers
-freenect_device *fake_dev = (freenect_device *)1234;
-freenect_context *fake_ctx = (freenect_context *)5678;
-freenect_depth_cb cur_depth_cb = NULL;
-freenect_rgb_cb cur_rgb_cb = NULL;
-char *input_path = NULL;
-FILE *index_fp = NULL;
-freenect_raw_device_state state = {};
-int already_warned = 0;
-double playback_prev_time = 0.;
-double record_prev_time = 0.;
+static freenect_device *fake_dev = (freenect_device *)1234;
+static freenect_context *fake_ctx = (freenect_context *)5678;
+static freenect_depth_cb cur_depth_cb = NULL;
+static freenect_rgb_cb cur_rgb_cb = NULL;
+static char *input_path = NULL;
+static FILE *index_fp = NULL;
+static freenect_raw_device_state state = {};
+static int already_warned = 0;
+static double playback_prev_time = 0.;
+static double record_prev_time = 0.;
+static void *depth_buffer = NULL;
+static freenect_pixel *rgb_buffer = NULL;
 
-void sleep_highres(double tm) {
+static void sleep_highres(double tm) {
     int sec = floor(tm);
     int usec = (tm - sec) * 1000000;
     if (tm > 0) {
@@ -52,23 +54,23 @@ void sleep_highres(double tm) {
     }
 }
 
-double get_time() {
+static double get_time() {
     struct timeval cur;
     gettimeofday(&cur, NULL);
     return cur.tv_sec + cur.tv_usec / 1000000.;
 }
 
-void dump_depth(FILE *fp, void *data, int data_size) {
+static void dump_depth(FILE *fp, void *data, int data_size) {
     fprintf(fp, "P5 %d %d 65535\n", FREENECT_FRAME_W, FREENECT_FRAME_H);
     fwrite(data, data_size, 1, fp);
 }
 
-void dump_rgb(FILE *fp, void *data, int data_size) {
+static void dump_rgb(FILE *fp, void *data, int data_size) {
     fprintf(fp, "P6 %d %d 255\n", FREENECT_FRAME_W, FREENECT_FRAME_H);
     fwrite(data, data_size, 1, fp);
 }
 
-char *one_line(FILE *fp) {
+static char *one_line(FILE *fp) {
     int pos = 0;
     char *out = NULL;
     char c;
@@ -85,7 +87,7 @@ char *one_line(FILE *fp) {
     return out;
 }
 
-int get_data_size(FILE *fp) {
+static int get_data_size(FILE *fp) {
     int orig = ftell(fp);
     fseek(fp, 0L, SEEK_END);
     int out = ftell(fp);
@@ -93,7 +95,7 @@ int get_data_size(FILE *fp) {
     return out;
 }
 
-int parse_line(char *type, double *cur_time, unsigned int *timestamp, unsigned int *data_size, char **data) {
+static int parse_line(char *type, double *cur_time, unsigned int *timestamp, unsigned int *data_size, char **data) {
     char *line = one_line(index_fp);
     if (!line) {
 	printf("Warning: No more lines in [%s]\n", input_path);
@@ -119,7 +121,7 @@ int parse_line(char *type, double *cur_time, unsigned int *timestamp, unsigned i
     return 0;
 }
 
-void open_index() {
+static void open_index() {
     input_path = getenv("FAKENECT_PATH");
     if (!input_path) {
 	printf("Error: Environmental variable FAKENECT_PATH is not set.  Set it to a path that was created using the 'record' utility.\n");
@@ -136,7 +138,7 @@ void open_index() {
     free(index_path);
 }
 
-char *skip_line(char *str) {
+static char *skip_line(char *str) {
     char *out = strchr(str, '\n');
     if (!out) {
 	printf("Error: PGM/PPM has incorrect formatting, expected a header on one line followed by a newline\n");
@@ -171,12 +173,24 @@ int freenect_process_events(freenect_context *ctx) {
     record_prev_time = record_cur_time;
     switch (type) {
     case 'd':
-	if (cur_depth_cb)
-	    cur_depth_cb(fake_dev, skip_line(data), timestamp);
+	if (cur_depth_cb) {
+	    void *cur_depth = skip_line(data);
+	    if (depth_buffer) {
+		memcpy(depth_buffer, cur_depth, FREENECT_DEPTH_SIZE);
+		cur_depth = depth_buffer;
+	    }
+	    cur_depth_cb(fake_dev, cur_depth, timestamp);
+	}
 	break;
     case 'r':
-	if (cur_rgb_cb)
-	    cur_rgb_cb(fake_dev, (freenect_pixel *)skip_line(data), timestamp);
+	if (cur_rgb_cb) {
+	    freenect_pixel *cur_rgb = (freenect_pixel *)skip_line(data);
+	    if (rgb_buffer) {
+		memcpy(rgb_buffer, cur_rgb, FREENECT_RGB_SIZE);
+		cur_rgb = rgb_buffer;
+	    }
+	    cur_rgb_cb(fake_dev, cur_rgb, timestamp);
+	}
 	break;
     case 'a':
 	if (data_size == sizeof(state)) {
@@ -225,6 +239,16 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 
 int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx) {
     *ctx = fake_ctx;
+    return 0;
+}
+
+int freenect_set_depth_buffer(freenect_device *dev, void *buf) {
+    depth_buffer = buf;
+    return 0;
+}
+
+int freenect_set_rgb_buffer(freenect_device *dev, freenect_pixel *buf) {
+    rgb_buffer = buf;
     return 0;
 }
 
