@@ -1,9 +1,9 @@
 #!/bin/sh
 
-LIBUSB_INCLUDE=/usr/include/libusb-1.0/
-LIBUSB_LIBRARY=/usr/lib/libusb-1.0.a
+LIBUSB_INCLUDE=-I/usr/include/libusb-1.0
+LIBUSB_LIBRARY=-lusb-1.0
 
-LIBFREENET_INCLUDE=../../include/
+LIBFREENET_INCLUDE=-I../../include/
 LIBFREENET_LIBRARY=../../lib/libfreenect.a
 
 # -- try to use installed as fallback
@@ -19,7 +19,7 @@ JAVA_SRC_DIR=OpenKinect/src
 
 mkdir -p dist/javadoc
 
-g++ -shared -fPIC -Wall -o dist/libOpenKinect.so ${JNI_SRC_DIR}/org_openkinect_Context.cpp OpenKinectJNI/org_openkinect_Device.cpp  -I/usr/include/libusb-1.0/ -lusb -I${LIBFREENET_INCLUDE} -L${LIBFREENET_LIBRARY}  -I${JDK_HOME}/include/ -I${JDK_HOME}/include/linux/ -L${JDK_HOME}/lib/
+g++ -m64 -shared -fPIC -Wall -o dist/libOpenKinect.so ${JNI_SRC_DIR}/org_openkinect_Context.cpp OpenKinectJNI/org_openkinect_Device.cpp ${LIBUSB_INCLUDE} ${LIBUSB_LIBRARY} ${LIBFREENET_INCLUDE} ${LIBFREENET_LIBRARY} -I${JDK_HOME}/include/ -I${JDK_HOME}/include/linux/ -L${JDK_HOME}/lib/
 
 mkdir -p build
 
