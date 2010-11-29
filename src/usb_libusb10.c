@@ -239,7 +239,7 @@ static void iso_callback(struct libusb_transfer *xfer)
 int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, int ep, int xfers, int pkts, int len)
 {
 	freenect_context *ctx = dev->parent->parent;
-	int ret, i, xx;
+	int ret, i;
 
   uint32_t max_packet_size = libusb_get_max_packet_size(libusb_get_device(dev->dev), 0x81);
 
