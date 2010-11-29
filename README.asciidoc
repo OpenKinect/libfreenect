@@ -78,6 +78,9 @@ libusb source and run
 
 patch -p1 < [path_to_OpenKinectRepo]/platform/osx/libusb-osx-kinect.diff
 
+You need to tell configure to include some necessary frameworks:
+./configure LDFLAGS='-framework IOKit -framework CoreFoundation'
+
 Recompile libusb and put it wherever CMake will look (/usr/local/lib,
 /usr/lib, etc...). If you're using a package manager like fink,
 macports, or homebrew, I'm going to expect you know what your doing
