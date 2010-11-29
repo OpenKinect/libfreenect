@@ -216,17 +216,19 @@ static void iso_callback(struct libusb_transfer *xfer)
         uint8_t *buf = libusb_get_iso_packet_buffer_simple(xfer, i);
         if(xfer->buffer + byte_count != buf)  //missing data
         {
-          fprintf(stderr,"move buffer\n");
+          //move the data in the buffer to compensate
           memcpy(xfer->buffer + byte_count, buf, xfer->iso_packet_desc[i].actual_length);
         }
         byte_count += xfer->iso_packet_desc[i].actual_length;
 
-        //strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
-        //buf += strm->len;
+        //moved callback outside of this loop, seems much better
       }
       libusb_submit_transfer(xfer);
 		}
+
+    //call back here with total byte_count
     strm->cb(strm->parent->parent, xfer->buffer, byte_count);
+
 	} else {
 		freenect_context *ctx = strm->parent->parent->parent;
 		FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
