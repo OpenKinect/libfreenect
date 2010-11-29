@@ -59,7 +59,6 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
     {
       case 0: //looking for magic
         {
-//fprintf(stderr,".");
           if (pkt[1] == 'B' && pkt[0] == 'R')  //Found a match
           {
             strm->state = 1; //next state
@@ -86,7 +85,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
           hdr->seq = hdr->seq >> 8 | hdr->seq << 8;
           hdr->size = hdr->size >> 8 | hdr->size << 8;
           strm->flag = hdr->flag;
-          fprintf(stderr, "header: flag=%x seq=%x size=%x time=%x \n", hdr->flag, hdr->seq, hdr->size, hdr->timestamp);
+          //fprintf(stderr, "header: flag=%x seq=%x size=%x time=%x \n", hdr->flag, hdr->seq, hdr->size, hdr->timestamp);
           if((hdr->flag & 0xF) == 0x1)
           {
             //fprintf(stderr,"==> START <==\n");
@@ -118,7 +117,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
             strm->state = 0;
             if(((strm->flag & 0x0F) == 0x05))  //marks end
             {
-              fprintf(stderr,"==> END <== total bytes=%d\n", total_bytes);
+              //fprintf(stderr,"==> END <== total bytes=%d\n", total_bytes);
               got_frame = 1;
             }
           }
