@@ -109,6 +109,16 @@ are not required to run as root.
 This library does not work on windows currently. We're trying to get
 something going ASAP though. Watch the mailing list for updates.
 
+==== Wrappers
+
+libfreenect has interface to several languages. Look in the wrappers/
+directory for them:
+
+- C (using a synchronous API)
+- python
+- actionscript
+- C#
+
 === Licensing
 
 The libfreenect project is covered under a dual Apache v2/GPL v2
