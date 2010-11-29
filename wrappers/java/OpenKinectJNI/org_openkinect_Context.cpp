@@ -25,7 +25,6 @@
  */
 
 #include <libfreenect.h>
-#include <libfreenect/libfreenect.h>
 #include <map>
 #include <list>
 #include <string>
@@ -36,7 +35,7 @@
 struct Data
 {
     freenect_pixel *rgb;
-    freenect_depth *depth;
+    void *depth;
 
     Data() : rgb(0), depth(0) {}
 };
@@ -61,7 +60,7 @@ void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
     data[dev].rgb = rgb;
 }
 
-void depth_cb(freenect_device *dev, freenect_depth *v_depth, uint32_t timestamp)
+void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
     data[dev].depth = v_depth;
 }
@@ -147,8 +146,11 @@ JNIEXPORT jboolean JNICALL Java_org_openkinect_Context_jniProcessEvents
         }
 
         {
+			freenect_update_device_state(f_dev);
+			freenect_raw_device_state* f_dev_raw = freenect_get_device_state(f_dev);
+
             double x, y, z;
-            freenect_get_mks_accel(f_dev, &x, &y, &z);
+            freenect_get_mks_accel(f_dev_raw, &x, &y, &z);
 
             jobject device = jDevice(env, jContext, f_dev);
             jclass clazz = env->GetObjectClass(device);

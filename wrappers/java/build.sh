@@ -3,12 +3,12 @@
 LIBUSB_INCLUDE=/usr/include/libusb-1.0/
 LIBUSB_LIBRARY=/usr/lib/libusb-1.0.a
 
-LIBFREENET_INCLUDE=../../include/libfreenect
+LIBFREENET_INCLUDE=../../include/
 LIBFREENET_LIBRARY=../../lib/libfreenect.a
 
+# -- try to use installed as fallback
 if [ -z ${LIBFREENET_INCLUDE} ]; then LIBFREENET_INCLUDE="/usr/include/libfreenect/"; fi
 if [ -z ${LIBFREENET_LIBRARY} ]; then LIBFREENET_LIBRARY="/usr/lib/libfreenect.a"; fi
-
 
 
 #-- if jdk home is not set try ubuntu default

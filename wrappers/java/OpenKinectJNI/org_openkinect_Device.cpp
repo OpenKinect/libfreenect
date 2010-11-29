@@ -25,7 +25,6 @@
  */
 
 #include <libfreenect.h>
-#include <libfreenect/libfreenect.h>
 
 #include "org_openkinect_Device.h"
 
