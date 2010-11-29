@@ -208,15 +208,25 @@ static void iso_callback(struct libusb_transfer *xfer)
 	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
 		//uint8_t *buf = (void*)xfer->buffer;
 		//for (i=0; i<strm->pkts; i++) {
+    uint32_t byte_count = 0;
+
 		for (i=0; i<xfer->num_iso_packets; i++) {
       if((xfer->iso_packet_desc[i].status == LIBUSB_TRANSFER_COMPLETED) && (xfer->iso_packet_desc[i].actual_length != 0))
       {
         uint8_t *buf = libusb_get_iso_packet_buffer_simple(xfer, i);
-        strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
+        if(xfer->buffer + byte_count != buf)  //missing data
+        {
+          fprintf(stderr,"move buffer\n");
+          memcpy(xfer->buffer + byte_count, buf, xfer->iso_packet_desc[i].actual_length);
+        }
+        byte_count += xfer->iso_packet_desc[i].actual_length;
+
+        //strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
         //buf += strm->len;
       }
       libusb_submit_transfer(xfer);
 		}
+    strm->cb(strm->parent->parent, xfer->buffer, byte_count);
 	} else {
 		freenect_context *ctx = strm->parent->parent->parent;
 		FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
@@ -262,8 +272,6 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 		ret = libusb_submit_transfer(strm->xfers[i]);
 		if (ret < 0)
 			FN_WARNING("Failed to submit isochronous transfer %d: %d\n", i, ret);
-
-		bufp += pkts*len;
 	}
 
 	return 0;
