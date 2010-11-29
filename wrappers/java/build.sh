@@ -12,7 +12,7 @@ JAVA_SRC_DIR=OpenKinect/src
 
 mkdir -p dist
 
-g++ -shared -fPIC -Wall -o dist/libOpenKinect.so ${JNI_SRC_DIR}/org_openkinect_Context.cpp OpenKinectJNI/org_openkinect_Device.cpp  -I/usr/include/libusb-1.0/ -lusb -I/usr/include/libfreenect -lfreenect  -I${JDK_HOME}/include/ -I${JDK_HOME}/include/linux/ -L${JDK_HOME}/lib/
+g++ -shared -fPIC -Wall -o dist/libOpenKinect.so ${JNI_SRC_DIR}/org_openkinect_Context.cpp OpenKinectJNI/org_openkinect_Device.cpp  -I/usr/include/libusb-1.0/ -lusb -I${FREENET_INCLUDE} -L${FREENET_LIBRARY}  -I${JDK_HOME}/include/ -I${JDK_HOME}/include/linux/ -L${JDK_HOME}/lib/
 
 mkdir -p build
 
