@@ -97,7 +97,10 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
           strm->seq &= 0xff;
           if(hdr->seq != strm->seq)
           {
-            FN_WARNING("stream_process: %d missing sequences detected\n", (hdr->seq - strm->seq));
+            if(hdr->seq < strm->seq)
+              hdr->seq += 0xff;
+            int diff = (hdr->seq - strm->seq);
+            FN_WARNING("stream_process: %d missing sequences detected\n", diff);
             strm->seq = hdr->seq;
           }
           strm->bytes_left = hdr->size - sizeof(struct pkt_hdr); // count down until we get all the bytes
@@ -567,6 +570,7 @@ int freenect_start_depth(freenect_device *dev)
 	dev->depth.valid_frames = 0;
   dev->depth.buf_ptr = dev->depth.buf = dev->depth.raw_buf;
   dev->depth.state = 0;
+  dev->depth.seq = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->depth_isoc, depth_process, 0x82, NUM_XFERS, PKTS_PER_XFER, DEPTH_PKTBUF);
 	if (res < 0)
@@ -612,6 +616,7 @@ int freenect_start_rgb(freenect_device *dev)
 	dev->rgb.buf_ptr = dev->rgb.buf = dev->rgb.raw_buf;
   dev->rgb.state = 0;
   dev->rgb.magic_count = 0;
+  dev->rgb.seq = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->rgb_isoc, rgb_process, 0x81, NUM_XFERS, PKTS_PER_XFER, RGB_PKTBUF);
 	if (res < 0)
