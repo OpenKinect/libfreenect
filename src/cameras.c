@@ -466,9 +466,9 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
-	chdr->cmd = CONVERT_UINT16_FOR_KINECT(cmd);
-	chdr->tag = CONVERT_UINT16_FOR_KINECT(dev->cam_tag);
-	chdr->len = CONVERT_UINT16_FOR_KINECT(cmd_len / 2);
+	chdr->cmd = UINT16_CPU_TO_KINECT(cmd);
+	chdr->tag = UINT16_CPU_TO_KINECT(dev->cam_tag);
+	chdr->len = UINT16_CPU_TO_KINECT(cmd_len / 2);
 
 	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
 
@@ -501,8 +501,8 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 		FN_ERROR("send_cmd: Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
 		return -1;
 	}
-	if (rhdr->len != (CONVERT_UINT16_FOR_CPU(actual_len/2))) {
-		FN_ERROR("send_cmd: Bad len %04x != %04x\n", rhdr->len, (int)(CONVERT_UINT16_FOR_CPU(actual_len/2)));
+	if (rhdr->len != (UINT16_KINECT_TO_CPU(actual_len/2))) {
+		FN_ERROR("send_cmd: Bad len %04x != %04x\n", rhdr->len, (int)(UINT16_KINECT_TO_CPU(actual_len/2)));
 		return -1;
 	}
 
@@ -525,8 +525,8 @@ static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
 	uint16_t cmd[2];
 	int res;
 
-	cmd[0] = CONVERT_UINT16_FOR_KINECT(reg);
-	cmd[1] = CONVERT_UINT16_FOR_KINECT(data);
+	cmd[0] = UINT16_CPU_TO_KINECT(reg);
+	cmd[1] = UINT16_CPU_TO_KINECT(data);
 
 	FN_DEBUG("Write Reg 0x%04x <= 0x%02x\n", reg, data);
 	res = send_cmd(dev, 0x03, cmd, 4, reply, 4);

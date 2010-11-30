@@ -83,11 +83,11 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 #define PID_NUI_MOTOR 0x02b0
 
 #if BIG_ENDIAN
-#define CONVERT_UINT16_FOR_KINECT(X) libusb_cpu_to_le16(X)
-#define CONVERT_UINT16_FOR_CPU(X) libusb_le16_to_cpu(X)
+#define UINT16_CPU_TO_KINECT(X) libusb_cpu_to_le16(X)
+#define UINT16_KINECT_TO_CPU(X) libusb_le16_to_cpu(X)
 #else
-#define CONVERT_UINT16_FOR_KINECT(X) X
-#define CONVERT_UINT16_FOR_CPU(X) X
+#define UINT16_CPU_TO_KINECT(X) X
+#define UINT16_KINECT_TO_CPU(X) X
 #endif
 
 typedef struct {
