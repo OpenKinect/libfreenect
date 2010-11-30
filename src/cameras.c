@@ -93,6 +93,13 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
             total_bytes = 0;
           }
 
+          strm->seq++;
+          strm->seq &= 0xff;
+          if(hdr->seq != strm->seq)
+          {
+            FN_WARNING("stream_process: %d missing sequences detected\n", (hdr->seq - strm->seq));
+            strm->seq = hdr->seq;
+          }
           strm->bytes_left = hdr->size - sizeof(struct pkt_hdr); // count down until we get all the bytes
           strm->state = 2;
           pkt += sizeof(struct pkt_hdr);
