@@ -72,6 +72,10 @@ include (FindOS)
 # Set up installation directories
 include (SetupDirectories)
 
+# Check the endianness of the system
+include (TestBigEndian)
+TEST_BIG_ENDIAN(BIG_ENDIAN)
+
 # Find packages needed to build library
 find_package(libusb-1.0 REQUIRED)
 
