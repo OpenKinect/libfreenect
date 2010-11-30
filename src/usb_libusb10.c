@@ -217,7 +217,7 @@ static void iso_callback(struct libusb_transfer *xfer)
         if(xfer->buffer + byte_count != buf)  //missing data
         {
           //move the data in the buffer to compensate
-          memcpy(xfer->buffer + byte_count, buf, xfer->iso_packet_desc[i].actual_length);
+          memmove(xfer->buffer + byte_count, buf, xfer->iso_packet_desc[i].actual_length);
         }
         byte_count += xfer->iso_packet_desc[i].actual_length;
 
