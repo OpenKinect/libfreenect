@@ -64,6 +64,20 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 #define FN_SPEW(...) FN_LOG(LL_SPEW, __VA_ARGS__)
 #define FN_FLOOD(...) FN_LOG(LL_FLOOD, __VA_ARGS__)
 
+#ifdef FN_BIGENDIAN
+static inline uint16_t fn_le16(uint16_t d)
+{
+	return (d<<8) | (d>>8);
+}
+static inline uint32_t fn_le32(uint32_t d)
+{
+	return (d<<24) | ((d<<8)&0xFF0000) | ((d>>8)&0xFF00) | (d>>24);
+}
+#else
+#define fn_le16(x) (x)
+#define fn_le32(x) (x)
+#endif
+
 #define FRAME_H FREENECT_FRAME_H
 #define FRAME_W FREENECT_FRAME_W
 #define FRAME_PIX FREENECT_FRAME_PIX
