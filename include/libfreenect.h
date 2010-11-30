@@ -81,7 +81,7 @@ typedef struct {
 	int16_t accelerometer_z;
 	int8_t tilt_angle;
 	freenect_tilt_status_code tilt_status;
-} freenect_raw_device_state;
+} freenect_raw_tilt_state;
 
 struct _freenect_context;
 typedef struct _freenect_context freenect_context;
@@ -139,13 +139,12 @@ int freenect_start_rgb(freenect_device *dev);
 int freenect_stop_depth(freenect_device *dev);
 int freenect_stop_rgb(freenect_device *dev);
 
+int freenect_update_tilt_state(freenect_device *dev);
+freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev);
+double freenect_get_tilt_degs(freenect_raw_tilt_state *state);
 int freenect_set_tilt_degs(freenect_device *dev, double angle);
 int freenect_set_led(freenect_device *dev, freenect_led_options option);
-
-int freenect_update_device_state(freenect_device *dev);
-freenect_raw_device_state* freenect_get_device_state(freenect_device *dev);
-void freenect_get_mks_accel(freenect_raw_device_state *state, double* x, double* y, double* z);
-double freenect_get_tilt_degs(freenect_raw_device_state *state);
+void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z);
 
 #ifdef __cplusplus
 }

@@ -317,11 +317,10 @@ void *freenect_threadfunc(void *arg)
 
 	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
 
-	while(!die && freenect_process_events(f_ctx) >= 0 )
-	{
-		freenect_raw_device_state* state;
-		freenect_update_device_state(f_dev);
-		state = freenect_get_device_state(f_dev);
+	while (!die && freenect_process_events(f_ctx) >= 0) {
+		freenect_raw_tilt_state* state;
+		freenect_update_tilt_state(f_dev);
+		state = freenect_get_tilt_state(f_dev);
 		double dx,dy,dz;
 		freenect_get_mks_accel(state, &dx, &dy, &dz);
 		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);

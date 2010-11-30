@@ -43,7 +43,7 @@ namespace Freenect {
 	
 	class FreenectDeviceState : Noncopyable {
 		friend class FreenectDevice;
-			FreenectDeviceState(freenect_raw_device_state *_state):
+			FreenectDeviceState(freenect_raw_tilt_state *_state):
 				m_state(_state)
 			{}
 		public:
@@ -54,7 +54,7 @@ namespace Freenect {
 				return freenect_get_tilt_degs(m_state);
 			}
 		private:
-			freenect_raw_device_state *m_state;
+			freenect_raw_tilt_state *m_state;
 	};
 
 	class FreenectDevice : Noncopyable {
@@ -89,10 +89,10 @@ namespace Freenect {
 			if(freenect_set_led(m_dev, _option) != 0) throw std::runtime_error("Cannot set led");
 		}
 		void updateState() {
-			if (freenect_update_device_state(m_dev) != 0) throw std::runtime_error("Cannot update device state");
+			if (freenect_update_tilt_state(m_dev) != 0) throw std::runtime_error("Cannot update device state");
 		}
 		FreenectDeviceState getState() const {
-			return FreenectDeviceState(freenect_get_device_state(m_dev));
+			return FreenectDeviceState(freenect_get_tilt_state(m_dev));
 		}
 		// Do not call directly even in child
 		virtual void RGBCallback(freenect_pixel *rgb, uint32_t timestamp) = 0;

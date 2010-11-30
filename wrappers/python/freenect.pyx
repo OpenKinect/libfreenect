@@ -68,8 +68,8 @@ cdef extern from "libfreenect.h":
     int freenect_stop_rgb(void *dev)
     int freenect_set_tilt_degs(void *dev, double angle)
     int freenect_set_led(void *dev, int option)
-    int freenect_update_device_state(void *dev)
-    void* freenect_get_device_state(void *dev)
+    int freenect_update_tilt_state(void *dev)
+    void* freenect_get_tilt_state(void *dev)
     void freenect_get_mks_accel(void *state, double* x, double* y, double* z)
     double freenect_get_tilt_degs(void *state)
 
@@ -125,11 +125,11 @@ def set_tilt_degs(DevPtr dev, float angle):
 def set_led(DevPtr dev, int option):
     return freenect_set_led(dev._ptr, option)
 
-def update_device_state(DevPtr dev):
-    return freenect_update_device_state(dev._ptr)
+def update_tilt_state(DevPtr dev):
+    return freenect_update_tilt_state(dev._ptr)
 
-def get_device_state(DevPtr dev):
-    cdef void* state = freenect_get_device_state(dev._ptr)
+def get_tilt_state(DevPtr dev):
+    cdef void* state = freenect_get_tilt_state(dev._ptr)
     cdef StatePtr state_out
     state_out = StatePtr()
     state_out._ptr = state
@@ -149,8 +149,8 @@ def get_accel(DevPtr dev):
    Returns:
        (x, y, z) accelerometer values
    """
-   update_device_state(dev)
-   return get_mks_accel(get_device_state(dev))
+   update_tilt_state(dev)
+   return get_mks_accel(get_tilt_state(dev))
    
 
 def get_tilt_degs(StatePtr state):

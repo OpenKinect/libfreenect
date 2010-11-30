@@ -31,14 +31,17 @@
 #include <unistd.h>
 #include <time.h>
 
+#define GRAVITY 9.80665
+
 // The dev and ctx are just faked with these numbers
+
 static freenect_device *fake_dev = (freenect_device *)1234;
 static freenect_context *fake_ctx = (freenect_context *)5678;
 static freenect_depth_cb cur_depth_cb = NULL;
 static freenect_rgb_cb cur_rgb_cb = NULL;
 static char *input_path = NULL;
 static FILE *index_fp = NULL;
-static freenect_raw_device_state state = {};
+static freenect_raw_tilt_state state = {};
 static int already_warned = 0;
 static double playback_prev_time = 0.;
 static double record_prev_time = 0.;
@@ -206,17 +209,23 @@ int freenect_process_events(freenect_context *ctx) {
     return 0;
 }
 
-double freenect_get_tilt_degs(freenect_raw_device_state *state) {
+double freenect_get_tilt_degs(freenect_raw_tilt_state *state) {
     // NOTE: This is duped from tilt.c, this is the only function we need from there 
     return ((double)state->tilt_angle) / 2.;
 }
 
-freenect_raw_device_state* freenect_get_device_state(freenect_device *dev) {
+freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev) {
     return &state;
 }
 
-// void freenect_get_mks_accel(freenect_raw_device_state *state, double* x, double* y, double* z);
-// NOTE: We use use the version of this function from accel.c
+void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z)
+{
+	//the documentation for the accelerometer (http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf)
+	//states there are 819 counts/g
+	*x = (double)state->accelerometer_x/FREENECT_COUNTS_PER_G*GRAVITY;
+	*y = (double)state->accelerometer_y/FREENECT_COUNTS_PER_G*GRAVITY;
+	*z = (double)state->accelerometer_z/FREENECT_COUNTS_PER_G*GRAVITY;
+}
 
 void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb) {
     cur_depth_cb = cb;
@@ -265,5 +274,5 @@ int freenect_stop_depth(freenect_device *dev) {return 0;}
 int freenect_stop_rgb(freenect_device *dev) {return 0;}
 int freenect_set_tilt_degs(freenect_device *dev, double angle) {return 0;}
 int freenect_set_led(freenect_device *dev, freenect_led_options option) {return 0;}
-int freenect_update_device_state(freenect_device *dev) {return 0;}
+int freenect_update_tilt_state(freenect_device *dev) {return 0;}
 void *freenect_get_user(freenect_device *dev) {return NULL;}

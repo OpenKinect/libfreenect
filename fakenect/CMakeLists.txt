@@ -3,7 +3,7 @@
 ######################################################################################
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/utils)
 SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib/fakenect)
-add_library (fakenect SHARED fakenect.c ../src/accel.c)
+add_library (fakenect SHARED fakenect.c)
 set_target_properties ( fakenect PROPERTIES
   VERSION ${PROJECT_VER}
   SOVERSION ${PROJECT_APIVER}

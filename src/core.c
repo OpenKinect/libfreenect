@@ -195,32 +195,3 @@ void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...
 		va_end(ap);
 	}
 }
-
-freenect_raw_device_state* freenect_get_device_state(freenect_device *dev)
-{
-	return &dev->raw_state;
-}
-
-int freenect_update_device_state(freenect_device *dev)
-{
-	freenect_context *ctx = dev->parent;
-	uint8_t buf[10];
-	uint16_t ux, uy, uz;
-	int ret = fnusb_control(&dev->usb_motor, 0xC0, 0x32, 0x0, 0x0, buf, 10);
-	if (ret != 10) {
-		FN_ERROR("Error in accelerometer reading, libusb_control_transfer returned %d\n", ret);
-		return ret < 0 ? ret : -1;
-	}
-	
-	ux = ((uint16_t)buf[2] << 8) | buf[3];
-	uy = ((uint16_t)buf[4] << 8) | buf[5];
-	uz = ((uint16_t)buf[6] << 8) | buf[7];
-	
-	dev->raw_state.accelerometer_x = (int16_t)ux;
-	dev->raw_state.accelerometer_y = (int16_t)uy;
-	dev->raw_state.accelerometer_z = (int16_t)uz;
-	dev->raw_state.tilt_angle = (int8_t)buf[8];
-	dev->raw_state.tilt_status = buf[9];
-	
-	return ret;
-}

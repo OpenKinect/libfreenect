@@ -101,9 +101,9 @@ void dump(char type, uint32_t timestamp, void *data, int data_size) {
 void snapshot_accel(freenect_device *dev) {
     if (!last_timestamp)
 	return;
-    freenect_raw_device_state* state;
-    freenect_update_device_state(dev);
-    state = freenect_get_device_state(dev);
+    freenect_raw_tilt_state* state;
+    freenect_update_tilt_state(dev);
+    state = freenect_get_tilt_state(dev);
     dump('a', last_timestamp, state, sizeof *state);
 }
 
