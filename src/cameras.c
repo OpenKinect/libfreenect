@@ -135,13 +135,13 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	strm->seq++;
 	strm->got_pkts++;
 
-	strm->last_timestamp = hdr->timestamp;
+	strm->last_timestamp = fn_le32(hdr->timestamp);
 
 	if (strm->pkt_num == strm->pkts_per_frame) {
 		strm->pkt_num = 0;
 		strm->valid_pkts = strm->got_pkts;
 		strm->got_pkts = 0;
-		strm->timestamp = hdr->timestamp;
+		strm->timestamp = strm->last_timestamp;
 		strm->valid_frames++;
 		return 1;
 	} else {
@@ -466,9 +466,9 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
-	chdr->cmd = cmd;
-	chdr->tag = dev->cam_tag;
-	chdr->len = cmd_len / 2;
+	chdr->cmd = fn_le16(cmd);
+	chdr->tag = fn_le16(dev->cam_tag);
+	chdr->len = fn_le16(cmd_len / 2);
 
 	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
 
@@ -501,8 +501,8 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 		FN_ERROR("send_cmd: Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
 		return -1;
 	}
-	if (rhdr->len != (actual_len/2)) {
-		FN_ERROR("send_cmd: Bad len %04x != %04x\n", rhdr->len, (int)(actual_len/2));
+	if (fn_le16(rhdr->len) != (actual_len/2)) {
+		FN_ERROR("send_cmd: Bad len %04x != %04x\n", fn_le16(rhdr->len), (int)(actual_len/2));
 		return -1;
 	}
 
@@ -525,8 +525,8 @@ static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
 	uint16_t cmd[2];
 	int res;
 
-	cmd[0] = reg;
-	cmd[1] = data;
+	cmd[0] = fn_le16(reg);
+	cmd[1] = fn_le16(data);
 
 	FN_DEBUG("Write Reg 0x%04x <= 0x%02x\n", reg, data);
 	res = send_cmd(dev, 0x03, cmd, 4, reply, 4);
