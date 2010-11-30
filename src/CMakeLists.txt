@@ -23,8 +23,8 @@ ENDIF()
 install (TARGETS freenectstatic
   DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}")
 
-target_link_libraries (freenect ${LIBUSB_1_LIBRARIES} ${LIBDC1394_LIBRARY})
-target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES} ${LIBDC1394_LIBRARY})
+target_link_libraries (freenect ${LIBUSB_1_LIBRARIES})
+target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
 
 # Install the header file
 install (FILES "../include/libfreenect.h" "../include/libfreenect.hpp"

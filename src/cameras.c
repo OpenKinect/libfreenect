@@ -246,6 +246,171 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 		dev->depth_cb(dev, dev->depth.proc_buf, dev->depth.timestamp);
 }
 
+static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
+{
+	int x,y;
+	/* Pixel arrangement:
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 *
+	 * To convert a Bayer-pattern into RGB you have to handle four pattern
+	 * configurations:
+	 * 1)         2)         3)         4)
+	 *      B1      B1 G1 B2   R1 G1 R2      R1       <- previous line
+	 *   R1 G1 R2   G2 R1 G3   G2 B1 G3   B1 G1 B2    <- current line
+	 *      B2      B3 G4 B4   R3 G4 R4      R2       <- next line
+	 *   ^  ^  ^
+	 *   |  |  next pixel
+	 *   |  current pixel
+	 *   previous pixel
+	 *
+	 * The RGB values (r,g,b) for each configuration are calculated as
+	 * follows:
+	 *
+	 * 1) r = (R1 + R2) / 2
+	 *    g =  G1
+	 *    b = (B1 + B2) / 2
+	 *
+	 * 2) r =  R1
+	 *    g = (G1 + G2 + G3 + G4) / 4
+	 *    b = (B1 + B2 + B3 + B4) / 4
+	 *
+	 * 3) r = (R1 + R2 + R3 + R4) / 4
+	 *    g = (G1 + G2 + G3 + G4) / 4
+	 *    b =  B1
+	 *
+	 * 4) r = (R1 + R2) / 2
+	 *    g =  G1
+	 *    b = (B1 + B2) / 2
+	 *
+	 * To efficiently calculate these values, two 32bit integers are used
+	 * as "shift-buffers". One integer to store the 3 horizontal bayer pixel
+	 * values (previous, current, next) of the current line. The other
+	 * integer to store the vertical average value of the bayer pixels
+	 * (previous, current, next) of the previous and next line.
+	 *
+	 * The boundary conditions for the first and last line and the first
+	 * and last column are solved via mirroring the second and second last
+	 * line and the second and second last column.
+	 *
+	 * To reduce slow memory access, the values of a rgb pixel are packet
+	 * into a 32bit variable and transfered together.
+	 */
+
+	uint8_t *dst = proc_buf; // pointer to destination
+
+	uint8_t *prevLine;        // pointer to previous, current and next line
+	uint8_t *curLine;         // of the source bayer pattern
+	uint8_t *nextLine;
+
+	// storing horizontal values in hVals:
+	// previous << 16, current << 8, next
+	uint32_t hVals;
+	// storing vertical averages in vSums:
+	// previous << 16, current << 8, next
+	uint32_t vSums;
+
+	// init curLine and nextLine pointers
+	curLine  = raw_buf;
+	nextLine = curLine + 640;
+	for (y = 0; y < 480; ++y) {
+
+		if ((y > 0) && (y < 479))
+			prevLine = curLine - 640; // normal case
+		else if (y == 0)
+			prevLine = nextLine;      // top boundary case
+		else
+			nextLine = prevLine;      // bottom boundary case
+
+		// init horizontal shift-buffer with current value
+		hVals  = (*(curLine++) << 8);
+		// handle left column boundary case
+		hVals |= (*curLine << 16);
+		// init vertical average shift-buffer with current values average
+		vSums = ((*(prevLine++) + *(nextLine++)) << 7) & 0xFF00;
+		// handle left column boundary case
+		vSums |= ((*prevLine + *nextLine) << 15) & 0xFF0000;
+
+		// store if line is odd or not
+		uint8_t yOdd = y & 1;
+		// the right column boundary case is not handled inside this loop
+		// thus the "639"
+		for (x = 0; x < 639; ++x) {
+			// place next value in shift buffers
+			hVals |= *(curLine++);
+			vSums |= (*(prevLine++) + *(nextLine++)) >> 1;
+
+			// calculate the horizontal sum as this sum is needed in
+			// any configuration
+			uint8_t hSum = ((uint8_t)(hVals >> 16) + (uint8_t)(hVals)) >> 1;
+
+			if (yOdd == 0) {
+				if ((x & 1) == 0) {
+					// Configuration 1
+					*(dst++) = hSum;		// r
+					*(dst++) = hVals >> 8;	// g
+					*(dst++) = vSums >> 8;	// b
+				} else {
+					// Configuration 2
+					*(dst++) = hVals >> 8;
+					*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+					*(dst++) = ((uint8_t)(vSums >> 16) + (uint8_t)(vSums)) >> 1;
+				}
+			} else {
+				if ((x & 1) == 0) {
+					// Configuration 3
+					*(dst++) = ((uint8_t)(vSums >> 16) + (uint8_t)(vSums)) >> 1;
+					*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+					*(dst++) = hVals >> 8;
+				} else {
+					// Configuration 4
+					*(dst++) = vSums >> 8;
+					*(dst++) = hVals >> 8;
+					*(dst++) = hSum;
+				}
+			}
+
+			// shift the shift-buffers
+			hVals <<= 8;
+			vSums <<= 8;
+		} // end of for x loop
+		// right column boundary case, mirroring second last column
+		hVals |= (uint8_t)(hVals >> 16);
+		vSums |= (uint8_t)(vSums >> 16);
+
+		// the horizontal sum simplifies to the second last column value
+		uint8_t hSum = (uint8_t)(hVals);
+
+		if (yOdd == 0) {
+			if ((x & 1) == 0) {
+				*(dst++) = hSum;
+				*(dst++) = hVals >> 8;
+				*(dst++) = vSums >> 8;
+			} else {
+				*(dst++) = hVals >> 8;
+				*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+				*(dst++) = vSums;
+			}
+		} else {
+			if ((x & 1) == 0) {
+				*(dst++) = vSums;
+				*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+				*(dst++) = hVals >> 8;
+			} else {
+				*(dst++) = vSums >> 8;
+				*(dst++) = hVals >> 8;
+				*(dst++) = hSum;
+			}
+		}
+
+	} // end of for y loop
+}
+
+
 static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 {
 	freenect_context *ctx = dev->parent;
@@ -261,25 +426,14 @@ static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (!got_frame)
 		return;
 
-  //fprintf(stderr, "GOT RGB\n");
 	FN_SPEW("Got RGB frame %d/%d packets arrived, TS %08x\n", dev->rgb.valid_pkts,
 	       dev->rgb.pkts_per_frame, dev->rgb.timestamp);
 
 
 	if (dev->rgb_format == FREENECT_FORMAT_RGB) {
-    uint8_t *rgb_frame  = dev->rgb.raw_buf;
-    uint8_t *proc_buf  = dev->rgb.proc_buf;
-		/* Pixel arrangement:
-		 * G R G R G R G R
-		 * B G B G B G B G
-		 * G R G R G R G R
-		 * B G B G B G B G
-		 * G R G R G R G R
-		 * B G B G B G B G
-		 */
-    dc1394_bayer_decoding_8bit( rgb_frame, proc_buf, FREENECT_FRAME_W, FREENECT_FRAME_H, DC1394_COLOR_FILTER_GRBG, DC1394_BAYER_METHOD_BILINEAR );
-    //dc1394_convert_to_RGB8( rgb_frame, proc_buf, 640, 480, DC1394_BYTE_ORDER_UYVY, DC1394_COLOR_CODING_YUV422, 16 );
+		convert_bayer_to_rgb(dev->rgb.raw_buf, dev->rgb.proc_buf);
 	}
+
 
 	if (dev->rgb_cb)
 		dev->rgb_cb(dev, dev->rgb.proc_buf, dev->rgb.timestamp);
