@@ -196,14 +196,15 @@ void *data_out(void *arg) {
 	while(!die && freenect_process_events(f_ctx) >= 0 )
 	{
 		if(data_connected == 1){
-			freenect_get_raw_accel(f_dev, &ax, &ay, &az);
-			freenect_get_mks_accel(f_dev, &dx, &dy, &dz);
-			//printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f\r", ax, ay, az, dx, dy, dz);
-			//fflush(stdout);
+			usleep(1000000 / 30); // EMULATE 30 FPS
+			freenect_raw_device_state* state;
+			freenect_update_device_state(f_dev);
+			state = freenect_get_device_state(f_dev);
+			freenect_get_mks_accel(state, &dx, &dy, &dz);
 			char buffer_send[3*2+3*8];
-			memcpy(&buffer_send,&ax, sizeof(int16_t));
-			memcpy(&buffer_send[2],&ay, sizeof(int16_t));
-			memcpy(&buffer_send[4],&az, sizeof(int16_t));
+			memcpy(&buffer_send,&state->accelerometer_x, sizeof(int16_t));
+			memcpy(&buffer_send[2],&state->accelerometer_y, sizeof(int16_t));
+			memcpy(&buffer_send[4],&state->accelerometer_z, sizeof(int16_t));
 			memcpy(&buffer_send[6],&dx, sizeof(double));
 			memcpy(&buffer_send[14],&dy, sizeof(double));
 			memcpy(&buffer_send[22],&dz, sizeof(double));
