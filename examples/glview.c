@@ -340,7 +340,7 @@ void *freenect_threadfunc(void *arg)
 		state = freenect_get_tilt_state(f_dev);
 		double dx,dy,dz;
 		freenect_get_mks_accel(state, &dx, &dy, &dz);
-		//printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
+		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
 		fflush(stdout);
 
 		if (requested_format != current_format) {
