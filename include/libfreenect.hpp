@@ -43,7 +43,7 @@ namespace Freenect {
 	
 	class FreenectDeviceState : Noncopyable {
 		friend class FreenectDevice;
-			FreenectDeviceState(freenect_raw_device_state *_state):
+			FreenectDeviceState(freenect_raw_tilt_state *_state):
 				m_state(_state)
 			{}
 		public:
@@ -54,7 +54,7 @@ namespace Freenect {
 				return freenect_get_tilt_degs(m_state);
 			}
 		private:
-			freenect_raw_device_state *m_state;
+			freenect_raw_tilt_state *m_state;
 	};
 
 	class FreenectDevice : Noncopyable {
@@ -62,19 +62,19 @@ namespace Freenect {
 		FreenectDevice(freenect_context *_ctx, int _index) {
 			if(freenect_open_device(_ctx, &m_dev, _index) != 0) throw std::runtime_error("Cannot open Kinect");
 			freenect_set_user(m_dev, this);
-			freenect_set_rgb_format(m_dev, FREENECT_FORMAT_RGB);
-			freenect_set_depth_format(m_dev, FREENECT_FORMAT_11_BIT);
+			freenect_set_video_format(m_dev, FREENECT_VIDEO_RGB);
+			freenect_set_depth_format(m_dev, FREENECT_DEPTH_11BIT);
 			freenect_set_depth_callback(m_dev, freenect_depth_callback);
-			freenect_set_rgb_callback(m_dev, freenect_rgb_callback);
+			freenect_set_video_callback(m_dev, freenect_video_callback);
 		}
 		~FreenectDevice() {
 			if(freenect_close_device(m_dev) != 0) throw std::runtime_error("Cannot shutdown Kinect");
 		}
-		void startRGB() {
-			if(freenect_start_rgb(m_dev) != 0) throw std::runtime_error("Cannot start RGB callback");
+		void startVideo() {
+			if(freenect_start_video(m_dev) != 0) throw std::runtime_error("Cannot start RGB callback");
 		}
-		void stopRGB() {
-			if(freenect_stop_rgb(m_dev) != 0) throw std::runtime_error("Cannot stop RGB callback");
+		void stopVideo() {
+			if(freenect_stop_video(m_dev) != 0) throw std::runtime_error("Cannot stop RGB callback");
 		}
 		void startDepth() {
 			if(freenect_start_depth(m_dev) != 0) throw std::runtime_error("Cannot start depth callback");
@@ -89,13 +89,13 @@ namespace Freenect {
 			if(freenect_set_led(m_dev, _option) != 0) throw std::runtime_error("Cannot set led");
 		}
 		void updateState() {
-			if (freenect_update_device_state(m_dev) != 0) throw std::runtime_error("Cannot update device state");
+			if (freenect_update_tilt_state(m_dev) != 0) throw std::runtime_error("Cannot update device state");
 		}
 		FreenectDeviceState getState() const {
-			return FreenectDeviceState(freenect_get_device_state(m_dev));
+			return FreenectDeviceState(freenect_get_tilt_state(m_dev));
 		}
 		// Do not call directly even in child
-		virtual void RGBCallback(freenect_pixel *rgb, uint32_t timestamp) = 0;
+		virtual void VideoCallback(void *video, uint32_t timestamp) = 0;
 		// Do not call directly even in child
 		virtual void DepthCallback(void *depth, uint32_t timestamp) = 0;
 	  private:
@@ -104,9 +104,9 @@ namespace Freenect {
 			FreenectDevice* device = static_cast<FreenectDevice*>(freenect_get_user(dev));
 			device->DepthCallback(depth, timestamp);
 		}
-		static void freenect_rgb_callback(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp) {
+		static void freenect_video_callback(freenect_device *dev, void *video, uint32_t timestamp) {
 			FreenectDevice* device = static_cast<FreenectDevice*>(freenect_get_user(dev));
-			device->RGBCallback(rgb, timestamp);
+			device->VideoCallback(video, timestamp);
 		}
 	};
 

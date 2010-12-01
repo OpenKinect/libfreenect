@@ -101,20 +101,20 @@ void dump(char type, uint32_t timestamp, void *data, int data_size) {
 void snapshot_accel(freenect_device *dev) {
     if (!last_timestamp)
 	return;
-    freenect_raw_device_state* state;
-    freenect_update_device_state(dev);
-    state = freenect_get_device_state(dev);
+    freenect_raw_tilt_state* state;
+    freenect_update_tilt_state(dev);
+    state = freenect_get_tilt_state(dev);
     dump('a', last_timestamp, state, sizeof *state);
 }
 
 
 void depth_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
-    dump('d', timestamp, depth, FREENECT_DEPTH_SIZE);
+    dump('d', timestamp, depth, FREENECT_DEPTH_11BIT_SIZE);
 }
 
 
-void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp) {
-    dump('r', timestamp, rgb, FREENECT_RGB_SIZE);
+void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
+    dump('r', timestamp, rgb, FREENECT_VIDEO_RGB_SIZE);
 }
 
 void init() {
@@ -129,16 +129,16 @@ void init() {
 	printf("Error: Cannot get device\n");
 	return;
     }
-    freenect_set_depth_format(dev, 0);
+    freenect_set_depth_format(dev, FREENECT_DEPTH_11BIT);
     freenect_start_depth(dev);
-    freenect_set_rgb_format(dev, FREENECT_FORMAT_RGB);
-    freenect_start_rgb(dev);
+    freenect_set_video_format(dev, FREENECT_VIDEO_RGB);
+    freenect_start_video(dev);
     freenect_set_depth_callback(dev, depth_cb);
-    freenect_set_rgb_callback(dev, rgb_cb);
+    freenect_set_video_callback(dev, rgb_cb);
     while(running && freenect_process_events(ctx) >= 0)
 	snapshot_accel(dev);
     freenect_stop_depth(dev);
-    freenect_stop_rgb(dev);
+    freenect_stop_video(dev);
     freenect_close_device(dev);
     freenect_shutdown(ctx);
 }

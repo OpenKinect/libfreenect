@@ -193,19 +193,33 @@ static int stream_setbuf(freenect_context *ctx, packet_stream *strm, void *pbuf)
 }
 
 // Unpack buffer of (vw bit) data into padded 16bit buffer.
-static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw)
+static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw, int len)
 {
 	int mask = (1 << vw) - 1;
-	int j = 640*480;
 	uint32_t buffer = 0;
 	int bitsIn = 0;
-	while (j--) {
+	while (len--) {
 		while (bitsIn < vw) {
 			buffer = (buffer << 8) | *(raw++);
 			bitsIn += 8;
 		}
 		bitsIn -= vw;
 		*(frame++) = (buffer >> bitsIn) & mask;
+	}
+}
+
+// Unpack buffer of (vw bit) data into 8bit buffer, dropping LSBs
+static inline void convert_packed_to_8bit(uint8_t *raw, uint8_t *frame, int vw, int len)
+{
+	uint32_t buffer = 0;
+	int bitsIn = 0;
+	while (len--) {
+		while (bitsIn < vw) {
+			buffer = (buffer << 8) | *(raw++);
+			bitsIn += 8;
+		}
+		bitsIn -= vw;
+		*(frame++) = buffer >> (bitsIn+vw-8);
 	}
 }
 
@@ -228,14 +242,14 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	       dev->depth.valid_pkts, dev->depth.pkts_per_frame, dev->depth.timestamp);
 
 	switch (dev->depth_format) {
-		case FREENECT_FORMAT_11_BIT:
-			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 11);
+		case FREENECT_DEPTH_11BIT:
+			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 11, FREENECT_FRAME_PIX);
 			break;
-		case FREENECT_FORMAT_10_BIT:
-			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 10);
+		case FREENECT_DEPTH_10BIT:
+			convert_packed_to_16bit(dev->depth.raw_buf, dev->depth.proc_buf, 10, FREENECT_FRAME_PIX);
 			break;
-		case FREENECT_FORMAT_PACKED_10_BIT:
-		case FREENECT_FORMAT_PACKED_11_BIT:
+		case FREENECT_DEPTH_10BIT_PACKED:
+		case FREENECT_DEPTH_11BIT_PACKED:
 			break;
 	}
 	if (dev->depth_cb)
@@ -407,32 +421,42 @@ static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
 }
 
 
-static void rgb_process(freenect_device *dev, uint8_t *pkt, int len)
+static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 {
 	freenect_context *ctx = dev->parent;
 
 	if (len == 0)
 		return;
 
-	if (!dev->rgb.running)
+	if (!dev->video.running)
 		return;
 
-	int got_frame = stream_process(ctx, &dev->rgb, pkt, len);
+	int got_frame = stream_process(ctx, &dev->video, pkt, len);
 
 	if (!got_frame)
 		return;
 
-	FN_SPEW("Got RGB frame %d/%d packets arrived, TS %08x\n", dev->rgb.valid_pkts,
-	       dev->rgb.pkts_per_frame, dev->rgb.timestamp);
+	FN_SPEW("Got RGB frame %d/%d packets arrived, TS %08x\n", dev->video.valid_pkts,
+	       dev->video.pkts_per_frame, dev->video.timestamp);
 
-
-	if (dev->rgb_format == FREENECT_FORMAT_RGB) {
-		convert_bayer_to_rgb(dev->rgb.raw_buf, dev->rgb.proc_buf);
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+			convert_bayer_to_rgb(dev->video.raw_buf, dev->video.proc_buf);
+			break;
+		case FREENECT_VIDEO_BAYER:
+			break;
+		case FREENECT_VIDEO_IR_10BIT:
+			convert_packed_to_16bit(dev->video.raw_buf, dev->video.proc_buf, 10, FREENECT_IR_FRAME_PIX);
+			break;
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			break;
+		case FREENECT_VIDEO_IR_8BIT:
+			convert_packed_to_8bit(dev->video.raw_buf, dev->video.proc_buf, 10, FREENECT_IR_FRAME_PIX);
+			break;
 	}
 
-
-	if (dev->rgb_cb)
-		dev->rgb_cb(dev, dev->rgb.proc_buf, dev->rgb.timestamp);
+	if (dev->video_cb)
+		dev->video_cb(dev, dev->video.proc_buf, dev->video.timestamp);
 }
 
 typedef struct {
@@ -458,9 +482,9 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 
 	chdr->magic[0] = 0x47;
 	chdr->magic[1] = 0x4d;
-	chdr->cmd = cmd;
-	chdr->tag = dev->cam_tag;
-	chdr->len = cmd_len / 2;
+	chdr->cmd = fn_le16(cmd);
+	chdr->tag = fn_le16(dev->cam_tag);
+	chdr->len = fn_le16(cmd_len / 2);
 
 	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
 
@@ -493,8 +517,8 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 		FN_ERROR("send_cmd: Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
 		return -1;
 	}
-	if (rhdr->len != (actual_len/2)) {
-		FN_ERROR("send_cmd: Bad len %04x != %04x\n", rhdr->len, (int)(actual_len/2));
+	if (fn_le16(rhdr->len) != (actual_len/2)) {
+		FN_ERROR("send_cmd: Bad len %04x != %04x\n", fn_le16(rhdr->len), (int)(actual_len/2));
 		return -1;
 	}
 
@@ -517,8 +541,8 @@ static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
 	uint16_t cmd[2];
 	int res;
 
-	cmd[0] = reg;
-	cmd[1] = data;
+	cmd[0] = fn_le16(reg);
+	cmd[1] = fn_le16(data);
 
 	FN_DEBUG("Write Reg 0x%04x <= 0x%02x\n", reg, data);
 	res = send_cmd(dev, 0x03, cmd, 4, reply, 4);
@@ -539,20 +563,20 @@ int freenect_start_depth(freenect_device *dev)
 		return -1;
 
 	switch (dev->depth_format) {
-		case FREENECT_FORMAT_11_BIT:
-			stream_initbufs(ctx, &dev->depth, FREENECT_PACKED_DEPTH_11_SIZE, FREENECT_DEPTH_SIZE);
+		case FREENECT_DEPTH_11BIT:
+			stream_initbufs(ctx, &dev->depth, FREENECT_DEPTH_11BIT_PACKED_SIZE, FREENECT_DEPTH_11BIT_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_11_BIT_PER_FRAME;
 			break;
-		case FREENECT_FORMAT_10_BIT:
-			stream_initbufs(ctx, &dev->depth, FREENECT_PACKED_DEPTH_10_SIZE, FREENECT_DEPTH_SIZE);
+		case FREENECT_DEPTH_10BIT:
+			stream_initbufs(ctx, &dev->depth, FREENECT_DEPTH_10BIT_PACKED_SIZE, FREENECT_DEPTH_10BIT_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_10_BIT_PER_FRAME;
 			break;
-		case FREENECT_FORMAT_PACKED_11_BIT:
-			stream_initbufs(ctx, &dev->depth, 0, FREENECT_PACKED_DEPTH_11_SIZE);
+		case FREENECT_DEPTH_11BIT_PACKED:
+			stream_initbufs(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_11_BIT_PER_FRAME;
 			break;
-		case FREENECT_FORMAT_PACKED_10_BIT:
-			stream_initbufs(ctx, &dev->depth, 0, FREENECT_PACKED_DEPTH_10_SIZE);
+		case FREENECT_DEPTH_10BIT_PACKED:
+			stream_initbufs(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
 			dev->depth.pkts_per_frame = DEPTH_PKTS_10_BIT_PER_FRAME;
 			break;
 	}
@@ -570,12 +594,12 @@ int freenect_start_depth(freenect_device *dev)
 
 	write_register(dev, 0x06, 0x00); // reset depth stream
 	switch (dev->depth_format) {
-		case FREENECT_FORMAT_11_BIT:
-		case FREENECT_FORMAT_PACKED_11_BIT:
+		case FREENECT_DEPTH_11BIT:
+		case FREENECT_DEPTH_11BIT_PACKED:
 			write_register(dev, 0x12, 0x03);
 			break;
-		case FREENECT_FORMAT_10_BIT:
-		case FREENECT_FORMAT_PACKED_10_BIT:
+		case FREENECT_DEPTH_10BIT:
+		case FREENECT_DEPTH_10BIT_PACKED:
 			write_register(dev, 0x12, 0x02);
 			break;
 	}
@@ -587,40 +611,64 @@ int freenect_start_depth(freenect_device *dev)
 	return 0;
 }
 
-int freenect_start_rgb(freenect_device *dev)
+int freenect_start_video(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	int res;
 
-	if (dev->rgb.running)
+	if (dev->video.running)
 		return -1;
 
-	if (dev->rgb_format == FREENECT_FORMAT_RGB)
-		stream_initbufs(ctx, &dev->rgb, FREENECT_BAYER_SIZE, FREENECT_RGB_SIZE);
-	else
-		stream_initbufs(ctx, &dev->rgb, 0, FREENECT_BAYER_SIZE);
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_BAYER_SIZE, FREENECT_VIDEO_RGB_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME;
+			break;
+		case FREENECT_VIDEO_BAYER:
+			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_BAYER_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME;
+			break;
+		case FREENECT_VIDEO_IR_8BIT:
+			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_IR_8BIT_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			break;
+		case FREENECT_VIDEO_IR_10BIT:
+			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_BAYER_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			break;
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			break;
+	}
 
-	dev->rgb.pkts_per_frame = RGB_PKTS_PER_FRAME;
-	dev->rgb.pkt_size = RGB_PKTDSIZE;
-	dev->rgb.synced = 0;
-	dev->rgb.flag = 0x80;
-	dev->rgb.valid_frames = 0;
-  dev->rgb.state = 0;
-  dev->rgb.magic_count = 0;
-  dev->rgb.seq = 0;
+	dev->video.pkt_size = VIDEO_PKTDSIZE;
+	dev->video.synced = 0;
+	dev->video.flag = 0x80;
+	dev->video.valid_frames = 0;
 
-	res = fnusb_start_iso(&dev->usb_cam, &dev->rgb_isoc, rgb_process, 0x81);
+	res = fnusb_start_iso(&dev->usb_cam, &dev->video_isoc, video_process, 0x81);
 	if (res < 0)
 		return res;
 
-	write_register(dev, 0x05, 0x00); // reset rgb stream
-	write_register(dev, 0x0c, 0x00); // bayer image format
-	write_register(dev, 0x0d, 0x01); // set resolution 1=640x480
-	write_register(dev, 0x0e, 30); // 30Hz bayer
-	write_register(dev, 0x05, 0x01); // start rgb stream
+	write_register(dev, 0x05, 0x00); // reset video stream
+	write_register(dev, 0x0c, 0x00);
+	write_register(dev, 0x0d, 0x01);
+	write_register(dev, 0x0e, 0x1e); // 30Hz bayer
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+		case FREENECT_VIDEO_BAYER:
+			write_register(dev, 0x05, 0x01); // start video stream
+			break;
+		case FREENECT_VIDEO_IR_8BIT:
+		case FREENECT_VIDEO_IR_10BIT:
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			write_register(dev, 0x05, 0x03); // start video stream
+			break;
+	}
 	write_register(dev, 0x47, 0x00); // disable Hflip
 
-	dev->rgb.running = 1;
+	dev->video.running = 1;
 	return 0;
 }
 
@@ -645,24 +693,24 @@ int freenect_stop_depth(freenect_device *dev)
 	return 0;
 }
 
-int freenect_stop_rgb(freenect_device *dev)
+int freenect_stop_video(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	int res;
 
-	if (!dev->rgb.running)
+	if (!dev->video.running)
 		return -1;
 
-	dev->rgb.running = 0;
-	write_register(dev, 0x05, 0x00); // stop rgb stream
+	dev->video.running = 0;
+	write_register(dev, 0x05, 0x00); // stop video stream
 
-	res = fnusb_stop_iso(&dev->usb_cam, &dev->rgb_isoc);
+	res = fnusb_stop_iso(&dev->usb_cam, &dev->video_isoc);
 	if (res < 0) {
 		FN_ERROR("Failed to stop RGB isochronous stream: %d\n", res);
 		return res;
 	}
 
-	stream_freebufs(ctx, &dev->rgb);
+	stream_freebufs(ctx, &dev->video);
 	return 0;
 }
 
@@ -671,26 +719,29 @@ void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb)
 	dev->depth_cb = cb;
 }
 
-void freenect_set_rgb_callback(freenect_device *dev, freenect_rgb_cb cb)
+void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb)
 {
-	dev->rgb_cb = cb;
+	dev->video_cb = cb;
 }
 
-int freenect_set_rgb_format(freenect_device *dev, freenect_rgb_format fmt)
+int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt)
 {
 	freenect_context *ctx = dev->parent;
-	if (dev->rgb.running) {
-		FN_ERROR("Tried to set RGB format while stream is active\n");
+	if (dev->video.running) {
+		FN_ERROR("Tried to set video format while stream is active\n");
 		return -1;
 	}
 
 	switch (fmt) {
-		case FREENECT_FORMAT_RGB:
-		case FREENECT_FORMAT_BAYER:
-			dev->rgb_format = fmt;
+		case FREENECT_VIDEO_RGB:
+		case FREENECT_VIDEO_BAYER:
+		case FREENECT_VIDEO_IR_8BIT:
+		case FREENECT_VIDEO_IR_10BIT:
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			dev->video_format = fmt;
 			return 0;
 		default:
-			FN_ERROR("Invalid RGB format %d\n", fmt);
+			FN_ERROR("Invalid video format %d\n", fmt);
 			return -1;
 	}
 }
@@ -703,10 +754,10 @@ int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
 		return -1;
 	}
 	switch (fmt) {
-		case FREENECT_FORMAT_11_BIT:
-		case FREENECT_FORMAT_10_BIT:
-		case FREENECT_FORMAT_PACKED_11_BIT:
-		case FREENECT_FORMAT_PACKED_10_BIT:
+		case FREENECT_DEPTH_11BIT:
+		case FREENECT_DEPTH_10BIT:
+		case FREENECT_DEPTH_11BIT_PACKED:
+		case FREENECT_DEPTH_10BIT_PACKED:
 			dev->depth_format = fmt;
 			return 0;
 		default:
@@ -721,7 +772,7 @@ int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 	return stream_setbuf(dev->parent, &dev->depth, buf);
 }
 
-int freenect_set_rgb_buffer(freenect_device *dev, freenect_pixel *buf)
+int freenect_set_video_buffer(freenect_device *dev, void *buf)
 {
-	return stream_setbuf(dev->parent, &dev->rgb, buf);
+	return stream_setbuf(dev->parent, &dev->video, buf);
 }

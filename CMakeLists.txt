@@ -75,6 +75,13 @@ include (SetupDirectories)
 # Find packages needed to build library
 find_package(libusb-1.0 REQUIRED)
 
+# Check the endianness of the system
+include (TestBigEndian)
+test_big_endian(BIG_ENDIAN)
+if(BIG_ENDIAN)
+  add_definitions(-DFN_BIGENDIAN)
+endif()
+
 ######################################################################################
 # CMake 
 ######################################################################################
