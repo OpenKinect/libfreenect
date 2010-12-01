@@ -137,7 +137,7 @@ void *network_rgb(void *arg)
 		printf("### Got rgb client\n");
 		send_policy_file(rgb_child);
 		rgb_connected = 1;
-		freenect_start_rgb(f_dev);
+		freenect_start_video(f_dev);
 	}
 	
 	return NULL;
@@ -197,9 +197,9 @@ void *data_out(void *arg) {
 	{
 		if(data_connected == 1){
 			usleep(1000000 / 30); // EMULATE 30 FPS
-			freenect_raw_device_state* state;
-			freenect_update_device_state(f_dev);
-			state = freenect_get_device_state(f_dev);
+			freenect_raw_tilt_state* state;
+			freenect_update_tilt_state(f_dev);
+			state = freenect_get_tilt_state(f_dev);
 			freenect_get_mks_accel(state, &dx, &dy, &dz);
 			char buffer_send[3*2+3*8];
 			memcpy(&buffer_send,&state->accelerometer_x, sizeof(int16_t));
@@ -336,7 +336,7 @@ uint16_t t_gamma[2048];
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
 	int i, n;
-	freenect_depth *depth = v_depth;
+	uint16_t *depth = v_depth;
 	
 	pthread_mutex_lock(&depth_mutex);
 	for (i=0; i<FREENECT_FRAME_PIX; i++) {
@@ -395,7 +395,7 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 	pthread_mutex_unlock(&depth_mutex);
 }
 
-void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
+void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 {
 	int n;
 	pthread_mutex_lock(&depth_mutex);
@@ -406,9 +406,9 @@ void rgb_cb(freenect_device *dev, freenect_pixel *rgb, uint32_t timestamp)
 	//printf("size: %d", compressed_size);
 	int x;
 	for (x=0; x<640 * 480; x++) {
-		buf_rgb[4 * x + 0] = rgb[3 * x + 0];
-		buf_rgb[4 * x + 1] = rgb[3 * x + 1];
-		buf_rgb[4 * x + 2] = rgb[3 * x + 2];
+		buf_rgb[4 * x + 0] = ((uint8_t*)rgb)[3 * x + 0];
+		buf_rgb[4 * x + 1] = ((uint8_t*)rgb)[3 * x + 1];
+		buf_rgb[4 * x + 2] = ((uint8_t*)rgb)[3 * x + 2];
 		buf_rgb[4 * x + 3] = 0x00;
 	}
 	printf("rgb received\n ");
@@ -430,9 +430,9 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_tilt_degs(f_dev,freenect_angle);
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
-	freenect_set_rgb_callback(f_dev, rgb_cb);
-	freenect_set_rgb_format(f_dev, FREENECT_FORMAT_RGB);
-	freenect_set_depth_format(f_dev, FREENECT_FORMAT_11_BIT);
+	freenect_set_video_callback(f_dev, rgb_cb);
+	freenect_set_video_format(f_dev, FREENECT_VIDEO_RGB);
+	freenect_set_depth_format(f_dev, FREENECT_VIDEO_IR_10BIT);
 
 	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
 	if ( pthread_create(&data_in_thread, NULL, data_in, NULL) )
@@ -450,7 +450,7 @@ void *freenect_threadfunc(void *arg)
 	printf("\nshutting down streams...\n");
 
 	freenect_stop_depth(f_dev);
-	freenect_stop_rgb(f_dev);
+	freenect_stop_video(f_dev);
 	network_close();
 	
 	printf("-- done!\n");
