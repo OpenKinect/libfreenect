@@ -29,4 +29,4 @@ def display_rgb(dev, data, timestamp):
     cv.WaitKey(5)
 
 freenect.runloop(depth=display_depth,
-                 rgb=display_rgb)
+                 video=display_rgb)

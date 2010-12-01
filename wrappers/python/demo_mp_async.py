@@ -27,4 +27,4 @@ def display_rgb(dev, data, timestamp):
     mp.draw()
 
 freenect.runloop(depth=display_depth,
-                 rgb=display_rgb)
+                 video=display_rgb)
