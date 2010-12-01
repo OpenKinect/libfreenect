@@ -59,6 +59,7 @@ class Mutex {
 	pthread_mutex_t m_mutex;
 };
 
+/* thanks to Yoda---- from IRC */
 class MyFreenectDevice : public Freenect::FreenectDevice {
   public:
 	MyFreenectDevice(freenect_context *_ctx, int _index)
