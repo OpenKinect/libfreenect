@@ -83,7 +83,7 @@ void send_policy_file(int child){
 	if(psent == 0){
 		int n;
 		char * str = "<?xml version='1.0'?><!DOCTYPE cross-domain-policy SYSTEM '/xml/dtds/cross-domain-policy.dtd'><cross-domain-policy><site-control permitted-cross-domain-policies='all'/><allow-access-from domain='*' to-ports='*'/></cross-domain-policy>\n";
-		n = write(child,str , 237);
+		//n = write(child,str , 237);
 		if ( n < 0 || n != 237)
 		{
 			fprintf(stderr, "Error on write() for depth (%d instead of %d)\n",n, 237);
@@ -344,39 +344,39 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 		int lb = pval & 0xff;
 		switch (pval>>8) {
 			case 0:
-				buf_depth[4 *  i + 0] = 255;
+				buf_depth[4 *  i + 2] = 255;
 				buf_depth[4 *  i + 1] = 255-lb;
-				buf_depth[4 *  i + 2] = 255-lb;
+				buf_depth[4 *  i + 0] = 255-lb;
 				break;
 			case 1:
-				buf_depth[4 *  i + 0] = 255;
+				buf_depth[4 *  i + 2] = 255;
 				buf_depth[4 *  i + 1] = lb;
-				buf_depth[4 *  i + 2] = 0;
+				buf_depth[4 *  i + 0] = 0;
 				break;
 			case 2:
-				buf_depth[4 *  i + 0] = 255-lb;
+				buf_depth[4 *  i + 2] = 255-lb;
 				buf_depth[4 *  i + 1] = 255;
-				buf_depth[4 *  i + 2] = 0;
+				buf_depth[4 *  i + 0] = 0;
 				break;
 			case 3:
-				buf_depth[4 *  i + 0] = 0;
+				buf_depth[4 *  i + 2] = 0;
 				buf_depth[4 *  i + 1] = 255;
-				buf_depth[4 *  i + 2] = lb;
+				buf_depth[4 *  i + 0] = lb;
 				break;
 			case 4:
-				buf_depth[4 *  i + 0] = 0;
+				buf_depth[4 *  i + 2] = 0;
 				buf_depth[4 *  i + 1] = 255-lb;
-				buf_depth[4 *  i + 2] = 255;
+				buf_depth[4 *  i + 0] = 255;
 				break;
 			case 5:
-				buf_depth[4 *  i + 0] = 0;
+				buf_depth[4 *  i + 2] = 0;
 				buf_depth[4 *  i + 1] = 0;
-				buf_depth[4 *  i + 2] = 255-lb;
+				buf_depth[4 *  i + 0] = 255-lb;
 				break;
 			default:
-				buf_depth[4 *  i + 0] = 0;
-				buf_depth[4 *  i + 1] = 0;
 				buf_depth[4 *  i + 2] = 0;
+				buf_depth[4 *  i + 1] = 0;
+				buf_depth[4 *  i + 0] = 0;
 				break;
 		}
 		buf_depth[4 *  i + 3] = 0x00;
@@ -406,9 +406,9 @@ void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 	//printf("size: %d", compressed_size);
 	int x;
 	for (x=0; x<640 * 480; x++) {
-		buf_rgb[4 * x + 0] = ((uint8_t*)rgb)[3 * x + 0];
+		buf_rgb[4 * x + 0] = ((uint8_t*)rgb)[3 * x + 2];
 		buf_rgb[4 * x + 1] = ((uint8_t*)rgb)[3 * x + 1];
-		buf_rgb[4 * x + 2] = ((uint8_t*)rgb)[3 * x + 2];
+		buf_rgb[4 * x + 2] = ((uint8_t*)rgb)[3 * x + 0];
 		buf_rgb[4 * x + 3] = 0x00;
 	}
 	printf("rgb received\n ");
@@ -432,8 +432,8 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_video_callback(f_dev, rgb_cb);
 	freenect_set_video_format(f_dev, FREENECT_VIDEO_RGB);
-	freenect_set_depth_format(f_dev, FREENECT_VIDEO_IR_10BIT);
-
+	freenect_set_depth_format(f_dev, FREENECT_DEPTH_11BIT);
+	
 	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode\n");
 	if ( pthread_create(&data_in_thread, NULL, data_in, NULL) )
 	{
