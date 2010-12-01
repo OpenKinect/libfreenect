@@ -83,7 +83,7 @@ void init_thread() {
     pthread_create(&thread, NULL, init, NULL);
 }
 
-int freenect_sync_get_depth(char **depth, uint32_t *timestamp) {
+int freenect_sync_get_depth(void **depth, uint32_t *timestamp) {
     *depth = malloc(FREENECT_DEPTH_11BIT_SIZE);
     if (!thread_running)
 	init_thread();
@@ -95,7 +95,7 @@ int freenect_sync_get_depth(char **depth, uint32_t *timestamp) {
     return 0;
 }
 
-int freenect_sync_get_rgb(char **rgb, uint32_t *timestamp) {
+int freenect_sync_get_rgb(void **rgb, uint32_t *timestamp) {
     *rgb = malloc(FREENECT_VIDEO_RGB_SIZE);
     if (!thread_running)
 	init_thread();
