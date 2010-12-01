@@ -41,7 +41,7 @@ namespace Freenect {
 		const Noncopyable& operator=( const Noncopyable& );
 	};
 	
-	class FreenectDeviceState : Noncopyable {
+	class FreenectDeviceState {
 		friend class FreenectDevice;
 			FreenectDeviceState(freenect_raw_tilt_state *_state):
 				m_state(_state)
