@@ -224,7 +224,7 @@ void DrawGLScene()
 
 void keyPressed(unsigned char key, int x, int y)
 {
-	/* doesnt work since getState() was temporarily removed */
+	/*  FreenectDeviceState::getState() doesnt really work as expected */
 	//double freenect_angle = device->getState().getTiltDegs();
 
 	if (key == 27) {
