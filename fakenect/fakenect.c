@@ -256,7 +256,7 @@ int freenect_set_depth_buffer(freenect_device *dev, void *buf) {
     return 0;
 }
 
-int freenect_set_rgb_buffer(freenect_device *dev, void *buf) {
+int freenect_set_video_buffer(freenect_device *dev, void *buf) {
     rgb_buffer = buf;
     return 0;
 }
