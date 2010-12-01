@@ -103,6 +103,7 @@ typedef struct {
 	void *proc_buf;
 	uint8_t *buf;
   uint8_t *buf_ptr; //current location in buffer
+  uint8_t *buf_ptr_end; //current location in buffer
   int state;  //need a statemachine to decode data coming in
 	uint32_t bytes_left;  //how many bytes are we waiting for
   int magic_count;

@@ -248,7 +248,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
   uint32_t allowed_max = (transactions + 1) * packet_size;
   uint32_t bufferSize = 32 * allowed_max;
   int num_xfers =  bufferSize / allowed_max;
-  //fprintf(stderr, "max_packet_size=%d transactions=%d packet_size=%d allowed_max=%d num_xfers=%d bufferSize=%d\n", max_packet_size, transactions, packet_size, allowed_max, num_xfers, bufferSize );
+  fprintf(stderr, "max_packet_size=%d transactions=%d packet_size=%d allowed_max=%d num_xfers=%d bufferSize=%d\n", max_packet_size, transactions, packet_size, allowed_max, num_xfers, bufferSize );
 
 
 	strm->parent = dev;
@@ -256,17 +256,18 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 	strm->num_xfers = xfers;
 	strm->pkts = num_xfers;
 	strm->len = bufferSize;
-	//strm->buffer = malloc(bufferSize);
+	strm->buffer = malloc(num_xfers * bufferSize);
 	strm->xfers = malloc(sizeof(struct libusb_transfer*) * num_xfers);
 	strm->dead = 0;
 	strm->dead_xfers = 0;
 
+  uint8_t *bufp = strm->buffer;
 
-	for (i=0; i<xfers; i++) {
+	for (i=0; i<num_xfers; i++) {
 		FN_SPEW("Creating EP %02x transfer #%d\n", ep, i);
 		strm->xfers[i] = libusb_alloc_transfer(num_xfers);
 
-    uint8_t *bufp = (uint8_t*)malloc(bufferSize);
+    //uint8_t *bufp = (uint8_t*)malloc(bufferSize);
 		libusb_fill_iso_transfer(strm->xfers[i], dev->dev, ep, bufp, bufferSize, num_xfers, iso_callback, strm, 0);
 
 		libusb_set_iso_packet_lengths(strm->xfers[i], allowed_max);
@@ -274,6 +275,8 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 		ret = libusb_submit_transfer(strm->xfers[i]);
 		if (ret < 0)
 			FN_WARNING("Failed to submit isochronous transfer %d: %d\n", i, ret);
+
+    bufp += bufferSize;
 	}
 
 	return 0;

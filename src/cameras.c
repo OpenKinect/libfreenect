@@ -77,8 +77,6 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
           // Pull out the header info, hope that is complete
 
           struct pkt_hdr *hdr = (void*)pkt;
-          //uint8_t *data = pkt + sizeof(*hdr);
-          //int datalen = len - sizeof(*hdr);
 
 
           hdr->flag = hdr->flag >> 8 | hdr->flag << 8;
@@ -91,6 +89,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
             //fprintf(stderr,"==> START <==\n");
             strm->buf_ptr = strm->buf;  //reset to beginning
             total_bytes = 0;
+            strm->synced = 1;
           }
 
           strm->seq++;
@@ -102,6 +101,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
             int diff = (hdr->seq - strm->seq);
             FN_WARNING("stream_process: %d missing sequences detected\n", diff);
             strm->seq = hdr->seq;
+            strm->synced = 0;
           }
           strm->bytes_left = hdr->size - sizeof(struct pkt_hdr); // count down until we get all the bytes
           strm->state = 2;
@@ -114,10 +114,10 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
           uint8_t *data = pkt;
 
           size_t bytes_to_copy = ((end-data) < strm->bytes_left ? (end-data):strm->bytes_left);
-          //uint8_t *dbuf = strm->buf + (FRAME_PIX - strm->bytes_left);
           memcpy(strm->buf_ptr, data, bytes_to_copy);
           strm->bytes_left -= bytes_to_copy;
-          strm->buf_ptr += bytes_to_copy;
+          if(strm->synced > 0)
+            strm->buf_ptr += bytes_to_copy;
           total_bytes += bytes_to_copy;
           //fprintf(stderr,"Copy %d bytes with bytes_left=%d total_bytes=%d\n", bytes_to_copy, strm->bytes_left, total_bytes);
           pkt += bytes_to_copy;
@@ -161,6 +161,8 @@ static void stream_initbufs(freenect_context *ctx, packet_stream *strm, int rlen
 	} else {
 		strm->split_bufs = 1;
 		strm->raw_buf = malloc(rlen);
+    strm->buf_ptr = strm->buf = strm->raw_buf;
+    strm->buf_ptr_end = strm->raw_buf + rlen;
 	}
 }
 
@@ -568,7 +570,6 @@ int freenect_start_depth(freenect_device *dev)
 	dev->depth.synced = 0;
 	dev->depth.flag = 0x70;
 	dev->depth.valid_frames = 0;
-  dev->depth.buf_ptr = dev->depth.buf = dev->depth.raw_buf;
   dev->depth.state = 0;
   dev->depth.seq = 0;
 
@@ -613,7 +614,6 @@ int freenect_start_rgb(freenect_device *dev)
 	dev->rgb.synced = 0;
 	dev->rgb.flag = 0x80;
 	dev->rgb.valid_frames = 0;
-	dev->rgb.buf_ptr = dev->rgb.buf = dev->rgb.raw_buf;
   dev->rgb.state = 0;
   dev->rgb.magic_count = 0;
   dev->rgb.seq = 0;
