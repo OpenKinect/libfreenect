@@ -206,8 +206,6 @@ static void iso_callback(struct libusb_transfer *xfer)
 
 
 	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		//uint8_t *buf = (void*)xfer->buffer;
-		//for (i=0; i<strm->pkts; i++) {
     uint32_t byte_count = 0;
 
 		for (i=0; i<xfer->num_iso_packets; i++) {
@@ -236,7 +234,7 @@ static void iso_callback(struct libusb_transfer *xfer)
 	}
 }
 
-int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, int ep, int xfers, int pkts, int len)
+int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, int ep )
 {
 	freenect_context *ctx = dev->parent->parent;
 	int ret, i;
@@ -253,7 +251,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 
 	strm->parent = dev;
 	strm->cb = cb;
-	strm->num_xfers = xfers;
+	strm->num_xfers = num_xfers;
 	strm->pkts = num_xfers;
 	strm->len = bufferSize;
 	strm->buffer = malloc(num_xfers * bufferSize);
@@ -267,7 +265,6 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 		FN_SPEW("Creating EP %02x transfer #%d\n", ep, i);
 		strm->xfers[i] = libusb_alloc_transfer(num_xfers);
 
-    //uint8_t *bufp = (uint8_t*)malloc(bufferSize);
 		libusb_fill_iso_transfer(strm->xfers[i], dev->dev, ep, bufp, bufferSize, num_xfers, iso_callback, strm, 0);
 
 		libusb_set_iso_packet_lengths(strm->xfers[i], allowed_max);

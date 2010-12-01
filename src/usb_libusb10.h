@@ -84,7 +84,7 @@ int fnusb_process_events(fnusb_ctx *ctx);
 int fnusb_open_subdevices(freenect_device *dev, int index);
 int fnusb_close_subdevices(freenect_device *dev);
 
-int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, int ep, int xfers, int pkts, int len);
+int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, int ep);
 int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm);
 
 int fnusb_control(fnusb_dev *dev, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint8_t *data, uint16_t wLength);

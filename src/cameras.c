@@ -40,9 +40,6 @@ struct pkt_hdr {
 	uint32_t timestamp;
 };
 
-extern const struct caminit inits[];
-extern const int num_inits;
-
 static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *pkt, int len)
 {
   static unsigned total_bytes = 0;
@@ -135,12 +132,6 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
         break;
     }
   }
-#if 0
-  if ( pkt[0] == 'R')  //Found a match
-  {
-    fprintf(stderr,"\n\n**** ENDS WITH R ********\n\n");
-  }
-#endif
 
   return got_frame;
 }
@@ -573,7 +564,7 @@ int freenect_start_depth(freenect_device *dev)
   dev->depth.state = 0;
   dev->depth.seq = 0;
 
-	res = fnusb_start_iso(&dev->usb_cam, &dev->depth_isoc, depth_process, 0x82, NUM_XFERS, PKTS_PER_XFER, DEPTH_PKTBUF);
+	res = fnusb_start_iso(&dev->usb_cam, &dev->depth_isoc, depth_process, 0x82);
 	if (res < 0)
 		return res;
 
@@ -618,7 +609,7 @@ int freenect_start_rgb(freenect_device *dev)
   dev->rgb.magic_count = 0;
   dev->rgb.seq = 0;
 
-	res = fnusb_start_iso(&dev->usb_cam, &dev->rgb_isoc, rgb_process, 0x81, NUM_XFERS, PKTS_PER_XFER, RGB_PKTBUF);
+	res = fnusb_start_iso(&dev->usb_cam, &dev->rgb_isoc, rgb_process, 0x81);
 	if (res < 0)
 		return res;
 
