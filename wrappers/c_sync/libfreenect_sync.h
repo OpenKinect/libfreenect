@@ -27,6 +27,11 @@
 #ifndef FREENECT_SYNC_H
 #define FREENECT_SYNC_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+
 int freenect_sync_get_rgb(void **rgb, uint32_t *timestamp);
 /*  Synchronous rgb function, starts the runloop if it isn't running
 
@@ -48,4 +53,10 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp);
         Nonzero on error.
 */
 void freenect_sync_stop();
+
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
