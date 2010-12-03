@@ -28,7 +28,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
-#include <dc1394/dc1394.h>
 
 #include "freenect_internal.h"
 
