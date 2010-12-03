@@ -267,6 +267,40 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 		dev->depth_cb(dev, dev->depth.proc_buf, dev->depth.timestamp);
 }
 
+#define CLAMP(x) if (x < 0) {x = 0;} if (x > 255) {x = 255;}
+static void convert_uyvy_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
+{
+	int x, y;
+	for(y = 0; y < 480; ++y) {
+		for(x = 0; x < 640; x+=2) {
+			int i = (640 * y + x);
+			int u  = raw_buf[2*i];
+			int y1 = raw_buf[2*i+1];
+			int v  = raw_buf[2*i+2];
+			int y2 = raw_buf[2*i+3];
+			int r1 = (y1-16)*1164/1000 + (v-128)*1596/1000;
+			int g1 = (y1-16)*1164/1000 - (v-128)*813/1000 - (u-128)*391/1000;
+			int b1 = (y1-16)*1164/1000 + (u-128)*2018/1000;
+			int r2 = (y2-16)*1164/1000 + (v-128)*1596/1000;
+			int g2 = (y2-16)*1164/1000 - (v-128)*813/1000 - (u-128)*391/1000;
+			int b2 = (y2-16)*1164/1000 + (u-128)*2018/1000;
+			CLAMP(r1)
+			CLAMP(g1)
+			CLAMP(b1)
+			CLAMP(r2)
+			CLAMP(g2)
+			CLAMP(b2)
+			proc_buf[3*i]  =r1;
+			proc_buf[3*i+1]=g1;
+			proc_buf[3*i+2]=b1;
+			proc_buf[3*i+3]=r2;
+			proc_buf[3*i+4]=g2;
+			proc_buf[3*i+5]=b2;
+		}
+	}
+}
+#undef CLAMP
+
 static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
 {
 	int x,y;
@@ -463,6 +497,9 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 		case FREENECT_VIDEO_IR_8BIT:
 			convert_packed_to_8bit(dev->video.raw_buf, dev->video.proc_buf, 10, FREENECT_IR_FRAME_PIX);
 			break;
+		case FREENECT_VIDEO_YUV:
+			convert_uyvy_to_rgb(dev->video.raw_buf, dev->video.proc_buf);
+			break;
 	}
 
 	if (dev->video_cb)
@@ -648,6 +685,10 @@ int freenect_start_video(freenect_device *dev)
 			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE);
 			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
 			break;
+		case FREENECT_VIDEO_YUV:
+			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_YUV_SIZE, FREENECT_VIDEO_RGB_SIZE);
+			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_YUV;
+			break;
 	}
 
 	dev->video.pkt_size = VIDEO_PKTDSIZE;
@@ -660,12 +701,19 @@ int freenect_start_video(freenect_device *dev)
 		return res;
 
 	write_register(dev, 0x05, 0x00); // reset video stream
-	write_register(dev, 0x0c, 0x00);
-	write_register(dev, 0x0d, 0x01);
-	write_register(dev, 0x0e, 0x1e); // 30Hz bayer
+	if (dev->video_format == FREENECT_VIDEO_YUV) {
+		write_register(dev, 0x0c, 0x05); // UYUV mode
+		write_register(dev, 0x0d, 0x01); // 640x480
+		write_register(dev, 0x0e, 0x0f); // 15Hz
+	} else {
+		write_register(dev, 0x0c, 0x00); // Bayer
+		write_register(dev, 0x0d, 0x01); // 640x480
+		write_register(dev, 0x0e, 0x1e); // 30Hz
+	}
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
 		case FREENECT_VIDEO_BAYER:
+		case FREENECT_VIDEO_YUV:
 			write_register(dev, 0x05, 0x01); // start video stream
 			break;
 		case FREENECT_VIDEO_IR_8BIT:
@@ -746,6 +794,7 @@ int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt)
 		case FREENECT_VIDEO_IR_8BIT:
 		case FREENECT_VIDEO_IR_10BIT:
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
+		case FREENECT_VIDEO_YUV:
 			dev->video_format = fmt;
 			return 0;
 		default:

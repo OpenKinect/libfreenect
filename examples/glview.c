@@ -80,7 +80,7 @@ void DrawGLScene()
 {
 	pthread_mutex_lock(&gl_backbuf_mutex);
 
-	while (!got_depth || !got_rgb) {
+	while (!got_depth && !got_rgb) {
 		pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
 	}
 
@@ -123,7 +123,7 @@ void DrawGLScene()
 	glEnd();
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	if (current_format == FREENECT_VIDEO_RGB)
+	if (current_format == FREENECT_VIDEO_RGB || current_format == FREENECT_VIDEO_YUV)
 		glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
 	else
 		glTexImage2D(GL_TEXTURE_2D, 0, 1, 640, 480, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front+640*4);
@@ -164,6 +164,8 @@ void keyPressed(unsigned char key, int x, int y)
 	if (key == 'f') {
 		if (requested_format == FREENECT_VIDEO_IR_8BIT)
 			requested_format = FREENECT_VIDEO_RGB;
+		else if (requested_format == FREENECT_VIDEO_RGB)
+			requested_format = FREENECT_VIDEO_YUV;
 		else
 			requested_format = FREENECT_VIDEO_IR_8BIT;
 	}
