@@ -50,9 +50,11 @@ cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t len)
 
 cdef extern from "libfreenect_sync.h":
-    int freenect_sync_get_rgb(void **rgb, unsigned int *timestamp) # NOTE: These were uint32_t
-    int freenect_sync_get_depth(void **depth, unsigned int *timestamp)
-    void freenect_sync_stop()
+    int freenect_sync_get_video(void **video, unsigned int *timestamp, int index, int fmt)
+    int freenect_sync_get_depth(void **depth, unsigned int *timestamp, int index, int fmt)
+    #int freenect_sync_get_rgb(void **rgb, unsigned int *timestamp) # NOTE: These were uint32_t
+    #int freenect_sync_get_depth(void **depth, unsigned int *timestamp)
+    #void freenect_sync_stop()
 
 cdef extern from "libfreenect.h":
     ctypedef void (*freenect_depth_cb)(void *dev, char *depth, int timestamp) # was u_int32
@@ -301,11 +303,10 @@ def _sync_get_depth_str():
     """
     cdef void* depth
     cdef unsigned int timestamp
-    out = freenect_sync_get_depth(&depth, &timestamp)
+    out = freenect_sync_get_depth(&depth, &timestamp, 0, DEPTH_11BIT)
     if out:
         return
     depth_str = PyString_FromStringAndSize(<char *>depth, DEPTH_BYTES)
-    free(depth);
     return depth_str, timestamp
 
 
@@ -319,18 +320,17 @@ def _sync_get_rgb_str():
     """
     cdef void* rgb
     cdef unsigned int timestamp
-    out = freenect_sync_get_rgb(&rgb, &timestamp)
+    out = freenect_sync_get_video(&rgb, &timestamp, 0, VIDEO_RGB)
     if out:
         return
     rgb_str = PyString_FromStringAndSize(<char *>rgb, RGB_BYTES)
-    free(rgb);
     return rgb_str, timestamp
 
 
-def sync_stop():
-    """Terminate the synchronous runloop if running, else this is a NOP
-    """
-    freenect_sync_stop()
+#def sync_stop():
+#    """Terminate the synchronous runloop if running, else this is a NOP
+#    """
+#    freenect_sync_stop()
 
         
 def sync_get_rgb():
