@@ -156,9 +156,6 @@ void DrawGLScene()
   glDrawElements(GL_POINTS, 640*480, GL_UNSIGNED_INT, indices);
 	glPopMatrix();
   glDisable(GL_TEXTURE_2D);
-	
-  free(rgb);
-  free(depth);
   
 	glutSwapBuffers();
 }
