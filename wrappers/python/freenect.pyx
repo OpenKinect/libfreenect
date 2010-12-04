@@ -22,6 +22,8 @@
 # Binary distributions must follow the binary distribution requirements of
 # either License.
 import cython
+import numpy as np
+cimport numpy as npc
 
 VIDEO_RGB = 0
 VIDEO_BAYER = 1
@@ -40,8 +42,10 @@ LED_BLINK_YELLOW = 4
 LED_BLINK_GREEN = 5
 LED_BLINK_RED_YELLOW = 6
 
-DEPTH_BYTES = 614400 # 480 * 640 * 2
-RGB_BYTES = 921600  # 480 * 640 * 3
+cdef extern from "numpy/arrayobject.h":
+     void import_array()
+     cdef object PyArray_SimpleNewFromData(int nd, npc.npy_intp *dims,
+                                           int typenum, void *data)
 
 cdef extern from "stdlib.h":
     void free(void *ptr)
@@ -52,9 +56,8 @@ cdef extern from "Python.h":
 cdef extern from "libfreenect_sync.h":
     int freenect_sync_get_video(void **video, unsigned int *timestamp, int index, int fmt)
     int freenect_sync_get_depth(void **depth, unsigned int *timestamp, int index, int fmt)
-    #int freenect_sync_get_rgb(void **rgb, unsigned int *timestamp) # NOTE: These were uint32_t
-    #int freenect_sync_get_depth(void **depth, unsigned int *timestamp)
-    #void freenect_sync_stop()
+    void freenect_sync_stop()
+    
 
 cdef extern from "libfreenect.h":
     ctypedef void (*freenect_depth_cb)(void *dev, char *depth, int timestamp) # was u_int32
@@ -250,15 +253,6 @@ def runloop(depth=None, video=None, body=None):
     freenect_shutdown(ctxp)
 
 
-def _load_numpy():
-    try:
-        import numpy as np
-        return np
-    except ImportError, e:
-        print('You need the numpy library to use this function')
-        raise e
-
-
 def _depth_cb_np(dev, string, timestamp):
    """Converts the raw depth data into a numpy array for your function
 
@@ -270,7 +264,6 @@ def _depth_cb_np(dev, string, timestamp):
     Returns:
         (dev, data, timestamp) where data is a 2D numpy array
    """
-   np = _load_numpy()
    data = np.fromstring(string, dtype=np.uint16)
    data.resize((480, 640))
    return dev, data, timestamp
@@ -287,84 +280,55 @@ def _video_cb_np(dev, string, timestamp):
     Returns:
         (dev, data, timestamp) where data is a 2D numpy array
    """
-   np = _load_numpy()
    data = np.fromstring(string, dtype=np.uint8)
    data.resize((480, 640, 3))
    return dev, data, timestamp
 
+import_array()
 
-def _sync_get_depth_str():
-    """Get the next available depth frame from the kinect.
-
-    Returns:
-        (depth, timestamp) or None on error
-        depth: A python string for the 16 bit depth image (640*480*2 bytes)
-        timestamp: int representing the time
-    """
-    cdef void* depth
-    cdef unsigned int timestamp
-    out = freenect_sync_get_depth(&depth, &timestamp, 0, DEPTH_11BIT)
-    if out:
-        return
-    depth_str = PyString_FromStringAndSize(<char *>depth, DEPTH_BYTES)
-    return depth_str, timestamp
-
-
-def _sync_get_rgb_str():
-    """Get the next available rgb frame from the kinect.
-
-    Returns:
-        (rgb, timestamp) or None on error
-        rgb: A python string for the 8 bit rgb image (640*480*3 bytes)
-        timestamp: int representing the time
-    """
-    cdef void* rgb
-    cdef unsigned int timestamp
-    out = freenect_sync_get_video(&rgb, &timestamp, 0, VIDEO_RGB)
-    if out:
-        return
-    rgb_str = PyString_FromStringAndSize(<char *>rgb, RGB_BYTES)
-    return rgb_str, timestamp
-
-
-#def sync_stop():
-#    """Terminate the synchronous runloop if running, else this is a NOP
-#    """
-#    freenect_sync_stop()
-
-        
-def sync_get_rgb():
-    """Get the next available RGB frame from the kinect, as a numpy array.
-
-    Returns:
-        (rgb, timestamp) or None on error
-        rgb: A numpy array, shape:(640,480,3) dtype:np.uint8
-        timestamp: int representing the time        
-    """
-    np = _load_numpy()
-    try:
-        string, timestamp = _sync_get_rgb_str()
-    except TypeError:
-        return
-    data = np.fromstring(string, dtype=np.uint8)
-    data.resize((480, 640, 3))
-    return data, timestamp
-
-
-def sync_get_depth():
+def sync_get_depth(index=0, fmt=DEPTH_11BIT):
     """Get the next available depth frame from the kinect, as a numpy array.
+
+    Args:
+        index: Kinect device index (default: 0)
+        fmt: Depth format (default: DEPTH_11BIT)
 
     Returns:
         (depth, timestamp) or None on error
         depth: A numpy array, shape:(640,480) dtype:np.uint16
         timestamp: int representing the time
     """
-    np = _load_numpy()
-    try:
-        string, timestamp = _sync_get_depth_str()
-    except TypeError:
+    cdef void* data
+    cdef unsigned int timestamp
+    cdef npc.npy_intp dims[2]
+    if freenect_sync_get_depth(&data, &timestamp, index, fmt):
         return
-    data = np.fromstring(string, dtype=np.uint16)
-    data.resize((480, 640))
-    return data, timestamp
+    dims[0], dims[1]  = 480, 640
+    return PyArray_SimpleNewFromData(2, dims, npc.NPY_UINT16, data), timestamp
 
+
+def sync_get_video(index=0, fmt=VIDEO_RGB):
+    """Get the next available rgb frame from the kinect, as a numpy array.
+
+    Args:
+        index: Kinect device index (default: 0)
+        fmt: Depth format (default: VIDEO_RGB)
+
+    Returns:
+        (depth, timestamp) or None on error
+        depth: A numpy array, shape:(480, 640, 3) dtype:np.uint8
+        timestamp: int representing the time
+    """
+    cdef void* data
+    cdef unsigned int timestamp
+    cdef npc.npy_intp dims[3]
+    if freenect_sync_get_video(&data, &timestamp, index, fmt):
+        return
+    dims[0], dims[1], dims[2]  = 480, 640, 3
+    return PyArray_SimpleNewFromData(3, dims, npc.NPY_UINT8, data), timestamp
+
+
+def sync_stop():
+    """Terminate the synchronous runloop if running, else this is a NOP
+    """
+    freenect_sync_stop()

@@ -246,6 +246,10 @@ static int change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt)
 
 static sync_kinect_t *alloc_kinect(int index) {
     sync_kinect_t *kinect = malloc(sizeof(sync_kinect_t));
+    if (freenect_open_device(ctx, &kinect->dev, index)) {
+	free(kinect);
+	return NULL;
+    }
     int i;
     for (i = 0; i < 3; ++i) {
 	kinect->video.bufs[i] = NULL;
@@ -253,7 +257,6 @@ static sync_kinect_t *alloc_kinect(int index) {
     }
     kinect->video.fmt = -1;
     kinect->depth.fmt = -1;
-    freenect_open_device(ctx, &kinect->dev, index);
     freenect_set_video_callback(kinect->dev, video_producer_cb);
     freenect_set_depth_callback(kinect->dev, depth_producer_cb);
     pthread_mutex_init(&kinect->video.lock, NULL);
@@ -277,25 +280,53 @@ static int sync_get(void **data, uint32_t *timestamp, buffer_ring_t *buf) {
     return 0;
 }
 
+int setup_kinect(int index, int fmt, int is_depth) {
+    pending_runloop_tasks_inc();
+    pthread_mutex_lock(&runloop_lock);
+    int thread_running_prev = thread_running;
+    if (!thread_running)
+	init_thread();
+    if (!kinects[index])
+	kinects[index] = alloc_kinect(index);
+    if (!kinects[index]) {
+	printf("Error: Invalid index [%d]\n", index);
+	// If we started the thread, we need to bring it back
+	if (!thread_running_prev) {
+	    thread_running = 0;
+	    pthread_mutex_unlock(&runloop_lock);
+	    pending_runloop_tasks_dec();
+	    pthread_join(thread, NULL);
+	} else {
+	    pthread_mutex_unlock(&runloop_lock);
+	    pending_runloop_tasks_dec();
+	}
+	return -1;
+    }
+    buffer_ring_t *buf;
+    if (is_depth)
+	buf = &kinects[index]->depth;
+    else
+	buf = &kinects[index]->video;
+    pthread_mutex_lock(&buf->lock);
+    if (buf->fmt != fmt)
+	if (is_depth)
+	    change_depth_format(kinects[index], fmt);
+	else
+	    change_video_format(kinects[index], fmt);
+    pthread_mutex_unlock(&buf->lock);
+    pthread_mutex_unlock(&runloop_lock);
+    pending_runloop_tasks_dec();
+    return 0;
+}
+
 int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt) {
     if (index < 0 || index >= MAX_KINECTS) {
 	printf("Error: Invalid index [%d]\n", index);
 	return -1;
     }
-    if (!thread_running || !kinects[index] || kinects[index]->video.fmt != fmt) {
-        pending_runloop_tasks_inc();
-	pthread_mutex_lock(&runloop_lock);
-	if (!thread_running)
-	    init_thread();
-	if (!kinects[index])
-	    kinects[index] = alloc_kinect(index);
-	pthread_mutex_lock(&kinects[index]->video.lock);
-	if (kinects[index]->video.fmt != fmt)
-	    change_video_format(kinects[index], fmt);	    
-	pthread_mutex_unlock(&kinects[index]->video.lock);
-	pthread_mutex_unlock(&runloop_lock);
-	pending_runloop_tasks_dec();
-    }
+    if (!thread_running || !kinects[index] || kinects[index]->video.fmt != fmt)
+	if (setup_kinect(index, fmt, 0))
+	    return -1;
     sync_get(video, timestamp, &kinects[index]->video);
     return 0;
 }
@@ -305,20 +336,9 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
 	printf("Error: Invalid index [%d]\n", index);
 	return -1;
     }
-    if (!thread_running || !kinects[index] || kinects[index]->depth.fmt != fmt) {
-        pending_runloop_tasks_inc();
-	pthread_mutex_lock(&runloop_lock);
-	if (!thread_running)
-	    init_thread();
-	if (!kinects[index])
-	    kinects[index] = alloc_kinect(index);
-	pthread_mutex_lock(&kinects[index]->depth.lock);
-	if (kinects[index]->depth.fmt != fmt)
-	    change_depth_format(kinects[index], fmt);	    
-	pthread_mutex_unlock(&kinects[index]->depth.lock);
-	pthread_mutex_unlock(&runloop_lock);
-        pending_runloop_tasks_dec();
-    }
+    if (!thread_running || !kinects[index] || kinects[index]->depth.fmt != fmt)
+	if (setup_kinect(index, fmt, 1))
+	    return -1;
     sync_get(depth, timestamp, &kinects[index]->depth);
     return 0;
 }
