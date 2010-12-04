@@ -28,6 +28,10 @@
 #define FREENECT_SYNC_H
 #include <libfreenect.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt);
 /*  Synchronous video function, starts the runloop if it isn't running
 
@@ -61,4 +65,10 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
         Nonzero on error.
 */
 void freenect_sync_stop();
+
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif
