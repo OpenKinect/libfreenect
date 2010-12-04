@@ -135,17 +135,6 @@ static void free_buffer_ring(buffer_ring_t *buf) {
     buf->fmt = -1;
 }
 
-static sync_kinect_t *find_kinect(freenect_device *dev) {
-    // This is a nasty hack until we can get the index from the dev
-    int i;
-    for (i = 0; i < MAX_KINECTS; ++i) {
-	if (kinects[i] && kinects[i]->dev == dev)
-	    return kinects[i];
-    }
-    printf("Error: Couldn't find kinect in find_kinect!\n");
-    return NULL;
-}
-
 static void producer_cb_inner(freenect_device *dev, void *data, uint32_t timestamp, buffer_ring_t *buf, set_buffer_t set_buffer) {
     pthread_mutex_lock(&buf->lock);
     assert(data == buf->bufs[2]);
@@ -160,11 +149,11 @@ static void producer_cb_inner(freenect_device *dev, void *data, uint32_t timesta
 }
 
 static void video_producer_cb(freenect_device *dev, void *data, uint32_t timestamp) {
-    producer_cb_inner(dev, data, timestamp, &find_kinect(dev)->video, freenect_set_video_buffer);
+    producer_cb_inner(dev, data, timestamp, &((sync_kinect_t *)freenect_get_user(dev))->video, freenect_set_video_buffer);
 }
 
 static void depth_producer_cb(freenect_device *dev, void *data, uint32_t timestamp) {
-    producer_cb_inner(dev, data, timestamp, &find_kinect(dev)->depth, freenect_set_depth_buffer);
+    producer_cb_inner(dev, data, timestamp, &((sync_kinect_t *)freenect_get_user(dev))->depth, freenect_set_depth_buffer);
 }
 
 /* You should only use these functions to manipulate the pending_runloop_tasks_lock*/
@@ -206,6 +195,7 @@ static void *init(void *unused) {
 	if (kinects[i]) {
 	    freenect_stop_video(kinects[i]->dev);
 	    freenect_stop_depth(kinects[i]->dev);
+	    freenect_set_user(kinects[i]->dev, NULL);
 	    freenect_close_device(kinects[i]->dev);
 	    free_buffer_ring(&kinects[i]->video);
 	    free_buffer_ring(&kinects[i]->depth);
@@ -266,28 +256,15 @@ static sync_kinect_t *alloc_kinect(int index) {
     return kinect;
 }
 
-static int sync_get(void **data, uint32_t *timestamp, buffer_ring_t *buf) {
-    pthread_mutex_lock(&buf->lock);
-    // If there isn't a frame ready for us
-    while (!buf->valid)
-	pthread_cond_wait(&buf->cb_cond, &buf->lock);
-    void *temp_buf = buf->bufs[0];
-    *data = buf->bufs[0] = buf->bufs[1];
-    buf->bufs[1] = temp_buf;
-    buf->valid = 0;
-    *timestamp = buf->timestamp;
-    pthread_mutex_unlock(&buf->lock);
-    return 0;
-}
-
-int setup_kinect(int index, int fmt, int is_depth) {
+static int setup_kinect(int index, int fmt, int is_depth) {
     pending_runloop_tasks_inc();
     pthread_mutex_lock(&runloop_lock);
     int thread_running_prev = thread_running;
     if (!thread_running)
 	init_thread();
-    if (!kinects[index])
+    if (!kinects[index]) {
 	kinects[index] = alloc_kinect(index);
+    }
     if (!kinects[index]) {
 	printf("Error: Invalid index [%d]\n", index);
 	// If we started the thread, we need to bring it back
@@ -302,6 +279,8 @@ int setup_kinect(int index, int fmt, int is_depth) {
 	}
 	return -1;
     }
+    if (!thread_running_prev)
+	freenect_set_user(kinects[index]->dev, kinects[index]);
     buffer_ring_t *buf;
     if (is_depth)
 	buf = &kinects[index]->depth;
@@ -316,6 +295,20 @@ int setup_kinect(int index, int fmt, int is_depth) {
     pthread_mutex_unlock(&buf->lock);
     pthread_mutex_unlock(&runloop_lock);
     pending_runloop_tasks_dec();
+    return 0;
+}
+
+static int sync_get(void **data, uint32_t *timestamp, buffer_ring_t *buf) {
+    pthread_mutex_lock(&buf->lock);
+    // If there isn't a frame ready for us
+    while (!buf->valid)
+	pthread_cond_wait(&buf->cb_cond, &buf->lock);
+    void *temp_buf = buf->bufs[0];
+    *data = buf->bufs[0] = buf->bufs[1];
+    buf->bufs[1] = temp_buf;
+    buf->valid = 0;
+    *timestamp = buf->timestamp;
+    pthread_mutex_unlock(&buf->lock);
     return 0;
 }
 
