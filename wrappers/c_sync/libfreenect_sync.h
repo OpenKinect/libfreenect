@@ -60,5 +60,5 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
     Returns:
         Nonzero on error.
 */
-/*void freenect_sync_stop();*/
+void freenect_sync_stop();
 #endif

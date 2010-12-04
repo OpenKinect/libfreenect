@@ -45,14 +45,29 @@ typedef struct sync_kinect {
     buffer_ring_t depth;
 } sync_kinect_t;
 
+typedef int (*set_buffer_t)(freenect_device *dev, void *buf);
+
 #define MAX_KINECTS 64
 static sync_kinect_t *kinects[MAX_KINECTS] = {};
 static freenect_context *ctx;
 static int thread_running = 0;
 static pthread_t thread;
 static pthread_mutex_t runloop_lock = PTHREAD_MUTEX_INITIALIZER;
+static int pending_runloop_tasks = 0;
+static pthread_mutex_t pending_runloop_tasks_lock = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t pending_runloop_tasks_cond = PTHREAD_COND_INITIALIZER;
 
-int alloc_buffer_ring_video(freenect_video_format fmt, buffer_ring_t *buf) {
+/* Locking Convention
+   Rules:
+       - if you need more than one lock on a line, get them from left to right
+       - do not mix locks on different lines
+       - if you need to change the lock rules, make sure you check everything and update this
+   Lock Families:
+       - pending_runloop_tasks_lock
+       - runloop_lock, buffer_ring_t.lock (NOTE: You may only have one)
+*/
+
+static int alloc_buffer_ring_video(freenect_video_format fmt, buffer_ring_t *buf) {
     int sz, i;
     switch (fmt) {
     case FREENECT_VIDEO_RGB:
@@ -82,7 +97,7 @@ int alloc_buffer_ring_video(freenect_video_format fmt, buffer_ring_t *buf) {
     return 0;
 }
 
-int alloc_buffer_ring_depth(freenect_depth_format fmt, buffer_ring_t *buf) {
+static int alloc_buffer_ring_depth(freenect_depth_format fmt, buffer_ring_t *buf) {
     int sz, i;
     switch (fmt) {
     case FREENECT_DEPTH_11BIT:
@@ -109,7 +124,7 @@ int alloc_buffer_ring_depth(freenect_depth_format fmt, buffer_ring_t *buf) {
     return 0;
 }
 
-void free_buffer_ring(buffer_ring_t *buf) {
+static void free_buffer_ring(buffer_ring_t *buf) {
     int i;
     for (i = 0; i < 3; ++i) {
 	free(buf->bufs[i]);
@@ -120,7 +135,7 @@ void free_buffer_ring(buffer_ring_t *buf) {
     buf->fmt = -1;
 }
 
-sync_kinect_t *find_kinect(freenect_device *dev) {
+static sync_kinect_t *find_kinect(freenect_device *dev) {
     // This is a nasty hack until we can get the index from the dev
     int i;
     for (i = 0; i < MAX_KINECTS; ++i) {
@@ -131,39 +146,58 @@ sync_kinect_t *find_kinect(freenect_device *dev) {
     return NULL;
 }
 
-void video_producer_cb(freenect_device *dev, void *data, uint32_t timestamp) {
-    sync_kinect_t *kinect = find_kinect(dev);
-    pthread_mutex_lock(&kinect->video.lock);
-    assert(data == kinect->video.bufs[2]);
-    void *temp_buf = kinect->video.bufs[1];
-    kinect->video.bufs[1] = kinect->video.bufs[2];
-    kinect->video.bufs[2] = temp_buf;
-    freenect_set_video_buffer(dev, temp_buf);
-    kinect->video.timestamp = timestamp;
-    kinect->video.valid = 1;
-    pthread_cond_signal(&kinect->video.cb_cond);
-    pthread_mutex_unlock(&kinect->video.lock);
+static void producer_cb_inner(freenect_device *dev, void *data, uint32_t timestamp, buffer_ring_t *buf, set_buffer_t set_buffer) {
+    pthread_mutex_lock(&buf->lock);
+    assert(data == buf->bufs[2]);
+    void *temp_buf = buf->bufs[1];
+    buf->bufs[1] = buf->bufs[2];
+    buf->bufs[2] = temp_buf;
+    set_buffer(dev, temp_buf);
+    buf->timestamp = timestamp;
+    buf->valid = 1;
+    pthread_cond_signal(&buf->cb_cond);
+    pthread_mutex_unlock(&buf->lock);
 }
 
-void depth_producer_cb(freenect_device *dev, void *data, uint32_t timestamp) {
-    sync_kinect_t *kinect = find_kinect(dev);
-    pthread_mutex_lock(&kinect->depth.lock);
-    assert(data == kinect->depth.bufs[2]);
-    void *temp_buf = kinect->depth.bufs[1];
-    kinect->depth.bufs[1] = kinect->depth.bufs[2];
-    kinect->depth.bufs[2] = temp_buf;
-    freenect_set_depth_buffer(dev, temp_buf);
-    kinect->depth.timestamp = timestamp;
-    kinect->depth.valid = 1;
-    pthread_cond_signal(&kinect->depth.cb_cond);
-    pthread_mutex_unlock(&kinect->depth.lock);
+static void video_producer_cb(freenect_device *dev, void *data, uint32_t timestamp) {
+    producer_cb_inner(dev, data, timestamp, &find_kinect(dev)->video, freenect_set_video_buffer);
 }
 
-void *init(void *unused) {
+static void depth_producer_cb(freenect_device *dev, void *data, uint32_t timestamp) {
+    producer_cb_inner(dev, data, timestamp, &find_kinect(dev)->depth, freenect_set_depth_buffer);
+}
+
+/* You should only use these functions to manipulate the pending_runloop_tasks_lock*/
+static void pending_runloop_tasks_inc() {
+    pthread_mutex_lock(&pending_runloop_tasks_lock);
+    assert(pending_runloop_tasks >= 0);
+    ++pending_runloop_tasks;
+    pthread_mutex_unlock(&pending_runloop_tasks_lock);
+}
+
+static void pending_runloop_tasks_dec() {
+    pthread_mutex_lock(&pending_runloop_tasks_lock);
+    --pending_runloop_tasks;
+    assert(pending_runloop_tasks >= 0);
+    if (!pending_runloop_tasks)
+	pthread_cond_signal(&pending_runloop_tasks_cond);
+    pthread_mutex_unlock(&pending_runloop_tasks_lock);
+}
+
+static void pending_runloop_tasks_wait_zero() {
+    pthread_mutex_lock(&pending_runloop_tasks_lock);
+    while (pending_runloop_tasks)
+	pthread_cond_wait(&pending_runloop_tasks_cond, &pending_runloop_tasks_lock);
+    pthread_mutex_unlock(&pending_runloop_tasks_lock);
+}
+
+static void *init(void *unused) {
+    pending_runloop_tasks_wait_zero();
     pthread_mutex_lock(&runloop_lock);
     while(thread_running && freenect_process_events(ctx) >= 0) {
 	pthread_mutex_unlock(&runloop_lock);
-	// NOTE: This lets other things run here
+	// NOTE: This lets you run tasks while process_events isn't running
+	pending_runloop_tasks_wait_zero();
 	pthread_mutex_lock(&runloop_lock);
     }
     // Go through each device, call stop video, close device
@@ -184,31 +218,33 @@ void *init(void *unused) {
     return NULL;
 }
 
-void init_thread() {
+static void init_thread() {
     thread_running = 1;
     freenect_init(&ctx, 0);
     pthread_create(&thread, NULL, init, NULL);
 }
 
-void change_video_format(sync_kinect_t *kinect, freenect_video_format fmt) {
+static int change_video_format(sync_kinect_t *kinect, freenect_video_format fmt) {
     freenect_stop_video(kinect->dev);
     free_buffer_ring(&kinect->video);
-    alloc_buffer_ring_video(fmt, &kinect->video);
+    if (alloc_buffer_ring_video(fmt, &kinect->video))
+	return -1;
     freenect_set_video_format(kinect->dev, fmt);
     freenect_set_video_buffer(kinect->dev, kinect->video.bufs[2]);
     freenect_start_video(kinect->dev);
 }
 
-void change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt) {
+static int change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt) {
     freenect_stop_depth(kinect->dev);
     free_buffer_ring(&kinect->depth);
-    alloc_buffer_ring_depth(fmt, &kinect->depth);
+    if(alloc_buffer_ring_depth(fmt, &kinect->depth))
+	return -1;
     freenect_set_depth_format(kinect->dev, fmt);
     freenect_set_depth_buffer(kinect->dev, kinect->depth.bufs[2]);
     freenect_start_depth(kinect->dev);
 }
 
-sync_kinect_t *alloc_kinect(int index) {
+static sync_kinect_t *alloc_kinect(int index) {
     sync_kinect_t *kinect = malloc(sizeof(sync_kinect_t));
     int i;
     for (i = 0; i < 3; ++i) {
@@ -227,12 +263,27 @@ sync_kinect_t *alloc_kinect(int index) {
     return kinect;
 }
 
+static int sync_get(void **data, uint32_t *timestamp, buffer_ring_t *buf) {
+    pthread_mutex_lock(&buf->lock);
+    // If there isn't a frame ready for us
+    while (!buf->valid)
+	pthread_cond_wait(&buf->cb_cond, &buf->lock);
+    void *temp_buf = buf->bufs[0];
+    *data = buf->bufs[0] = buf->bufs[1];
+    buf->bufs[1] = temp_buf;
+    buf->valid = 0;
+    *timestamp = buf->timestamp;
+    pthread_mutex_unlock(&buf->lock);
+    return 0;
+}
+
 int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt) {
     if (index < 0 || index >= MAX_KINECTS) {
 	printf("Error: Invalid index [%d]\n", index);
 	return -1;
     }
     if (!thread_running || !kinects[index] || kinects[index]->video.fmt != fmt) {
+        pending_runloop_tasks_inc();
 	pthread_mutex_lock(&runloop_lock);
 	if (!thread_running)
 	    init_thread();
@@ -243,19 +294,9 @@ int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freene
 	    change_video_format(kinects[index], fmt);	    
 	pthread_mutex_unlock(&kinects[index]->video.lock);
 	pthread_mutex_unlock(&runloop_lock);
+	pending_runloop_tasks_dec();
     }
-    sync_kinect_t *kinect;
-    kinect = kinects[index];
-    pthread_mutex_lock(&kinect->video.lock);
-    // If there isn't a frame ready for us
-    while (!kinect->video.valid)
-	pthread_cond_wait(&kinect->video.cb_cond, &kinect->video.lock);
-    void *temp_buf = kinect->video.bufs[0];
-    *video = kinect->video.bufs[0] = kinect->video.bufs[1];
-    kinect->video.bufs[1] = temp_buf;
-    kinect->video.valid = 0;
-    *timestamp = kinect->video.timestamp;
-    pthread_mutex_unlock(&kinect->video.lock);
+    sync_get(video, timestamp, &kinects[index]->video);
     return 0;
 }
 
@@ -265,6 +306,7 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
 	return -1;
     }
     if (!thread_running || !kinects[index] || kinects[index]->depth.fmt != fmt) {
+        pending_runloop_tasks_inc();
 	pthread_mutex_lock(&runloop_lock);
 	if (!thread_running)
 	    init_thread();
@@ -275,28 +317,15 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
 	    change_depth_format(kinects[index], fmt);	    
 	pthread_mutex_unlock(&kinects[index]->depth.lock);
 	pthread_mutex_unlock(&runloop_lock);
+        pending_runloop_tasks_dec();
     }
-    sync_kinect_t *kinect;
-    kinect = kinects[index];
-    pthread_mutex_lock(&kinect->depth.lock);
-    // If there isn't a frame ready for us
-    while (!kinect->depth.valid)
-	pthread_cond_wait(&kinect->depth.cb_cond, &kinect->depth.lock);
-    void *temp_buf = kinect->depth.bufs[0];
-    *depth = kinect->depth.bufs[0] = kinect->depth.bufs[1];
-    kinect->depth.bufs[1] = temp_buf;
-    kinect->depth.valid = 0;
-    *timestamp = kinect->depth.timestamp;
-    pthread_mutex_unlock(&kinect->depth.lock);
+    sync_get(depth, timestamp, &kinects[index]->depth);
     return 0;
 }
 
-/*
 void freenect_sync_stop() {
     if (thread_running) {
 	thread_running = 0;
 	pthread_join(thread, NULL);
     }
 }
-
-*/
