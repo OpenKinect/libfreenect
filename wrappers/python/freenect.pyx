@@ -50,8 +50,8 @@ cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t len)
 
 cdef extern from "libfreenect_sync.h":
-    int freenect_sync_get_rgb(void **rgb, unsigned int *timestamp) # NOTE: These were uint32_t
-    int freenect_sync_get_depth(void **depth, unsigned int *timestamp)
+    int freenect_sync_get_rgb(void **rgb, unsigned int *timestamp) nogil # NOTE: These were uint32_t
+    int freenect_sync_get_depth(void **depth, unsigned int *timestamp) nogil
     void freenect_sync_stop()
 
 cdef extern from "libfreenect.h":
@@ -290,7 +290,6 @@ def _video_cb_np(dev, string, timestamp):
    data.resize((480, 640, 3))
    return dev, data, timestamp
 
-
 def _sync_get_depth_str():
     """Get the next available depth frame from the kinect.
 
@@ -301,7 +300,9 @@ def _sync_get_depth_str():
     """
     cdef void* depth
     cdef unsigned int timestamp
-    out = freenect_sync_get_depth(&depth, &timestamp)
+    cdef int out
+    with nogil:
+        out = freenect_sync_get_depth(&depth, &timestamp)
     if out:
         return
     depth_str = PyString_FromStringAndSize(<char *>depth, DEPTH_BYTES)
@@ -319,7 +320,9 @@ def _sync_get_rgb_str():
     """
     cdef void* rgb
     cdef unsigned int timestamp
-    out = freenect_sync_get_rgb(&rgb, &timestamp)
+    cdef int out
+    with nogil:
+        out = freenect_sync_get_rgb(&rgb, &timestamp)
     if out:
         return
     rgb_str = PyString_FromStringAndSize(<char *>rgb, RGB_BYTES)
