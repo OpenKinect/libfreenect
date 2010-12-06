@@ -59,11 +59,11 @@ void LoadVertexMatrix()
 	float b = 3.3309495f;
 	float cx = 340.0f;
 	float cy = 240.0f;
-	float mat[4][4] = {
-		{1/f,     0,  0, 0},
-		{0,    -1/f,  0, 0},
-		{0,       0,  0, a},
-		{-cx/f,cy/f, -1, b}
+	GLfloat mat[16] = {
+		1/f,     0,  0, 0,
+		0,    -1/f,  0, 0,
+		0,       0,  0, a,
+		-cx/f,cy/f, -1, b
 	};
 	glMultMatrixf(mat);
 }
@@ -73,11 +73,11 @@ void LoadVertexMatrix()
 // and some python code I haven't documented yet.
 void LoadRGBMatrix()
 {
-	float mat[4][4] = {
-		{  5.34866271e+02,   3.89654806e+00,   0.00000000e+00,   1.74704200e-02},
-		{ -4.70724694e+00,  -5.28843603e+02,   0.00000000e+00,  -1.22753400e-02},
-		{ -3.19670762e+02,  -2.60999685e+02,   0.00000000e+00,  -9.99772000e-01},
-		{ -6.98445586e+00,   3.31139785e+00,   0.00000000e+00,   1.09167360e-02}
+	float mat[16] = {
+		  5.34866271e+02,   3.89654806e+00,   0.00000000e+00,   1.74704200e-02,
+		 -4.70724694e+00,  -5.28843603e+02,   0.00000000e+00,  -1.22753400e-02,
+		 -3.19670762e+02,  -2.60999685e+02,   0.00000000e+00,  -9.99772000e-01,
+		 -6.98445586e+00,   3.31139785e+00,   0.00000000e+00,   1.09167360e-02
 	};
 	glMultMatrixf(mat);
 }
@@ -108,9 +108,9 @@ void DrawGLScene()
 {
 	short *depth = 0;
 	char *rgb = 0;
-	int ts;
-	freenect_sync_get_depth(&depth, &ts);
-	freenect_sync_get_rgb(&rgb, &ts);
+	uint32_t ts;
+	freenect_sync_get_depth((void**)&depth, &ts);
+	freenect_sync_get_rgb((void**)&rgb, &ts);
 
 	static unsigned int indices[480][640];
 	static short xyz[480][640][3];
@@ -221,6 +221,6 @@ int main(int argc, char **argv)
 
 	glutMainLoop();
 
-	return NULL;
+	return 0;
 }
 
