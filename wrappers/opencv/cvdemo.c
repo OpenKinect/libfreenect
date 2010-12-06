@@ -1,5 +1,6 @@
 #include <opencv/cv.h>
 #include <opencv/highgui.h>
+#include <stdio.h>
 #include "libfreenect_cv.h"
 
 IplImage *GlViewColor(IplImage *depth)
@@ -56,12 +57,16 @@ int main(int argc, char **argv)
 {
 	while (cvWaitKey(10) < 0) {
 		IplImage *image = freenect_sync_get_rgb_cv(0);
-		if (!image)
+		if (!image) {
+		    printf("Error: Kinect not connected?\n");
 		    return -1;
+		}
 		cvCvtColor(image, image, CV_RGB2BGR);
 		IplImage *depth = freenect_sync_get_depth_cv(0);
-		if (!depth)
+		if (!depth) {
+		    printf("Error: Kinect not connected?\n");
 		    return -1;
+		}
 		cvShowImage("RGB", image);
 		cvShowImage("Depth", GlViewColor(depth));
 	}

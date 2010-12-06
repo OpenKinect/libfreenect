@@ -39,7 +39,7 @@
 #include <GL/gl.h>
 #include <GL/glu.h>
 #endif
-
+#include <stdlib.h>
 #include <math.h>
 
 int window;
@@ -105,17 +105,21 @@ void mousePress(int button, int state, int x, int y)
     }
 }
 
+void no_kinect_quit(void)
+{
+    printf("Error: Kinect not connected?\n");
+    exit(1);
+}
+
 void DrawGLScene()
 {
     short *depth = 0;
     char *rgb = 0;
     uint32_t ts;
     if (freenect_sync_get_depth((void**)&depth, &ts, 0, FREENECT_DEPTH_11BIT) < 0)
-        return;
-    if (freenect_sync_get_video((void**)&rgb, &ts, 0, FREENECT_VIDEO_RGB) < 0) {
-        free(depth);
-        return;
-    }
+	no_kinect_quit();
+    if (freenect_sync_get_video((void**)&rgb, &ts, 0, FREENECT_VIDEO_RGB) < 0)
+	no_kinect_quit();
 
     static unsigned int indices[480][640];
     static short xyz[480][640][3];
