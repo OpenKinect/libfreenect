@@ -3,7 +3,7 @@
  *
  * Copyright (c) 2010 individual OpenKinect contributors. See the CONTRIB file
  * for details.
- * 
+ *
  * Andrew Miller <amiller@dappervision.com>
  *
  * This code is licensed to you under the terms of the Apache License, version
@@ -52,19 +52,20 @@ int color = 1;          // Use the RGB texture or just draw it as color
 // Do the projection from u,v,depth to X,Y,Z directly in an opengl matrix
 // These numbers come from a combination of the ros kinect_node wiki, and
 // nicolas burrus' posts.
-void LoadVertexMatrix() 
+void LoadVertexMatrix()
 {
-  float f = 590.0f;
-  float a = -0.0030711f;
-  float b = 3.3309495f;
-  float cx = 340.0f;
-  float cy = 240.0f;
-  float mat[4][4] = {
-    {1/f,     0,  0, 0},
-    {0,    -1/f,  0, 0},
-    {0,       0,  0, a},
-    {-cx/f,cy/f, -1, b}};
-  glMultMatrixf(mat);
+	float f = 590.0f;
+	float a = -0.0030711f;
+	float b = 3.3309495f;
+	float cx = 340.0f;
+	float cy = 240.0f;
+	float mat[4][4] = {
+		{1/f,     0,  0, 0},
+		{0,    -1/f,  0, 0},
+		{0,       0,  0, a},
+		{-cx/f,cy/f, -1, b}
+	};
+	glMultMatrixf(mat);
 }
 
 
@@ -72,94 +73,96 @@ void LoadVertexMatrix()
 // and some python code I haven't documented yet.
 void LoadRGBMatrix()
 {
-  float mat[4][4] = {
-    {  5.34866271e+02,   3.89654806e+00,   0.00000000e+00,   1.74704200e-02},
-    { -4.70724694e+00,  -5.28843603e+02,   0.00000000e+00,  -1.22753400e-02},
-    { -3.19670762e+02,  -2.60999685e+02,   0.00000000e+00,  -9.99772000e-01},
-    { -6.98445586e+00,   3.31139785e+00,   0.00000000e+00,   1.09167360e-02}};
-  glMultMatrixf(mat);
+	float mat[4][4] = {
+		{  5.34866271e+02,   3.89654806e+00,   0.00000000e+00,   1.74704200e-02},
+		{ -4.70724694e+00,  -5.28843603e+02,   0.00000000e+00,  -1.22753400e-02},
+		{ -3.19670762e+02,  -2.60999685e+02,   0.00000000e+00,  -9.99772000e-01},
+		{ -6.98445586e+00,   3.31139785e+00,   0.00000000e+00,   1.09167360e-02}
+	};
+	glMultMatrixf(mat);
 }
 
 void mouseMoved(int x, int y)
 {
-  if (mx>=0 && my>=0) {
-    rotangles[0] += y-my;
-    rotangles[1] += x-mx;
-  }
-  mx = x;
-  my = y;
+	if (mx>=0 && my>=0) {
+		rotangles[0] += y-my;
+		rotangles[1] += x-mx;
+	}
+	mx = x;
+	my = y;
 }
 
 void mousePress(int button, int state, int x, int y)
 {
-  if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
-    mx = x;
-    my = y;
-  }
-  if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
-    mx = -1;
-    my = -1;
-  }
+	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {
+		mx = x;
+		my = y;
+	}
+	if (button == GLUT_LEFT_BUTTON && state == GLUT_UP) {
+		mx = -1;
+		my = -1;
+	}
 }
 
 void DrawGLScene()
 {
-  short *depth = 0;
-  char *rgb = 0;
-  int ts;
-  freenect_sync_get_depth(&depth, &ts);
-  freenect_sync_get_rgb(&rgb, &ts);
-  
-  static unsigned int indices[480][640];
-  static short xyz[480][640][3];
-  int i,j;
-  for (i = 0; i < 480; i++) {
-    for (j = 0; j < 640; j++) {
-      xyz[i][j][0] = j;
-      xyz[i][j][1] = i;
-      xyz[i][j][2] = depth[i*640+j];
-      indices[i][j] = i*640+j; 
-    }
-  }
-  
+	short *depth = 0;
+	char *rgb = 0;
+	int ts;
+	freenect_sync_get_depth(&depth, &ts);
+	freenect_sync_get_rgb(&rgb, &ts);
+
+	static unsigned int indices[480][640];
+	static short xyz[480][640][3];
+	int i,j;
+	for (i = 0; i < 480; i++) {
+		for (j = 0; j < 640; j++) {
+			xyz[i][j][0] = j;
+			xyz[i][j][1] = i;
+			xyz[i][j][2] = depth[i*640+j];
+			indices[i][j] = i*640+j;
+		}
+	}
+
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
-	
-  glPushMatrix();
-  glScalef(zoom,zoom,1);
-  glTranslatef(0,0,-3.5);
-  glRotatef(rotangles[0], 1,0,0);
-  glRotatef(rotangles[1], 0,1,0);
-  glTranslatef(0,0,1.5);
-  
-  LoadVertexMatrix();
-  
-  // Set the projection from the XYZ to the texture image
-  glMatrixMode(GL_TEXTURE);
-  glLoadIdentity();
-  glScalef(1/640.0f,1/480.0f,1);
-  LoadRGBMatrix();
-  LoadVertexMatrix();
-  glMatrixMode(GL_MODELVIEW);
-  
-  glPointSize(1);
 
-  glEnableClientState(GL_VERTEX_ARRAY);
-  glVertexPointer(3, GL_SHORT, 0, xyz);
-  glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-  glTexCoordPointer(3, GL_SHORT, 0, xyz);
-  
-  if (color) glEnable(GL_TEXTURE_2D);
+	glPushMatrix();
+	glScalef(zoom,zoom,1);
+	glTranslatef(0,0,-3.5);
+	glRotatef(rotangles[0], 1,0,0);
+	glRotatef(rotangles[1], 0,1,0);
+	glTranslatef(0,0,1.5);
+
+	LoadVertexMatrix();
+
+	// Set the projection from the XYZ to the texture image
+	glMatrixMode(GL_TEXTURE);
+	glLoadIdentity();
+	glScalef(1/640.0f,1/480.0f,1);
+	LoadRGBMatrix();
+	LoadVertexMatrix();
+	glMatrixMode(GL_MODELVIEW);
+
+	glPointSize(1);
+
+	glEnableClientState(GL_VERTEX_ARRAY);
+	glVertexPointer(3, GL_SHORT, 0, xyz);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	glTexCoordPointer(3, GL_SHORT, 0, xyz);
+
+	if (color)
+		glEnable(GL_TEXTURE_2D);
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
 	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb);
-		
-  glDrawElements(GL_POINTS, 640*480, GL_UNSIGNED_INT, indices);
+
+	glDrawElements(GL_POINTS, 640*480, GL_UNSIGNED_INT, indices);
 	glPopMatrix();
-  glDisable(GL_TEXTURE_2D);
-	
-  free(rgb);
-  free(depth);
-  
+	glDisable(GL_TEXTURE_2D);
+
+	free(rgb);
+	free(depth);
+
 	glutSwapBuffers();
 }
 
@@ -167,11 +170,14 @@ void keyPressed(unsigned char key, int x, int y)
 {
 	if (key == 27) {
 		glutDestroyWindow(window);
-    exit(0);
+		exit(0);
 	}
-  if (key == 'w') zoom *= 1.1f;
-  if (key == 's') zoom /= 1.1f;
-  if (key == 'c') color = !color;
+	if (key == 'w')
+		zoom *= 1.1f;
+	if (key == 's')
+		zoom /= 1.1f;
+	if (key == 'c')
+		color = !color;
 }
 
 void ReSizeGLScene(int Width, int Height)
@@ -179,7 +185,7 @@ void ReSizeGLScene(int Width, int Height)
 	glViewport(0,0,Width,Height);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-  gluPerspective(60, 4/3., 0.3, 200);
+	gluPerspective(60, 4/3., 0.3, 200);
 	glMatrixMode(GL_MODELVIEW);
 }
 
@@ -196,10 +202,10 @@ void InitGL(int Width, int Height)
 
 int main(int argc, char **argv)
 {
-  glutInit(&argc, argv);
+	glutInit(&argc, argv);
 
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
-  glutInitWindowSize(640, 480);
+	glutInitWindowSize(640, 480);
 	glutInitWindowPosition(0, 0);
 
 	window = glutCreateWindow("LibFreenect");
@@ -208,8 +214,8 @@ int main(int argc, char **argv)
 	glutIdleFunc(&DrawGLScene);
 	glutReshapeFunc(&ReSizeGLScene);
 	glutKeyboardFunc(&keyPressed);
-  glutMotionFunc(&mouseMoved);
-  glutMouseFunc(&mousePress);
+	glutMotionFunc(&mouseMoved);
+	glutMouseFunc(&mousePress);
 
 	InitGL(640, 480);
 
