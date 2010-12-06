@@ -170,6 +170,7 @@ void DrawGLScene()
 void keyPressed(unsigned char key, int x, int y)
 {
 	if (key == 27) {
+		freenect_sync_stop();
 		glutDestroyWindow(window);
 		exit(0);
 	}
