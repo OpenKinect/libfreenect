@@ -109,8 +109,12 @@ void DrawGLScene()
 	short *depth = 0;
 	char *rgb = 0;
 	uint32_t ts;
-	freenect_sync_get_depth((void**)&depth, &ts);
-	freenect_sync_get_rgb((void**)&rgb, &ts);
+	if (freenect_sync_get_depth((void**)&depth, &ts) < 0)
+		return;
+	if (freenect_sync_get_rgb((void**)&rgb, &ts) < 0) {
+		free(depth);
+		return;
+	}
 
 	static unsigned int indices[480][640];
 	static short xyz[480][640][3];
