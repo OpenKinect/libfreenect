@@ -52,7 +52,7 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp);
     Returns:
         Nonzero on error.
 */
-void freenect_sync_stop();
+void freenect_sync_stop(void);
 
 
 #ifdef __cplusplus
