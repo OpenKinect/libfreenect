@@ -234,6 +234,7 @@ static int change_video_format(sync_kinect_t *kinect, freenect_video_format fmt)
 	freenect_set_video_format(kinect->dev, fmt);
 	freenect_set_video_buffer(kinect->dev, kinect->video.bufs[2]);
 	freenect_start_video(kinect->dev);
+	return 0;
 }
 
 static int change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt)
@@ -245,6 +246,7 @@ static int change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt)
 	freenect_set_depth_format(kinect->dev, fmt);
 	freenect_set_depth_buffer(kinect->dev, kinect->depth.bufs[2]);
 	freenect_start_depth(kinect->dev);
+	return 0;
 }
 
 static sync_kinect_t *alloc_kinect(int index)
@@ -301,11 +303,12 @@ static int setup_kinect(int index, int fmt, int is_depth)
 	else
 		buf = &kinects[index]->video;
 	pthread_mutex_lock(&buf->lock);
-	if (buf->fmt != fmt)
+	if (buf->fmt != fmt) {
 		if (is_depth)
 			change_depth_format(kinects[index], fmt);
 		else
 			change_video_format(kinects[index], fmt);
+	}
 	pthread_mutex_unlock(&buf->lock);
 	pthread_mutex_unlock(&runloop_lock);
 	pending_runloop_tasks_dec();
