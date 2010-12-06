@@ -200,7 +200,7 @@ int freenect_process_events(freenect_context *ctx) {
 			memcpy(&state, data, sizeof(state));
 		} else if (!already_warned) {
 			already_warned = 1;
-			printf("\n\nWarning: Accelerometer data has an unexpected size [%d] instead of [%ld].  The acceleration and tilt data will be substituted for dummy values.  This data was probably made with an older version of record (the upstream interface changes and we have to follow).\n\n", data_size, sizeof state);
+			printf("\n\nWarning: Accelerometer data has an unexpected size [%d] instead of [%u].  The acceleration and tilt data will be substituted for dummy values.  This data was probably made with an older version of record (the upstream interface changes and we have to follow).\n\n", data_size, sizeof state);
 		}
 		break;
 	}

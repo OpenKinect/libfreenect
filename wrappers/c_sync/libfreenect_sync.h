@@ -26,35 +26,46 @@
 
 #ifndef FREENECT_SYNC_H
 #define FREENECT_SYNC_H
+#include <libfreenect.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
+int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt);
+/*  Synchronous video function, starts the runloop if it isn't running
 
-int freenect_sync_get_rgb(void **rgb, uint32_t *timestamp);
-/*  Synchronous rgb function, starts the runloop if it isn't running
+    The returned buffer is valid until this function is called again, after which the buffer must not
+    be used again.  Make a copy if the data is required.
 
     Args:
-        rgb: Populated with a pointer to a RGB buffer (of size RGB_BYTES)
-        timestamp: Populated with a pointer to the associated timestamp
+        video: Populated with a pointer to a video buffer with a size of the requested type
+        timestamp: Populated with the associated timestamp
+        index: Device index (0 is the first)
+        fmt: Valid format
 
     Returns:
         Nonzero on error.
 */
-int freenect_sync_get_depth(void **depth, uint32_t *timestamp);
+
+
+int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freenect_depth_format fmt);
 /*  Synchronous depth function, starts the runloop if it isn't running
 
+    The returned buffer is valid until this function is called again, after which the buffer must not
+    be used again.  Make a copy if the data is required.
+
     Args:
-        depth: Populated with a pointer to a depth buffer (of size DEPTH_BYTES)
-        timestamp: Populated with a pointer to the associated timestamp
+        depth: Populated with a pointer to a depth buffer with a size of the requested type
+        timestamp: Populated with the associated timestamp
+        index: Device index (0 is the first)
+        fmt: Valid format
 
     Returns:
         Nonzero on error.
 */
 void freenect_sync_stop(void);
-
-
 #ifdef __cplusplus
 }
 #endif
