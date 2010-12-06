@@ -688,11 +688,11 @@ int freenect_start_video(freenect_device *dev)
 			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
 			break;
 		case FREENECT_VIDEO_YUV_RGB:
-			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_YUV_SIZE, FREENECT_VIDEO_RGB_SIZE);
+			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_YUV_RAW_SIZE, FREENECT_VIDEO_RGB_SIZE);
 			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_YUV;
 			break;
 		case FREENECT_VIDEO_YUV_RAW:
-			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_YUV_SIZE);
+			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_YUV_RAW_SIZE);
 			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_YUV;
 			break;
 	}
