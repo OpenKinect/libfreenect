@@ -43,73 +43,74 @@ int thread_running = 0;
 pthread_t thread;
 
 void depth_producer_cb(freenect_device *dev, void *depth, uint32_t timestamp) {
-    pthread_mutex_lock(&depth_mutex);
-    memcpy(depth_img, depth, FREENECT_DEPTH_11BIT_SIZE);
-    depth_timestamp = timestamp;
-    pthread_cond_signal(&depth_cond);
-    pthread_mutex_unlock(&depth_mutex);
+	pthread_mutex_lock(&depth_mutex);
+	memcpy(depth_img, depth, FREENECT_DEPTH_11BIT_SIZE);
+	depth_timestamp = timestamp;
+	pthread_cond_signal(&depth_cond);
+	pthread_mutex_unlock(&depth_mutex);
 }
 
 void rgb_producer_cb(freenect_device *dev, void *rgb, uint32_t timestamp) {
-    pthread_mutex_lock(&rgb_mutex);
-    memcpy(rgb_img, rgb, FREENECT_VIDEO_RGB_SIZE);
-    rgb_timestamp = timestamp;
-    pthread_cond_signal(&rgb_cond);
-    pthread_mutex_unlock(&rgb_mutex);
+	pthread_mutex_lock(&rgb_mutex);
+	memcpy(rgb_img, rgb, FREENECT_VIDEO_RGB_SIZE);
+	rgb_timestamp = timestamp;
+	pthread_cond_signal(&rgb_cond);
+	pthread_mutex_unlock(&rgb_mutex);
 }
 
 void *init(void *unused) {
-    freenect_context *ctx;
-    freenect_device *dev;
-    freenect_init(&ctx, 0);
-    freenect_open_device(ctx, &dev, 0);
-    freenect_set_depth_format(dev, FREENECT_DEPTH_11BIT);
-    freenect_start_depth(dev);
-    freenect_set_video_format(dev, FREENECT_VIDEO_RGB);
-    freenect_start_video(dev);
-    freenect_set_depth_callback(dev, depth_producer_cb);
-    freenect_set_video_callback(dev, rgb_producer_cb);
-    while(thread_running && freenect_process_events(ctx) >= 0)
-	{}
-    freenect_stop_depth(dev);
-    freenect_stop_video(dev);
-    freenect_close_device(dev);
-    freenect_shutdown(ctx);
-    return NULL;
+	freenect_context *ctx;
+	freenect_device *dev;
+	freenect_init(&ctx, 0);
+	freenect_open_device(ctx, &dev, 0);
+	freenect_set_depth_format(dev, FREENECT_DEPTH_11BIT);
+	freenect_start_depth(dev);
+	freenect_set_video_format(dev, FREENECT_VIDEO_RGB);
+	freenect_start_video(dev);
+	freenect_set_depth_callback(dev, depth_producer_cb);
+	freenect_set_video_callback(dev, rgb_producer_cb);
+
+	while(thread_running && freenect_process_events(ctx) >= 0);
+
+	freenect_stop_depth(dev);
+	freenect_stop_video(dev);
+	freenect_close_device(dev);
+	freenect_shutdown(ctx);
+	return NULL;
 }
 
 void init_thread() {
-    thread_running = 1;
-    pthread_create(&thread, NULL, init, NULL);
+	thread_running = 1;
+	pthread_create(&thread, NULL, init, NULL);
 }
 
 int freenect_sync_get_depth(void **depth, uint32_t *timestamp) {
-    *depth = malloc(FREENECT_DEPTH_11BIT_SIZE);
-    if (!thread_running)
-	init_thread();
-    pthread_mutex_lock(&depth_mutex);
-    pthread_cond_wait(&depth_cond, &depth_mutex);
-    memcpy(*depth, depth_img, FREENECT_DEPTH_11BIT_SIZE);
-    *timestamp = depth_timestamp;
-    pthread_mutex_unlock(&depth_mutex);
-    return 0;
+	*depth = malloc(FREENECT_DEPTH_11BIT_SIZE);
+	if (!thread_running)
+		init_thread();
+	pthread_mutex_lock(&depth_mutex);
+	pthread_cond_wait(&depth_cond, &depth_mutex);
+	memcpy(*depth, depth_img, FREENECT_DEPTH_11BIT_SIZE);
+	*timestamp = depth_timestamp;
+	pthread_mutex_unlock(&depth_mutex);
+	return 0;
 }
 
 int freenect_sync_get_rgb(void **rgb, uint32_t *timestamp) {
-    *rgb = malloc(FREENECT_VIDEO_RGB_SIZE);
-    if (!thread_running)
-	init_thread();
-    pthread_mutex_lock(&rgb_mutex);
-    pthread_cond_wait(&rgb_cond, &rgb_mutex);
-    memcpy(*rgb, rgb_img, FREENECT_VIDEO_RGB_SIZE);
-    *timestamp = rgb_timestamp;
-    pthread_mutex_unlock(&rgb_mutex);
-    return 0;
+	*rgb = malloc(FREENECT_VIDEO_RGB_SIZE);
+	if (!thread_running)
+		init_thread();
+	pthread_mutex_lock(&rgb_mutex);
+	pthread_cond_wait(&rgb_cond, &rgb_mutex);
+	memcpy(*rgb, rgb_img, FREENECT_VIDEO_RGB_SIZE);
+	*timestamp = rgb_timestamp;
+	pthread_mutex_unlock(&rgb_mutex);
+	return 0;
 }
 
 void freenect_sync_stop() {
-    if (thread_running) {
-	thread_running = 0;
-	pthread_join(thread, NULL);
-    }
+	if (thread_running) {
+		thread_running = 0;
+		pthread_join(thread, NULL);
+	}
 }
