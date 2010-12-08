@@ -128,7 +128,7 @@ namespace Freenect {
 		}
 		T& createDevice(int _index) {
 			m_devices.insert(std::make_pair<int, T*>(_index, new T(m_ctx, _index)));
-			return *(m_devices.at(_index));
+			return *(m_devices[_index]);
 		}
 		void deleteDevice(int _index) {
 			m_devices.erase(_index);
