@@ -4,7 +4,6 @@
 
 include_directories (${CMAKE_CURRENT_SOURCE_DIR})
 
-set(CMAKE_C_FLAGS "-Wall")
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
 LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c)
 
