@@ -7,6 +7,6 @@ public interface Context {
     Device openDevice(int index);
     void processEvents();
     void processEventsBackground();
-    void closeDevice(Device device);
     void stopEventThread();
+    void shutdown();
 }
