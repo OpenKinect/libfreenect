@@ -91,6 +91,12 @@ SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 
+# let CFLAGS env override this
+if(CMAKE_C_FLAGS STREQUAL "")
+  set(CMAKE_C_FLAGS "-O2")
+endif()
+add_definitions(-Wall)
+
 # Pretty much everyone is going to need the main includes
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 
