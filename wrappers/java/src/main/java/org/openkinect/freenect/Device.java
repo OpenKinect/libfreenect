@@ -15,4 +15,5 @@ public interface Device {
     int startVideo(VideoHandler handler);
     int stopDepth();
     int stopVideo();
+    void close();
 }

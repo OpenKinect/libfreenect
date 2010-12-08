@@ -49,10 +49,6 @@ public class Freenect implements Library {
         throw new IllegalStateException("init() returned " + rval);
     }
 
-    public interface NativeLogCallback extends Callback {
-        void callback(Device dev, int logLevel, String msg);
-    }
-    
     protected static class NativeContext extends PointerType implements Context {
         private EventThread eventThread;
 
@@ -61,7 +57,7 @@ public class Freenect implements Library {
         private LogHandler logHandler;
         private final NativeLogCallback logCallback = new NativeLogCallback() {
             @Override
-            public void callback(Device dev, int level, String msg) {
+            public void callback(NativeDevice dev, int level, String msg) {
                 logHandler.onMessage(dev, LogLevel.fromInt(level), msg);
             }
         };
@@ -70,6 +66,7 @@ public class Freenect implements Library {
             super(ptr);
         }
 
+        @Override
         public void setLogHandler(LogHandler handler) {
             this.logHandler = handler;
             if (logHandler == null) {
@@ -79,14 +76,17 @@ public class Freenect implements Library {
             }
         }
         
+        @Override
         public void setLogLevel(LogLevel level) {
             freenect_set_log_level(this, level.intValue());
         }
         
+        @Override
         public int numDevices() {
             return freenect_num_devices(this);
         }
 
+        @Override
         public Device openDevice(int index) {
             PointerByReference devicePtr = new PointerByReference();
             int rval = freenect_open_device(this, devicePtr, index);
@@ -96,14 +96,12 @@ public class Freenect implements Library {
             return new NativeDevice(devicePtr.getValue());
         }
 
-        public void closeDevice(Device dev) {
-            freenect_close_device((NativeDevice) dev);
-        }
-
+        @Override
         public void processEvents() {
             freenect_process_events(this);
         }
 
+        @Override
         public void processEventsBackground() {
             if (eventThread == null || !eventThread.isAlive()) {
                 eventThread = new EventThread(this);
@@ -113,17 +111,18 @@ public class Freenect implements Library {
 
         @Override
         public void stopEventThread() {
-            eventThread.kill();
+            if (eventThread != null) {
+                eventThread.kill();
+                eventThread = null;
+            }
+        }
+        
+        @Override
+        public void shutdown() {
+            stopEventThread();
+            freenect_shutdown(this);
         }
     }
-
-    private interface NativeDepthCallback extends Callback {
-        void invoke(Pointer dev, Pointer depth, int timestamp);
-    };
-
-    private interface NativeVideoCallback extends Callback {
-        void invoke(Pointer dev, Pointer frame, int timestamp);
-    };
 
     protected static class NativeDevice extends PointerType implements Device {
         private Pointer tiltState;
@@ -139,14 +138,14 @@ public class Freenect implements Library {
 
         private final NativeVideoCallback videoCallback = new NativeVideoCallback() {
             @Override
-            public void invoke(Pointer dev, Pointer depth, int timestamp) {
+            public void callback(Pointer dev, Pointer depth, int timestamp) {
                 videoHandler.onFrameReceived(videoFormat, videoBuffer, timestamp);
             }
         };
 
         private final NativeDepthCallback depthCallback = new NativeDepthCallback() {
             @Override
-            public void invoke(Pointer dev, Pointer depth, int timestamp) {
+            public void callback(Pointer dev, Pointer depth, int timestamp) {
                 depthHandler.onFrameReceived(depthFormat, depthBuffer, timestamp);
             }
         };
@@ -271,6 +270,18 @@ public class Freenect implements Library {
     
     // function prototypes from libfreenect.h
     // These must match the names used in the library!
+
+    public interface NativeLogCallback extends Callback {
+        void callback(NativeDevice dev, int logLevel, String msg);
+    }
+
+    private interface NativeDepthCallback extends Callback {
+        void callback(Pointer dev, Pointer depth, int timestamp);
+    };
+
+    private interface NativeVideoCallback extends Callback {
+        void callback(Pointer dev, Pointer frame, int timestamp);
+    };
 
     private static native int freenect_init(PointerByReference ctx, Pointer usb_ctx);
     private static native int freenect_shutdown(NativeContext ctx);
