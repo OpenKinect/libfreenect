@@ -88,12 +88,6 @@ static inline uint32_t fn_le32(uint32_t d)
 #define DEPTH_PKTDSIZE (DEPTH_PKTSIZE-12)
 #define VIDEO_PKTDSIZE (VIDEO_PKTSIZE-12)
 
-#define DEPTH_PKTS_10_BIT_PER_FRAME ((FREENECT_DEPTH_10BIT_PACKED_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
-#define DEPTH_PKTS_11_BIT_PER_FRAME ((FREENECT_DEPTH_11BIT_PACKED_SIZE+DEPTH_PKTDSIZE-1)/DEPTH_PKTDSIZE)
-#define VIDEO_PKTS_PER_FRAME ((FRAME_PIX+VIDEO_PKTDSIZE-1)/VIDEO_PKTDSIZE)
-#define VIDEO_PKTS_PER_FRAME_IR  ((FREENECT_VIDEO_IR_10BIT_PACKED_SIZE+VIDEO_PKTDSIZE-1)/VIDEO_PKTDSIZE)
-#define VIDEO_PKTS_PER_FRAME_YUV  ((FREENECT_VIDEO_YUV_RAW_SIZE+VIDEO_PKTDSIZE-1)/VIDEO_PKTDSIZE)
-
 #define VID_MICROSOFT 0x45e
 #define PID_NUI_CAMERA 0x02ae
 #define PID_NUI_MOTOR 0x02b0
@@ -107,8 +101,11 @@ typedef struct {
 	int pkt_num;
 	int pkts_per_frame;
 	int pkt_size;
+	int frame_size;
+	int last_pkt_size;
 	int valid_pkts;
 	int valid_frames;
+	int variable_length;
 	uint32_t last_timestamp;
 	uint32_t timestamp;
 	int split_bufs;
