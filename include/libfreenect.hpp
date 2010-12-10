@@ -145,6 +145,7 @@ namespace Freenect {
 		static void *pthread_callback(void *user_data) {
 			Freenect<T>* freenect = static_cast<Freenect<T>*>(user_data);
 			(*freenect)();
+			return NULL;
 		}
 	  private:
 		freenect_context *m_ctx;

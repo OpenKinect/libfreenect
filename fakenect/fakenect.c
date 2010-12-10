@@ -30,6 +30,7 @@
 #include <math.h>
 #include <unistd.h>
 #include <time.h>
+#include <assert.h>
 
 #define GRAVITY 9.80665
 
@@ -47,8 +48,12 @@ static double playback_prev_time = 0.;
 static double record_prev_time = 0.;
 static void *depth_buffer = NULL;
 static void *rgb_buffer = NULL;
+static int depth_running = 0;
+static int rgb_running = 0;
+static void *user_ptr = NULL;
 
-static void sleep_highres(double tm) {
+static void sleep_highres(double tm)
+{
 	int sec = floor(tm);
 	int usec = (tm - sec) * 1000000;
 	if (tm > 0) {
@@ -57,23 +62,15 @@ static void sleep_highres(double tm) {
 	}
 }
 
-static double get_time() {
+static double get_time()
+{
 	struct timeval cur;
 	gettimeofday(&cur, NULL);
 	return cur.tv_sec + cur.tv_usec / 1000000.;
 }
 
-static void dump_depth(FILE *fp, void *data, int data_size) {
-	fprintf(fp, "P5 %d %d 65535\n", FREENECT_FRAME_W, FREENECT_FRAME_H);
-	fwrite(data, data_size, 1, fp);
-}
-
-static void dump_rgb(FILE *fp, void *data, int data_size) {
-	fprintf(fp, "P6 %d %d 255\n", FREENECT_FRAME_W, FREENECT_FRAME_H);
-	fwrite(data, data_size, 1, fp);
-}
-
-static char *one_line(FILE *fp) {
+static char *one_line(FILE *fp)
+{
 	int pos = 0;
 	char *out = NULL;
 	char c;
@@ -90,7 +87,8 @@ static char *one_line(FILE *fp) {
 	return out;
 }
 
-static int get_data_size(FILE *fp) {
+static int get_data_size(FILE *fp)
+{
 	int orig = ftell(fp);
 	fseek(fp, 0L, SEEK_END);
 	int out = ftell(fp);
@@ -98,7 +96,8 @@ static int get_data_size(FILE *fp) {
 	return out;
 }
 
-static int parse_line(char *type, double *cur_time, unsigned int *timestamp, unsigned int *data_size, char **data) {
+static int parse_line(char *type, double *cur_time, unsigned int *timestamp, unsigned int *data_size, char **data)
+{
 	char *line = one_line(index_fp);
 	if (!line) {
 		printf("Warning: No more lines in [%s]\n", input_path);
@@ -117,14 +116,18 @@ static int parse_line(char *type, double *cur_time, unsigned int *timestamp, uns
 	*data_size = get_data_size(cur_fp);
 	sscanf(line, "%c-%lf-%u-%*s", type, cur_time, timestamp);
 	*data = malloc(*data_size);
-	fread(*data, *data_size, 1, cur_fp);
+	if (fread(*data, *data_size, 1, cur_fp) != 1) {
+		printf("Error: Couldn't read entire file.\n");
+		return -1;
+	}
 	fclose(cur_fp);
 	free(line);
 	free(file_path);
 	return 0;
 }
 
-static void open_index() {
+static void open_index()
+{
 	input_path = getenv("FAKENECT_PATH");
 	if (!input_path) {
 		printf("Error: Environmental variable FAKENECT_PATH is not set.  Set it to a path that was created using the 'record' utility.\n");
@@ -141,7 +144,8 @@ static void open_index() {
 	free(index_path);
 }
 
-static char *skip_line(char *str) {
+static char *skip_line(char *str)
+{
 	char *out = strchr(str, '\n');
 	if (!out) {
 		printf("Error: PGM/PPM has incorrect formatting, expected a header on one line followed by a newline\n");
@@ -150,7 +154,8 @@ static char *skip_line(char *str) {
 	return out + 1;
 }
 
-int freenect_process_events(freenect_context *ctx) {
+int freenect_process_events(freenect_context *ctx)
+{
 	/* This is where the magic happens. We read 1 update from the index
 	   per call, so this needs to be called in a loop like usual.  If the
 	   index line is a Depth/RGB image the provided callback is called.  If
@@ -175,46 +180,54 @@ int freenect_process_events(freenect_context *ctx) {
 		sleep_highres((record_cur_time - record_prev_time) - (get_time() - playback_prev_time));
 	record_prev_time = record_cur_time;
 	switch (type) {
-	case 'd':
-		if (cur_depth_cb) {
-			void *cur_depth = skip_line(data);
-			if (depth_buffer) {
-				memcpy(depth_buffer, cur_depth, FREENECT_DEPTH_11BIT_SIZE);
-				cur_depth = depth_buffer;
+		case 'd':
+			if (cur_depth_cb && depth_running) {
+				void *cur_depth = skip_line(data);
+				if (depth_buffer) {
+					memcpy(depth_buffer, cur_depth, FREENECT_DEPTH_11BIT_SIZE);
+					cur_depth = depth_buffer;
+				}
+				cur_depth_cb(fake_dev, cur_depth, timestamp);
 			}
-			cur_depth_cb(fake_dev, cur_depth, timestamp);
-		}
-		break;
-	case 'r':
-		if (cur_rgb_cb) {
-			void *cur_rgb = skip_line(data);
-			if (rgb_buffer) {
-				memcpy(rgb_buffer, cur_rgb, FREENECT_VIDEO_RGB_SIZE);
-				cur_rgb = rgb_buffer;
+			break;
+		case 'r':
+			if (cur_rgb_cb && rgb_running) {
+				void *cur_rgb = skip_line(data);
+				if (rgb_buffer) {
+					memcpy(rgb_buffer, cur_rgb, FREENECT_VIDEO_RGB_SIZE);
+					cur_rgb = rgb_buffer;
+				}
+				cur_rgb_cb(fake_dev, cur_rgb, timestamp);
 			}
-			cur_rgb_cb(fake_dev, cur_rgb, timestamp);
-		}
-		break;
-	case 'a':
-		if (data_size == sizeof(state)) {
-			memcpy(&state, data, sizeof(state));
-		} else if (!already_warned) {
-			already_warned = 1;
-			printf("\n\nWarning: Accelerometer data has an unexpected size [%d] instead of [%u].  The acceleration and tilt data will be substituted for dummy values.  This data was probably made with an older version of record (the upstream interface changes and we have to follow).\n\n", data_size, sizeof state);
-		}
-		break;
+			break;
+		case 'a':
+			if (data_size == sizeof(state)) {
+				memcpy(&state, data, sizeof(state));
+			} else if (!already_warned) {
+				already_warned = 1;
+				printf("\n\nWarning: Accelerometer data has an unexpected"
+				       " size [%u] instead of [%u].  The acceleration "
+				       "and tilt data will be substituted for dummy "
+				       "values.  This data was probably made with an "
+				       "older version of record (the upstream interface "
+				       "changed).\n\n",
+				       data_size, (unsigned int)sizeof state);
+			}
+			break;
 	}
 	free(data);
 	playback_prev_time = get_time();
 	return 0;
 }
 
-double freenect_get_tilt_degs(freenect_raw_tilt_state *state) {
+double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
+{
 	// NOTE: This is duped from tilt.c, this is the only function we need from there
 	return ((double)state->tilt_angle) / 2.;
 }
 
-freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev) {
+freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev)
+{
 	return &state;
 }
 
@@ -227,52 +240,111 @@ void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y
 	*z = (double)state->accelerometer_z/FREENECT_COUNTS_PER_G*GRAVITY;
 }
 
-void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb) {
+void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb)
+{
 	cur_depth_cb = cb;
 }
 
-void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb) {
+void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb)
+{
 	cur_rgb_cb = cb;
 }
 
-int freenect_num_devices(freenect_context *ctx) {
+int freenect_num_devices(freenect_context *ctx)
+{
 	// Always 1 device
 	return 1;
 }
 
-int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index) {
+int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
+{
 	// Set it to some number to allow for NULL checks
 	*dev = fake_dev;
 	return 0;
 }
 
-int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx) {
+int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
+{
 	*ctx = fake_ctx;
 	return 0;
 }
 
-int freenect_set_depth_buffer(freenect_device *dev, void *buf) {
+int freenect_set_depth_buffer(freenect_device *dev, void *buf)
+{
 	depth_buffer = buf;
 	return 0;
 }
 
-int freenect_set_video_buffer(freenect_device *dev, void *buf) {
+int freenect_set_video_buffer(freenect_device *dev, void *buf)
+{
 	rgb_buffer = buf;
+	return 0;
+}
+
+void freenect_set_user(freenect_device *dev, void *user)
+{
+	user_ptr = user;
+}
+
+void *freenect_get_user(freenect_device *dev)
+{
+	return user_ptr;
+}
+
+int freenect_start_depth(freenect_device *dev)
+{
+	depth_running = 1;
+	return 0;
+}
+
+int freenect_start_video(freenect_device *dev)
+{
+	rgb_running = 1;
+	return 0;
+}
+
+int freenect_stop_depth(freenect_device *dev)
+{
+	depth_running = 0;
+	return 0;
+}
+
+int freenect_stop_video(freenect_device *dev)
+{
+	rgb_running = 0;
+	return 0;
+}
+
+int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt)
+{
+	assert(fmt == FREENECT_VIDEO_RGB);
+	return 0;
+}
+int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
+{
+	assert(fmt == FREENECT_DEPTH_11BIT);
 	return 0;
 }
 
 void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb) {}
 void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level) {}
-void freenect_set_user(freenect_device *dev, void *user) {}
-int freenect_shutdown(freenect_context *ctx) {return 0;}
-int freenect_close_device(freenect_device *dev) {return 0;}
-int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt) {return 0;}
-int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt) {return 0;}
-int freenect_start_depth(freenect_device *dev) {return 0;}
-int freenect_start_video(freenect_device *dev) {return 0;}
-int freenect_stop_depth(freenect_device *dev) {return 0;}
-int freenect_stop_video(freenect_device *dev) {return 0;}
-int freenect_set_tilt_degs(freenect_device *dev, double angle) {return 0;}
-int freenect_set_led(freenect_device *dev, freenect_led_options option) {return 0;}
-int freenect_update_tilt_state(freenect_device *dev) {return 0;}
-void *freenect_get_user(freenect_device *dev) {return NULL;}
+int freenect_shutdown(freenect_context *ctx)
+{
+	return 0;
+}
+int freenect_close_device(freenect_device *dev)
+{
+	return 0;
+}
+int freenect_set_tilt_degs(freenect_device *dev, double angle)
+{
+	return 0;
+}
+int freenect_set_led(freenect_device *dev, freenect_led_options option)
+{
+	return 0;
+}
+int freenect_update_tilt_state(freenect_device *dev)
+{
+	return 0;
+}
