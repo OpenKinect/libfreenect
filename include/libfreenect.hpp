@@ -44,7 +44,7 @@ namespace Freenect {
 	class FreenectTiltState {
 	  friend class FreenectDevice;
 		FreenectTiltState(freenect_raw_tilt_state *_state):
-			m_state(_state), m_code(_state->tilt_status)
+			m_code(_state->tilt_status), m_state(_state)
 		{}
 	  public:
 		void getAccelerometers(double* x, double* y, double* z) {
@@ -128,7 +128,7 @@ namespace Freenect {
 		}
 		T& createDevice(int _index) {
 			m_devices.insert(std::make_pair<int, T*>(_index, new T(m_ctx, _index)));
-			return *(m_devices[_index]);
+			return *(m_devices.find(_index)->second);
 		}
 		void deleteDevice(int _index) {
 			m_devices.erase(_index);
