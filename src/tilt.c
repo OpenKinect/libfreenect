@@ -93,6 +93,11 @@ double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
 	return ((double)state->tilt_angle) / 2.;
 }
 
+freenect_tilt_status_code freenect_get_tilt_status(freenect_raw_tilt_state *state)
+{
+	return state->tilt_status;
+}
+
 void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z)
 {
 	//the documentation for the accelerometer (http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf)

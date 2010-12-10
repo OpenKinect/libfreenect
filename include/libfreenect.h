@@ -157,6 +157,7 @@ int freenect_update_tilt_state(freenect_device *dev);
 freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev);
 double freenect_get_tilt_degs(freenect_raw_tilt_state *state);
 int freenect_set_tilt_degs(freenect_device *dev, double angle);
+freenect_tilt_status_code freenect_get_tilt_status(freenect_raw_tilt_state *state);
 int freenect_set_led(freenect_device *dev, freenect_led_options option);
 void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z);
 
