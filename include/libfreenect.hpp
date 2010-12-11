@@ -70,7 +70,7 @@ namespace Freenect {
 			freenect_set_video_callback(m_dev, freenect_video_callback);
 		}
 		~FreenectDevice() {
-			if(freenect_close_device(m_dev) < 0) throw std::runtime_error("Cannot shutdown Kinect");
+			if(freenect_close_device(m_dev) < 0){} //FN_WARNING("Device did not shutdown in a clean fashion");
 		}
 		void startVideo() {
 			if(freenect_start_video(m_dev) < 0) throw std::runtime_error("Cannot start RGB callback");
@@ -124,7 +124,7 @@ namespace Freenect {
 			}
 			m_stop = true;
 			pthread_join(m_thread, NULL);
-			if(freenect_shutdown(m_ctx) < 0) throw std::runtime_error("Cannot cleanup freenect library");
+			if(freenect_shutdown(m_ctx) < 0){} //FN_WARNING("Freenect did not shutdown in a clean fashion");
 		}
 		T& createDevice(int _index) {
 			m_devices.insert(std::make_pair<int, T*>(_index, new T(m_ctx, _index)));
