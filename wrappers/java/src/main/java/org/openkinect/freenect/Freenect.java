@@ -185,7 +185,7 @@ public class Freenect implements Library {
         }
 
         @Override
-        public void refreshTitleState() {
+        public void refreshTiltState() {
             freenect_update_tilt_state(this);
         }
         

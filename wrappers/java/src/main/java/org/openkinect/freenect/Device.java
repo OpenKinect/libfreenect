@@ -5,7 +5,7 @@ package org.openkinect.freenect;
 public interface Device {
     double[] getAccel();
     int setLed(LedStatus status);
-    void refreshTitleState();
+    void refreshTiltState();
     double getTiltAngle();
     int setTiltAngle(double angle);
     TiltStatus getTiltStatus();
