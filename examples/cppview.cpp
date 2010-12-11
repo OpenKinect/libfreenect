@@ -171,9 +171,8 @@ freenect_video_format requested_format(FREENECT_VIDEO_RGB);
 GLuint gl_depth_tex;
 GLuint gl_rgb_tex;
 
-bool die;
+
 double freenect_angle(0);
-//double ext_freenect_angle(0);
 int got_frames(0),window(0);
 int g_argc;
 char **g_argv;
@@ -231,10 +230,7 @@ void DrawGLScene()
 
 void keyPressed(unsigned char key, int x, int y)
 {
-	//ext_freenect_angle = freenect_angle;
-
 	if (key == 27) {
-		die = 1;
 		glutDestroyWindow(window);
 	}
 	if (key == '1') {
