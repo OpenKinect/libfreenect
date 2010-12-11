@@ -45,7 +45,7 @@ public class FreenectTest {
     @Test 
     public void testTiltAngle() {
         assumeThat(dev, is(not(nullValue())));
-        dev.refreshTitleState();
+        dev.refreshTiltState();
         assertThat(dev.getTiltAngle(), is(allOf(greaterThanOrEqualTo(-22d), lessThanOrEqualTo(22d))));
         // There's currently no way to access the tilt state to
         // wait for movement to complete, so no way to verify movements.
