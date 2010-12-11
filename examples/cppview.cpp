@@ -1,28 +1,28 @@
-/*This file is part of the OpenKinect Project. http://www.openkinect.org
-
-  Copyright (c) 2010 individual OpenKinect contributors. See the CONTRIB
-  file for details.
-
-  This code is licensed to you under the terms of the Apache License,
-  version 2.0, or, at your option, the terms of the GNU General Public
-  License, version 2.0. See the APACHE20 and GPL2 files for the text of
-  the licenses, or the following URLs:
-  http://www.apache.org/licenses/LICENSE-2.0
-  http://www.gnu.org/licenses/gpl-2.0.txt
-
-  If you redistribute this file in source form, modified or unmodified,
-  you may:
-
-  - Leave this header intact and distribute it under the same terms,
-  accompanying it with the APACHE20 and GPL2 files, or
-  - Delete the Apache 2.0 clause and accompany it with the GPL2 file, or
-  - Delete the GPL v2 clause and accompany it with the APACHE20 file
-
-  In all cases you must keep the copyright notice intact and include a
-  copy of the CONTRIB file.
-
-  Binary distributions must follow the binary distribution requirements
-  of either License.*/
+/*
+ * This file is part of the OpenKinect Project. http://www.openkinect.org
+ *
+ * Copyright (c) 2010 individual OpenKinect contributors. See the CONTRIB file
+ * for details.
+ *
+ * This code is licensed to you under the terms of the Apache License, version
+ * 2.0, or, at your option, the terms of the GNU General Public License,
+ * version 2.0. See the APACHE20 and GPL2 files for the text of the licenses,
+ * or the following URLs:
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.gnu.org/licenses/gpl-2.0.txt
+ *
+ * If you redistribute this file in source form, modified or unmodified, you
+ * may:
+ *   1) Leave this header intact and distribute it under the same terms,
+ *      accompanying it with the APACHE20 and GPL20 files, or
+ *   2) Delete the Apache 2.0 clause and accompany it with the GPL2 file, or
+ *   3) Delete the GPL v2 clause and accompany it with the APACHE20 file
+ * In all cases you must keep the copyright notice intact and include a copy
+ * of the CONTRIB file.
+ *
+ * Binary distributions must follow the binary distribution requirements of
+ * either License.
+ */
 
 
 #include "libfreenect.hpp"
@@ -71,18 +71,17 @@ public:
 			m_gamma[i] = v*6*256;
 		}
 	}
+	//~MyFreenectDevice(){}
 	// Do not call directly even in child
 	void VideoCallback(void* _rgb, uint32_t timestamp) {
-		std::cout << "RGB callback" << std::endl;
 		m_rgb_mutex.lock();
 		uint8_t* rgb = static_cast<uint8_t*>(_rgb);
-		std::copy(rgb, rgb+FREENECT_VIDEO_RGB_SIZE, m_buffer_video.begin());
+		std::copy(rgb, rgb+getVideoBufferSize(), m_buffer_video.begin());
 		m_new_rgb_frame = true;
 		m_rgb_mutex.unlock();
 	};
 	// Do not call directly even in child
 	void DepthCallback(void* _depth, uint32_t timestamp) {
-		std::cout << "Depth callback" << std::endl;
 		m_depth_mutex.lock();
 		uint16_t* depth = static_cast<uint16_t*>(_depth);
 		for( unsigned int i = 0 ; i < FREENECT_FRAME_PIX ; i++) {
@@ -167,12 +166,14 @@ private:
 
 Freenect::Freenect<MyFreenectDevice> freenect;
 MyFreenectDevice* device;
+freenect_video_format requested_format(FREENECT_VIDEO_RGB);
 
 GLuint gl_depth_tex;
 GLuint gl_rgb_tex;
 
 bool die;
 double freenect_angle(0);
+//double ext_freenect_angle(0);
 int got_frames(0),window(0);
 int g_argc;
 char **g_argv;
@@ -181,6 +182,14 @@ void DrawGLScene()
 {
 	static std::vector<uint8_t> depth(640*480*4);
 	static std::vector<uint8_t> rgb(640*480*4);
+
+	// using getTiltDegs() in a closed loop is unstable
+	/*if(device->getState().m_code == TILT_STATUS_STOPPED){
+		freenect_angle = device->getState().getTiltDegs();
+	}*/
+	device->updateState();
+	printf("\r demanded tilt angle: %+4.2f device tilt angle: %+4.2f", freenect_angle, device->getState().getTiltDegs());
+	fflush(stdout);
 
 	device->getDepth(depth);
 	device->getRGB(rgb);
@@ -204,7 +213,10 @@ void DrawGLScene()
 	glEnd();
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, &rgb[0]);
+	if (device->getVideoFormat() == FREENECT_VIDEO_RGB || device->getVideoFormat() == FREENECT_VIDEO_YUV_RGB)
+		glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, &rgb[0]);
+	else
+		glTexImage2D(GL_TEXTURE_2D, 0, 1, 640, 480, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, &rgb[0]);
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
@@ -219,27 +231,11 @@ void DrawGLScene()
 
 void keyPressed(unsigned char key, int x, int y)
 {
-	/*  FreenectDeviceState::getState() doesnt really work as expected */
-	//double freenect_angle = device->getState().getTiltDegs();
+	//ext_freenect_angle = freenect_angle;
 
 	if (key == 27) {
 		die = 1;
 		glutDestroyWindow(window);
-	}
-	if (key == 'w') {
-		freenect_angle++;
-		if (freenect_angle > 30) {
-			freenect_angle = 30;
-		}
-	}
-	if (key == 's') {
-		freenect_angle = 0;
-	}
-	if (key == 'x') {
-		freenect_angle--;
-		if (freenect_angle < -30) {
-			freenect_angle = -30;
-		}
 	}
 	if (key == '1') {
 		device->setLed(LED_GREEN);
@@ -261,6 +257,37 @@ void keyPressed(unsigned char key, int x, int y)
 	}
 	if (key == '0') {
 		device->setLed(LED_OFF);
+	}
+	if (key == 'f') {
+		if (requested_format == FREENECT_VIDEO_IR_8BIT)
+			requested_format = FREENECT_VIDEO_RGB;
+		else if (requested_format == FREENECT_VIDEO_RGB)
+			requested_format = FREENECT_VIDEO_YUV_RGB;
+		else
+			requested_format = FREENECT_VIDEO_IR_8BIT;
+		device->setVideoFormat(requested_format);
+	}
+
+	if (key == 'w') {
+		freenect_angle++;
+		if (freenect_angle > 30) {
+			freenect_angle = 30;
+		}
+	}
+	if (key == 's' || key == 'd') {
+		freenect_angle = 0;
+	}
+	if (key == 'x') {
+		freenect_angle--;
+		if (freenect_angle < -30) {
+			freenect_angle = -30;
+		}
+	}
+	if (key == 'e') {
+		freenect_angle = 10;
+	}
+	if (key == 'c') {
+		freenect_angle = -10;
 	}
 	device->setTiltDegrees(freenect_angle);
 }
