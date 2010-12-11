@@ -42,9 +42,6 @@ struct pkt_hdr {
 	uint32_t timestamp;
 };
 
-extern const struct caminit inits[];
-extern const int num_inits;
-
 static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *pkt, int len)
 {
 	if (len < 12)
