@@ -54,9 +54,15 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	uint8_t *data = pkt + sizeof(*hdr);
 	int datalen = len - sizeof(*hdr);
 
+	freenect_loglevel l_info = LL_INFO;
+	freenect_loglevel l_notice = LL_NOTICE;
+	freenect_loglevel l_warning = LL_WARNING;
+	if (strm->valid_frames < 2)
+		l_info = l_notice = l_warning = LL_SPEW;
+
 	if (hdr->magic[0] != 'R' || hdr->magic[1] != 'B') {
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
-		       "[Stream %02x] Invalid magic %02x%02x\n", strm->flag, hdr->magic[0], hdr->magic[1]);
+		FN_LOG(l_notice, "[Stream %02x] Invalid magic %02x%02x\n",
+		       strm->flag, hdr->magic[0], hdr->magic[1]);
 		return 0;
 	}
 
@@ -79,16 +85,14 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 		strm->got_pkts = 0;
 	}
 
-	int got_frame = 0;
+	int got_frame_size = 0;
 
 	// handle lost packets
 	if (strm->seq != hdr->seq) {
 		uint8_t lost = hdr->seq - strm->seq;
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_INFO, \
-		       "[Stream %02x] Lost %d packets\n", strm->flag, lost);
-		if (lost > 5) {
-			FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
-			       "[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
+		FN_LOG(l_info, "[Stream %02x] Lost %d packets\n", strm->flag, lost);
+		if (lost > 5 || strm->variable_length) {
+			FN_LOG(l_notice, "[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
 			strm->synced = 0;
 			return 0;
 		}
@@ -98,7 +102,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 			strm->pkt_num = lost - left;
 			strm->valid_pkts = strm->got_pkts;
 			strm->got_pkts = 0;
-			got_frame = 1;
+			got_frame_size = strm->frame_size;
 			strm->timestamp = strm->last_timestamp;
 			strm->valid_frames++;
 		} else {
@@ -106,28 +110,52 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 		}
 	}
 
-	// check the header to make sure it's what we expect
-	if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
-	    !(strm->pkt_num == strm->pkts_per_frame-1 && hdr->flag == eof) &&
-	    !(strm->pkt_num > 0 && strm->pkt_num < strm->pkts_per_frame-1 && hdr->flag == mof)) {
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_NOTICE, \
-		       "[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
-		       strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
-		strm->synced = 0;
-		return got_frame;
+	int expected_pkt_size = (strm->pkt_num == strm->pkts_per_frame-1) ? strm->last_pkt_size : strm->pkt_size;
+
+	if (!strm->variable_length) {
+		// check the header to make sure it's what we expect
+		if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
+		    !(strm->pkt_num == strm->pkts_per_frame-1 && hdr->flag == eof) &&
+		    !(strm->pkt_num > 0 && strm->pkt_num < strm->pkts_per_frame-1 && hdr->flag == mof)) {
+			FN_LOG(l_notice, "[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
+			       strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
+			strm->synced = 0;
+			return got_frame_size;
+		}
+		// check data length
+		if (datalen > expected_pkt_size) {
+			FN_LOG(l_warning, "[Stream %02x] Expected max %d data bytes, but got %d. Dropping...\n",
+			       strm->flag, expected_pkt_size, datalen);
+			return got_frame_size;
+		}
+		if (datalen < expected_pkt_size)
+			FN_LOG(l_warning, "[Stream %02x] Expected %d data bytes, but got %d\n",
+			       strm->flag, expected_pkt_size, datalen);
+	} else {
+		// check the header to make sure it's what we expect
+		if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
+		    !(strm->pkt_num < strm->pkts_per_frame && (hdr->flag == eof || hdr->flag == mof))) {
+			FN_LOG(l_notice, "[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
+			       strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
+			strm->synced = 0;
+			return got_frame_size;
+		}
+		// check data length
+		if (datalen > expected_pkt_size) {
+			FN_LOG(l_warning, "[Stream %02x] Expected max %d data bytes, but got %d. Resyncng...\n",
+			       strm->flag, expected_pkt_size, datalen);
+			strm->synced = 0;
+			return got_frame_size;
+		}
+		if (datalen < expected_pkt_size && hdr->flag != eof) {
+			FN_LOG(l_warning, "[Stream %02x] Expected %d data bytes, but got %d. Resyncing...\n",
+			       strm->flag, expected_pkt_size, datalen);
+			strm->synced = 0;
+			return got_frame_size;
+		}
 	}
 
 	// copy data
-	if (datalen > strm->pkt_size) {
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
-		       "[Stream %02x] Expected %d data bytes, but got %d. Dropping...\n", strm->flag, strm->pkt_size, datalen);
-		return got_frame;
-	}
-
-	if (datalen != strm->pkt_size && hdr->flag != eof)
-		FN_LOG(strm->valid_frames < 2 ? LL_SPEW : LL_WARNING, \
-		       "[Stream %02x] Expected %d data bytes, but got only %d\n", strm->flag, strm->pkt_size, datalen);
-
 	uint8_t *dbuf = strm->raw_buf + strm->pkt_num * strm->pkt_size;
 	memcpy(dbuf, data, datalen);
 
@@ -137,20 +165,25 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 
 	strm->last_timestamp = fn_le32(hdr->timestamp);
 
-	if (strm->pkt_num == strm->pkts_per_frame) {
+	if (hdr->flag == eof) {
+		if (strm->variable_length)
+			got_frame_size = (dbuf - strm->raw_buf) + datalen;
+		else
+			got_frame_size = (dbuf - strm->raw_buf) + strm->last_pkt_size;
 		strm->pkt_num = 0;
 		strm->valid_pkts = strm->got_pkts;
 		strm->got_pkts = 0;
 		strm->timestamp = strm->last_timestamp;
 		strm->valid_frames++;
-		return 1;
-	} else {
-		return got_frame;
 	}
+	return got_frame_size;
 }
 
-static void stream_initbufs(freenect_context *ctx, packet_stream *strm, int rlen, int plen)
+static void stream_init(freenect_context *ctx, packet_stream *strm, int rlen, int plen)
 {
+	strm->valid_frames = 0;
+	strm->synced = 0;
+
 	if (strm->usr_buf) {
 		strm->lib_buf = NULL;
 		strm->proc_buf = strm->usr_buf;
@@ -162,10 +195,17 @@ static void stream_initbufs(freenect_context *ctx, packet_stream *strm, int rlen
 	if (rlen == 0) {
 		strm->split_bufs = 0;
 		strm->raw_buf = strm->proc_buf;
+		strm->frame_size = plen;
 	} else {
 		strm->split_bufs = 1;
 		strm->raw_buf = malloc(rlen);
+		strm->frame_size = rlen;
 	}
+
+	strm->last_pkt_size = strm->frame_size % strm->pkt_size;
+	if (strm->last_pkt_size == 0)
+		strm->last_pkt_size = strm->pkt_size;
+	strm->pkts_per_frame = (strm->frame_size + strm->pkt_size - 1) / strm->pkt_size;
 }
 
 static void stream_freebufs(freenect_context *ctx, packet_stream *strm)
@@ -244,13 +284,13 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (!dev->depth.running)
 		return;
 
-	int got_frame = stream_process(ctx, &dev->depth, pkt, len);
+	int got_frame_size = stream_process(ctx, &dev->depth, pkt, len);
 
-	if (!got_frame)
+	if (!got_frame_size)
 		return;
 
-	FN_SPEW("Got depth frame %d/%d packets arrived, TS %08x\n",
-	       dev->depth.valid_pkts, dev->depth.pkts_per_frame, dev->depth.timestamp);
+	FN_SPEW("Got depth frame of size %d/%d, %d/%d packets arrived, TS %08x\n", got_frame_size,
+	        dev->depth.frame_size, dev->depth.valid_pkts, dev->depth.pkts_per_frame, dev->depth.timestamp);
 
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
@@ -475,13 +515,13 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (!dev->video.running)
 		return;
 
-	int got_frame = stream_process(ctx, &dev->video, pkt, len);
+	int got_frame_size = stream_process(ctx, &dev->video, pkt, len);
 
-	if (!got_frame)
+	if (!got_frame_size)
 		return;
 
-	FN_SPEW("Got RGB frame %d/%d packets arrived, TS %08x\n", dev->video.valid_pkts,
-	       dev->video.pkts_per_frame, dev->video.timestamp);
+	FN_SPEW("Got video frame of size %d/%d, %d/%d packets arrived, TS %08x\n", got_frame_size,
+	        dev->video.frame_size, dev->video.valid_pkts, dev->video.pkts_per_frame, dev->video.timestamp);
 
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
@@ -611,29 +651,24 @@ int freenect_start_depth(freenect_device *dev)
 	if (dev->depth.running)
 		return -1;
 
+	dev->depth.pkt_size = DEPTH_PKTDSIZE;
+	dev->depth.flag = 0x70;
+	dev->depth.variable_length = 0;
+
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
-			stream_initbufs(ctx, &dev->depth, FREENECT_DEPTH_11BIT_PACKED_SIZE, FREENECT_DEPTH_11BIT_SIZE);
-			dev->depth.pkts_per_frame = DEPTH_PKTS_11_BIT_PER_FRAME;
+			stream_init(ctx, &dev->depth, FREENECT_DEPTH_11BIT_PACKED_SIZE, FREENECT_DEPTH_11BIT_SIZE);
 			break;
 		case FREENECT_DEPTH_10BIT:
-			stream_initbufs(ctx, &dev->depth, FREENECT_DEPTH_10BIT_PACKED_SIZE, FREENECT_DEPTH_10BIT_SIZE);
-			dev->depth.pkts_per_frame = DEPTH_PKTS_10_BIT_PER_FRAME;
+			stream_init(ctx, &dev->depth, FREENECT_DEPTH_10BIT_PACKED_SIZE, FREENECT_DEPTH_10BIT_SIZE);
 			break;
 		case FREENECT_DEPTH_11BIT_PACKED:
-			stream_initbufs(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
-			dev->depth.pkts_per_frame = DEPTH_PKTS_11_BIT_PER_FRAME;
+			stream_init(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
 			break;
 		case FREENECT_DEPTH_10BIT_PACKED:
-			stream_initbufs(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
-			dev->depth.pkts_per_frame = DEPTH_PKTS_10_BIT_PER_FRAME;
+			stream_init(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
 			break;
 	}
-
-	dev->depth.pkt_size = DEPTH_PKTDSIZE;
-	dev->depth.synced = 0;
-	dev->depth.flag = 0x70;
-	dev->depth.valid_frames = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->depth_isoc, depth_process, 0x82, NUM_XFERS, PKTS_PER_XFER, DEPTH_PKTBUF);
 	if (res < 0)
@@ -666,41 +701,33 @@ int freenect_start_video(freenect_device *dev)
 	if (dev->video.running)
 		return -1;
 
+	dev->video.pkt_size = VIDEO_PKTDSIZE;
+	dev->video.flag = 0x80;
+	dev->video.variable_length = 0;
+
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
-			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_BAYER_SIZE, FREENECT_VIDEO_RGB_SIZE);
-			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME;
+			stream_init(ctx, &dev->video, FREENECT_VIDEO_BAYER_SIZE, FREENECT_VIDEO_RGB_SIZE);
 			break;
 		case FREENECT_VIDEO_BAYER:
-			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_BAYER_SIZE);
-			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME;
+			stream_init(ctx, &dev->video, 0, FREENECT_VIDEO_BAYER_SIZE);
 			break;
 		case FREENECT_VIDEO_IR_8BIT:
-			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_IR_8BIT_SIZE);
-			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			stream_init(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_IR_8BIT_SIZE);
 			break;
 		case FREENECT_VIDEO_IR_10BIT:
-			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_BAYER_SIZE);
-			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			stream_init(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_BAYER_SIZE);
 			break;
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
-			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE);
-			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_IR;
+			stream_init(ctx, &dev->video, 0, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE);
 			break;
 		case FREENECT_VIDEO_YUV_RGB:
-			stream_initbufs(ctx, &dev->video, FREENECT_VIDEO_YUV_RAW_SIZE, FREENECT_VIDEO_RGB_SIZE);
-			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_YUV;
+			stream_init(ctx, &dev->video, FREENECT_VIDEO_YUV_RAW_SIZE, FREENECT_VIDEO_RGB_SIZE);
 			break;
 		case FREENECT_VIDEO_YUV_RAW:
-			stream_initbufs(ctx, &dev->video, 0, FREENECT_VIDEO_YUV_RAW_SIZE);
-			dev->video.pkts_per_frame = VIDEO_PKTS_PER_FRAME_YUV;
+			stream_init(ctx, &dev->video, 0, FREENECT_VIDEO_YUV_RAW_SIZE);
 			break;
 	}
-
-	dev->video.pkt_size = VIDEO_PKTDSIZE;
-	dev->video.synced = 0;
-	dev->video.flag = 0x80;
-	dev->video.valid_frames = 0;
 
 	res = fnusb_start_iso(&dev->usb_cam, &dev->video_isoc, video_process, 0x81, NUM_XFERS, PKTS_PER_XFER, VIDEO_PKTBUF);
 	if (res < 0)
