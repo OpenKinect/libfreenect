@@ -1,0 +1,30 @@
+libfreenect for Java
+====================
+
+This is an API decided to be familiar to most Java developers. Where 
+possible, the native library details have been hidden from view.
+
+The entry point into the API is the Freenect.createContext() static
+factory method. This will initialize and return a Context which you
+can then use to query for and interact with supported devices, like
+the Microsoft Kinect. The the Javadoc for further details.
+
+Building the library
+====================
+
+This project is built with Maven and uses the standard maven build
+phases. See http://maven.apache.org/ for more details.
+
+Quick start for Ubuntu:
+
+  sudo apt-get install maven2
+  mvn package
+
+Using the library
+=================
+
+The library requires a platform installed shared library of libfreenect
+to be present in a standard location on the system. This is typically
+/usr/lib or /usr/local/lib on unix-like platforms. dYou may also be able
+to place the library in current directory to be loaded, but this is not
+recommended.
