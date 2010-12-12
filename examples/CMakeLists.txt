@@ -2,6 +2,13 @@
 # Packages needed for examples
 ######################################################################################
 
+set(CMAKE_C_FLAGS "-Wall")
+
+if (WIN32)
+  set_source_files_properties(glview.c PROPERTIES LANGUAGE CXX)
+  set_source_files_properties(glpclview.c PROPERTIES LANGUAGE CXX)
+endif()
+
 add_executable(glview glview.c)
 add_executable(cppview cppview.cpp)
 add_executable(glpclview glpclview.c)
