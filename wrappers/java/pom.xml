@@ -5,31 +5,11 @@
   <artifactId>freenect</artifactId>
   <version>0.0.1-SNAPSHOT</version>
 
-  <repositories>
-    <repository>
-      <id>nativelibs4java-repo</id>
-      <name>NativeLibs4Java Maven Repository</name>
-      <url>http://nativelibs4java.sourceforge.net/maven</url>
-    </repository>
-  </repositories>
-  <pluginRepositories>
-    <pluginRepository>
-      <id>nativelibs4java-pluginRepo</id>
-      <url>http://nativelibs4java.sourceforge.net/maven</url>
-    </pluginRepository>
-  </pluginRepositories>
-
   <dependencies>
     <dependency>
       <groupId>net.java.dev.jna</groupId>
       <artifactId>jna</artifactId>
       <version>3.2.3</version>
-      <scope>compile</scope>
-    </dependency>
-    <dependency>
-      <groupId>com.jnaerator</groupId>
-      <artifactId>jnaerator-runtime</artifactId>
-      <version>0.9.5</version>
       <scope>compile</scope>
     </dependency>
     <dependency>

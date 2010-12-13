@@ -1,10 +1,9 @@
 package org.openkinect.freenect;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.DoubleBuffer;
 
-
-import com.ochafik.lang.jnaerator.runtime.LibraryExtractor;
 import com.sun.jna.Callback;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
@@ -14,10 +13,16 @@ import com.sun.jna.PointerType;
 import com.sun.jna.ptr.PointerByReference;
 
 public class Freenect implements Library {
-    public static final java.lang.String JNA_LIBRARY_NAME = LibraryExtractor.getLibraryPath("freenect", true, org.openkinect.freenect.Freenect.class);
-    public static final NativeLibrary JNA_NATIVE_LIB = NativeLibrary.getInstance(org.openkinect.freenect.Freenect.JNA_LIBRARY_NAME, com.ochafik.lang.jnaerator.runtime.MangledFunctionMapper.DEFAULT_OPTIONS);
     static {
-        Native.register(org.openkinect.freenect.Freenect.JNA_LIBRARY_NAME);
+        try {
+            NativeLibrary.addSearchPath("freenect", "../../build/lib");
+            NativeLibrary.addSearchPath("freenect", "/usr/local/lib");
+            NativeLibrary instance = NativeLibrary.getInstance("freenect");
+            System.err.println("Loaded " + instance.getName() + " from " + instance.getFile().getCanonicalPath());
+            Native.register(instance);
+        } catch (IOException e) {
+            throw new AssertionError(e);
+        }
     }
 
     // constants from libfreenect.h
@@ -44,7 +49,9 @@ public class Freenect implements Library {
         PointerByReference ctxPtr = new PointerByReference();
         int rval = freenect_init(ctxPtr, Pointer.NULL);
         if (rval == 0) {
-            return new NativeContext(ctxPtr.getValue());
+            NativeContext ctx = new NativeContext(ctxPtr.getValue());
+            ctx.startEventThread();
+            return ctx;
         }
         throw new IllegalStateException("init() returned " + rval);
     }
@@ -61,7 +68,7 @@ public class Freenect implements Library {
                 logHandler.onMessage(dev, LogLevel.fromInt(level), msg);
             }
         };
-        
+
         protected NativeContext(Pointer ptr) {
             super(ptr);
         }
@@ -75,12 +82,12 @@ public class Freenect implements Library {
                 freenect_set_log_callback(this, logCallback);
             }
         }
-        
+
         @Override
         public void setLogLevel(LogLevel level) {
             freenect_set_log_level(this, level.intValue());
         }
-        
+
         @Override
         public int numDevices() {
             return freenect_num_devices(this);
@@ -93,30 +100,27 @@ public class Freenect implements Library {
             if (rval != 0) {
                 throw new IllegalStateException("freenect_open_device() returned " + rval);
             }
-            return new NativeDevice(devicePtr.getValue());
+            return new NativeDevice(devicePtr.getValue(), index);
         }
 
-        @Override
-        public void processEvents() {
+        protected void processEvents() {
             freenect_process_events(this);
         }
 
-        @Override
-        public void processEventsBackground() {
+        protected void startEventThread() {
             if (eventThread == null || !eventThread.isAlive()) {
                 eventThread = new EventThread(this);
                 eventThread.start();
             }
         }
 
-        @Override
-        public void stopEventThread() {
+        protected void stopEventThread() {
             if (eventThread != null) {
                 eventThread.kill();
                 eventThread = null;
             }
         }
-        
+
         @Override
         public void shutdown() {
             stopEventThread();
@@ -125,7 +129,6 @@ public class Freenect implements Library {
     }
 
     protected static class NativeDevice extends PointerType implements Device {
-        private Pointer tiltState;
         private VideoFormat videoFormat;
         private ByteBuffer videoBuffer;
         private DepthFormat depthFormat;
@@ -135,6 +138,12 @@ public class Freenect implements Library {
         private final DoubleBuffer accelZ = DoubleBuffer.allocate(1);
         private VideoHandler videoHandler;
         private DepthHandler depthHandler;
+        private int index;
+
+        private TiltState rawTiltState;
+        private TiltStatus tiltStatus;
+        private double tiltAngle;
+        private double[] accel;
 
         private final NativeVideoCallback videoCallback = new NativeVideoCallback() {
             @Override
@@ -152,11 +161,23 @@ public class Freenect implements Library {
 
         public NativeDevice() {}
 
-        protected NativeDevice(Pointer ptr) {
+        protected NativeDevice(Pointer ptr, int index) {
             super(ptr);
-            tiltState = freenect_get_tilt_state(this);
+            this.index = index;
+            this.rawTiltState = freenect_get_tilt_state(this);
+            this.accel = new double[3];
+            refreshTiltState();
             setVideoFormat(VideoFormat.RGB);
             setDepthFormat(DepthFormat.D11BIT);
+        }
+
+        protected void setDeviceIndex(int index) {
+            this.index = index;
+        }
+
+        @Override
+        public int getDeviceIndex() {
+            return index;
         }
 
         public void close() {
@@ -187,13 +208,18 @@ public class Freenect implements Library {
         @Override
         public void refreshTiltState() {
             freenect_update_tilt_state(this);
+            this.rawTiltState = freenect_get_tilt_state(this);
+            this.tiltAngle = freenect_get_tilt_degs(rawTiltState);
+            this.tiltStatus = TiltStatus.fromInt(freenect_get_tilt_status(rawTiltState));
+            freenect_get_mks_accel(rawTiltState, accelX, accelY, accelZ);
+            this.accel[0] = accelX.get(0);
+            this.accel[1] = accelY.get(0);
+            this.accel[2] = accelZ.get(0);
         }
-        
+
         @Override
         public double getTiltAngle() {
-            // TODO should this get called automatically?
-            // freenect_update_tilt_state(this);
-            return freenect_get_tilt_degs(tiltState);
+            return tiltAngle;
         }
 
         @Override
@@ -203,15 +229,11 @@ public class Freenect implements Library {
 
         @Override
         public TiltStatus getTiltStatus() {
-            // TODO not exposed by freenect
-            return TiltStatus.STOPPED;
+            return tiltStatus;
         }
 
         @Override
         public double[] getAccel() {
-            // TODO should this get called automatically?
-            // freenect_update_tilt_state(this);
-            freenect_get_mks_accel(tiltState, accelX, accelY, accelZ);
             return new double[] { accelX.get(0), accelY.get(0), accelZ.get(0) };
         }
 
@@ -267,7 +289,11 @@ public class Freenect implements Library {
             }
         }
     };
-    
+
+    protected static class TiltState extends PointerType {
+        public TiltState() {}
+    }
+
     // function prototypes from libfreenect.h
     // These must match the names used in the library!
 
@@ -304,9 +330,10 @@ public class Freenect implements Library {
     private static native int freenect_stop_depth(NativeDevice dev);
     private static native int freenect_stop_video(NativeDevice dev);
     private static native int freenect_update_tilt_state(NativeDevice dev);
-    private static native Pointer freenect_get_tilt_state(NativeDevice dev);
-    private static native double freenect_get_tilt_degs(Pointer tiltState);
+    private static native TiltState freenect_get_tilt_state(NativeDevice dev);
+    private static native byte freenect_get_tilt_status(TiltState tiltState);
+    private static native double freenect_get_tilt_degs(TiltState tiltState);
     private static native int freenect_set_tilt_degs(NativeDevice dev, double angle);
     private static native int freenect_set_led(NativeDevice dev, int option);
-    private static native void freenect_get_mks_accel(Pointer tiltState, DoubleBuffer x, DoubleBuffer y, DoubleBuffer z);
+    private static native void freenect_get_mks_accel(TiltState tiltState, DoubleBuffer x, DoubleBuffer y, DoubleBuffer z);
 }

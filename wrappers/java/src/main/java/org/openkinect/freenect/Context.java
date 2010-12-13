@@ -5,8 +5,5 @@ public interface Context {
     void setLogHandler(LogHandler handler);
     void setLogLevel(LogLevel level);
     Device openDevice(int index);
-    void processEvents();
-    void processEventsBackground();
-    void stopEventThread();
     void shutdown();
 }

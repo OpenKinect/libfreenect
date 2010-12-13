@@ -13,6 +13,7 @@ public enum LedStatus {
     private LedStatus(int value) {
         this.value = value;
     }
+
     public int intValue() {
         return value;
     }

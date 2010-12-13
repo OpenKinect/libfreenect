@@ -16,4 +16,5 @@ public interface Device {
     int stopDepth();
     int stopVideo();
     void close();
+    public abstract int getDeviceIndex();
 }
