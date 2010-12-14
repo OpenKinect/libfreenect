@@ -52,6 +52,7 @@ OPTION(BUILD_EXAMPLES "Build example programs" ON)
 OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
 OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
+OPTION(BUILD_PYTHON "Build Python extension" OFF)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
@@ -114,6 +115,10 @@ ENDIF()
 
 IF(BUILD_AS3_SERVER)
   add_subdirectory(wrappers/actionscript)
+ENDIF()
+
+IF(BUILD_PYTHON)
+  add_subdirectory (wrappers/python)
 ENDIF()
 
 ######################################################################################
