@@ -142,13 +142,4 @@ struct _freenect_device {
 	freenect_raw_tilt_state raw_state;
 };
 
-struct caminit {
-	uint16_t command;
-	uint16_t tag;
-	int cmdlen;
-	int replylen;
-	uint8_t cmddata[1024];
-	uint8_t replydata[1024];
-};
-
 #endif
