@@ -251,7 +251,7 @@ static int change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt)
 
 static sync_kinect_t *alloc_kinect(int index)
 {
-	sync_kinect_t *kinect = malloc(sizeof(sync_kinect_t));
+	sync_kinect_t *kinect = (sync_kinect_t*)malloc(sizeof(sync_kinect_t));
 	if (freenect_open_device(ctx, &kinect->dev, index)) {
 		free(kinect);
 		return NULL;
@@ -305,9 +305,9 @@ static int setup_kinect(int index, int fmt, int is_depth)
 	pthread_mutex_lock(&buf->lock);
 	if (buf->fmt != fmt) {
 		if (is_depth)
-			change_depth_format(kinects[index], fmt);
+			change_depth_format(kinects[index], (freenect_depth_format)fmt);
 		else
-			change_video_format(kinects[index], fmt);
+			change_video_format(kinects[index], (freenect_video_format)fmt);
 	}
 	pthread_mutex_unlock(&buf->lock);
 	pthread_mutex_unlock(&runloop_lock);
