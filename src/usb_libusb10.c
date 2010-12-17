@@ -229,7 +229,7 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 	strm->pkts = pkts;
 	strm->len = len;
 	strm->buffer = (uint8_t*)malloc(xfers * pkts * len);
-	strm->xfers = (libusb_transfer**)malloc(sizeof(struct libusb_transfer*) * xfers);
+	strm->xfers = (struct libusb_transfer**)malloc(sizeof(struct libusb_transfer*) * xfers);
 	strm->dead = 0;
 	strm->dead_xfers = 0;
 

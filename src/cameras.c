@@ -47,7 +47,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	if (len < 12)
 		return 0;
 
-	struct pkt_hdr *hdr = (pkt_hdr*)pkt;
+	struct pkt_hdr *hdr = (struct pkt_hdr*)pkt;
 	uint8_t *data = pkt + sizeof(*hdr);
 	int datalen = len - sizeof(*hdr);
 
