@@ -205,7 +205,7 @@ static void iso_callback(struct libusb_transfer *xfer)
 	}
 
 	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		uint8_t *buf = (uint8_t*)(void*)xfer->buffer;
+		uint8_t *buf = (uint8_t*)xfer->buffer;
 		for (i=0; i<strm->pkts; i++) {
 			strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
 			buf += strm->len;

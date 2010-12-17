@@ -108,6 +108,12 @@ typedef struct _freenect_device freenect_device;
 typedef libusb_context freenect_usb_context;
 //
 
+#ifndef _WIN32
+#define EXPORT
+#else
+#define EXPORT extern "C" __declspec(dllexport)
+#endif
+
 typedef enum {
 	FREENECT_LOG_FATAL = 0,
 	FREENECT_LOG_ERROR,
@@ -119,47 +125,47 @@ typedef enum {
 	FREENECT_LOG_FLOOD,
 } freenect_loglevel;
 
-int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx);
-int freenect_shutdown(freenect_context *ctx);
+EXPORT int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx);
+EXPORT int freenect_shutdown(freenect_context *ctx);
 
 typedef void (*freenect_log_cb)(freenect_context *dev, freenect_loglevel level, const char *msg);
 
-void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level);
-void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb);
+EXPORT void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level);
+EXPORT void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb);
 
-int freenect_process_events(freenect_context *ctx);
+EXPORT int freenect_process_events(freenect_context *ctx);
 
-int freenect_num_devices(freenect_context *ctx);
-int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index);
-int freenect_close_device(freenect_device *dev);
+EXPORT int freenect_num_devices(freenect_context *ctx);
+EXPORT int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index);
+EXPORT int freenect_close_device(freenect_device *dev);
 
-void freenect_set_user(freenect_device *dev, void *user);
-void *freenect_get_user(freenect_device *dev);
+EXPORT void freenect_set_user(freenect_device *dev, void *user);
+EXPORT void *freenect_get_user(freenect_device *dev);
 
 typedef void (*freenect_depth_cb)(freenect_device *dev, void *depth, uint32_t timestamp);
 typedef void (*freenect_video_cb)(freenect_device *dev, void *video, uint32_t timestamp);
 
-void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);
-void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb);
+EXPORT void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb);
+EXPORT void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb);
 
-int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt);
-int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt);
+EXPORT int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt);
+EXPORT int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt);
 
-int freenect_set_depth_buffer(freenect_device *dev, void *buf);
-int freenect_set_video_buffer(freenect_device *dev, void *buf);
+EXPORT int freenect_set_depth_buffer(freenect_device *dev, void *buf);
+EXPORT int freenect_set_video_buffer(freenect_device *dev, void *buf);
 
-int freenect_start_depth(freenect_device *dev);
-int freenect_start_video(freenect_device *dev);
-int freenect_stop_depth(freenect_device *dev);
-int freenect_stop_video(freenect_device *dev);
+EXPORT int freenect_start_depth(freenect_device *dev);
+EXPORT int freenect_start_video(freenect_device *dev);
+EXPORT int freenect_stop_depth(freenect_device *dev);
+EXPORT int freenect_stop_video(freenect_device *dev);
 
-int freenect_update_tilt_state(freenect_device *dev);
-freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev);
-double freenect_get_tilt_degs(freenect_raw_tilt_state *state);
-int freenect_set_tilt_degs(freenect_device *dev, double angle);
-freenect_tilt_status_code freenect_get_tilt_status(freenect_raw_tilt_state *state);
-int freenect_set_led(freenect_device *dev, freenect_led_options option);
-void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z);
+EXPORT int freenect_update_tilt_state(freenect_device *dev);
+EXPORT freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev);
+EXPORT double freenect_get_tilt_degs(freenect_raw_tilt_state *state);
+EXPORT int freenect_set_tilt_degs(freenect_device *dev, double angle);
+EXPORT freenect_tilt_status_code freenect_get_tilt_status(freenect_raw_tilt_state *state);
+EXPORT int freenect_set_led(freenect_device *dev, freenect_led_options option);
+EXPORT void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z);
 
 #ifdef __cplusplus
 }
