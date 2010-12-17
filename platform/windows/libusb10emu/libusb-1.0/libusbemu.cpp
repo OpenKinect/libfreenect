@@ -46,7 +46,7 @@ template<> struct LibTranslator<usb_dev_handle>       { typedef libusb_device_ha
 template<typename T>
 typename LibTranslator<T>::TranslatedType* translate(const T* p)
 {
-	return((LibTranslator<T>::TranslatedType*)p);
+	return((LibTranslator<T>::TranslatedType*)(void*)p);
 }
 
 int libusb_init(libusb_context** context)
