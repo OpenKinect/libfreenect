@@ -12,7 +12,7 @@ class LibusbFreenect <Formula
 
   def install
     system "./autogen.sh"
-    system "./configure", "--prefix=#{prefix}", "--disable-dependency-tracking"
+    system "./configure", "--prefix=#{prefix}", "--disable-dependency-tracking", "LDFLAGS=-framework IOKit -framework CoreFoundation"
     system "make install"
   end
 end
