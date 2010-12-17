@@ -27,7 +27,16 @@
 #ifndef LIBUSB_1_0_INTERFACE_EMULATOR_FOR_LIBUSB_0_1_H
 #define LIBUSB_1_0_INTERFACE_EMULATOR_FOR_LIBUSB_0_1_H
 
+// This interface emulator requires the libusb-win32 v1.2.2.1 (snapshot)
+// or later. Prior win32 versions of the library were not conformal to
+// the official libusb-0.1 API naming convention
+// (e.g.: usb_device_t instead of usb_device)
+// One can either workaround prior releases to match the official naming
+// or upgrade to the libusb-win32 1.2.2.1 snapshot.
+
 #include <unistd.h>
+
+#define LIBUSBEMU 1
 
 // gotta use "_t" suffix here...
 struct libusb_context_t;
