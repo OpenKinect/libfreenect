@@ -28,13 +28,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdarg.h>
+
 #include <unistd.h>
 
 #include "freenect_internal.h"
 
-int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
+EXPORT int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 {
-	*ctx = malloc(sizeof(freenect_context));
+	*ctx = (freenect_context*)malloc(sizeof(freenect_context));
 	if (!ctx)
 		return -1;
 
@@ -44,7 +45,7 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 	return fnusb_init(&(*ctx)->usb, usb_ctx);
 }
 
-int freenect_shutdown(freenect_context *ctx)
+EXPORT int freenect_shutdown(freenect_context *ctx)
 {
 	while (ctx->first) {
 		FN_NOTICE("Device %p open during shutdown, closing...\n", ctx->first);
@@ -56,39 +57,20 @@ int freenect_shutdown(freenect_context *ctx)
 	return 0;
 }
 
-int freenect_process_events(freenect_context *ctx)
+EXPORT int freenect_process_events(freenect_context *ctx)
 {
 	return fnusb_process_events(&ctx->usb);
 }
 
-int freenect_num_devices(freenect_context *ctx)
+EXPORT int freenect_num_devices(freenect_context *ctx)
 {
-	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
-	ssize_t cnt = libusb_get_device_list (ctx->usb.ctx, &devs); //get the list of devices
-
-	if (cnt < 0)
-		return (-1);
-
-	int nr = 0, i = 0;
-	struct libusb_device_descriptor desc;
-	for (i = 0; i < cnt; ++i)
-	{
-		int r = libusb_get_device_descriptor (devs[i], &desc);
-		if (r < 0)
-			continue;
-		if (desc.idVendor == VID_MICROSOFT && desc.idProduct == PID_NUI_CAMERA)
-			nr++;
-	}
-
-	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
-
-	return (nr);
+	return fnusb_num_devices(&ctx->usb);
 }
 
-int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
+EXPORT int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
 {
 	int res;
-	freenect_device *pdev = malloc(sizeof(freenect_device));
+	freenect_device *pdev = (freenect_device*)malloc(sizeof(freenect_device));
 	if (!pdev)
 		return -1;
 
@@ -116,7 +98,7 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 	return 0;
 }
 
-int freenect_close_device(freenect_device *dev)
+EXPORT int freenect_close_device(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	int res;
@@ -153,22 +135,22 @@ int freenect_close_device(freenect_device *dev)
 	return 0;
 }
 
-void freenect_set_user(freenect_device *dev, void *user)
+EXPORT void freenect_set_user(freenect_device *dev, void *user)
 {
 	dev->user_data = user;
 }
 
-void *freenect_get_user(freenect_device *dev)
+EXPORT void *freenect_get_user(freenect_device *dev)
 {
 	return dev->user_data;
 }
 
-void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level)
+EXPORT void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level)
 {
 	ctx->log_level = level;
 }
 
-void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb)
+EXPORT void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb)
 {
 	ctx->log_cb = cb;
 }
