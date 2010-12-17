@@ -98,6 +98,11 @@ include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
 # libfreenect.h includes libusb.h, so everyone needs this too
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
 
+if(WIN32)
+  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows")
+  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu")
+endif()
+
 # Add library project
 add_subdirectory (src)
 
