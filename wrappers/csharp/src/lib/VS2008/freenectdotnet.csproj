@@ -7,8 +7,8 @@
     <SchemaVersion>2.0</SchemaVersion>
     <ProjectGuid>{360413F9-4D9B-46BE-BEC7-9B666850ED8C}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>LibFreenect</RootNamespace>
-    <AssemblyName>Kinect.NET</AssemblyName>
+    <RootNamespace>freenect</RootNamespace>
+    <AssemblyName>freenect</AssemblyName>
     <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -36,7 +36,9 @@
     <Reference Include="System.Drawing" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="..\AssemblyInfo.cs">
+      <Link>AssemblyInfo.cs</Link>
+    </Compile>
     <Compile Include="..\Kinect.cs">
       <Link>Kinect.cs</Link>
     </Compile>

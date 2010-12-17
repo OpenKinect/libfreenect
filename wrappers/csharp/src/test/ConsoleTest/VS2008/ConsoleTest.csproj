@@ -33,14 +33,16 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="System" />
-    <Reference Include="Kinect.NET, Version=1.0.3982.1623, Culture=neutral, PublicKeyToken=null">
+    <Reference Include="freenectdotnet, Version=1.0.3982.1623, Culture=neutral, PublicKeyToken=null">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\bin\Kinect.NET.dll</HintPath>
+      <HintPath>..\..\..\..\bin\freenectdotnet.dll</HintPath>
     </Reference>
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.cs" />
+    <Compile Include="..\AssemblyInfo.cs">
+      <Link>AssemblyInfo.cs</Link>
+    </Compile>
     <Compile Include="..\Main.cs">
       <Link>Main.cs</Link>
     </Compile>

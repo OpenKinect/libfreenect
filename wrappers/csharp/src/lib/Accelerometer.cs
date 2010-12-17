@@ -26,12 +26,12 @@
 
 using System;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Provides data from the accelerometer on the Kinect device
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class Accelerometer
 	{

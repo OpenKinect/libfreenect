@@ -29,12 +29,12 @@ using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.Drawing;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Provides access to the depth camera on the Kinect
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class DepthCamera
 	{
@@ -63,7 +63,9 @@ namespace LibFreenect
 		/// Event raised when video data (an image) has been received.
 		/// </summary>
 		public event DataReceivedEventHandler DataReceived = delegate { };
-		
+
+		private FreenectDepthDataCallback DepthCallback = new FreenectDepthDataCallback(DepthCamera.HandleDataReceived);
+
 		/// <summary>
 		/// Gets whether the depth camera is streaming data
 		/// </summary>
@@ -145,7 +147,7 @@ namespace LibFreenect
 			this.DataFormat = DataFormatOption.Format11Bit;
 			
 			// Setup callbacks
-			KinectNative.freenect_set_depth_callback(parent.devicePointer, new FreenectDepthDataCallback(DepthCamera.HandleDataReceived));
+			KinectNative.freenect_set_depth_callback(parent.devicePointer, DepthCallback);
 		}
 		
 		/// <summary>

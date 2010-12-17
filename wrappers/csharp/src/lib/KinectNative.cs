@@ -29,13 +29,13 @@ using System.Threading;
 using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Provides access to native libfreenect calls. These are "ugly" calls used internally 
 	/// in the wrapper.
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	class KinectNative
 	{
@@ -48,6 +48,8 @@ namespace LibFreenect
 		/// Map between native pointers to actual Kinect devices
 		/// </summary>
 		private static Dictionary<IntPtr, Kinect> deviceMap = new Dictionary<IntPtr, Kinect>();
+		
+		private static FreenectLogCallback LogCallback = new FreenectLogCallback(Kinect.LogCallback);
 		
 		/// <summary>
 		/// Gets a freenect context to work with.
@@ -152,73 +154,73 @@ namespace LibFreenect
 			}
 			
 			// Set callbacks for logging
-			KinectNative.freenect_set_log_callback(KinectNative.freenectContext, new FreenectLogCallback(Kinect.LogCallback));
+			KinectNative.freenect_set_log_callback(KinectNative.freenectContext, LogCallback);
 		}
 
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_init(ref IntPtr context, IntPtr freenectUSBContext);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_process_events(IntPtr context);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern void freenect_set_log_level(IntPtr context, Kinect.LogLevelOptions level);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern void freenect_set_log_callback(IntPtr context, FreenectLogCallback callback);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_shutdown(IntPtr context);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_num_devices(IntPtr context);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_open_device(IntPtr context, ref IntPtr device, int index);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_close_device(IntPtr device);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_led(IntPtr device, LED.ColorOption option);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_tilt_degs(IntPtr device, double angle);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_video_format(IntPtr device, VideoCamera.DataFormatOption rgbFormat);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern void freenect_set_video_callback(IntPtr device, FreenectVideoDataCallback callback);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_start_video(IntPtr device);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_stop_video(IntPtr device);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_depth_format(IntPtr device, DepthCamera.DataFormatOption depthFormat);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern void freenect_set_depth_callback(IntPtr device, FreenectDepthDataCallback callback);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_start_depth(IntPtr device);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_stop_depth(IntPtr device);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_update_tilt_state(IntPtr device);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern IntPtr freenect_get_tilt_state(IntPtr device);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_depth_buffer(IntPtr device, IntPtr buf);
 		
-		[DllImport("libfreenect")]
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_video_buffer(IntPtr device, IntPtr buf);
 	}
 	
@@ -237,16 +239,19 @@ namespace LibFreenect
 	/// <summary>
 	/// "Native" callback for freelect library logging
 	/// </summary>
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	delegate void FreenectLogCallback(IntPtr device, Kinect.LogLevelOptions logLevel, string message);
 	
 	/// <summary>
 	/// "Native" callback for depth data
 	/// </summary>
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	delegate void FreenectDepthDataCallback(IntPtr device, IntPtr depthData, UInt32 timestamp);
 	
 	/// <summary>
 	/// "Native" callback for video image data
 	/// </summary>
+	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	delegate void FreenectVideoDataCallback(IntPtr device, IntPtr imageData, UInt32 timestamp);
 	
 }

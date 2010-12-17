@@ -30,12 +30,12 @@ using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Provides access to the RGB/IR camera on the Kinect
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class VideoCamera
 	{
@@ -65,6 +65,8 @@ namespace LibFreenect
 		/// </summary>
 		public event DataReceivedEventHandler DataReceived = delegate { };
 		
+		private FreenectVideoDataCallback VideoCallback = new FreenectVideoDataCallback(VideoCamera.HandleDataReceived);
+
 		/// <summary>
 		/// Gets whether the video camera is streaming data
 		/// </summary>
@@ -155,7 +157,7 @@ namespace LibFreenect
 			this.DataFormat = DataFormatOption.RGB;
 			
 			// Setup callbacks
-			KinectNative.freenect_set_video_callback(parent.devicePointer, new FreenectVideoDataCallback(VideoCamera.HandleDataReceived));
+			KinectNative.freenect_set_video_callback(parent.devicePointer, VideoCallback);
 		}
 		
 		/// <summary>

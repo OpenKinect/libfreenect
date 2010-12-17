@@ -26,7 +26,7 @@
 
 using System;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Delegate for Kinect.Log event
@@ -36,7 +36,7 @@ namespace LibFreenect
 	/// <summary>
 	/// Log event data
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class LogEventArgs
 	{

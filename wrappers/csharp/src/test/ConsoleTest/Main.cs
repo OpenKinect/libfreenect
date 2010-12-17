@@ -26,7 +26,7 @@
 
 using System;
 using System.Threading;
-using LibFreenect;
+using freenect;
 
 namespace ConsoleTest
 {
@@ -34,7 +34,7 @@ namespace ConsoleTest
 	/// Performs some basic tests on the Kinect device connected to see
 	/// if the wrapper is functioning properly
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	class MainClass
 	{
 		/// <summary>
@@ -63,10 +63,10 @@ namespace ConsoleTest
 				
 				// Try to set LED colors
 				Console.WriteLine(" - LED Testing");
-				string[] colors = Enum.GetNames(typeof(KinectLED.ColorOption));
+				string[] colors = Enum.GetNames(typeof(LED.ColorOption));
 				foreach(string color in colors)
 				{
-					var c = (KinectLED.ColorOption)Enum.Parse(typeof(KinectLED.ColorOption), color);
+					var c = (LED.ColorOption)Enum.Parse(typeof(LED.ColorOption), color);
 					Console.WriteLine("\t - Setting LED to Color: " + color);
 					k.LED.Color = c;
 					Thread.Sleep(3000);

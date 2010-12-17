@@ -26,12 +26,12 @@
 
 using System;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Provides control over the LED on the Kinect
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class LED
 	{

@@ -30,7 +30,7 @@ using System.Drawing.Imaging;
 using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.Threading;
-using LibFreenect;
+using freenect;
 using OpenTK;
 using OpenTK.Graphics.OpenGL;
 

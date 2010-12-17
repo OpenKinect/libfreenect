@@ -27,7 +27,7 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Represents an collection of swap buffers. Data in the buffer is 
@@ -35,7 +35,7 @@ namespace LibFreenect
 	/// to prevent memory leaks, you MUST call the Dispose method after you are done 
 	/// with the collection.
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class SwapBufferCollection<T> : IDisposable
 	{

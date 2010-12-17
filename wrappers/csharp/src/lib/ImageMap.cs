@@ -29,12 +29,12 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.InteropServices;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Represents a map of rgb values from the RGBCamera
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class ImageMap
 	{	

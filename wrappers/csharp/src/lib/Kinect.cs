@@ -26,13 +26,13 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Kinect device. This wraps functionality associated with the entire Kinect
 	/// device into a happy little bundle.
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class Kinect
 	{

@@ -27,12 +27,12 @@
 using System;
 using System.Runtime.InteropServices;
 
-namespace LibFreenect
+namespace freenect
 {
 	/// <summary>
 	/// Represents a map of depth values from the DepthCamera
 	/// </summary>
-	/// <author>Aditya Gaddam (adityagaddam@gmail.com)</author>
+	///
 	/// 
 	public class DepthMap
 	{		
