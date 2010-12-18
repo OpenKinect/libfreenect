@@ -118,7 +118,7 @@ are not required to run as root.
 
 ==== Windows
 
-Windows support is now available in libnifalcon. The inf files in the
+Windows support is now available in libfreenect. The inf files in the
 platform/windows directory can be used for installing the device, and
 the library will need libusb-win32 to compile.
 
