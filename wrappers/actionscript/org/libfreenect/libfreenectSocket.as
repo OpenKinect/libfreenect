@@ -48,6 +48,7 @@
 		private var _socket:Socket;
 		private var _buffer:ByteArray;
 		private var _port:Number;
+		private var _policy_file:Boolean = false;
 
 		public function libfreenectSocket()
 		{		
@@ -93,10 +94,11 @@
 		
 		private function onSocketData(event:ProgressEvent):void
 		{
-			if(_socket.bytesAvailable == 237){
+			if(!_policy_file){
 				var _byte_arr:ByteArray = new ByteArray();
-				_socket.readBytes(_byte_arr, 0, _socket.bytesAvailable);
+				_socket.readBytes(_byte_arr, 0, 235);
 				trace("policy_file : " + _byte_arr);
+				_policy_file = true;
 			}
 			if(_socket.bytesAvailable > 0) {
 				if(_socket.bytesAvailable >= _packet_size){
