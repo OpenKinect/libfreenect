@@ -29,6 +29,7 @@ package org.libfreenect
 {
 	import org.libfreenect.libfreenect;
 	import org.libfreenect.libfreenectSocket;
+	import org.libfreenect.libfreenectBlobs;
 	import org.libfreenect.events.libfreenectSocketEvent;
 	import org.libfreenect.events.libfreenectCameraEvent;
 	
@@ -51,6 +52,7 @@ package org.libfreenect
 		private var depth_bmp:Bitmap;
 		private var socket_rgb:libfreenectSocket;
 		private var socket_depth:libfreenectSocket;
+		private var blobs:Array;
 		
 		public function libfreenectCamera()
 		{
@@ -62,6 +64,9 @@ package org.libfreenect
 			canvas_depth.lock();
 			canvas_depth.setPixels(new Rectangle(0,0,640, 480), event.data);
 			canvas_depth.unlock();
+			blobs = libfreenectBlobs.getBlobs(canvas_depth);
+			if(blobs.length > 0)
+				dispatchEvent(new libfreenectCameraEvent(libfreenectCameraEvent.BLOBS_RECEIVED, blobs));
 			event.data.clear();
 		}
 		private function onRGBReceived(event:libfreenectSocketEvent):void{
