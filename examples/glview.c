@@ -193,9 +193,10 @@ void keyPressed(unsigned char key, int x, int y)
 		freenect_set_led(f_dev,LED_YELLOW);
 	}
 	if (key == '4') {
-		freenect_set_led(f_dev,LED_BLINK_YELLOW);
+		freenect_set_led(f_dev,LED_BLINK_GREEN);
 	}
 	if (key == '5') {
+		// 5 is the same as 4
 		freenect_set_led(f_dev,LED_BLINK_GREEN);
 	}
 	if (key == '6') {

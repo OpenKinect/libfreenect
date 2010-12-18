@@ -59,7 +59,7 @@ extern "C" {
 /// Enumeration of video frame information states.
 /// See http://openkinect.org/wiki/Protocol_Documentation#RGB_Camera for more information.
 typedef enum {
-	FREENECT_VIDEO_RGB             = 0, /**< Decompressed RGB mode (decompression done by libfreenect) */
+	FREENECT_VIDEO_RGB             = 0, /**< Decompressed RGB mode (demosaicing done by libfreenect) */
 	FREENECT_VIDEO_BAYER           = 1, /**< Bayer compressed mode (raw information from camera) */
 	FREENECT_VIDEO_IR_8BIT         = 2, /**< 8-bit IR mode  */
 	FREENECT_VIDEO_IR_10BIT        = 3, /**< 10-bit IR mode */
@@ -75,18 +75,18 @@ typedef enum {
 	LED_GREEN            = 1, /**< Turn LED to Green */
 	LED_RED              = 2, /**< Turn LED to Red */
 	LED_YELLOW           = 3, /**< Turn LED to Yellow */
-	LED_BLINK_YELLOW     = 4, /**< Make LED blink Green (Not Yellow) */
-	LED_BLINK_GREEN      = 5, /**< Make LED blink Green */
+	LED_BLINK_GREEN      = 4, /**< Make LED blink Green */
+	// 5 is same as 4, LED blink Green
 	LED_BLINK_RED_YELLOW = 6, /**< Make LED blink Red/Yellow */
 } freenect_led_options;
 
 /// Enumeration of depth frame states
 /// See http://openkinect.org/wiki/Protocol_Documentation#RGB_Camera for more information.
 typedef enum {
-	FREENECT_DEPTH_11BIT        = 0, /**< 11 bit depth information in one uint_16t/pixel */
-	FREENECT_DEPTH_10BIT        = 1, /**< 10 bit depth information in one uint_16t/pixel */
-	FREENECT_DEPTH_11BIT_PACKED = 2, /**< 11 bit compressed depth information */
-	FREENECT_DEPTH_10BIT_PACKED = 3, /**< 10 bit compressed depth information */
+	FREENECT_DEPTH_11BIT        = 0, /**< 11 bit depth information in one uint16_t/pixel */
+	FREENECT_DEPTH_10BIT        = 1, /**< 10 bit depth information in one uint16_t/pixel */
+	FREENECT_DEPTH_11BIT_PACKED = 2, /**< 11 bit packed depth information */
+	FREENECT_DEPTH_10BIT_PACKED = 3, /**< 10 bit packed depth information */
 } freenect_depth_format;
 
 
@@ -140,7 +140,7 @@ typedef enum {
  * Initialize a freenect context and do any setup required for
  * platform specific USB libraries.
  *
- * @param ctx Pointer to freenect context struct to initialize
+ * @param ctx Address of pointer to freenect context struct to allocate and initialize
  * @param usb_ctx USB context to initialize. Can be NULL if not using multiple contexts.
  *
  * @return 0 on success, < 0 on error
