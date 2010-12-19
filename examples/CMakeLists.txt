@@ -15,7 +15,6 @@ if (WIN32)
 endif()
 
 add_executable(glview glview.c)
-add_executable(cppview cppview.cpp)
 
 if (BUILD_C_SYNC)
   add_executable(glpclview glpclview.c)
@@ -28,7 +27,6 @@ include_directories (../wrappers/c_sync/)
 if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
   target_link_libraries(glview freenect)
-  target_link_libraries(cppview freenect)
   if (BUILD_C_SYNC)
     target_link_libraries(glpclview freenect_sync)
   endif()
@@ -48,7 +46,6 @@ else()
   endif()
 
   target_link_libraries(glview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
-  target_link_libraries(cppview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   if (BUILD_C_SYNC)
     target_link_libraries(glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   endif()
@@ -56,9 +53,6 @@ endif()
 
 
 install (TARGETS glview 
-  DESTINATION bin)
-
-install (TARGETS cppview
   DESTINATION bin)
 
 if (BUILD_C_SYNC)
