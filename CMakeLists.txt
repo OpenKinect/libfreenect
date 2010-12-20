@@ -51,8 +51,10 @@ set (PROJECT_APIVER
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
 OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
+OPTION(BUILD_CPP "Build C++ Library (currently header only" ON)
 OPTION(BUILD_CV "Build OpenCV wrapper" OFF)
 OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
+OPTION(BUILD_PYTHON "Build Python extension" OFF)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
@@ -119,12 +121,20 @@ IF(BUILD_C_SYNC)
   add_subdirectory (wrappers/c_sync)
 ENDIF()
 
+IF(BUILD_C_SYNC)
+  add_subdirectory (wrappers/cpp)
+ENDIF()
+
 IF(BUILD_CV)
   add_subdirectory (wrappers/opencv)
 ENDIF()
 
 IF(BUILD_AS3_SERVER)
   add_subdirectory(wrappers/actionscript)
+ENDIF()
+
+IF(BUILD_PYTHON)
+  add_subdirectory (wrappers/python)
 ENDIF()
 
 ######################################################################################

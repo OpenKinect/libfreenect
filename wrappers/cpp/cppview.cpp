@@ -243,9 +243,10 @@ void keyPressed(unsigned char key, int x, int y)
 		device->setLed(LED_YELLOW);
 	}
 	if (key == '4') {
-		device->setLed(LED_BLINK_YELLOW);
+		device->setLed(LED_BLINK_GREEN);
 	}
 	if (key == '5') {
+		// 5 is the same as 4
 		device->setLed(LED_BLINK_GREEN);
 	}
 	if (key == '6') {

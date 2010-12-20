@@ -356,6 +356,34 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
 	return 0;
 }
 
+int freenect_sync_get_accelerometers(int16_t *ax, int16_t *ay, int16_t *az, double *dx, double *dy, double *dz, int index) {
+	if (index < 0 || index >= MAX_KINECTS) {
+		printf("Error: Invalid index [%d]\n", index);
+		return -1;
+	}
+	if (!thread_running || !kinects[index])
+		return -1;
+	freenect_raw_tilt_state* state;
+	freenect_update_tilt_state(kinects[index]->dev);
+	state = freenect_get_tilt_state(kinects[index]->dev);
+	freenect_get_mks_accel(state, dx, dy, dz);
+    *ax = state->accelerometer_x;
+	*ay = state->accelerometer_y;
+	*az = state->accelerometer_z;
+    return 0;
+}
+
+int freenect_sync_set_tilt_degs(int angle, int index) {
+	if (index < 0 || index >= MAX_KINECTS) {
+		printf("Error: Invalid index [%d]\n", index);
+		return -1;
+	}
+	if (!thread_running || !kinects[index])
+		return -1;
+	freenect_set_tilt_degs(kinects[index]->dev, angle);
+	return 0;
+}
+
 void freenect_sync_stop(void)
 {
 	if (thread_running) {

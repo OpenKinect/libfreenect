@@ -671,6 +671,7 @@ int freenect_start_depth(freenect_device *dev)
 	if (res < 0)
 		return res;
 
+	write_register(dev, 0x105, 0x00); // Disable auto-cycle of projector
 	write_register(dev, 0x06, 0x00); // reset depth stream
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
@@ -750,6 +751,7 @@ int freenect_start_video(freenect_device *dev)
 		case FREENECT_VIDEO_IR_8BIT:
 		case FREENECT_VIDEO_IR_10BIT:
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			write_register(dev, 0x105, 0x00); // Disable auto-cycle of projector
 			write_register(dev, 0x05, 0x03); // start video stream
 			break;
 	}
