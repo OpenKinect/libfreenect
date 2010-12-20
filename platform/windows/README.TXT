@@ -51,6 +51,7 @@ The latest snapshots are recommended and can be obtained directly from this URL:
 
 2) libusbemu: best practices
 
+
 TIP: Configure your project to build your application with a console window!
 
 Since libusbemu is quite experimental, I've placed a fail guard within it. If for some
@@ -62,6 +63,7 @@ to the user asking for action. You can either resume execution (if you unintenti
 pressed [ESC] in the console window) or abort the libusbemu. The recent fixes in the
 libusbemu should not cause any unresponsiveness, but you never know...
 
+
 TIP: Do not change the default state of libusbemu.
 
 The default setup embraces the best performance current available, that is,
@@ -70,5 +72,27 @@ If you feel curious/adventurous, go ahead and change the ReapStrategy within the
 emulator and see how it performs to you. Just be warned that the default ReapThreaded
 strategy is quite reliable and stable, while the others are pretty crappy and
 experimental.
+
+
+TIP: Only use a single freenect context.
+
+Multiple freenect contexts should be no problem, but no tests were performed so far.
+
+
+TIP: Be sure that streaming operations are only being called within the thread that
+is responsible to call freenect_handle_events() in your logic.
+
+By streaming operations I mean these:
+  freenect_start_video()
+  freenect_start_depth()
+  freenect_stop_video()
+  freenect_stop_depth()
+
+Also, be sure that only one thread call freenect_handle_events().
+
+Although possible to mix such calls in different threads, there is no guarantee that
+libusbemu is currently able to safely execute them in such fashion. Some tests were
+already been done and it seems to work fine, but it may be pure luck... The libusbemu
+still lacks in proper critical section protection within it.
 
 ======================================================================================
