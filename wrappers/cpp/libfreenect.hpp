@@ -155,13 +155,15 @@ namespace Freenect {
 	};
 
 	class Freenect : Noncopyable {
+	  private:
+		typedef std::map<int, FreenectDevice*> DeviceMap;
 	  public:
 		Freenect() : m_stop(false) {
 			if(freenect_init(&m_ctx, NULL) < 0) throw std::runtime_error("Cannot initialize freenect library");
 			if(pthread_create(&m_thread, NULL, pthread_callback, (void*)this) != 0) throw std::runtime_error("Cannot initialize freenect thread");
 		}
 		~Freenect() {
-			for(typename std::map<int, FreenectDevice*>::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
+			for(typename DeviceMap::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
 				delete it->second;
 			}
 			m_stop = true;
@@ -170,14 +172,14 @@ namespace Freenect {
 		}
 		template <typename ConcreteDevice>
 		ConcreteDevice& createDevice(int _index) {
-			typename std::map<int, FreenectDevice*>::iterator it = m_devices.find(_index);
+			typename DeviceMap::iterator it = m_devices.find(_index);
 			if (it != m_devices.end()) delete it->second;
 			ConcreteDevice * device = new ConcreteDevice(m_ctx, _index);
 			m_devices.insert(std::make_pair<int, FreenectDevice*>(_index, device));
 			return *device;
 		}
 		void deleteDevice(int _index) {
-			typename std::map<int, FreenectDevice*>::iterator it = m_devices.find(_index);
+			typename DeviceMap::iterator it = m_devices.find(_index);
 			if (it == m_devices.end()) return;
 			delete it->second;
 			m_devices.erase(it);
@@ -200,7 +202,7 @@ namespace Freenect {
 		freenect_context *m_ctx;
 		volatile bool m_stop;
 		pthread_t m_thread;
-		std::map<int, FreenectDevice*> m_devices;
+		DeviceMap m_devices;
 	};
 
 }
