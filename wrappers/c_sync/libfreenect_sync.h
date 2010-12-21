@@ -65,6 +65,34 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
     Returns:
         Nonzero on error.
 */
+
+int freenect_sync_set_tilt_degs(int angle, int index);
+/*  Tilt function
+
+    Args:
+        angle: Set the angle to tilt the device
+		index: Device index (0 is the first)
+
+    Returns:
+        Nonzero on error.
+*/
+
+int freenect_sync_get_accelerometers(int16_t *ax, int16_t *ay, int16_t *az, double *dx, double *dy, double *dz, int index);
+/*  Accelerometers function
+
+    Args:
+        ax: Populated with a pointer to the associated state->accelerometer_x
+        ay: Populated with a pointer to the associated state->accelerometer_y
+        az: Populated with a pointer to the associated state->accelerometer_y
+        dx: Populated with a pointer to the associated mks x
+        dy: Populated with a pointer to the associated mks y
+        dz: Populated with a pointer to the associated mks z
+		index: Device index (0 is the first)
+
+    Returns:
+        Nonzero on error.
+*/
+
 void freenect_sync_stop(void);
 #ifdef __cplusplus
 }

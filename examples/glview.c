@@ -193,9 +193,10 @@ void keyPressed(unsigned char key, int x, int y)
 		freenect_set_led(f_dev,LED_YELLOW);
 	}
 	if (key == '4') {
-		freenect_set_led(f_dev,LED_BLINK_YELLOW);
+		freenect_set_led(f_dev,LED_BLINK_GREEN);
 	}
 	if (key == '5') {
+		// 5 is the same as 4
 		freenect_set_led(f_dev,LED_BLINK_GREEN);
 	}
 	if (key == '6') {
@@ -331,6 +332,8 @@ void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 
 void *freenect_threadfunc(void *arg)
 {
+	int accelCount = 0;
+
 	freenect_set_tilt_degs(f_dev,freenect_angle);
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
@@ -345,13 +348,18 @@ void *freenect_threadfunc(void *arg)
 	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format\n");
 
 	while (!die && freenect_process_events(f_ctx) >= 0) {
-		freenect_raw_tilt_state* state;
-		freenect_update_tilt_state(f_dev);
-		state = freenect_get_tilt_state(f_dev);
-		double dx,dy,dz;
-		freenect_get_mks_accel(state, &dx, &dy, &dz);
-		printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
-		fflush(stdout);
+		//Throttle the text output
+		if (accelCount++ >= 2000)
+		{
+			accelCount = 0;
+			freenect_raw_tilt_state* state;
+			freenect_update_tilt_state(f_dev);
+			state = freenect_get_tilt_state(f_dev);
+			double dx,dy,dz;
+			freenect_get_mks_accel(state, &dx, &dy, &dz);
+			printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
+			fflush(stdout);
+		}
 
 		if (requested_format != current_format) {
 			freenect_stop_video(f_dev);

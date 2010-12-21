@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="3.5" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProductVersion>9.0.21022</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{360413F9-4D9B-46BE-BEC7-9B666850ED8C}</ProjectGuid>
+    <OutputType>Library</OutputType>
+    <RootNamespace>freenect</RootNamespace>
+    <AssemblyName>freenect</AssemblyName>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\..\..\bin\</OutputPath>
+    <DefineConstants>DEBUG</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>false</ConsolePause>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>none</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>..\..\..\bin\</OutputPath>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <ConsolePause>false</ConsolePause>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="System" />
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\AssemblyInfo.cs">
+      <Link>AssemblyInfo.cs</Link>
+    </Compile>
+    <Compile Include="..\Kinect.cs">
+      <Link>Kinect.cs</Link>
+    </Compile>
+    <Compile Include="..\KinectNative.cs">
+      <Link>KinectNative.cs</Link>
+    </Compile>
+    <Compile Include="..\Motor.cs">
+      <Link>Motor.cs</Link>
+    </Compile>
+    <Compile Include="..\LED.cs">
+      <Link>LED.cs</Link>
+    </Compile>
+    <Compile Include="..\DepthCamera.cs">
+      <Link>DepthCamera.cs</Link>
+    </Compile>
+    <Compile Include="..\Accelerometer.cs">
+      <Link>Accelerometer.cs</Link>
+    </Compile>
+    <Compile Include="..\LogEventArgs.cs">
+      <Link>LogEventArgs.cs</Link>
+    </Compile>
+    <Compile Include="..\DepthMap.cs">
+      <Link>DepthMap.cs</Link>
+    </Compile>
+    <Compile Include="..\ImageMap.cs">
+      <Link>ImageMap.cs</Link>
+    </Compile>
+    <Compile Include="..\VideoCamera.cs">
+      <Link>VideoCamera.cs</Link>
+    </Compile>
+    <Compile Include="..\SwapBufferCollection.cs">
+      <Link>SwapBufferCollection.cs</Link>
+    </Compile>
+  </ItemGroup>
+  <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
+</Project>

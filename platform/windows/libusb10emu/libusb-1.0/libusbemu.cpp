@@ -35,10 +35,40 @@
 #include <conio.h>
 #include "freenect_internal.h"
 
-// stick to the Windows mutexes for now, but this structure could be easily
-// replaced by pthread mutexes for portability or even by dummy mutexes for
-// a much lightweight run-time, provided that the library client is careful
-// enough to avoid any race-conditions...
+#ifndef MIN
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#endif//MIN
+
+#ifndef SAFE_DELETE
+#define SAFE_DELETE(p) { if(NULL != p) delete(p); p = NULL; }
+#endif//SAFE_DELETE
+
+// Wrappers for platform-specific thread/synchronization objects:
+// stick to the Windows scheme for now, but this structure could be easily
+// replaced by pthread for portability; however if real-time priority turns
+// out to be a requirement on that platform, the pthread implementation may
+// not have support for such scheduling.
+// for a much more lightweight run-time, this could be replaced by dummy
+// objects, provided that the library client is careful enough to avoid any
+// sort of race-conditions or dead-locks...
+struct QuickThread
+{
+  HANDLE hThread;
+  template<typename F>
+  QuickThread(F* proc, void* params)  : hThread(NULL)
+  {
+    fprintf(stdout, "Thread created.\n");
+    hThread = CreateThread(NULL, 0, proc, params, 0, NULL);
+  }
+  ~QuickThread()
+  {
+    CloseHandle(hThread);
+    fprintf(stdout, "Thread resources released.\n");
+  }
+  inline bool Valid() { return(NULL != hThread); }
+  inline void Join() { WaitForSingleObject(hThread, INFINITE); }
+  inline bool TryJoin() { return(WAIT_OBJECT_0 == WaitForSingleObject(hThread, 0)); }
+};
 struct QuickMutex
 {
   CRITICAL_SECTION cs;
@@ -46,6 +76,16 @@ struct QuickMutex
   ~QuickMutex() { DeleteCriticalSection(&cs); }
   inline void Enter() { EnterCriticalSection(&cs); }
   inline void Leave() { LeaveCriticalSection(&cs); }
+};
+struct QuickEvent
+{
+  HANDLE hEvent;
+  QuickEvent() : hEvent(NULL) { hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); }
+  ~QuickEvent() { CloseHandle(hEvent); }
+  inline void Signal() { SetEvent(hEvent); }
+  inline void Reset()  { ResetEvent(hEvent); }
+  inline bool Check()  { return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, 0)); }
+  inline void Wait()   { WaitForSingleObject(hEvent, INFINITE); }
 };
 
 template<typename T>
@@ -197,12 +237,7 @@ void libusbemu_unregister_device(libusb_device* dev)
   // ... and unregister device if the reference count reaches zero
   if (0 == dev->refcount)
   {
-    if (NULL != dev->handles)
-    {
-      assert(0 == dev->handles->size());  // Paranoid...
-      delete(dev->handles);
-    }
-    dev->handles = NULL;
+    SAFE_DELETE(dev->handles);
     // prior to device deletion, all of its transfer lists must be deleted
     if (NULL != dev->isoTransfers)
     {
@@ -221,8 +256,7 @@ void libusbemu_unregister_device(libusb_device* dev)
         }
         allTransfers.erase(it);
       }
-      delete(dev->isoTransfers);
-      dev->isoTransfers = NULL;
+      SAFE_DELETE(dev->isoTransfers);
     }
     libusb_context* ctx (dev->ctx);
     ctx->devices.erase(dev->device);
@@ -408,14 +442,7 @@ int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestT
 
 // FROM HERE ON CODE BECOMES QUITE MESSY: ASYNCHRONOUS TRANSFERS AND HANDLE EVENTS STUFF
 
-transfer_wrapper* GetWrapper(struct libusb_transfer* transfer)
-{
-	const char* const raw_address ((char*)transfer);
-	const void* const off_address (raw_address-sizeof(void*)-2*sizeof(transfer_wrapper*));
-	transfer_wrapper* wrapper ((transfer_wrapper*)off_address);
-	return(wrapper);
-}
-
+static int cnt (0);
 static int cnt (0);
 struct libusb_transfer* libusb_alloc_transfer(int iso_packets)
 {
@@ -507,7 +534,7 @@ int SetupTransfer(transfer_wrapper* wrapper)
   void*& context = wrapper->usb;
   if (NULL != context)  // Paranoid check...
     return(LIBUSB_ERROR_OTHER);
-  
+
   int ret (LIBUSB_ERROR_OTHER);
   libusb_transfer* transfer = &wrapper->libusb;
   switch(transfer->type)
@@ -592,20 +619,17 @@ int ReapSequential(const libusb_device&);         // EXPERIMENTAL
 int ReapJohnnieWalker(const libusb_device& dev);  // EXPERIMENTAL
 int ReapThreaded(const libusb_device&);           // WORKS FINE
 
-static HANDLE hProblem (NULL);
-static HANDLE hRelease (NULL);
-static HANDLE hAbort (NULL);
+static QuickEvent hProblem;
+static QuickEvent hRelease;
+static QuickEvent hAbort;
+static QuickEvent hWithin;
 int libusb_handle_events(libusb_context* ctx)
 {
-  if (NULL == hProblem) hProblem = CreateEvent(NULL, TRUE, FALSE, NULL);
-  if (NULL == hRelease) hRelease = CreateEvent(NULL, TRUE, FALSE, NULL);
-  if (NULL == hAbort)   hAbort   = CreateEvent(NULL, TRUE, FALSE, NULL);
-
-  if (WAIT_OBJECT_0 == WaitForSingleObject(hAbort, 0))
-    return(LIBUSB_ERROR_INTERRUPTED);
+  int ret (0);
 
   static QuickMutex mutex;
   mutex.Enter();
+  hWithin.Signal();
 
   int(*ReapStrategy)(const libusb_device&) (ReapThreaded);
 
@@ -639,10 +663,12 @@ int libusb_handle_events(libusb_context* ctx)
   // of the children threads internally spawned from within it.
   if (_kbhit())
     if (27 == _getch()) // ESC
-      SetEvent(hProblem);
-  if (WAIT_OBJECT_0 == WaitForSingleObject(hProblem, 0))
+      hProblem.Signal();
+  if (hAbort.Check())
+    ret = LIBUSB_ERROR_INTERRUPTED;
+  else if (hProblem.Check())
   {
-    ResetEvent(hRelease);
+    hRelease.Reset();
     int user_option =
     MessageBoxA(GetDesktopWindow(),
                 "The libusb_handle_events() fail guard of libusbemu was reached!\n"
@@ -652,15 +678,17 @@ int libusb_handle_events(libusb_context* ctx)
                 "the host program might run abnormally after such termination).",
                 "WARNING: libusbemu thread fail guard reached!", MB_ICONWARNING | MB_OKCANCEL);
     if (IDOK == user_option)
-      SetEvent(hAbort);
+      hAbort.Signal();
     else
-      ResetEvent(hProblem);
-    SetEvent(hRelease);
+      hProblem.Reset();
+    hRelease.Signal();
   }
 
+  hWithin.Reset();
   mutex.Leave();
+
   // 0 on success, or a LIBUSB_ERROR code on failure
-  return(0);
+  return(ret);
 }
 
 enum EReapResult { ETIMEOUT = -116, ECANCELLED = -998 };
@@ -709,58 +737,84 @@ int ReapJohnnieWalker(const libusb_device& dev)
   return(0);
 }
 
-DWORD WINAPI ReapThreadProc(__in LPVOID lpParameter)
+DWORD WINAPI ReapThreadProc(/*__in*/ LPVOID lpParameter)
 {
+  fprintf(stdout, "Thread execution started.\n");
   libusb_device::TListTransfers& listTransfers (*(libusb_device::TListTransfers*)lpParameter);
 	while(!listTransfers.Empty())
 	{
+    hWithin.Wait();
 		transfer_wrapper* wrapper = listTransfers.Head();
 		if (NULL != wrapper)
 			ReapTransfer(wrapper, 1000);
 
-    if (WAIT_OBJECT_0 == WaitForSingleObject(hProblem,0))
+    if (hProblem.Check())
     {
       fprintf(stderr, "Thread is waiting for user reaction...\n");
       // wait for user reaction...
-      WaitForSingleObject(hRelease, INFINITE);
+      hRelease.Wait();
       // did the user decide to abort?
-      if (WAIT_OBJECT_0 == WaitForSingleObject(hAbort,0))
+      if (hAbort.Check())
       {
-        fprintf(stderr, "Thread is aborting!\n");
+        fprintf(stderr, "Thread is aborting: releasing transfers...\n");
         while(!listTransfers.Empty())
         {
           transfer_wrapper* wrapper = listTransfers.Head();
           libusb_cancel_transfer(&(wrapper->libusb));
           ReapTransfer(wrapper, 0);
         }
+        fprintf(stderr, "Thread execution aborted.\n");
         return(LIBUSB_ERROR_INTERRUPTED);
       }
     }
 	}
+  fprintf(stdout, "Thread execution finished.\n");
 	return(0);
 }
 // ReapThreaded Rationale: for each transfer list (stream), delegate the reap
 // to a dedicated thread for that stream
 int ReapThreaded(const libusb_device& dev)
 {
-  if (WAIT_OBJECT_0 == WaitForSingleObject(hProblem, 0))
+  static std::map<const libusb_device*, std::map<int,QuickThread*> > mapDeviceEndPointThreads;
+
+  if (hAbort.Check())
+  {
+    std::map<int,QuickThread*>& mThreads = mapDeviceEndPointThreads[&dev];
+    std::map<int,QuickThread*>::iterator it  (mThreads.begin());
+	  std::map<int,QuickThread*>::iterator end (mThreads.end());
+    for (; it!=end; ++it)
+    {
+      QuickThread*& hThread = it->second;
+      if (NULL != hThread)
+        if (hThread->TryJoin())
+          SAFE_DELETE(hThread);
+    }
+    return(-1);
+  }
+
+  if (hProblem.Check())
     return(-1);
 
-  static std::map<const libusb_device*, std::map<int,HANDLE> > mapDeviceEndPointThreads;
   libusb_device::TMapIsocTransfers::iterator it  (dev.isoTransfers->begin());
 	libusb_device::TMapIsocTransfers::iterator end (dev.isoTransfers->end());
   for (; it!=end; ++it)
   {
     const int endpoint (it->first);
-    HANDLE& hThread = mapDeviceEndPointThreads[&dev][endpoint];
-    if (WAIT_OBJECT_0 == WaitForSingleObject(hThread, 0))
-      hThread = NULL;
-    if (NULL == hThread)
+    QuickThread*& hThread = mapDeviceEndPointThreads[&dev][endpoint];
+    if (NULL != hThread)
+    {
+      if (hThread->TryJoin())
+        SAFE_DELETE(hThread);
+    }
+    else
+    {
       if (!it->second.Empty())
       {
-        hThread = CreateThread(NULL, 0, ReapThreadProc, (void*)&(it->second), 0, NULL);
-        SetThreadPriority(hThread, THREAD_PRIORITY_TIME_CRITICAL);
+        libusb_device::TListTransfers& listTransfers (it->second);
+        hThread = new QuickThread(ReapThreadProc, (void*)&listTransfers);
+        SetThreadPriority(hThread->hThread, THREAD_PRIORITY_TIME_CRITICAL);
       }
+    }
   }
 
   Sleep(1);
@@ -860,7 +914,7 @@ void PreprocessTransferNaive(libusb_transfer* transfer, const int read)
 	for (int i=0; i<pkts; ++i)
 	{
 		libusb_iso_packet_descriptor& desc (transfer->iso_packet_desc[i]);
-		desc.actual_length = __min(remaining, desc.length);
+		desc.actual_length = MIN(remaining, desc.length);
 		remaining -= desc.actual_length;
 	}
 }
@@ -914,10 +968,10 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 			{
 			case 0x01 : // begin
 			case 0x02 : // middle
-				desc.actual_length = __min(remaining, pktlen);
+				desc.actual_length = MIN(remaining, pktlen);
 				break;
 			case 0x05 : // final
-				desc.actual_length = __min(remaining, pktend);
+				desc.actual_length = MIN(remaining, pktend);
 				break;
 			default :
 				fprintf(stdout, "0x%02X\n", header.flag);
