@@ -169,11 +169,16 @@ namespace Freenect {
 			if(freenect_shutdown(m_ctx) < 0){} //FN_WARNING("Freenect did not shutdown in a clean fashion");
 		}
 		T& createDevice(int _index) {
+			typename std::map<int, T*>::iterator it = m_devices.find(_index);
+			if (it != m_devices.end()) delete it->second;
 			m_devices.insert(std::make_pair<int, T*>(_index, new T(m_ctx, _index)));
 			return *(m_devices.find(_index)->second);
 		}
 		void deleteDevice(int _index) {
-			m_devices.erase(_index);
+			typename std::map<int, T*>::iterator it = m_devices.find(_index);
+			if (it == m_devices.end()) return;
+			delete * it->second;
+			m_devices.erase(it);
 		}
 		int deviceCount() {
 			return freenect_num_devices(m_ctx);
