@@ -69,7 +69,7 @@ namespace Freenect {
 			freenect_set_depth_callback(m_dev, freenect_depth_callback);
 			freenect_set_video_callback(m_dev, freenect_video_callback);
 		}
-		~FreenectDevice() {
+		virtual ~FreenectDevice() {
 			if(freenect_close_device(m_dev) < 0){} //FN_WARNING("Device did not shutdown in a clean fashion");
 		}
 		void startVideo() {
@@ -154,28 +154,30 @@ namespace Freenect {
 		}
 	};
 
-	template <class T>class Freenect : Noncopyable {
+	class Freenect : Noncopyable {
 	  public:
 		Freenect() : m_stop(false) {
 			if(freenect_init(&m_ctx, NULL) < 0) throw std::runtime_error("Cannot initialize freenect library");
 			if(pthread_create(&m_thread, NULL, pthread_callback, (void*)this) != 0) throw std::runtime_error("Cannot initialize freenect thread");
 		}
 		~Freenect() {
-			for(typename std::map<int, T*>::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
+			for(typename std::map<int, FreenectDevice*>::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
 				delete it->second;
 			}
 			m_stop = true;
 			pthread_join(m_thread, NULL);
 			if(freenect_shutdown(m_ctx) < 0){} //FN_WARNING("Freenect did not shutdown in a clean fashion");
 		}
-		T& createDevice(int _index) {
-			typename std::map<int, T*>::iterator it = m_devices.find(_index);
+		template <typename ConcreteDevice>
+		ConcreteDevice& createDevice(int _index) {
+			typename std::map<int, FreenectDevice*>::iterator it = m_devices.find(_index);
 			if (it != m_devices.end()) delete it->second;
-			m_devices.insert(std::make_pair<int, T*>(_index, new T(m_ctx, _index)));
-			return *(m_devices.find(_index)->second);
+			ConcreteDevice * device = new ConcreteDevice(m_ctx, _index);
+			m_devices.insert(std::make_pair<int, FreenectDevice*>(_index, device));
+			return *device;
 		}
 		void deleteDevice(int _index) {
-			typename std::map<int, T*>::iterator it = m_devices.find(_index);
+			typename std::map<int, FreenectDevice*>::iterator it = m_devices.find(_index);
 			if (it == m_devices.end()) return;
 			delete it->second;
 			m_devices.erase(it);
@@ -190,7 +192,7 @@ namespace Freenect {
 			}
 		}
 		static void *pthread_callback(void *user_data) {
-			Freenect<T>* freenect = static_cast<Freenect<T>*>(user_data);
+			Freenect* freenect = static_cast<Freenect*>(user_data);
 			(*freenect)();
 			return NULL;
 		}
@@ -198,7 +200,7 @@ namespace Freenect {
 		freenect_context *m_ctx;
 		volatile bool m_stop;
 		pthread_t m_thread;
-		std::map<int, T*> m_devices;
+		std::map<int, FreenectDevice*> m_devices;
 	};
 
 }
