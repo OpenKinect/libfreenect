@@ -177,7 +177,7 @@ namespace Freenect {
 		void deleteDevice(int _index) {
 			typename std::map<int, T*>::iterator it = m_devices.find(_index);
 			if (it == m_devices.end()) return;
-			delete * it->second;
+			delete it->second;
 			m_devices.erase(it);
 		}
 		int deviceCount() {
