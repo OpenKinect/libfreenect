@@ -152,6 +152,13 @@ struct transfer_wrapper
 	libusb_transfer libusb;
 };
 
+transfer_wrapper* GetWrapper(libusb_transfer* transfer)
+{
+  char* raw_address ((char*)transfer);
+  char* off_address (raw_address - sizeof(void*) - 2*sizeof(transfer_wrapper*));
+  return((transfer_wrapper*)off_address);
+}
+
 struct libusb_device_handle_t
 {
 	libusb_device* dev;
@@ -407,14 +414,6 @@ int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestT
 }
 
 // FROM HERE ON CODE BECOMES QUITE MESSY: ASYNCHRONOUS TRANSFERS AND HANDLE EVENTS STUFF
-
-transfer_wrapper* GetWrapper(struct libusb_transfer* transfer)
-{
-	const char* const raw_address ((char*)transfer);
-	const void* const off_address (raw_address-sizeof(void*)-2*sizeof(transfer_wrapper*));
-	transfer_wrapper* wrapper ((transfer_wrapper*)off_address);
-	return(wrapper);
-}
 
 static int cnt (0);
 struct libusb_transfer* libusb_alloc_transfer(int iso_packets)
@@ -781,7 +780,8 @@ int ReapTransfer(transfer_wrapper* wrapper, int timeout)
   {
     // data successfully acquired (0 bytes is also a go!), which means that
     // the transfer should be removed from the head of the list and put into
-    // an orphan state.
+    // an orphan state; it is up to the client code to resubmit the transfer
+    // which will possibly happen during the client callback.
     libusb_device::TListTransfers::Remove(wrapper);
 
     // if data is effectively acquired (non-zero bytes transfer), all of the
