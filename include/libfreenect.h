@@ -119,9 +119,16 @@ typedef libusb_context freenect_usb_context; /**< Holds libusb-1.0 specific info
 
 /// If Win32, export all functions for DLL usage
 #ifndef _WIN32
-#define EXPORT /**< DLLExport information for windows, set to nothing on other platforms */
+  #define EXPORT /**< DLLExport information for windows, set to nothing on other platforms */
 #else
-#define EXPORT extern "C" __declspec(dllexport) /**< DLLExport information for windows, set to nothing on other platforms */
+  /**< DLLExport information for windows, set to nothing on other platforms */
+  #ifdef __cplusplus
+    #define EXPORT extern "C" __declspec(dllexport)
+  #else
+    // this is required when building from a Win32 port of gcc without being
+    // forced to compile all of the library files (.c) with g++...
+    #define EXPORT __declspec(dllexport)
+  #endif
 #endif
 
 /// Enumeration of message logging levels
