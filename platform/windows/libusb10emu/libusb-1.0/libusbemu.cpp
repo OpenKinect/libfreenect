@@ -24,251 +24,30 @@
 * either License.
 */
 
+// Headers required to enable Visual C++ Memory Leak mechanism:
+// http://msdn.microsoft.com/en-us/library/x98tx3cf(v=vs.71).aspx
+// http://msdn.microsoft.com/en-us/library/x98tx3cf(v=vs.80).aspx
+// Note that for VC71 the human-readable map-mode flag is CRTDBG_MAP_ALLOC
+// while for VC80 and on the flag is prefixed by a "_" : _CRTDBG_MAP_ALLOC
+#if defined(_MSC_VER) && defined(_DEBUG)
+  #define _CRTDBG_MAP_ALLOC
+  #include <stdlib.h>
+  #include <crtdbg.h>
+  // Also, gotta redefine the new operator ...
+  // http://support.microsoft.com/kb/140858
+  #define MYDEBUG_NEW  new ( _NORMAL_BLOCK, __FILE__, __LINE__)
+  #define new MYDEBUG_NEW
+#endif
+
 #include "libusb.h"
-#include <usb.h>
+#include "libusbemu_internal.h"
 #include <cassert>
-#include <vector>
-#include <set>
-#include <map>
 #include <algorithm>
 #include <windows.h>
 #include <conio.h>
 #include "freenect_internal.h"
 
-#ifndef MIN
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#endif//MIN
-
-#ifndef SAFE_DELETE
-#define SAFE_DELETE(p) { if(NULL != p) delete(p); p = NULL; }
-#endif//SAFE_DELETE
-
-// Wrappers for platform-specific thread/synchronization objects:
-// stick to the Windows scheme for now, but this structure could be easily
-// replaced by pthread for portability; however if real-time priority turns
-// out to be a requirement on that platform, the pthread implementation may
-// not have support for such scheduling.
-// for a much more lightweight run-time, this could be replaced by dummy
-// objects, provided that the library client is careful enough to avoid any
-// sort of race-conditions or dead-locks...
-struct QuickThread
-{
-  HANDLE hThread;
-  template<typename F>
-  QuickThread(F* proc, void* params)  : hThread(NULL)
-  {
-    fprintf(stdout, "Thread created.\n");
-    hThread = CreateThread(NULL, 0, proc, params, 0, NULL);
-  }
-  ~QuickThread()
-  {
-    CloseHandle(hThread);
-    fprintf(stdout, "Thread resources released.\n");
-  }
-  inline bool Valid() { return(NULL != hThread); }
-  inline void Join() { WaitForSingleObject(hThread, INFINITE); }
-  inline bool TryJoin() { return(WAIT_OBJECT_0 == WaitForSingleObject(hThread, 0)); }
-};
-struct QuickMutex
-{
-  CRITICAL_SECTION cs;
-  QuickMutex()  { InitializeCriticalSection(&cs); }
-  ~QuickMutex() { DeleteCriticalSection(&cs); }
-  inline void Enter() { EnterCriticalSection(&cs); }
-  inline void Leave() { LeaveCriticalSection(&cs); }
-};
-struct QuickEvent
-{
-  HANDLE hEvent;
-  QuickEvent() : hEvent(NULL) { hEvent = CreateEvent(NULL, TRUE, FALSE, NULL); }
-  ~QuickEvent() { CloseHandle(hEvent); }
-  inline void Signal() { SetEvent(hEvent); }
-  inline void Reset()  { ResetEvent(hEvent); }
-  inline bool Check()  { return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, 0)); }
-  inline void Wait()   { WaitForSingleObject(hEvent, INFINITE); }
-};
-
-template<typename T>
-struct QuickList
-{
-	T ini;
-	T end;
-	QuickList()
-	{
-		memset(&ini, 0, sizeof(T));
-		memset(&end, 0, sizeof(T));
-		ini.prev = NULL;
-		ini.next = &end;
-		end.prev = &ini;
-		end.next = NULL;
-	}
-  // copy-constructor is required to be safely used as a plain std::map value
-	QuickList(const QuickList& rhs)
-	{
-    if (!rhs.Empty())
-    {
-      fprintf(stdout, "WARNING: Copy-constructin from a non-empty QuickList!\n");
-      return;
-    }
-		memset(&ini, 0, sizeof(T));
-		memset(&end, 0, sizeof(T));
-		ini.prev = NULL;
-		ini.next = &end;
-		end.prev = &ini;
-		end.next = NULL;
-	}
-	const bool Empty() const
-	{
-		return(ini.next == &end);  // could also be (end.prev == &ini)
-	}
-	void Append(T* node)
-	{
-		if (!Orphan(node))
-    {
-      fprintf(stdout, "WARNING: Appending non-orphan node to list...\n");
-      Remove(node);
-    }
-		end.prev->next = node;
-		node->prev = end.prev;
-		node->next = &end;
-		end.prev = node;
-	}
-	T* Head() const
-	{
-		T* head (NULL);
-		if (!Empty())
-			head = ini.next;
-		return(head);
-	}
-	T* Last() const
-	{
-		T* last (NULL);
-		if (!Empty())
-			last = end.prev;
-		return(last);
-	}
-	const bool Member(T* node) const
-	{
-		bool member (false);
-		for (T* it=ini.next; it!=&end, member!=true; it=Next(it))
-			if (it == node)
-				member = true;
-		return(member);
-	}
-	static T* Prev(T* node)
-	{
-		T* prev (NULL);
-		if (NULL != node->prev->prev)
-			prev = node->prev;
-		return(prev);
-	}
-	static T* Next(T* node)
-	{
-		T* next (NULL);
-		if (NULL != node->next->next)
-			next = node->next;
-		return(next);
-	}
-	static void Remove(T* node)
-	{
-		if (Orphan(node))
-			return;
-		node->prev->next = node->next;
-		node->next->prev = node->prev;
-		node->prev = NULL;
-		node->next = NULL;
-	}
-	static const bool Orphan(T* node)
-	{
-		return((NULL == node->prev) && (NULL == node->next)); // (node->prev == node->next)
-	}
-};
-
-struct transfer_wrapper
-{
-	transfer_wrapper* prev;
-	transfer_wrapper* next;
-	void* usb;
-	libusb_transfer libusb;
-};
-
-transfer_wrapper* GetWrapper(libusb_transfer* transfer)
-{
-  char* raw_address ((char*)transfer);
-  char* off_address (raw_address - sizeof(void*) - 2*sizeof(transfer_wrapper*));
-  return((transfer_wrapper*)off_address);
-}
-
-struct libusb_device_handle_t
-{
-	libusb_device* dev;
-  usb_dev_handle* handle;
-};
-
-struct libusb_device_t
-{
-	libusb_context* ctx;
-  struct usb_device* device;
-  int refcount;
-  typedef QuickList<transfer_wrapper> TListTransfers;
-  typedef std::map<int, TListTransfers> TMapIsocTransfers;
-  TMapIsocTransfers* isoTransfers;
-  typedef std::map<usb_dev_handle*, libusb_device_handle> TMapHandles;
-  TMapHandles* handles;
-};
-
-struct libusb_context_t
-{
-  typedef std::map<struct usb_device*, libusb_device> TMapDevices;
-  TMapDevices devices;
-};
-
-libusb_device* libusbemu_register_device(libusb_context* ctx, struct usb_device* dev)
-{
-  // register the device (if not already there) ...
-  libusb_device dummy = { ctx, dev, 0, NULL, NULL };
-  libusb_context::TMapDevices::iterator it = ctx->devices.insert(std::make_pair(dev,dummy)).first;
-  // ... and increment the reference count
-  libusb_device& record (it->second);
-  record.refcount++;
-  // might as well do some paranoid checkings...
-  assert(record.ctx == ctx);
-  assert(record.device == dev);
-  return(&(it->second));
-}
-
-void libusbemu_unregister_device(libusb_device* dev)
-{
-  // decrement the reference count of the device ...
-  --(dev->refcount);
-  // ... and unregister device if the reference count reaches zero
-  if (0 == dev->refcount)
-  {
-    SAFE_DELETE(dev->handles);
-    // prior to device deletion, all of its transfer lists must be deleted
-    if (NULL != dev->isoTransfers)
-    {
-      libusb_device::TMapIsocTransfers& allTransfers (*(dev->isoTransfers));
-      while (!allTransfers.empty())
-      {
-        libusb_device::TMapIsocTransfers::iterator it (allTransfers.begin());
-        libusb_device::TListTransfers& listTransfers (it->second);
-        while (!listTransfers.Empty())
-        {
-          transfer_wrapper* transfer (listTransfers.Head());
-          // make it orphan so that it can be deleted:
-          libusb_device::TListTransfers::Remove(transfer);
-          // the following will free the wrapper object as well:
-          libusb_free_transfer(&transfer->libusb);
-        }
-        allTransfers.erase(it);
-      }
-      SAFE_DELETE(dev->isoTransfers);
-    }
-    libusb_context* ctx (dev->ctx);
-    ctx->devices.erase(dev->device);
-  }
-}
+using namespace libusbemu;
 
 int libusb_init(libusb_context** context)
 {
@@ -330,6 +109,7 @@ ssize_t libusb_get_device_list(libusb_context* ctx, libusb_device*** list)
 		bus = bus->next;
 	};
   // populate the device list that will be returned to the client:
+  // the list must be NULL-terminated to follow the semantics of libusb-1.0!
   libusb_device**& devlist = *list;
   devlist = new libusb_device* [ctx->devices.size()+1];   // +1 is for a finalization mark
   libusb_context::TMapDevices::iterator it  (ctx->devices.begin());
@@ -447,9 +227,8 @@ int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestT
 	return(bytes_transferred);
 }
 
-// FROM HERE ON CODE BECOMES QUITE MESSY: ASYNCHRONOUS TRANSFERS AND HANDLE EVENTS STUFF
+// FROM HERE ON CODE BECOMES QUITE MESSY: ASYNCHRONOUS TRANSFERS MANAGEMENT
 
-static int cnt (0);
 struct libusb_transfer* libusb_alloc_transfer(int iso_packets)
 {
   transfer_wrapper* wrapper = new transfer_wrapper;
@@ -458,7 +237,6 @@ struct libusb_transfer* libusb_alloc_transfer(int iso_packets)
   transfer.num_iso_packets = iso_packets;
   transfer.iso_packet_desc = new libusb_iso_packet_descriptor [iso_packets];
   memset(transfer.iso_packet_desc, 0, iso_packets*sizeof(libusb_iso_packet_descriptor));
-  ++cnt;
   // a newly allocated transfer, or NULL on error
   return(&transfer);
 }
@@ -475,7 +253,7 @@ void libusb_free_transfer(struct libusb_transfer* transfer)
   // "It is not legal to free an active transfer
   //  (one which has been submitted and has not yet completed)."
   // that means that only "orphan" transfers can be deleted:
-  transfer_wrapper* wrapper = GetWrapper(transfer);
+  transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
   if (!libusb_device::TListTransfers::Orphan(wrapper))
   {
     fprintf(stderr, "ERROR: libusb_free_transfer() attempted to free an active transfer!\n");
@@ -492,9 +270,6 @@ void libusb_free_transfer(struct libusb_transfer* transfer)
   delete[](transfer->iso_packet_desc);
   memset(wrapper, 0, sizeof(transfer_wrapper)); // Paranoid clean...
   delete(wrapper);
-
-  --cnt;
-  //fprintf(stdout, "transfer deleted; %d remaining\n", cnt);   // HARDCORE DEBUG
 }
 
 void libusb_fill_iso_transfer(struct libusb_transfer* transfer, libusb_device_handle* dev_handle, unsigned char endpoint, unsigned char* buffer, int length, int num_iso_packets, libusb_transfer_cb_fn callback, void* user_data, unsigned int timeout)
@@ -535,48 +310,9 @@ void libusb_set_iso_packet_lengths(struct libusb_transfer* transfer, unsigned in
 		transfer->iso_packet_desc[i].length = length;
 }
 
-int SetupTransfer(transfer_wrapper* wrapper)
-{
-  void*& context = wrapper->usb;
-  if (NULL != context)  // Paranoid check...
-    return(LIBUSB_ERROR_OTHER);
-
-  int ret (LIBUSB_ERROR_OTHER);
-  libusb_transfer* transfer = &wrapper->libusb;
-  switch(transfer->type)
-  {
-    case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS :
-      ret = usb_isochronous_setup_async(transfer->dev_handle->handle, &context, transfer->endpoint, transfer->iso_packet_desc[0].length);
-      break;
-    case LIBUSB_TRANSFER_TYPE_CONTROL :
-      // libusb-0.1 does not actually support asynchronous control transfers, but this should be
-      // very easy to emulate if necessary: just stick the transfer in a special list and then
-      // libusb_handle_events() check if the list is empty or not; if it is not empty, a thread
-      // is created temporarily just to deal with such control transfer requests until the list
-      // becomes eventually empty again and the thread terminates.
-    case LIBUSB_TRANSFER_TYPE_BULK :
-    case LIBUSB_TRANSFER_TYPE_INTERRUPT :
-      // these transfer types are not being used by libfreenect. they should be fairly simple to
-      // emulate with libusb-0.1 since it already provides support for them.
-      // usb_bulk_setup_async(translate(transfer->dev_handle), &context, transfer->endpoint);
-      // usb_interrupt_setup_async(translate(transfer->dev_handle), &context, transfer->endpoint);
-    default :
-      return(LIBUSB_ERROR_INVALID_PARAM);
-  }
-
-  if (ret < 0)
-  {
-    // TODO: better error handling...
-    // what do the functions usb_***_setup_async() actually return on error?
-    return(ret);
-  }
-
-  return(LIBUSB_SUCCESS);
-}
-
 int libusb_submit_transfer(struct libusb_transfer* transfer)
 {
-  transfer_wrapper* wrapper = GetWrapper(transfer);
+  transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
 
   // the first time a transfer is submitted, the libusb-0.1 transfer context
   // (the void*) must be created and initialized with a proper call to one of
@@ -585,7 +321,7 @@ int libusb_submit_transfer(struct libusb_transfer* transfer)
   // functions to fill the transfer data structure: the library client is not
   // forced to call them and could fill the fields directly within the struct.
   if (NULL == wrapper->usb)
-    SetupTransfer(wrapper);
+    libusbemu_setup_transfer(wrapper);
 
   libusb_device::TMapIsocTransfers& isoTransfers (*transfer->dev_handle->dev->isoTransfers);
   isoTransfers[transfer->endpoint].Append(wrapper);
@@ -606,7 +342,7 @@ int libusb_submit_transfer(struct libusb_transfer* transfer)
 
 int libusb_cancel_transfer(struct libusb_transfer* transfer)
 {
-  transfer_wrapper* wrapper = GetWrapper(transfer);
+  transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
   // according to the official libusb_cancel_transfer() documentation:
   // "This function returns immediately, but this does not indicate
   //  cancellation is complete. Your callback function will be invoked at
@@ -621,21 +357,21 @@ int libusb_cancel_transfer(struct libusb_transfer* transfer)
 	return(ret);
 }
 
+// FROM HERE ON CODE BECOMES REALLY REALLY REALLY MESSY: HANDLE EVENTS STUFF
+
 int ReapSequential(const libusb_device&);         // EXPERIMENTAL
 int ReapJohnnieWalker(const libusb_device& dev);  // EXPERIMENTAL
 int ReapThreaded(const libusb_device&);           // WORKS FINE
 
 static QuickEvent hProblem;
-static QuickEvent hRelease;
+static QuickEvent hReaction;
 static QuickEvent hAbort;
-static QuickEvent hWithin;
 int libusb_handle_events(libusb_context* ctx)
 {
   int ret (0);
 
-  static QuickMutex mutex;
-  mutex.Enter();
-  hWithin.Signal();
+  ctx->mutex.Enter();
+  ctx->processing.Signal();
 
   int(*ReapStrategy)(const libusb_device&) (ReapThreaded);
 
@@ -674,7 +410,7 @@ int libusb_handle_events(libusb_context* ctx)
     ret = LIBUSB_ERROR_INTERRUPTED;
   else if (hProblem.Check())
   {
-    hRelease.Reset();
+    hReaction.Reset();
     int user_option =
     MessageBoxA(GetDesktopWindow(),
                 "The libusb_handle_events() fail guard of libusbemu was reached!\n"
@@ -687,11 +423,11 @@ int libusb_handle_events(libusb_context* ctx)
       hAbort.Signal();
     else
       hProblem.Reset();
-    hRelease.Signal();
+    hReaction.Signal();
   }
 
-  hWithin.Reset();
-  mutex.Leave();
+  ctx->processing.Reset();
+  ctx->mutex.Leave();
 
   // 0 on success, or a LIBUSB_ERROR code on failure
   return(ret);
@@ -704,8 +440,6 @@ int ReapTransfer(transfer_wrapper*,int=0);
 // ReapSequential Rationale: reap only the head of each transfer list (stream)
 int ReapSequential(const libusb_device& dev)
 {
-  static QuickMutex mutex;
-  mutex.Enter();
 	// This reap strategy is very buggy and it is not working properly...
   libusb_device::TMapIsocTransfers::iterator it  (dev.isoTransfers->begin());
 	libusb_device::TMapIsocTransfers::iterator end (dev.isoTransfers->end());
@@ -716,7 +450,6 @@ int ReapSequential(const libusb_device& dev)
 		if (NULL != wrapper)
 			ReapTransfer(wrapper, 100);
 	}
-  mutex.Leave();
   //Sleep(1);
 	return(0);
 }
@@ -743,13 +476,13 @@ int ReapJohnnieWalker(const libusb_device& dev)
   return(0);
 }
 
-DWORD WINAPI ReapThreadProc(/*__in*/ LPVOID lpParameter)
+int ReapThreadProc(void* lpParameter)
 {
   fprintf(stdout, "Thread execution started.\n");
   libusb_device::TListTransfers& listTransfers (*(libusb_device::TListTransfers*)lpParameter);
 	while(!listTransfers.Empty())
 	{
-    hWithin.Wait();
+    listTransfers.Head()->libusb.dev_handle->dev->ctx->processing.Wait();
 		transfer_wrapper* wrapper = listTransfers.Head();
 		if (NULL != wrapper)
 			ReapTransfer(wrapper, 1000);
@@ -758,7 +491,7 @@ DWORD WINAPI ReapThreadProc(/*__in*/ LPVOID lpParameter)
     {
       fprintf(stderr, "Thread is waiting for user reaction...\n");
       // wait for user reaction...
-      hRelease.Wait();
+      hReaction.Wait();
       // did the user decide to abort?
       if (hAbort.Check())
       {
@@ -805,12 +538,16 @@ int ReapThreaded(const libusb_device& dev)
 	libusb_device::TMapIsocTransfers::iterator end (dev.isoTransfers->end());
   for (; it!=end; ++it)
   {
+    std::map<int,QuickThread*>& mThreads = mapDeviceEndPointThreads[&dev];
     const int endpoint (it->first);
-    QuickThread*& hThread = mapDeviceEndPointThreads[&dev][endpoint];
+    QuickThread*& hThread = mThreads[endpoint];
     if (NULL != hThread)
     {
       if (hThread->TryJoin())
+      {
         SAFE_DELETE(hThread);
+        mThreads.erase(endpoint);
+      }
     }
     else
     {
@@ -818,7 +555,7 @@ int ReapThreaded(const libusb_device& dev)
       {
         libusb_device::TListTransfers& listTransfers (it->second);
         hThread = new QuickThread(ReapThreadProc, (void*)&listTransfers);
-        SetThreadPriority(hThread->hThread, THREAD_PRIORITY_TIME_CRITICAL);
+        hThread->RaisePriority();
       }
     }
   }
