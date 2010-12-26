@@ -369,13 +369,6 @@ static QuickEvent hAbort;
 
 int libusb_handle_events(libusb_context* ctx)
 {
-  if (NULL == hProblem) hProblem = CreateEvent(NULL, TRUE, FALSE, NULL);
-  if (NULL == hRelease) hRelease = CreateEvent(NULL, TRUE, FALSE, NULL);
-  if (NULL == hAbort)   hAbort   = CreateEvent(NULL, TRUE, FALSE, NULL);
-
-  if (WAIT_OBJECT_0 == WaitForSingleObject(hAbort, 0))
-    return(LIBUSB_ERROR_INTERRUPTED);
-
   ctx->mutex.Enter();
   ctx->processing.Signal();
 
