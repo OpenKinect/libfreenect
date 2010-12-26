@@ -38,6 +38,8 @@
 
 #define LIBUSBEMU 1
 
+// guard to enable mix of compiler semantics (C/C++ calling C++);
+// this should allow builds under VC++ and gcc/g++ profiles
 #ifdef __cplusplus
   extern "C" {
 #endif
