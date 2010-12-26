@@ -658,7 +658,7 @@ void PreprocessTransferNaive(libusb_transfer* transfer, const int read)
 	for (int i=0; i<pkts; ++i)
 	{
 		libusb_iso_packet_descriptor& desc (transfer->iso_packet_desc[i]);
-		desc.actual_length = __min(remaining, desc.length);
+		desc.actual_length = MIN(remaining, desc.length);
 		remaining -= desc.actual_length;
 	}
 }
@@ -712,10 +712,10 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 			{
 			case 0x01 : // begin
 			case 0x02 : // middle
-				desc.actual_length = __min(remaining, pktlen);
+				desc.actual_length = MIN(remaining, pktlen);
 				break;
 			case 0x05 : // final
-				desc.actual_length = __min(remaining, pktend);
+				desc.actual_length = MIN(remaining, pktend);
 				break;
 			default :
 				fprintf(stdout, "0x%02X\n", header.flag);
