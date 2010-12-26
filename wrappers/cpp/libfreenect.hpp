@@ -163,7 +163,7 @@ namespace Freenect {
 			if(pthread_create(&m_thread, NULL, pthread_callback, (void*)this) != 0) throw std::runtime_error("Cannot initialize freenect thread");
 		}
 		~Freenect() {
-			for(typename DeviceMap::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
+			for(DeviceMap::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
 				delete it->second;
 			}
 			m_stop = true;
@@ -172,14 +172,14 @@ namespace Freenect {
 		}
 		template <typename ConcreteDevice>
 		ConcreteDevice& createDevice(int _index) {
-			typename DeviceMap::iterator it = m_devices.find(_index);
+			DeviceMap::iterator it = m_devices.find(_index);
 			if (it != m_devices.end()) delete it->second;
 			ConcreteDevice * device = new ConcreteDevice(m_ctx, _index);
 			m_devices.insert(std::make_pair<int, FreenectDevice*>(_index, device));
 			return *device;
 		}
 		void deleteDevice(int _index) {
-			typename DeviceMap::iterator it = m_devices.find(_index);
+			DeviceMap::iterator it = m_devices.find(_index);
 			if (it == m_devices.end()) return;
 			delete it->second;
 			m_devices.erase(it);
