@@ -369,6 +369,7 @@ static QuickEvent hAbort;
 
 int libusb_handle_events(libusb_context* ctx)
 {
+  int ret = 0;
   ctx->mutex.Enter();
   ctx->processing.Signal();
 
@@ -428,7 +429,7 @@ int libusb_handle_events(libusb_context* ctx)
   ctx->mutex.Leave();
 
   // 0 on success, or a LIBUSB_ERROR code on failure
-  return(0);
+  return(ret);
 }
 
 enum EReapResult { ETIMEOUT = -116, ECANCELLED = -998 };
