@@ -51,7 +51,7 @@ set (PROJECT_APIVER
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
 OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
-OPTION(BUILD_CPP "Build C++ Library (currently header only" ON)
+OPTION(BUILD_CPP "Build C++ Library (currently header only)" ON)
 OPTION(BUILD_CV "Build OpenCV wrapper" OFF)
 OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
 OPTION(BUILD_PYTHON "Build Python extension" OFF)
@@ -121,7 +121,7 @@ IF(BUILD_C_SYNC)
   add_subdirectory (wrappers/c_sync)
 ENDIF()
 
-IF(BUILD_C_SYNC)
+IF(BUILD_CPP)
   add_subdirectory (wrappers/cpp)
 ENDIF()
 
