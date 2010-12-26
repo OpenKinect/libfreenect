@@ -310,48 +310,6 @@ void libusb_set_iso_packet_lengths(struct libusb_transfer* transfer, unsigned in
 		transfer->iso_packet_desc[i].length = length;
 }
 
-<<<<<<< HEAD
-int SetupTransfer(transfer_wrapper* wrapper)
-{
-  void*& context = wrapper->usb;
-  if (NULL != context)  // Paranoid check...
-    return(LIBUSB_ERROR_OTHER);
-  
-  int ret (LIBUSB_ERROR_OTHER);
-  libusb_transfer* transfer = &wrapper->libusb;
-  switch(transfer->type)
-  {
-    case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS :
-      ret = usb_isochronous_setup_async(transfer->dev_handle->handle, &context, transfer->endpoint, transfer->iso_packet_desc[0].length);
-      break;
-    case LIBUSB_TRANSFER_TYPE_CONTROL :
-      // libusb-0.1 does not actually support asynchronous control transfers, but this should be
-      // very easy to emulate if necessary: just stick the transfer in a special list and then
-      // libusb_handle_events() check if the list is empty or not; if it is not empty, a thread
-      // is created temporarily just to deal with such control transfer requests until the list
-      // becomes eventually empty again and the thread terminates.
-    case LIBUSB_TRANSFER_TYPE_BULK :
-    case LIBUSB_TRANSFER_TYPE_INTERRUPT :
-      // these transfer types are not being used by libfreenect. they should be fairly simple to
-      // emulate with libusb-0.1 since it already provides support for them.
-      // usb_bulk_setup_async(translate(transfer->dev_handle), &context, transfer->endpoint);
-      // usb_interrupt_setup_async(translate(transfer->dev_handle), &context, transfer->endpoint);
-    default :
-      return(LIBUSB_ERROR_INVALID_PARAM);
-  }
-
-  if (ret < 0)
-  {
-    // TODO: better error handling...
-    // what do the functions usb_***_setup_async() actually return on error?
-    return(ret);
-  }
-
-  return(LIBUSB_SUCCESS);
-}
-
-=======
->>>>>>> code is now using libusbemu thread back-end.
 int libusb_submit_transfer(struct libusb_transfer* transfer)
 {
   transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
@@ -405,15 +363,10 @@ int ReapSequential(const libusb_device&);         // EXPERIMENTAL
 int ReapJohnnieWalker(const libusb_device& dev);  // EXPERIMENTAL
 int ReapThreaded(const libusb_device&);           // WORKS FINE
 
-<<<<<<< HEAD
-static HANDLE hProblem (NULL);
-static HANDLE hRelease (NULL);
-static HANDLE hAbort (NULL);
-=======
 static QuickEvent hProblem;
 static QuickEvent hReaction;
 static QuickEvent hAbort;
->>>>>>> code is now using libusbemu thread back-end.
+
 int libusb_handle_events(libusb_context* ctx)
 {
   if (NULL == hProblem) hProblem = CreateEvent(NULL, TRUE, FALSE, NULL);
@@ -423,13 +376,8 @@ int libusb_handle_events(libusb_context* ctx)
   if (WAIT_OBJECT_0 == WaitForSingleObject(hAbort, 0))
     return(LIBUSB_ERROR_INTERRUPTED);
 
-<<<<<<< HEAD
-  static QuickMutex mutex;
-  mutex.Enter();
-=======
   ctx->mutex.Enter();
   ctx->processing.Signal();
->>>>>>> code is now using libusbemu thread back-end.
 
   int(*ReapStrategy)(const libusb_device&) (ReapThreaded);
 
@@ -466,11 +414,8 @@ int libusb_handle_events(libusb_context* ctx)
       SetEvent(hProblem);
   if (WAIT_OBJECT_0 == WaitForSingleObject(hProblem, 0))
   {
-<<<<<<< HEAD
-    ResetEvent(hRelease);
-=======
     hReaction.Reset();
->>>>>>> code is now using libusbemu thread back-end.
+
     int user_option =
     MessageBoxA(GetDesktopWindow(),
                 "The libusb_handle_events() fail guard of libusbemu was reached!\n"
@@ -482,21 +427,13 @@ int libusb_handle_events(libusb_context* ctx)
     if (IDOK == user_option)
       SetEvent(hAbort);
     else
-<<<<<<< HEAD
-      ResetEvent(hProblem);
-    SetEvent(hRelease);
-  }
-
-  mutex.Leave();
-=======
-      hProblem.Reset();
+		hProblem.Reset();
     hReaction.Signal();
   }
 
   ctx->processing.Reset();
   ctx->mutex.Leave();
 
->>>>>>> code is now using libusbemu thread back-end.
   // 0 on success, or a LIBUSB_ERROR code on failure
   return(0);
 }
@@ -544,19 +481,12 @@ int ReapJohnnieWalker(const libusb_device& dev)
   return(0);
 }
 
-<<<<<<< HEAD
-DWORD WINAPI ReapThreadProc(__in LPVOID lpParameter)
-=======
 int ReapThreadProc(void* lpParameter)
->>>>>>> code is now using libusbemu thread back-end.
 {
   libusb_device::TListTransfers& listTransfers (*(libusb_device::TListTransfers*)lpParameter);
 	while(!listTransfers.Empty())
 	{
-<<<<<<< HEAD
-=======
     listTransfers.Head()->libusb.dev_handle->dev->ctx->processing.Wait();
->>>>>>> code is now using libusbemu thread back-end.
 		transfer_wrapper* wrapper = listTransfers.Head();
 		if (NULL != wrapper)
 			ReapTransfer(wrapper, 1000);
@@ -565,11 +495,7 @@ int ReapThreadProc(void* lpParameter)
     {
       fprintf(stderr, "Thread is waiting for user reaction...\n");
       // wait for user reaction...
-<<<<<<< HEAD
-      WaitForSingleObject(hRelease, INFINITE);
-=======
       hReaction.Wait();
->>>>>>> code is now using libusbemu thread back-end.
       // did the user decide to abort?
       if (WAIT_OBJECT_0 == WaitForSingleObject(hAbort,0))
       {
@@ -600,16 +526,6 @@ int ReapThreaded(const libusb_device& dev)
   {
     std::map<int,QuickThread*>& mThreads = mapDeviceEndPointThreads[&dev];
     const int endpoint (it->first);
-<<<<<<< HEAD
-    HANDLE& hThread = mapDeviceEndPointThreads[&dev][endpoint];
-    if (WAIT_OBJECT_0 == WaitForSingleObject(hThread, 0))
-      hThread = NULL;
-    if (NULL == hThread)
-      if (!it->second.Empty())
-      {
-        hThread = CreateThread(NULL, 0, ReapThreadProc, (void*)&(it->second), 0, NULL);
-        SetThreadPriority(hThread, THREAD_PRIORITY_TIME_CRITICAL);
-=======
     QuickThread*& hThread = mThreads[endpoint];
     if (NULL != hThread)
     {
@@ -626,7 +542,6 @@ int ReapThreaded(const libusb_device& dev)
         libusb_device::TListTransfers& listTransfers (it->second);
         hThread = new QuickThread(ReapThreadProc, (void*)&listTransfers);
         hThread->RaisePriority();
->>>>>>> code is now using libusbemu thread back-end.
       }
   }
 
