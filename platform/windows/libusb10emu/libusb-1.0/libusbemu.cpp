@@ -369,7 +369,8 @@ static QuickEvent hAbort;
 
 int libusb_handle_events(libusb_context* ctx)
 {
-  int ret = 0;
+  int ret (0);
+
   ctx->mutex.Enter();
   ctx->processing.Signal();
 
@@ -405,11 +406,12 @@ int libusb_handle_events(libusb_context* ctx)
   // of the children threads internally spawned from within it.
   if (_kbhit())
     if (27 == _getch()) // ESC
-      SetEvent(hProblem);
-  if (WAIT_OBJECT_0 == WaitForSingleObject(hProblem, 0))
+      hProblem.Signal();
+  if (hAbort.Check())
+    ret = LIBUSB_ERROR_INTERRUPTED;
+  else if (hProblem.Check())
   {
     hReaction.Reset();
-
     int user_option =
     MessageBoxA(GetDesktopWindow(),
                 "The libusb_handle_events() fail guard of libusbemu was reached!\n"
@@ -419,9 +421,9 @@ int libusb_handle_events(libusb_context* ctx)
                 "the host program might run abnormally after such termination).",
                 "WARNING: libusbemu thread fail guard reached!", MB_ICONWARNING | MB_OKCANCEL);
     if (IDOK == user_option)
-      SetEvent(hAbort);
+      hAbort.Signal();
     else
-		hProblem.Reset();
+      hProblem.Reset();
     hReaction.Signal();
   }
 
@@ -477,6 +479,7 @@ int ReapJohnnieWalker(const libusb_device& dev)
 
 int ReapThreadProc(void* lpParameter)
 {
+  fprintf(stdout, "Thread execution started.\n");
   libusb_device::TListTransfers& listTransfers (*(libusb_device::TListTransfers*)lpParameter);
 	while(!listTransfers.Empty())
 	{
@@ -485,35 +488,53 @@ int ReapThreadProc(void* lpParameter)
 		if (NULL != wrapper)
 			ReapTransfer(wrapper, 1000);
 
-    if (WAIT_OBJECT_0 == WaitForSingleObject(hProblem,0))
+    if (hProblem.Check())
     {
       fprintf(stderr, "Thread is waiting for user reaction...\n");
       // wait for user reaction...
       hReaction.Wait();
       // did the user decide to abort?
-      if (WAIT_OBJECT_0 == WaitForSingleObject(hAbort,0))
+      if (hAbort.Check())
       {
-        fprintf(stderr, "Thread is aborting!\n");
+        fprintf(stderr, "Thread is aborting: releasing transfers...\n");
         while(!listTransfers.Empty())
         {
           transfer_wrapper* wrapper = listTransfers.Head();
           libusb_cancel_transfer(&(wrapper->libusb));
           ReapTransfer(wrapper, 0);
         }
+        fprintf(stderr, "Thread execution aborted.\n");
         return(LIBUSB_ERROR_INTERRUPTED);
       }
     }
 	}
+  fprintf(stdout, "Thread execution finished.\n");
 	return(0);
 }
 // ReapThreaded Rationale: for each transfer list (stream), delegate the reap
 // to a dedicated thread for that stream
 int ReapThreaded(const libusb_device& dev)
 {
-  if (WAIT_OBJECT_0 == WaitForSingleObject(hProblem, 0))
+  static std::map<const libusb_device*, std::map<int,QuickThread*> > mapDeviceEndPointThreads;
+
+  if (hAbort.Check())
+  {
+    std::map<int,QuickThread*>& mThreads = mapDeviceEndPointThreads[&dev];
+    std::map<int,QuickThread*>::iterator it  (mThreads.begin());
+	  std::map<int,QuickThread*>::iterator end (mThreads.end());
+    for (; it!=end; ++it)
+    {
+      QuickThread*& hThread = it->second;
+      if (NULL != hThread)
+        if (hThread->TryJoin())
+          SAFE_DELETE(hThread);
+    }
+    return(-1);
+  }
+
+  if (hProblem.Check())
     return(-1);
 
-  static std::map<const libusb_device*, std::map<int,HANDLE> > mapDeviceEndPointThreads;
   libusb_device::TMapIsocTransfers::iterator it  (dev.isoTransfers->begin());
 	libusb_device::TMapIsocTransfers::iterator end (dev.isoTransfers->end());
   for (; it!=end; ++it)
@@ -537,8 +558,8 @@ int ReapThreaded(const libusb_device& dev)
         hThread = new QuickThread(ReapThreadProc, (void*)&listTransfers);
         hThread->RaisePriority();
       }
+    }
   }
-
   Sleep(1);
 	return(0);
 }
@@ -715,7 +736,7 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 	{
 		fprintf(stdout, "%d remaining out of %d\n", remaining, read);
 		if (remaining == read)
-      fprintf(stdout, "no bytes consumed!\n");
+			fprintf(stdout, "no bytes consumed!\n");
 	}
 #endif//_DEBUG
 }
