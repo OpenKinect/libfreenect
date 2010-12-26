@@ -34,6 +34,7 @@ package org.libfreenect.events
 			
 		public static const LIBFREENECT_CAMERA_ON:String = "LIBFREENECT_CAMERA_ON";
 		public static const LIBFREENECT_CAMERA_OFF:String = "LIBFREENECT_CAMERA_OFF";
+		public static const BLOBS_RECEIVED:String = "BLOBS_RECEIVED";
 		
 		public var data:*;
 		

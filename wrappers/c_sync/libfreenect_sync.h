@@ -65,6 +65,41 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
     Returns:
         Nonzero on error.
 */
+
+int freenect_sync_set_tilt_degs(int angle, int index);
+/*  Tilt function, starts the runloop if it isn't running
+
+    Args:
+        angle: Set the angle to tilt the device
+		    index: Device index (0 is the first)
+
+    Returns:
+        Nonzero on error.
+*/
+
+int freenect_sync_get_tilt_state(freenect_raw_tilt_state **state, int index);
+/*  Tilt state function, starts the runloop if it isn't running
+
+    Args:
+        state: Populated with an updated tilt state pointer
+		    index: Device index (0 is the first)
+
+    Returns:
+        Nonzero on error.
+*/
+
+int freenect_sync_set_led(freenect_led_options led, int index);
+/*  Led function, starts the runloop if it isn't running
+
+    Args:
+        led: The LED state to set the device to
+		    index: Device index (0 is the first)
+
+    Returns:
+        Nonzero on error.
+*/
+
+
 void freenect_sync_stop(void);
 #ifdef __cplusplus
 }

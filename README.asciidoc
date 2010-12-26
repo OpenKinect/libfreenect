@@ -35,16 +35,28 @@ Or the IRC channel at
 
 #openkinect on Freenode
 
+We are also on twitter at
+
+http://twitter.com/openkinect
+
 === Requirements
 
-You'll need
+For the driver, you'll need
 
-- libusb-1.0 >= 1.0.3
-- Cmake >= 2.6
+- libusb-1.0 >= 1.0.3 (*nix and OS X)
+- libusb-win32 (Windows)
+- Cmake >= 2.6 (All platforms)
 
-Outside of that, you may also want opengl and other things. See the
-platform specifics section for anything needed by your platform to run
-examples.
+For the glview sample, you'll need
+
+- OpenGL
+- glut
+- pthreads (Either platform provided or pthread-win32 for windows)
+
+For links to the software listed, see http://openkinect.org/wiki/Getting_Started#Dependencies
+
+See the platform specifics section for other information specific to
+the platform you may be working on.
 
 === Basic Compiling Instructions
 
@@ -106,8 +118,9 @@ are not required to run as root.
 
 ==== Windows
 
-This library does not work on windows currently. We're trying to get
-something going ASAP though. Watch the mailing list for updates.
+Windows support is now available in libfreenect. The inf files in the
+platform/windows directory can be used for installing the device, and
+the library will need libusb-win32 to compile.
 
 ==== Wrappers
 

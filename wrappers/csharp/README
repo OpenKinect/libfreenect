@@ -1,0 +1,10 @@
+
+
+Just a quick readme for now... will flesh out at some point.
+
+Need monodevelop (or the mono compiler) for now. Will provide VS stuff later 
+on.
+
+-Compiled stuff from goes to bin folder under the folder this file is in.
+-Copy over libfreenect.so into bin. 
+-Run!

@@ -330,6 +330,37 @@ static int sync_get(void **data, uint32_t *timestamp, buffer_ring_t *buf)
 	return 0;
 }
 
+
+/* 
+  Use this to make sure the runloop is locked and no one is in it. Then you can
+  call arbitrary functions from libfreenect.h in a safe way. If the kinect with
+  this index has not been initialized yet, then it will try to set it up. If 
+  this function is successful, then you can access kinects[index]. Don't forget
+  to unlock the runloop when you're done.
+  
+  Returns 0 if successful, nonzero if kinect[index] is unvailable
+ */ 
+static int runloop_enter(int index)
+{
+	if (index < 0 || index >= MAX_KINECTS) {
+		printf("Error: Invalid index [%d]\n", index);
+		return -1;
+	}
+	if (!thread_running || !kinects[index])
+		if (setup_kinect(index, FREENECT_DEPTH_11BIT, 1))
+			return -1;
+		
+	pending_runloop_tasks_inc();
+	pthread_mutex_lock(&runloop_lock);
+	return 0;
+}
+
+static void runloop_exit()
+{
+	pthread_mutex_unlock(&runloop_lock);
+	pending_runloop_tasks_dec();
+}
+
 int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt)
 {
 	if (index < 0 || index >= MAX_KINECTS) {
@@ -353,6 +384,29 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
 		if (setup_kinect(index, fmt, 1))
 			return -1;
 	sync_get(depth, timestamp, &kinects[index]->depth);
+	return 0;
+}
+
+int freenect_sync_get_tilt_state(freenect_raw_tilt_state **state, int index)
+{
+	if (runloop_enter(index)) return -1;
+	freenect_update_tilt_state(kinects[index]->dev);
+	*state = freenect_get_tilt_state(kinects[index]->dev);  
+	runloop_exit();
+	return 0;
+}
+
+int freenect_sync_set_tilt_degs(int angle, int index) {
+	if (runloop_enter(index)) return -1;
+	freenect_set_tilt_degs(kinects[index]->dev, angle);
+	runloop_exit();
+	return 0;
+}
+
+int freenect_sync_set_led(freenect_led_options led, int index) {
+	if (runloop_enter(index)) return -1;
+	freenect_set_led(kinects[index]->dev, led);
+	runloop_exit();
 	return 0;
 }
 
