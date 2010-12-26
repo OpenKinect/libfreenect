@@ -1,4 +1,4 @@
-﻿/*
+/*
 * This file is part of the OpenKinect Project. http://www.openkinect.org
 *
 * Copyright (c) 2010 individual OpenKinect contributors. See the CONTRIB file
@@ -37,6 +37,10 @@
 #include <unistd.h>
 
 #define LIBUSBEMU 1
+
+#ifdef __cplusplus
+  extern "C" {
+#endif
 
 // gotta use "_t" suffix here...
 struct libusb_context_t;
@@ -162,5 +166,9 @@ enum libusb_error
 	LIBUSB_ERROR_NOT_SUPPORTED = -12,
 	LIBUSB_ERROR_OTHER = -99,
 };
+
+#ifdef __cplusplus
+  }
+#endif
 
 #endif//LIBUSB_1_0_INTERFACE_EMULATOR_FOR_LIBUSB_0_1_H
