@@ -9,8 +9,7 @@ cv.NamedWindow('RGB')
 die = False
 
 def display_depth(dev, data, timestamp):
-    data -= np.min(data.ravel())
-    data *= 65536 / np.max(data.ravel())
+    data <<= (16-11) # 11 bits -> 16 bits
     image = cv.CreateImageHeader((data.shape[1], data.shape[0]),
                                  cv.IPL_DEPTH_16U,
                                  1)
