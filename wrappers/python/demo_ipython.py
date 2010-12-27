@@ -8,14 +8,16 @@ def doloop():
     while True:
         # Get a fresh frame
         (depth,_), (rgb,_) = sync_get_depth(), sync_get_video()
-        
+	# Down sample 11 to 8 bits
+        depth >>=(11-8)
         # Build a two panel color image
         d3 = np.dstack((depth,depth,depth)).astype(np.uint8)
         da = np.hstack((d3,rgb))
         
         # Simple Downsample
         cv.ShowImage('both',np.array(da[::2,::2,::-1]))
-        cv.WaitKey(5)
+        if cv.WaitKey(5) == 27 : break
+    freenect.sync_stop()
         
 doloop()
 

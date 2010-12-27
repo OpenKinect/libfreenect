@@ -207,7 +207,12 @@ void *data_out(void *arg) {
 		usleep(1000000 / 30); // EMULATE 30 FPS
 		#endif
 		char buffer_send[3*2+3*8];
-		freenect_sync_get_accelerometers(&ax, &ay, &az, &dx, &dy, &dz, 0);
+		freenect_raw_tilt_state *state;
+		freenect_sync_get_tilt_state(&state, 0);
+		ax = state->accelerometer_x;
+		ay = state->accelerometer_y;
+		az = state->accelerometer_z;
+		freenect_get_mks_accel(state, &dx, &dy, &dz);
 		memcpy(&buffer_send,&ax, sizeof(int16_t));
 		memcpy(&buffer_send[2],&ay, sizeof(int16_t));
 		memcpy(&buffer_send[4],&az, sizeof(int16_t));
