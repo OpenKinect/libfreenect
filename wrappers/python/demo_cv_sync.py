@@ -8,6 +8,10 @@ cv.NamedWindow('Video')
 while 1:
     depth, timestamp = freenect.sync_get_depth()
     rgb, timestamp = freenect.sync_get_video()
-    cv.ShowImage('Depth', depth.astype(np.uint8))
+
+    # maximize dynamic range of the given 11 bits into the used 16 bits
+    depth<<=(16-11)
+
+    cv.ShowImage('Depth', depth.astype(np.uint16))
     cv.ShowImage('Video', rgb[:, :, ::-1].astype(np.uint8))
     cv.WaitKey(10)
