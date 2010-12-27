@@ -8,7 +8,8 @@ def doloop():
     while True:
         # Get a fresh frame
         (depth,_), (rgb,_) = sync_get_depth(), sync_get_video()
-        
+	# Down sample 11 to 8 bits
+        depth >>=(11-8)
         # Build a two panel color image
         d3 = np.dstack((depth,depth,depth)).astype(np.uint8)
         da = np.hstack((d3,rgb))
