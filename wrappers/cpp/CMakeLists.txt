@@ -36,3 +36,6 @@ endif()
 
 install (TARGETS cppview
   DESTINATION bin)
+install (FILES "libfreenect.hpp"
+  DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+
