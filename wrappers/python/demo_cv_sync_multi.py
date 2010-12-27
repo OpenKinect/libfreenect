@@ -3,8 +3,8 @@ import freenect
 import cv
 import numpy as np
 
-cv.NamedWindow('Depth')
-cv.NamedWindow('Video')
+#cv.NamedWindow('Depth')
+#cv.NamedWindow('Video')
 ind = 0
 size = (640, 480)
 
@@ -27,8 +27,8 @@ while 1:
     rgb[:] = bgr[:,:,::-1]
     ind += 1
 
-    cv.ShowImage('Depth', depth)
-    cv.ShowImage('Video', rgb)
+    cv.ShowImage('Depth %i'%ind, depth)
+    cv.ShowImage('Video %i'%ind, rgb)
     if cv.WaitKey(10) == 27 : break
 
 freenect.sync_stop()
