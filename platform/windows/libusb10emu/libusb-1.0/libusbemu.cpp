@@ -43,7 +43,6 @@
 #include "libusbemu_internal.h"
 #include <cassert>
 #include <algorithm>
-#include <windows.h>
 #include <conio.h>
 #include "freenect_internal.h"
 
@@ -52,6 +51,10 @@ using namespace libusbemu;
 int libusb_init(libusb_context** context)
 {
 	usb_init();
+  const usb_version* version = usb_get_version();
+  fprintf(stdout, "libusb-win32 version %d.%d.%d.%d (driver %d.%d.%d.%d)\n",
+    version->dll.major, version->dll.minor, version->dll.micro, version->dll.nano,
+    version->driver.major, version->driver.minor, version->driver.micro, version->driver.nano);
 	// there is no such a thing like 'context' in libusb-0.1...
 	// however, it is wise to emulate such context structure to localize and
   // keep track of any resource and/or internal data structures, as well as
@@ -382,11 +385,7 @@ int libusb_handle_events(libusb_context* ctx)
   // to alleviate sequence losses; however, even at such extreme conditions,
   // sequence losses still happen at frequent pace without ReapThreaded().
   if (ReapStrategy != ReapThreaded)
-  {
-    HANDLE hThread = GetCurrentThread();
-    SetThreadPriority(hThread, THREAD_PRIORITY_TIME_CRITICAL);
-    assert(THREAD_PRIORITY_TIME_CRITICAL == GetThreadPriority(hThread)); // paranoid...
-  }
+    QuickThread::Myself().RaisePriority();
 
   //HANDLE hMyself (GetCurrentThread());
   // ctx->mutex.Enter();
@@ -451,7 +450,7 @@ int ReapSequential(const libusb_device& dev)
 		if (NULL != wrapper)
 			ReapTransfer(wrapper, 100);
 	}
-  //Sleep(1);
+  //QuickThread::Yield();
 	return(0);
 }
 
@@ -560,7 +559,7 @@ int ReapThreaded(const libusb_device& dev)
       }
     }
   }
-  Sleep(1);
+  QuickThread::Yield();
 	return(0);
 }
 
