@@ -58,6 +58,11 @@ private:
     }
   };
 
+  // allow the creation of pseudo-handles to the calling thread
+  // this constructor cannot and should never be called explicitly!
+  // use QuickThread::Myself() to spawn a pseudo-handle QuickThread
+  inline QuickThread() : hThread(GetCurrentThread()) {}
+
 public:
   template<typename F>
   inline QuickThread(F* proc, void* params) : hThread(NULL)
@@ -82,7 +87,14 @@ public:
   inline ~QuickThread()
   {
     CloseHandle(hThread);
-    fprintf(stdout, "Thread resources released.\n");
+    // echo only if not a pseudo-handle...
+    if (hThread != GetCurrentThread())
+      fprintf(stdout, "Thread resources released.\n");
+  }
+
+  static inline QuickThread Myself()
+  {
+    return(QuickThread());
   }
 
   inline void Join()
@@ -98,12 +110,34 @@ public:
   inline bool LowerPriority()
   {
     return(TRUE == SetThreadPriority(hThread, THREAD_PRIORITY_NORMAL));
-  };
+  }
 
   inline bool RaisePriority()
   {
     return(TRUE == SetThreadPriority(hThread, THREAD_PRIORITY_TIME_CRITICAL));
-  };
+  }
+
+  static inline void Sleep(int milliseconds)
+  {
+    ::Sleep(milliseconds);
+  }
+
+// Yield is already a Win32 macro (WinBase.h)...
+// http://winapi.freetechsecrets.com/win32/WIN32Yield.htm
+#ifdef Yield
+#undef Yield
+#endif
+// A pragma push/pop could be used instead, but it does not solve the issues
+// http://stackoverflow.com/questions/1793800/can-i-redefine-a-c-macro-for-a-few-includes-and-then-define-it-back
+//#pragma push_macro("Yield")
+//#undef Yield
+  static inline void Yield()
+  {
+    // Sleep(0) or Sleep(1) ?!
+    // http://stackoverflow.com/questions/1413630/switchtothread-thread-yield-vs-thread-sleep0-vs-thead-sleep1
+    ::Sleep(1);
+  }
+//#pragma pop_macro("Yield")
 };
 
 
