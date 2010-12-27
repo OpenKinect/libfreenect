@@ -22,8 +22,6 @@ def display_depth(dev, data, timestamp):
 
 rgb = None
 
-lastVideo = None
-
 def display_rgb(dev, data, timestamp):
     global rgb
     if rgb is None :
