@@ -68,7 +68,8 @@ int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
 			return res;
 		}
 	} else {
-		ctx->ctx = usb_ctx;
+    // explicit cast required: in WIN32, freenect_usb_context* maps to void*
+    ctx->ctx = (libusb_context*)usb_ctx;
 		ctx->should_free_ctx = 0;
 		return 0;
 	}
