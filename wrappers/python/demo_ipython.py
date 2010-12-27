@@ -16,7 +16,8 @@ def doloop():
         
         # Simple Downsample
         cv.ShowImage('both',np.array(da[::2,::2,::-1]))
-        cv.WaitKey(5)
+        if cv.WaitKey(5) == 27 : break
+    freenect.sync_stop()
         
 doloop()
 

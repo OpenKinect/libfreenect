@@ -29,6 +29,7 @@ while 1:
 
     cv.ShowImage('Depth', depth)
     cv.ShowImage('Video', rgb)
-    cv.WaitKey(10)
-    freenect.sync_stop()# NOTE: May remove if you have good USB bandwidth
+    if cv.WaitKey(10) == 27 : break
+
+freenect.sync_stop()
 

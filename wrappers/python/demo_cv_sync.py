@@ -23,5 +23,7 @@ while 1:
 
     cv.ShowImage('Depth', depth)
     cv.ShowImage('Video', rgb)
-    cv.WaitKey(10)
+    if cv.WaitKey(10) == 27 : break
+
+freenect.sync_stop()
 
