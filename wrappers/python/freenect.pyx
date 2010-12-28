@@ -44,6 +44,14 @@ LED_BLINK_YELLOW = 4
 LED_BLINK_GREEN = 5
 LED_BLINK_RED_YELLOW = 6
 
+
+cdef struct freenect_raw_tilt_state:
+    short accelerometer_x
+    short accelerometer_y
+    short accelerometer_z
+    char tilt_angle
+    int tilt_status
+
 cdef extern from "numpy/arrayobject.h":
     void import_array()
     cdef object PyArray_SimpleNewFromData(int nd, npc.npy_intp *dims,
@@ -81,9 +89,9 @@ cdef extern from "libfreenect.h":
     int freenect_set_tilt_degs(void *dev, double angle)
     int freenect_set_led(void *dev, int option)
     int freenect_update_tilt_state(void *dev)
-    void* freenect_get_tilt_state(void *dev)
-    void freenect_get_mks_accel(void *state, double* x, double* y, double* z)
-    double freenect_get_tilt_degs(void *state)
+    freenect_raw_tilt_state* freenect_get_tilt_state(void *dev)
+    void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z)
+    double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
 
 cdef class DevPtr:
     cdef void* _ptr 
@@ -96,9 +104,31 @@ cdef class CtxPtr:
         return "<Ctx Pointer>"
 
 cdef class StatePtr:
-    cdef void* _ptr 
+    cdef freenect_raw_tilt_state* _ptr 
     def __repr__(self): 
         return "<State Pointer>"
+    
+    def _get_accelx(self):
+        return int(cython.operator.dereference(self._ptr).accelerometer_x)
+
+    def _get_accely(self):
+        return int(cython.operator.dereference(self._ptr).accelerometer_y)
+
+    def _get_accelz(self):
+        return int(cython.operator.dereference(self._ptr).accelerometer_z)
+
+    def _get_tilt_angle(self):
+        return int(cython.operator.dereference(self._ptr).tilt_angle)
+
+    def _get_tilt_status(self):
+        return int(cython.operator.dereference(self._ptr).tilt_status)
+    
+    accelerometer_x = property(_get_accelx)
+    accelerometer_y = property(_get_accely)
+    accelerometer_z = property(_get_accelz)
+    tilt_angle = property(_get_tilt_angle)
+    tilt_status = property(_get_tilt_status)
+
 
 def set_video_format(DevPtr dev, int fmt):
     return freenect_set_video_format(dev._ptr, fmt)
@@ -140,7 +170,7 @@ def update_tilt_state(DevPtr dev):
     return freenect_update_tilt_state(dev._ptr)
 
 def get_tilt_state(DevPtr dev):
-    cdef void* state = freenect_get_tilt_state(dev._ptr)
+    cdef freenect_raw_tilt_state* state = freenect_get_tilt_state(dev._ptr)
     cdef StatePtr state_out
     state_out = StatePtr()
     state_out._ptr = state
