@@ -5,41 +5,39 @@ import numpy as np
 
 cv.NamedWindow('Depth')
 cv.NamedWindow('RGB')
+keep_running = True
 
-die = False
 
 def display_depth(dev, data, timestamp):
-    data <<= (16-11) # 11 bits -> 16 bits
+    global keep_running
+    data = data.astype(np.uint8)
     image = cv.CreateImageHeader((data.shape[1], data.shape[0]),
-                                 cv.IPL_DEPTH_16U,
+                                 cv.IPL_DEPTH_8U,
                                  1)
     cv.SetData(image, data.tostring(),
                data.dtype.itemsize * data.shape[1])
     cv.ShowImage('Depth', image)
-    global die
-    if cv.WaitKey(5) == 27 : die = True
+    if cv.WaitKey(10) == 27:
+        keep_running = False
 
-rgb = None
 
 def display_rgb(dev, data, timestamp):
-    global rgb
-    if rgb is None :
-        rgb = np.zeros(data.shape, np.uint8)
-    rgb[:] = data[:, :, ::-1]
+    global keep_running
     image = cv.CreateImageHeader((data.shape[1], data.shape[0]),
                                  cv.IPL_DEPTH_8U,
                                  3)
     # Note: We swap from RGB to BGR here
-    cv.SetData(image, rgb,
+    cv.SetData(image, data[:, :, ::-1].tostring(),
                data.dtype.itemsize * 3 * data.shape[1])
     cv.ShowImage('RGB', image)
-    global die
-    if cv.WaitKey(5) == 27 : die = True
+    if cv.WaitKey(10) == 27:
+        keep_running = False
 
-def body(context, device) :
-    if die : raise freenect.Kill
 
+def body(*args):
+    if not keep_running:
+        raise freenect.Kill
+print('Press ESC in window to stop')
 freenect.runloop(depth=display_depth,
                  video=display_rgb,
                  body=body)
-
