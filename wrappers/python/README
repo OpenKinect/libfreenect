@@ -12,8 +12,8 @@ Install
 - Global Install: sudo python setup.py install
 - Local Directory Install: python setup.py build_ext --inplace
 
-Why do the demos truncate the depth?
-The depth is 11 bits, if you want to display it as an 8 bit gray image you need to lose information somewhere.  The truncation allows you to differentiate between local depth differences but doesn't give you the absolute depth due to ambiguities; however, normalization gives you the absolute depth differences between pixels but you will lose resolution due to the difference between high and low depths.  We feel that this truncation produces the best results visually as a demo while being simple.  See glview for an example of using colors to extend the range.
+Why is frame_convert.py there?  Why not just use 1 file?
+We had individual file demos and when we started experimenting with optimization and normalization it made maintaning the duplicative code a nightmare.  Now we have this separate file so that we can keep those changes abstracted.
 
 Do I need to call sync_stop when the program ends?
 No, it is not necessary.
@@ -21,8 +21,8 @@ No, it is not necessary.
 Do you need to run everything with root?
 No.  Use the udev drivers available in the project main directory.
 
-Why does sync_multi call sync_stop after each kinect?
-The goal is to test multiple kinects, but some machines don't have the USB bandwidth for it.  By default, this only lets one run at a time so that you can have many kinects on a hub or a slow laptop.  You can comment out the line if your machine can handle it.
+Why does sync_multi have trouble with multiple kinects?
+The goal is to test multiple kinects, but some machines don't have the USB bandwidth for it.  By default, this lets them all run, however if you uncomment the sync_stop line it only lets one run at a time so that you can have many kinects on a hub or a slow laptop.
 
 Differences From C Library
 Things that are intentially different to be more Pythonic

@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 import freenect
 import matplotlib.pyplot as mp
-import numpy as np
 import signal
+import frame_convert
 
 mp.ion()
 image_rgb = None
@@ -12,7 +12,7 @@ keep_running = True
 
 def display_depth(dev, data, timestamp):
     global image_depth
-    data = data.astype(np.uint8)
+    data = frame_convert.pretty_depth(data)
     mp.gray()
     mp.figure(1)
     if image_depth:
@@ -40,6 +40,8 @@ def body(*args):
 def handler(signum, frame):
     global keep_running
     keep_running = False
+
+
 print('Press Ctrl-C in terminal to stop')
 signal.signal(signal.SIGINT, handler)
 freenect.runloop(depth=display_depth,
