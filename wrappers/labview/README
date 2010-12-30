@@ -1,0 +1,19 @@
+General information:
+These drivers are still very very experimental and while they work, they are not stable. I guarantee there will be problems we haven't discovered yet. Please keep this in mind!
+
+Needed first before this works: 
+1) Windows machine with a (preferably) new version of LabVIEW (8.6+). Older versions untested.
+2) inf files (driver files) Please see: http://openkinect.org/wiki/Getting_Started_Windows and follow the Driver Installation instructions. You don't need the dependencies or the other instructions unless you actually want to mess with and compile the code that makes up the dlls. 
+
+Known issues:
+1) RGB image in example.vi isn't being color-converted correctly but works enough to provide as an example. To be diagnosed
+2) It is IMPORTANT to make sure the Kinect is turned off (either by pressing the the "stop" button in example.vi or running "stop.vi" or manually removing physical power from the Kinect before working on the code. It's been seen that LabView will close without warning or explanation if these steps are not taken. If LabView crashes when you try and run it, unplug your Kinect physically, wait a few seconds, and plug it back in. Restarting your computer or LabVIEW may also help. Save your work often.
+
+Information:
+- The depth frame image in example.vi uses an arbitrary gray-scale false-color rendering. The raw resultant array can be accessed from the vi "get depth frame.vi" included in libfreenect.lvlib. Please see: http://openkinect.org/wiki/Protocol_Documentation for more information
+- The RGB frame image in example.vi can be directly accessed from the raw resultant array in "get image frame.vi" included in libfreenect.lvlib. Please see: http://openkinect.org/wiki/Imaging_Information for more information
+- The dlls in this project are 32bit compiled with MSVC 2010
+- Only have tested 1 sychronous Kinect so far
+- Timing is very important to frame rate speed. Please be considerate to cycles when developing algorithms on top of these drivers
+
+If you have problems, email me at rygordon4@gmail.com or find me on irc.freenode.net #openkinect under the RyanGordon alias.
