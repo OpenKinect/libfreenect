@@ -12,8 +12,17 @@ Install
 - Global Install: sudo python setup.py install
 - Local Directory Install: python setup.py build_ext --inplace
 
+Why is frame_convert.py there?  Why not just use 1 file?
+We had individual file demos and when we started experimenting with optimization and normalization it made maintaning the duplicative code a nightmare.  Now we have this separate file so that we can keep those changes abstracted.
+
+Do I need to call sync_stop when the program ends?
+No, it is not necessary.
+
 Do you need to run everything with root?
 No.  Use the udev drivers available in the project main directory.
+
+Why does sync_multi have trouble with multiple kinects?
+The goal is to test multiple kinects, but some machines don't have the USB bandwidth for it.  By default, this lets them all run, however if you uncomment the sync_stop line it only lets one run at a time so that you can have many kinects on a hub or a slow laptop.
 
 Differences From C Library
 Things that are intentially different to be more Pythonic
@@ -21,8 +30,7 @@ Things that are intentially different to be more Pythonic
 - Names: Everything is in the freenect module.  Since all freenect functions are of the form freenect_blah, we use freenect.blah to refer to them.  This is also true for the synchronous calls.
 
 Things not implemented (though could be added)
-- get/set user: Not implemented
-- Dev/Ctx/State: Opaque classes wrapping void *'s (you can't access struct elements)
+- Dev/Ctx: Opaque classes wrapping void *'s (you can't access struct elements)
 - Log functionality and callback
 
 Additional Features

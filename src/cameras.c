@@ -663,7 +663,7 @@ int freenect_start_depth(freenect_device *dev)
 			stream_init(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
 			break;
 		case FREENECT_DEPTH_10BIT_PACKED:
-			stream_init(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
+			stream_init(ctx, &dev->depth, 0, FREENECT_DEPTH_10BIT_PACKED_SIZE);
 			break;
 	}
 
