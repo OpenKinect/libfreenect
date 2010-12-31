@@ -2,7 +2,7 @@
 # Actual video and depth capture work similarly to eachother.
 # But they're still both pretty un-sugary.
 #
-# Future versions will probably abstract this and try to make it more 
+# Future versions will probably abstract this and try to make it more
 # ruby-ish.
 #
 # The example below shows how to capture a single video frame to a PPM file.
@@ -44,7 +44,7 @@ dev.set_video_callback do |device, video, timestamp|
 end
 
 ret = -1
-until $snapshot_finished 
+until $snapshot_finished
   break if (ret=ctx.process_events) < 0
 end
 
@@ -57,5 +57,3 @@ dev.stop_depth
 dev.stop_video
 dev.close
 ctx.close
-
-

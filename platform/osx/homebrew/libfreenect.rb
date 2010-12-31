@@ -5,7 +5,7 @@ class Libfreenect <Formula
   version 'master'
   homepage 'http://openkinect.org'
   md5 ''
-  
+
   depends_on 'libusb-freenect'
   depends_on 'cmake'
 

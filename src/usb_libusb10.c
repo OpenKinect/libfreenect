@@ -33,10 +33,10 @@
 
 int fnusb_num_devices(fnusb_ctx *ctx)
 {
-	libusb_device **devs; 
-	//pointer to pointer of device, used to retrieve a list of devices	
-	ssize_t cnt = libusb_get_device_list (ctx->ctx, &devs); 
-	//get the list of devices	
+	libusb_device **devs;
+	//pointer to pointer of device, used to retrieve a list of devices
+	ssize_t cnt = libusb_get_device_list (ctx->ctx, &devs);
+	//get the list of devices
 	if (cnt < 0)
 		return (-1);
 	int nr = 0, i = 0;

@@ -9,7 +9,7 @@ require 'ffi'
 module FFI::Freenect
   extend FFI::Library
   ffi_lib 'freenect', 'freenect_sync'
-  
+
   FRAME_W = 640
   FRAME_H = 480
   FRAME_PIX = FRAME_W * FRAME_H
@@ -17,7 +17,7 @@ module FFI::Freenect
   IR_FRAME_W = 640
   IR_FRAME_H = 488
   IR_FRAME_PIX = FRAME_W * FRAME_H
- 
+
   RGB_SIZE = FRAME_PIX * 3
   BAYER_SIZE = FRAME_PIX
   YUV_RGB_SIZE = RGB_SIZE
@@ -47,9 +47,9 @@ module FFI::Freenect
                       :yellow,            LED_YELLOW,
                       :blink_yellow,      LED_BLINK_YELLOW,
                       :blink_green,       LED_BLINK_GREEN,
-                      :blink_red_yellow,  LED_BLINK_RED_YELLOW) 
- 
- 
+                      :blink_red_yellow,  LED_BLINK_RED_YELLOW)
+
+
 	VIDEO_RGB = 0
 	VIDEO_BAYER = 1
 	VIDEO_IR_8BIT = 2
@@ -65,7 +65,7 @@ module FFI::Freenect
                         :yuv_rgb,         VIDEO_YUV_RGB,
                         :yuv_raw,         VIDEO_YUV_RAW,
                         :ir_10bit_packed, VIDEO_IR_10BIT_PACKED)
-  
+
   VIDEO_SIZES = enum( :rgb,             RGB_SIZE,
                       :bayer,           BAYER_SIZE,
                       :ir_8bit,         IR_8BIT_SIZE,
@@ -74,7 +74,7 @@ module FFI::Freenect
                       :yuv_raw,         YUV_RAW_SIZE,
                       :ir_10bit_packed, IR_10BIT_PACKED_SIZE )
 
- 
+
 	DEPTH_11BIT = 0
 	DEPTH_10BIT = 1
 	DEPTH_11BIT_PACKED = 2
@@ -98,10 +98,10 @@ module FFI::Freenect
                             :limit,    TILT_STATUS_LIMIT,
                             :moving,   TILT_STATUS_MOVING)
 
- 
+
 	LOG_FATAL = 0
 	LOG_ERROR = 1
-	LOG_WARNING = 2 
+	LOG_WARNING = 2
 	LOG_NOTICE = 3
 	LOG_INFO = 4
 	LOG_DEBUG = 5
@@ -116,17 +116,17 @@ module FFI::Freenect
                     :debug,   LOG_DEBUG,
                     :spew,    LOG_SPEW,
                     :flood,   LOG_FLOOD)
-  
+
   typedef :pointer, :freenect_context
   typedef :pointer, :freenect_device
   typedef :pointer, :freenect_usb_context # actually a libusb_context
- 
- 
+
+
   class RawTiltState < FFI::Struct
     layout :accelerometer_x,  :int16_t,
            :accelerometer_y,  :int16_t,
-           :accelerometer_z,  :int16_t, 
-           :tilt_angle,       :int8_t, 
+           :accelerometer_z,  :int16_t,
+           :tilt_angle,       :int8_t,
            :tilt_status,      TILT_STATUS_CODES
   end
 
@@ -145,7 +145,7 @@ module FFI::Freenect
   attach_function :freenect_set_user, [:freenect_device, :pointer], :void
   attach_function :freenect_get_user, [:freenect_device], :pointer
   attach_function :freenect_set_depth_callback, [:freenect_device, :freenect_depth_cb], :void
-  attach_function :freenect_set_video_callback, [:freenect_device, :freenect_video_cb], :void  
+  attach_function :freenect_set_video_callback, [:freenect_device, :freenect_video_cb], :void
   attach_function :freenect_set_depth_format, [:freenect_device, DEPTH_FORMATS], :int
   attach_function :freenect_set_video_format, [:freenect_device, VIDEO_FORMATS], :int
   attach_function :freenect_set_depth_buffer, [:freenect_device, :void], :int
@@ -166,5 +166,3 @@ module FFI::Freenect
   attach_function :freenect_sync_stop, [], :void
 
 end
-
-

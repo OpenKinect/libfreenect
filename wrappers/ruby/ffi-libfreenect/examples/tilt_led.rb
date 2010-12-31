@@ -52,7 +52,7 @@ class TILT_LED
       script_usage
     end
   end
-  
+
   def initialize_device
     @ctx = FFI::MemoryPointer.new(:pointer)
     @dev = FFI::MemoryPointer.new(:pointer)
@@ -71,7 +71,7 @@ class TILT_LED
     end
     @dev = @dev.read_pointer
   end
-  
+
   def tilt_led_set
     #
     # Set tilt and/or led options on the @device

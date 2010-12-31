@@ -1,7 +1,7 @@
 #!/usr/bin/env ruby
-# This is a more or less a straight ruby port of the "record" utility 
-# included in the libfreenect fakenect directory using the 
-# ffi-libfreenect ruby class wrappers. 
+# This is a more or less a straight ruby port of the "record" utility
+# included in the libfreenect fakenect directory using the
+# ffi-libfreenect ruby class wrappers.
 #
 # This was really implemented just to see if ffi-libfreenect was working.
 # However, the output should be completely compatible the C version fakenect.

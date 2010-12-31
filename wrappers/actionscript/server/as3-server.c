@@ -101,9 +101,9 @@ int initServer(addrinfo si_type, PCSTR conf_port, SOCKET *the_socket, PCSTR labe
 	si_type.ai_socktype = SOCK_STREAM;
 	si_type.ai_protocol = IPPROTO_TCP;
 	si_type.ai_flags = AI_PASSIVE;
-	
+
 	// Resolve the local address and port to be used by the server
-	struct addrinfo *result = NULL;	
+	struct addrinfo *result = NULL;
 
 	int iResult = getaddrinfo(NULL, conf_port, &si_type, &result);
 	if (iResult != 0) {
@@ -141,7 +141,7 @@ int initServer(addrinfo si_type, PCSTR conf_port, SOCKET *the_socket, PCSTR labe
 
 	return 0;
 }
-#else 
+#else
 int initServer(struct sockaddr_in si_type, int conf_port, int *the_socket) {
 	int optval = 1;
 	if ( (*the_socket = socket(AF_INET, SOCK_STREAM, 0)) == -1 )
@@ -280,7 +280,7 @@ void *rgb_out(void *arg){
 		#else
 		int n = write(rgb_child, &buf_rgb, AS3_BITMAPDATA_LEN);
 		#endif
-		
+
 		if ( n < 0 || n != AS3_BITMAPDATA_LEN)
 		{
 			//fprintf(stderr, "Error on write() for rgb (%d instead of %d)\n",n, AS3_BITMAPDATA_LEN);
@@ -298,7 +298,7 @@ void send_policy_file(int child){
 		#else
 		int n = write(child,str , 235);
 		#endif
-		
+
 		if ( n < 0 || n != 235)
 		{
 			fprintf(stderr, "Error on write() for policy (%d instead of %d)\n",n, 235);
@@ -311,7 +311,7 @@ void *network_depth(void *arg)
 {
 	int childlen;
 	struct sockaddr_in childaddr;
-	
+
 	childlen = sizeof(childaddr);
 	while ( !die )
 	{
@@ -332,7 +332,7 @@ void *network_depth(void *arg)
 			break;
 		}
 		#endif
-		
+
 		printf("### Got depth client\n");
 		send_policy_file(depth_child);
 		depth_connected = 1;
@@ -341,7 +341,7 @@ void *network_depth(void *arg)
 			fprintf(stderr, "Error on pthread_create() for depth_out\n");
 		}
 	}
-	
+
 	return NULL;
 }
 
@@ -349,7 +349,7 @@ void *network_rgb(void *arg)
 {
 	int childlen;
 	struct sockaddr_in childaddr;
-	
+
 	childlen = sizeof(childaddr);
 	while ( !die )
 	{
@@ -370,7 +370,7 @@ void *network_rgb(void *arg)
 			break;
 		}
 		#endif
-		
+
 		printf("### Got rgb client\n");
 		send_policy_file(rgb_child);
 		rgb_connected = 1;
@@ -379,7 +379,7 @@ void *network_rgb(void *arg)
 			fprintf(stderr, "Error on pthread_create() for rgb_out\n");
 		}
 	}
-	
+
 	return NULL;
 }
 
@@ -387,7 +387,7 @@ void *network_data(void *arg)
 {
 	int childlen;
 	struct sockaddr_in childaddr;
-	
+
 	childlen = sizeof(childaddr);
 	while ( !die )
 	{
@@ -408,23 +408,23 @@ void *network_data(void *arg)
 			break;
 		}
 		#endif
-		
+
 		printf("### Got data client\n");
 		data_connected = 1;
-		
+
 		send_policy_file(data_child);
-		
+
 		if ( pthread_create(&data_in_thread, NULL, data_in, NULL) )
 		{
 			fprintf(stderr, "Error on pthread_create() for data_in\n");
 		}
-		
+
 		if ( pthread_create(&data_out_thread, NULL, data_out, NULL) )
 		{
 			fprintf(stderr, "Error on pthread_create() for data_out\n");
 		}
 	}
-	
+
 	return NULL;
 }
 
@@ -457,19 +457,19 @@ int network_init()
 
 	/* launch 3 threads, 2 for each images and 1 for control
 	 */
-	
+
 	if ( pthread_create(&depth_thread, NULL, network_depth, NULL) )
 	{
 		fprintf(stderr, "Error on pthread_create() for depth\n");
 		return -1;
 	}
-	
+
 	if ( pthread_create(&rgb_thread, NULL, network_rgb, NULL) )
 	{
 		fprintf(stderr, "Error on pthread_create() for rgb\n");
 		return -1;
 	}
-	
+
 	if ( pthread_create(&data_thread, NULL, network_data, NULL) )
 	{
 		fprintf(stderr, "Error on pthread_create() for data\n");
@@ -503,7 +503,7 @@ int main(int argc, char **argv)
 {
 	if ( network_init() < 0 )
 		return -1;
-	
+
 	while(!die);
 
 	return 0;
