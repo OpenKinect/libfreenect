@@ -102,7 +102,7 @@ int initServer(addrinfo si_type, PCSTR conf_port, SOCKET *the_socket, PCSTR labe
 	si_type.ai_protocol = IPPROTO_TCP;
 	si_type.ai_flags = AI_PASSIVE;
 	
-   // Resolve the local address and port to be used by the server
+	// Resolve the local address and port to be used by the server
 	struct addrinfo *result = NULL;	
 
 	int iResult = getaddrinfo(NULL, conf_port, &si_type, &result);
@@ -437,19 +437,19 @@ int network_init()
 	initServer(si_data, conf_port_data, &s_data);
 	#else
 	WORD wVersionRequested;
-    WSADATA wsaData;
-    int err;
+	WSADATA wsaData;
+	int err;
 
 	/* Use the MAKEWORD(lowbyte, highbyte) macro declared in Windef.h */
-    wVersionRequested = MAKEWORD(2, 2);
+	wVersionRequested = MAKEWORD(2, 2);
 
-    err = WSAStartup(wVersionRequested, &wsaData);
-    if (err != 0) {
-        /* Tell the user that we could not find a usable */
-        /* Winsock DLL.                                  */
-        printf("WSAStartup failed with error: %d\n", err);
-        return 1;
-    }
+	err = WSAStartup(wVersionRequested, &wsaData);
+	if (err != 0) {
+		/* Tell the user that we could not find a usable */
+		/* Winsock DLL.                                  */
+		printf("WSAStartup failed with error: %d\n", err);
+		return 1;
+	}
 	initServer(si_depth, conf_port_depth, &depth_socket, "DEPTH");
 	initServer(si_rgb, conf_port_rgb, &rgb_socket, "RGB");
 	initServer(si_data, conf_port_data, &data_socket, "DATA");
