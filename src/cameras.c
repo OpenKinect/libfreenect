@@ -241,33 +241,33 @@ static int stream_setbuf(freenect_context *ctx, packet_stream *strm, void *pbuf)
 }
 
 // Unpack buffer of (vw bit) data into padded 16bit buffer.
-static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw, int len)
+static inline void convert_packed_to_16bit(uint8_t *src, uint16_t *dest, int vw, int n)
 {
-	int mask = (1 << vw) - 1;
+	unsigned int mask = (1 << vw) - 1;
 	uint32_t buffer = 0;
 	int bitsIn = 0;
-	while (len--) {
+	while (n--) {
 		while (bitsIn < vw) {
-			buffer = (buffer << 8) | *(raw++);
+			buffer = (buffer << 8) | *(src++);
 			bitsIn += 8;
 		}
 		bitsIn -= vw;
-		*(frame++) = (buffer >> bitsIn) & mask;
+		*(dest++) = (buffer >> bitsIn) & mask;
 	}
 }
 
 // Unpack buffer of (vw bit) data into 8bit buffer, dropping LSBs
-static inline void convert_packed_to_8bit(uint8_t *raw, uint8_t *frame, int vw, int len)
+static inline void convert_packed_to_8bit(uint8_t *src, uint8_t *dest, int vw, int n)
 {
 	uint32_t buffer = 0;
 	int bitsIn = 0;
-	while (len--) {
+	while (n--) {
 		while (bitsIn < vw) {
-			buffer = (buffer << 8) | *(raw++);
+			buffer = (buffer << 8) | *(src++);
 			bitsIn += 8;
 		}
 		bitsIn -= vw;
-		*(frame++) = buffer >> (bitsIn+vw-8);
+		*(dest++) = buffer >> (bitsIn + vw - 8);
 	}
 }
 
