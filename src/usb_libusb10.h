@@ -49,8 +49,13 @@
 #define DEPTH_PKTBUF 2048
 #define VIDEO_PKTBUF 2048
 #else
-#define PKTS_PER_XFER 16
-#define NUM_XFERS 16
+#ifdef _WIN32
+  #define PKTS_PER_XFER 32
+  #define NUM_XFERS 8
+#else
+  #define PKTS_PER_XFER 16
+  #define NUM_XFERS 16
+#endif
 #define DEPTH_PKTBUF 1920
 #define VIDEO_PKTBUF 1920
 #endif
