@@ -34,27 +34,23 @@
 	import org.as3kinect.events.as3kinectWrapperEvent;
 	
 	import flash.utils.ByteArray;
-	import flash.display.BitmapData;
-	import flash.display.Bitmap;
 	import flash.geom.Rectangle;
 	import flash.events.EventDispatcher;
-	import flash.text.TextField;
 	
 	public class as3kinectWrapper extends EventDispatcher {
 
-		private var _socket:as3kinectSocket;
-		private var _data:ByteArray;
-		private var _console:TextField;
-		private var _debugging:Boolean = false;
-		private var _video_waiting:Boolean = false;
-		private var user_id:Number;
-		private var _tracked_users:Array;
+		private var _socket			:as3kinectSocket;
+		private var _data			:ByteArray;
+		private var _video_waiting	:Boolean = false;
+		private var user_id			:Number;
+		private var _tracked_users	:Array;
 		
 		public var motor:as3kinectMotor;
 		public var depth:as3kinectDepth;
 		public var video:as3kinectVideo;
 
 		public function as3kinectWrapper() {
+			/* Init motor, depth and video objects */
 			motor = new as3kinectMotor;
 			depth = new as3kinectDepth;
 			video = new as3kinectVideo;
@@ -66,15 +62,6 @@
 			
 			/* Init data out buffer */
 			_data = new ByteArray();
-		}
-		
-		/*
-		 * Draw ARGB from ByteArray to BitmapData object
-		 */
-		public function byteArrayToBitmapData(bytes:ByteArray, _canvas:BitmapData):void{
-			_canvas.lock();
-			_canvas.setPixels(new Rectangle(0,0, as3kinect.IMG_WIDTH, as3kinect.IMG_HEIGHT), bytes);
-			_canvas.unlock();
 		}
 
 		/*
@@ -122,22 +109,13 @@
 				case 3: //Server
 					switch (event.data.second) {
 						case 0: //Debug received
-							if(_debugging) _console.appendText(event.data.buffer.toString());
+							//if(_debugging) _console.appendText(event.data.buffer.toString());
 						break;
 					}
 				break;
 			}
 			// Clear ByteArray after used
 			event.data.buffer.clear();
-		}
-		
-		/*
-		 * Enable log console on TextField
-		 */
-		public function set logConsole(txt:TextField){
-			_debugging = true;
-			_console = txt;
-			_console.text = "=== Started console ===\n";
 		}
 	}
 	

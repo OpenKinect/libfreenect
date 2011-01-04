@@ -1,4 +1,4 @@
-/*
+﻿/*
  * 
  * This file is part of the OpenKinect Project. http://www.openkinect.org
  * 
@@ -31,24 +31,27 @@ package org.as3kinect {
 	import org.as3kinect.as3kinectSocket;
 	
 	import flash.utils.ByteArray;
+	import flash.display.BitmapData;
 	
 	public class as3kinectVideo {
 		private var _socket:as3kinectSocket;
 		private var _data:ByteArray;
 		private var _video_busy:Boolean;
 		private var _is_mirrored:Boolean;
+		public var bitmap:BitmapData;
 
 		public function as3kinectVideo(){
 			_socket = as3kinectSocket.instance;
 			_data = new ByteArray;
 			_video_busy = false;
 			_is_mirrored = false;
+			bitmap = new BitmapData(as3kinect.IMG_WIDTH, as3kinect.IMG_HEIGHT, false, 0xFF000000);
 		}
 
 		/*
 		 * Tell server to send the latest video frame
-		* Note: We should lock the command while we are waiting for the data to avoid lag
-		*/
+		 * Note: We should lock the command while we are waiting for the data to avoid lag
+		 */
 		public function getBuffer():void {
 			if(!_video_busy) {
 				_video_busy = true;

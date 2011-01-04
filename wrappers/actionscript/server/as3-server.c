@@ -51,6 +51,8 @@
 int g_argc;
 char **g_argv;
 
+char *_current_version = "v9.0b";
+
 #define AS3_BITMAPDATA_LEN FREENECT_FRAME_PIX * 4
 
 pthread_t wait_for_client_thread, connection_thread;
@@ -85,8 +87,10 @@ int client_connected = 0;
 
 int psent = 0;
 
-int _video_mirrored = 0;
-int _depth_mirrored = 0;
+int _video_mirrored = 0,
+	_depth_mirrored = 0,
+	_min_depth = 600,
+	_max_depth = 800;
 
 #ifdef WIN32
 int initServer(addrinfo si_type, PCSTR conf_port, SOCKET *the_socket){
@@ -224,10 +228,11 @@ void sendDepth(){
 		buf_depth[4 * i + 1] = 0x00;
 		buf_depth[4 * i + 2] = 0x00;
 		buf_depth[4 * i + 3] = 0xFF;
-		if(depth[i] < 800 && depth[i] > 600){
-			buf_depth[4 * i + 0] = 0xFF;
-			buf_depth[4 * i + 1] = 0xFF;
-			buf_depth[4 * i + 2] = 0xFF;
+		if(depth[i] < _max_depth && depth[i] > _min_depth){
+			unsigned char l =  0xFF - ((depth[i] - _min_depth) & 0xFF);
+			buf_depth[4 * i + 0] = l;
+			buf_depth[4 * i + 1] = l;
+			buf_depth[4 * i + 2] = l;
 			buf_depth[4 * i + 3] = 0xFF;
 		}
 	}
@@ -328,6 +333,12 @@ void *connection_handler(void *arg) {
 							break;
 							case 3: //Mirror video
 								_video_mirrored = value;
+							break;
+							case 4: //Min depth
+								_min_depth = value;
+							break;
+							case 5: //Max depth
+								_max_depth = value;
 							break;
 						}
 					break;
@@ -457,6 +468,7 @@ void clean_exit(){
 //Main: we start here
 int main(int argc, char **argv)
 {
+	printf("as3kinect server %s\n", _current_version);
 	//waiting for client led status
 	freenect_sync_set_led((freenect_led_options) 4, 0);
 	//Listening to C-c

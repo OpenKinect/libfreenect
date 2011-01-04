@@ -45,6 +45,8 @@
 		public static const GET_VIDEO:int = 1;
 		public static const MIRROR_DEPTH:int = 2;
 		public static const MIRROR_VIDEO:int = 3;
+		public static const MIN_DEPTH:int = 4;
+		public static const MAX_DEPTH:int = 5;
 		
 		public static const MOVE_MOTOR:int = 0;
 		public static const LED_COLOR:int = 1;
@@ -62,9 +64,9 @@
 		public static const BLOB_COLOR:uint = 0xFFFFFFFF;
 		public static const BLOB_FILL_COLOR:uint = 0xFF0000FF;
 		public static const BLOB_PROCESSED_COLOR:uint = 0x00FF00FF;
-		public static const BLOB_MIN_WIDTH:uint = 30;
-		public static const BLOB_MAX_WIDTH:uint = 120;
-		public static const BLOB_MIN_HEIGHT:uint = 30;
-		public static const BLOB_MAX_HEIGHT:uint = 120;
+		public static const BLOB_MIN_WIDTH:uint = 15;
+		public static const BLOB_MAX_WIDTH:uint = 30;
+		public static const BLOB_MIN_HEIGHT:uint = 15;
+		public static const BLOB_MAX_HEIGHT:uint = 80;
 	}
 }
