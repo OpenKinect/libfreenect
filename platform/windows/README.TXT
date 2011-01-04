@@ -59,12 +59,25 @@ Such implicit casts then have to be made explicit:
 Fortunately, they are not many, and it can be done in a couple of minutes.
 This should impose a minimal burden to the Win32 repository maintainers.
 
+NOTE: Sometimes, even when "Compile as C++ Code" is specified, the build will insist
+on using the C-compiler to compile .c files (this happens with MSVC versions prior to
+2010). To work around this, just set the "Compile As" to "Default", click "Apply" and
+then set it back to "Compile as C++ Code (/TP)", click "Apply" and then "OK".
+
 Another problem is that Visual C++ does not offer the <unistd.h> and <stdbool.h>
 headers. However, they are pretty simple to be emulated; the <stdbool.h> will
 actually be a dummy header because C++ already defines the "bool" type semantics,
 while the <unistd.h> has to simply #include <stdint.h> and define the "ssize_t"
 type. The implementation of these headers are located at:
   "libfreenect\platform\windows"
+
+NOTE: MSVC versions prior to 2010 do not provide the <stdint.h> header. An ISO C9x
+compilant <stdint.h> header for such MSVC versions can be found at the wikipedia entry
+of stdint.h (at the "External links" section of the page):
+  http://en.wikipedia.org/wiki/Stdint.h
+or directly through this link:
+  http://msinttypes.googlecode.com/svn/trunk/stdint.h
+A copy of such header will be also provided within libfreenect in the future.
 
 The "freenect_internal.h" makes use of GCC's "__attribute__" keyword, and there is no
 such a thing in Visual C++. Fortunately, this header is not exposed for the library
