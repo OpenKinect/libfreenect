@@ -25,45 +25,52 @@
  * 
  */
 
-package org.libfreenect
+package org.as3kinect
 {
-	import org.libfreenect.libfreenect;
+	import org.as3kinect.as3kinect;
 	
 	import flash.display.BitmapData;
 	import flash.geom.Rectangle;
 	import flash.geom.Point;
 	
-	public class libfreenectBlobs
+	public class as3kinectBlobs
 	{
-		public static function getBlobs(r:BitmapData):Array 
+		public static function getBlobs(r:BitmapData, _w:Number = 0, _h:Number = 0):Array 
 		{
 			var i:int;
 			var blobs:Array = new Array();
-			while (i < libfreenect.MAX_BLOBS)
+			while (i < as3kinect.MAX_BLOBS)
 			{
-			    var mainRect:Rectangle = r.getColorBoundsRect(libfreenect.BLOB_MASK, libfreenect.BLOB_COLOR);
+			    var mainRect:Rectangle = r.getColorBoundsRect(as3kinect.BLOB_MASK, as3kinect.BLOB_COLOR);
 			    if (mainRect.isEmpty()) break;
 			    var xx:int = mainRect.x;
 			    for (var yy:uint = mainRect.y; yy < mainRect.y + mainRect.height; yy++)
 			    {
-			        if (r.getPixel32(xx, yy) == libfreenect.BLOB_COLOR)
+			        if (r.getPixel32(xx, yy) == as3kinect.BLOB_COLOR)
 			        {
-			            r.floodFill(xx, yy, libfreenect.BLOB_FILL_COLOR);
-			            var blobRect:Rectangle = r.getColorBoundsRect(libfreenect.BLOB_MASK, libfreenect.BLOB_FILL_COLOR);
-			            if (blobRect.width > libfreenect.BLOB_MIN_WIDTH 
-							&& blobRect.width < libfreenect.BLOB_MAX_WIDTH 
-							&& blobRect.height > libfreenect.BLOB_MIN_HEIGHT 
-							&& blobRect.height < libfreenect.BLOB_MAX_HEIGHT)
+			            r.floodFill(xx, yy, as3kinect.BLOB_FILL_COLOR);
+			            var blobRect:Rectangle = r.getColorBoundsRect(as3kinect.BLOB_MASK, as3kinect.BLOB_FILL_COLOR);
+			            if (blobRect.width > as3kinect.BLOB_MIN_WIDTH 
+							&& blobRect.width < as3kinect.BLOB_MAX_WIDTH 
+							&& blobRect.height > as3kinect.BLOB_MIN_HEIGHT 
+							&& blobRect.height < as3kinect.BLOB_MAX_HEIGHT)
 			            {
 			                var blob:Object = {};
 			                blob.rect = blobRect;
-							blob.rect.x = libfreenect.IMG_WIDTH - blob.rect.x - blob.rect.width;
 							var _x:int = blob.rect.x + (blob.rect.width / 2);
-							var _y:int = blob.rect.y + (blob.rect.height / 2);							
+							var _y:int = blob.rect.y + (blob.rect.height / 2);
+							if(_w != 0 && _h != 0) {
+								blob.rect.x = blob.rect.x / as3kinect.IMG_WIDTH * _w;
+								blob.rect.y = blob.rect.y / as3kinect.IMG_HEIGHT * _h;
+								blob.rect.width = blob.rect.width / as3kinect.IMG_WIDTH * _w;
+								blob.rect.height = blob.rect.height / as3kinect.IMG_HEIGHT * _h;
+								_x = _x / as3kinect.IMG_WIDTH * _w;
+								_y = _y / as3kinect.IMG_HEIGHT * _h;
+							}						
 							blob.point = new Point(_x, _y);
 			                blobs.push(blob);
 			            }
-			            r.floodFill(xx, yy, libfreenect.BLOB_PROCESSED_COLOR);
+			            r.floodFill(xx, yy, as3kinect.BLOB_PROCESSED_COLOR);
 			        }
 			    }
 			    i++;
