@@ -188,23 +188,23 @@ namespace Freenect {
 		}
 		template <typename ConcreteDevice>
 		ConcreteDevice& createDevice(int _index) {
-			m_HasDeviceMutex.Lock(); 		// Windows Fix
+			m_HasDeviceMutex.lock(); 		// Windows Fix
 			DeviceMap::iterator it = m_devices.find(_index);
 			if (it != m_devices.end()) delete it->second;
 			ConcreteDevice * device = new ConcreteDevice(m_ctx, _index);
 			m_devices.insert(std::make_pair<int, FreenectDevice*>(_index, device));
 			m_HasDevice = (m_devices.size() != 0); 	// Windows Fix
-			m_HasDeviceMutex.Unlock(); 		// Windows Fix
+			m_HasDeviceMutex.unlock(); 		// Windows Fix
 			return *device;
 		}
 		void deleteDevice(int _index) {
-			m_HasDeviceMutex.Lock(); 		// Windows Fix
+			m_HasDeviceMutex.lock(); 		// Windows Fix
 			DeviceMap::iterator it = m_devices.find(_index);
 			if (it == m_devices.end()) return;
 			delete it->second;
 			m_devices.erase(it);
 			m_HasDevice = (m_devices.size() != 0); 	// Windows Fix
-			m_HasDeviceMutex.Unlock(); 		// Windows Fix
+			m_HasDeviceMutex.unlock(); 		// Windows Fix
 		}
 		int deviceCount() {
 			return freenect_num_devices(m_ctx);
@@ -212,9 +212,9 @@ namespace Freenect {
 		// Do not call directly, thread runs here
 		void operator()() {
 			while(!m_stop) {
-				m_HasDeviceMutex.Lock();
+				m_HasDeviceMutex.lock();
 				if(m_HasDevice && freenect_process_events(m_ctx) < 0) throw std::runtime_error("Cannot process freenect events");
-				m_HasDeviceMutex.Lock();
+				m_HasDeviceMutex.unlock();
 			}
 		}
 		static void *pthread_callback(void *user_data) {
