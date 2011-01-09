@@ -1,26 +1,19 @@
-#include "libfreenect.h"
 #include "libfreenect_cv.h"
 
-IplImage *freenect_sync_get_depth_cv(int index)
+void freenect_sync_get_depth_cv(IplImage *image, int index)
 {
-	static IplImage *image = 0;
-	static char *data = 0;
-	if (!image) image = cvCreateImageHeader(cvSize(640,480), 16, 1);
+	void *depth_data = 0;
 	unsigned int timestamp;
-	if (freenect_sync_get_depth(&data, &timestamp, index, FREENECT_DEPTH_11BIT))
-	    return NULL;
-	cvSetData(image, data, 640*2);
-	return image;
+	freenect_sync_get_depth(&depth_data, &timestamp, index, FREENECT_DEPTH_11BIT);
+	unsigned char *depth = (unsigned char*) depth_data;
+	cvSetData(image, depth, FREENECT_FRAME_W * 2);
 }
 
-IplImage *freenect_sync_get_rgb_cv(int index)
+void freenect_sync_get_rgb_cv(IplImage *image, int index)
 {
-	static IplImage *image = 0;
-	static char *data = 0;
-	if (!image) image = cvCreateImageHeader(cvSize(640,480), 8, 3);
+	void *video_data = 0;
 	unsigned int timestamp;
-	if (freenect_sync_get_video(&data, &timestamp, index, FREENECT_VIDEO_RGB))
-	    return NULL;
-	cvSetData(image, data, 640*3);
-	return image;
+	freenect_sync_get_video(&video_data, &timestamp, index, FREENECT_VIDEO_RGB);
+	unsigned char *video = (unsigned char*) video_data;
+	cvSetData(image, video, FREENECT_FRAME_W * 3);
 }

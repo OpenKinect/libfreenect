@@ -34,6 +34,7 @@ package org.as3kinect.events
 		{
 			
 		public static const ON_DEPTH:String = "ON_DEPTH";
+		public static const ON_RAW_DEPTH:String = "ON_RAW_DEPTH";
 		public static const ON_DEBUG:String = "ON_DEBUG";
 		public static const ON_VIDEO:String = "ON_VIDEO";
 		public static const ON_ACCELEROMETER:String = "ON_ACCELEROMETER";

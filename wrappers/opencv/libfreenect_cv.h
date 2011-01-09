@@ -5,10 +5,11 @@
 extern "C" {
 #endif
 
+#include "libfreenect_sync.h"
 #include <opencv/cv.h>
 
-	IplImage *freenect_sync_get_depth_cv(int index);
-	IplImage *freenect_sync_get_rgb_cv(int index);
+void freenect_sync_get_depth_cv(IplImage *image, int index);
+void freenect_sync_get_rgb_cv(IplImage *image, int index);
 
 #ifdef __cplusplus
 }
