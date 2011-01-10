@@ -8,10 +8,10 @@ set(CMAKE_C_FLAGS "-Wall")
 
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
 IF(WIN32)
-  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c ../platform/windows/libusb10emu/libusb-1.0/libusbemu.cpp)
+  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c postprocessing.c ../platform/windows/libusb10emu/libusb-1.0/libusbemu.cpp)
   set_source_files_properties(${SRC} PROPERTIES LANGUAGE CXX)
 ELSE(WIN32)
-  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c)
+  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c postprocessing.c)
 ENDIF(WIN32)
 
 add_library (freenect SHARED ${SRC})
@@ -33,7 +33,7 @@ target_link_libraries (freenect ${LIBUSB_1_LIBRARIES})
 target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
 
 # Install the header file
-install (FILES "../include/libfreenect.h" "../include/libfreenect.hpp"
+install (FILES "../include/libfreenect.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 
 IF(UNIX AND NOT APPLE)

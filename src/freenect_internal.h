@@ -147,6 +147,31 @@ struct _freenect_device {
 	// Motor
 	fnusb_dev usb_motor;
 	freenect_raw_tilt_state raw_state;
+
+	//Post processing: distortion correction
+	float map_v[FREENECT_FRAME_PIX];
+	float map_u[FREENECT_FRAME_PIX];
+};
+
+/** 
+ * Post-processing part
+ */
+
+
+/** projection matrix */
+struct _freenect_projection_matrix{
+	float p11;
+	float p12;
+	float p13;
+	float p14;
+	float p21;
+	float p22;
+	float p23;
+	float p24;
+	float p31;
+	float p32;
+	float p33;
+	float p34;
 };
 
 #endif

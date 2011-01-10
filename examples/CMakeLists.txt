@@ -7,6 +7,8 @@ set(CMAKE_C_FLAGS "-Wall")
 if (WIN32)
   set_source_files_properties(glview.c PROPERTIES LANGUAGE CXX)
   set_source_files_properties(glpclview.c PROPERTIES LANGUAGE CXX)
+  set_source_files_properties(tiltdemo.c PROPERTIES LANGUAGE CXX)
+  set_source_files_properties(undistort.c PROPERTIES LANGUAGE CXX)
 
   set(THREADS_USE_PTHREADS_WIN32 true)
   find_package(Threads REQUIRED)
@@ -15,9 +17,11 @@ if (WIN32)
 endif()
 
 add_executable(glview glview.c)
+add_executable(undistort undistort.c)
 
 if (BUILD_C_SYNC)
   add_executable(glpclview glpclview.c)
+	add_executable(tiltdemo tiltdemo.c)
 endif()
 
 # We need to include libfreenect_sync.h for glpclview
@@ -27,8 +31,10 @@ include_directories (../wrappers/c_sync/)
 if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
   target_link_libraries(glview freenect)
+  target_link_libraries(undistort freenect)
   if (BUILD_C_SYNC)
     target_link_libraries(glpclview freenect_sync)
+		target_link_libraries(tiltdemo freenect_sync)
   endif()
 # Linux, not so much
 else()
@@ -46,16 +52,19 @@ else()
   endif()
 
   target_link_libraries(glview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+  target_link_libraries(undistort freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   if (BUILD_C_SYNC)
-    target_link_libraries(glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+    target_link_libraries(glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY}
+ ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+		target_link_libraries(tiltdemo freenect_sync ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   endif()
 endif()
 
 
-install (TARGETS glview 
+install (TARGETS glview undistort 
   DESTINATION bin)
 
 if (BUILD_C_SYNC)
-  install (TARGETS glpclview
+  install (TARGETS glpclview tiltdemo
     DESTINATION bin)
 endif()
