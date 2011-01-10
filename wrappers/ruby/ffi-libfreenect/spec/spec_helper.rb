@@ -1,0 +1,11 @@
+SPEC_DIR = File.expand_path(File.dirname(__FILE__))
+
+$LOAD_PATH.unshift(SPEC_DIR)
+$LOAD_PATH.unshift(File.join(SPEC_DIR, '..', 'lib'))
+
+require 'freenect'
+require 'spec'
+require 'spec/autorun'
+
+Spec::Runner.configure do |config|
+end

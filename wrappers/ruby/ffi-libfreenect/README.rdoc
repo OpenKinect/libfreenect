@@ -1,0 +1,86 @@
+= ffi-libfreenect
+
+FFI-based Ruby wrapper for the OpenKinect libfreenect library.
+
+== Requirements
+  * ffi >= 0.5.0
+
+== Installation
+
+=== via Gem
+
+    (sudo)? gem install ffi-libfreenect
+
+=== via Rake
+
+    git clone http://github.com/jgrunzweig/ffi-libfreenect.git
+    cd ffi-libfreenect
+    (sudo)? gem install jeweler
+    rake install
+
+=== Synopsis
+
+    require 'freenect'
+
+    ctx = Freenect.init()
+    devs = ctx.num_devices
+
+    STDERR.puts "Number of Kinects detected: #{devs}"
+    unless devs > 0
+      STDERR.puts "Error: no kinect detected"
+      exit 1
+    end
+
+    STDERR.puts "Selecting device 0"
+    dev = ctx.open_device(0)
+
+    dev.set_led(:red)   # play with the led
+    dev.set_tilt_degrees(30)  # tilt up to max
+    sleep 1
+    dev.set_tilt_degrees(-30) # tilt down to max
+    sleep 1
+    dev.set_tilt_degrees(0.0) # tilt back to center
+    sleep 1
+    dev.set_led(:green)   # play with the led
+
+    # Actual video and depth capture work similarly to eachother.
+    # But they're still both pretty un-sugary.
+    #
+    # Future versions will probably abstract this and try to make it more 
+    # ruby-ish.
+    #
+    # The example below shows how to write a single video frame to a PPM file.
+
+    dev.set_depth_format(Freenect::DEPTH_11BIT)
+    dev.set_video_format(Freenect::VIDEO_RGB)
+    dev.start_depth()
+    dev.start_video()
+
+    $snapshot_finished = nil
+
+    STDERR.puts "Taking snapshot"
+    dev.set_video_callback do |device, video, timestamp|
+      if not $snapshot_finished
+        fname = "%u.ppm" % timestamp
+        STDERR.puts "Writing #{fname}"
+        File.open(fname, "w") do |f|
+          f.puts("P6 %d %d 255\n" % [ Freenect::FRAME_W, Freenect::FRAME_H ] )
+          f.write(video.read_string_length(Freenect::RGB_SIZE))
+        end
+        $snapshot_finished = true
+      end
+    end
+
+    until $snapshot_finished 
+      break if (ctx.process_events < 0)
+    end
+
+    dev.set_led(:off)
+    dev.stop_depth
+    dev.stop_video
+    dev.close
+    ctx.close
+
+== Copyright
+
+Copyright (c) 2010 Josh Grunzweig & Eric Monti. See LICENSE.txt for details.

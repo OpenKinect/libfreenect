@@ -25,33 +25,48 @@
  * 
  */
 
-package org.libfreenect
-{
-	public class libfreenect
-	{
+ package org.as3kinect {
+	 
+ 	import flash.utils.ByteArray;
+	
+	public class as3kinect {
 
 		public static const SUCCESS:int = 0;
 		public static const ERROR:int = -1;
-		
+
+		public static const SERVER_IP:String = "localhost";
+		public static const SOCKET_PORT:int = 6001;
+
 		public static const CAMERA_ID:int = 0;
 		public static const MOTOR_ID:int = 1;
 		public static const MIC_ID:int = 2;
+		
+		public static const GET_DEPTH:int = 0;
+		public static const GET_VIDEO:int = 1;
+		public static const MIRROR_DEPTH:int = 2;
+		public static const MIRROR_VIDEO:int = 3;
+		public static const MIN_DEPTH:int = 4;
+		public static const MAX_DEPTH:int = 5;
+		
+		public static const MOVE_MOTOR:int = 0;
+		public static const LED_COLOR:int = 1;
+		public static const ACCEL_DATA:int = 2;
 		
 		public static const IMG_WIDTH:int = 640;
 		public static const IMG_HEIGHT:int = 480;
 
 		public static const RAW_IMG_SIZE:int = IMG_WIDTH * IMG_HEIGHT * 4;
 		public static const DATA_IN_SIZE:int = 3 * 2 + 3 * 8;
-		public static const DATA_OUT_SIZE:int = 6;
+		public static const COMMAND_SIZE:int = 6;
 		
 		public static const MAX_BLOBS:int = 15;
 		public static const BLOB_MASK:uint = 0xFFFFFFFF;
 		public static const BLOB_COLOR:uint = 0xFFFFFFFF;
 		public static const BLOB_FILL_COLOR:uint = 0xFF0000FF;
 		public static const BLOB_PROCESSED_COLOR:uint = 0x00FF00FF;
-		public static const BLOB_MIN_WIDTH:uint = 30;
-		public static const BLOB_MAX_WIDTH:uint = 120;
-		public static const BLOB_MIN_HEIGHT:uint = 30;
-		public static const BLOB_MAX_HEIGHT:uint = 120;
+		public static const BLOB_MIN_WIDTH:uint = 15;
+		public static const BLOB_MAX_WIDTH:uint = 30;
+		public static const BLOB_MIN_HEIGHT:uint = 15;
+		public static const BLOB_MAX_HEIGHT:uint = 80;
 	}
 }

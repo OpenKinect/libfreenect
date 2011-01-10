@@ -164,7 +164,7 @@ private:
 	bool m_new_depth_frame;
 };
 
-Freenect::Freenect<MyFreenectDevice> freenect;
+Freenect::Freenect freenect;
 MyFreenectDevice* device;
 freenect_video_format requested_format(FREENECT_VIDEO_RGB);
 
@@ -343,7 +343,7 @@ void *gl_threadfunc(void *arg)
 }
 
 int main(int argc, char **argv) {
-	device = &freenect.createDevice(0);
+	device = &freenect.createDevice<MyFreenectDevice>(0);
 	device->startVideo();
 	device->startDepth();
 	gl_threadfunc(NULL);

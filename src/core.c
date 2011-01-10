@@ -33,7 +33,7 @@
 
 #include "freenect_internal.h"
 
-EXPORT int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
+FREENECTAPI int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 {
 	*ctx = (freenect_context*)malloc(sizeof(freenect_context));
 	if (!ctx)
@@ -45,7 +45,7 @@ EXPORT int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 	return fnusb_init(&(*ctx)->usb, usb_ctx);
 }
 
-EXPORT int freenect_shutdown(freenect_context *ctx)
+FREENECTAPI int freenect_shutdown(freenect_context *ctx)
 {
 	while (ctx->first) {
 		FN_NOTICE("Device %p open during shutdown, closing...\n", ctx->first);
@@ -57,17 +57,17 @@ EXPORT int freenect_shutdown(freenect_context *ctx)
 	return 0;
 }
 
-EXPORT int freenect_process_events(freenect_context *ctx)
+FREENECTAPI int freenect_process_events(freenect_context *ctx)
 {
 	return fnusb_process_events(&ctx->usb);
 }
 
-EXPORT int freenect_num_devices(freenect_context *ctx)
+FREENECTAPI int freenect_num_devices(freenect_context *ctx)
 {
 	return fnusb_num_devices(&ctx->usb);
 }
 
-EXPORT int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
+FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
 {
 	int res;
 	freenect_device *pdev = (freenect_device*)malloc(sizeof(freenect_device));
@@ -98,7 +98,7 @@ EXPORT int freenect_open_device(freenect_context *ctx, freenect_device **dev, in
 	return 0;
 }
 
-EXPORT int freenect_close_device(freenect_device *dev)
+FREENECTAPI int freenect_close_device(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	int res;
@@ -135,22 +135,22 @@ EXPORT int freenect_close_device(freenect_device *dev)
 	return 0;
 }
 
-EXPORT void freenect_set_user(freenect_device *dev, void *user)
+FREENECTAPI void freenect_set_user(freenect_device *dev, void *user)
 {
 	dev->user_data = user;
 }
 
-EXPORT void *freenect_get_user(freenect_device *dev)
+FREENECTAPI void *freenect_get_user(freenect_device *dev)
 {
 	return dev->user_data;
 }
 
-EXPORT void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level)
+FREENECTAPI void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level)
 {
 	ctx->log_level = level;
 }
 
-EXPORT void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb)
+FREENECTAPI void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb)
 {
 	ctx->log_cb = cb;
 }
