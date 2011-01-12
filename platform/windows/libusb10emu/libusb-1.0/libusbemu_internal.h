@@ -282,6 +282,18 @@ int libusbemu_setup_transfer(transfer_wrapper* wrapper)
   return(LIBUSB_SUCCESS);
 }
 
+void libusbemu_clear_transfer(transfer_wrapper* wrapper)
+{
+  libusb_transfer* transfer (&wrapper->libusb);
+  if (transfer->actual_length > 0)
+  {
+    transfer->actual_length = 0;
+    memset(transfer->buffer, 0, transfer->length);
+    for (int i=0; i<transfer->num_iso_packets; ++i)
+      transfer->iso_packet_desc[i].actual_length = 0;
+  }
+}
+
 } // end of 'namespace libusbemu'
 
 #endif//LIBUSB_EMULATOR_INTERNAL_H

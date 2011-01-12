@@ -25,18 +25,43 @@
 */
 
 // Headers required to enable Visual C++ Memory Leak mechanism:
-// http://msdn.microsoft.com/en-us/library/x98tx3cf(v=vs.71).aspx
-// http://msdn.microsoft.com/en-us/library/x98tx3cf(v=vs.80).aspx
-// Note that for VC71 the human-readable map-mode flag is CRTDBG_MAP_ALLOC
-// while for VC80 and on the flag is prefixed by a "_" : _CRTDBG_MAP_ALLOC
+// (NOTE: this should only be activated in Debug mode!)
 #if defined(_MSC_VER) && defined(_DEBUG)
-  #define _CRTDBG_MAP_ALLOC
+
+  // MSVC version predefined macros:
+  // http://social.msdn.microsoft.com/Forums/en-US/vcgeneral/thread/17a84d56-4713-48e4-a36d-763f4dba0c1c/
+  // _MSC_VER | MSVC Edition
+  // ---------+---------------
+  //     1300 | MSVC .NET 2002
+  //     1310 | MSVC .NET 2003
+  //     1400 | MSVC 2005
+  //     1500 | MSVC 2008
+  //     1600 | MSVC 2010
+
+  // until VC71 (MSVC2003) the human-readable map/dump mode flag is CRTDBG_MAP_ALLOC:
+  // http://msdn.microsoft.com/en-us/library/x98tx3cf(v=vs.71).aspx
+  // but from VC80 (MSVC2005) and on the flag should be prefixed by a "_":
+  // http://msdn.microsoft.com/en-us/library/x98tx3cf(v=vs.80).aspx
+  #if _MSC_VER >= 1400
+    #define _CRTDBG_MAP_ALLOC
+  #else
+    #define CRTDBG_MAP_ALLOC
+  #endif
   #include <stdlib.h>
   #include <crtdbg.h>
+
   // Also, gotta redefine the new operator ...
   // http://support.microsoft.com/kb/140858
-  #define MYDEBUG_NEW  new ( _NORMAL_BLOCK, __FILE__, __LINE__)
-  #define new MYDEBUG_NEW
+  // but before redefining it, for MSVC version prior to 2010, the STL <map>
+  // header must be included in order to avoid some scary compilation issues:
+  // http://social.msdn.microsoft.com/forums/en-US/vclanguage/thread/a6a148ed-aff1-4ec0-95d2-a82cd4c29cbb
+  #if _MSC_VER < 1600
+    #include <map>
+  #endif
+  // now it is safe to redefine the new operator
+  #define LIBUSBEMU_DEBUG_NEW  new ( _NORMAL_BLOCK, __FILE__, __LINE__)
+  #define new LIBUSBEMU_DEBUG_NEW
+
 #endif
 
 #include "libusb.h"
@@ -194,11 +219,21 @@ void libusb_close(libusb_device_handle*	dev_handle)
 
 int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
 {
-	if (0 != usb_claim_interface(dev->handle, interface_number))
-    return(LIBUSB_ERROR_OTHER);
+  // according to the official libusb-win32 usb_set_configuration() documentation:
+  // http://sourceforge.net/apps/trac/libusb-win32/wiki/libusbwin32_documentation
+  // "Must be called!: usb_set_configuration() must be called with a valid
+  //  configuration (not 0) before you can claim the interface. This might
+  //  not be be necessary in the future. This behavior is different from
+  //  Linux libusb-0.1."
   if (0 != usb_set_configuration(dev->handle, 1))
     return(LIBUSB_ERROR_OTHER);
-	// LIBUSB_ERROR_NOT_FOUND if the requested interface does not exist
+	if (0 != usb_claim_interface(dev->handle, interface_number))
+    return(LIBUSB_ERROR_OTHER);
+  /*
+  if (0 != usb_set_altinterface(dev->handle, 0))
+    return(LIBUSB_ERROR_OTHER);
+  */
+  // LIBUSB_ERROR_NOT_FOUND if the requested interface does not exist
 	// LIBUSB_ERROR_BUSY if another program or driver has claimed the interface
 	// LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
 	// a LIBUSB_ERROR code on other failure
@@ -374,9 +409,6 @@ int libusb_handle_events(libusb_context* ctx)
 {
   int ret (0);
 
-  ctx->mutex.Enter();
-  ctx->processing.Signal();
-
   int(*ReapStrategy)(const libusb_device&) (ReapThreaded);
 
   // ReapThreaded() is already spawning threads (one per stream) at very high
@@ -388,7 +420,6 @@ int libusb_handle_events(libusb_context* ctx)
     QuickThread::Myself().RaisePriority();
 
   //HANDLE hMyself (GetCurrentThread());
-  // ctx->mutex.Enter();
   libusb_context::TMapDevices::iterator it  (ctx->devices.begin());
   libusb_context::TMapDevices::iterator end (ctx->devices.end());
   for (; it!=end; ++it)
@@ -397,7 +428,6 @@ int libusb_handle_events(libusb_context* ctx)
     if (dev.refcount > 0)
       ReapStrategy(dev);
   }
-  // ctx->mutex.Leave();
 
   // Fail Guard to prevent THREAD_PRIORITY_TIME_CRITICAL from rendering the
   // system unresponsive: press ESC key on the CONSOLE window to kill the
@@ -426,15 +456,12 @@ int libusb_handle_events(libusb_context* ctx)
     hReaction.Signal();
   }
 
-  ctx->processing.Reset();
-  ctx->mutex.Leave();
-
   // 0 on success, or a LIBUSB_ERROR code on failure
   return(ret);
 }
 
 enum EReapResult { ETIMEOUT = -116, ECANCELLED = -998 };
-int ReapTransfer(transfer_wrapper*,int=0);
+int ReapTransfer(transfer_wrapper*,int=0,libusb_device::TListTransfers* = NULL);
 
 // EXPERIMENTAL:
 // ReapSequential Rationale: reap only the head of each transfer list (stream)
@@ -448,7 +475,7 @@ int ReapSequential(const libusb_device& dev)
     libusb_device::TListTransfers& list (it->second);
 		transfer_wrapper* wrapper (list.Head());
 		if (NULL != wrapper)
-			ReapTransfer(wrapper, 100);
+			ReapTransfer(wrapper, 0); // zero-timeout to avoid streaming to stop coming
 	}
   //QuickThread::Yield();
 	return(0);
@@ -469,23 +496,43 @@ int ReapJohnnieWalker(const libusb_device& dev)
     while (!list.Empty())
     {
       transfer_wrapper* wrapper (list.Head());
-      if (0 != ReapTransfer(wrapper, 100))
+      if (0 != ReapTransfer(wrapper, 0))  // zero-timeout to avoid streaming to stop coming
         break;
     }
 	}
   return(0);
 }
 
+#include <list>
+static QuickMutex mutexReady;   // producer-consumer stuff
+static std::map<libusb_device::TListTransfers*,libusb_device::TListTransfers*> mapDeviceTransfersReady;
 int ReapThreadProc(void* lpParameter)
 {
   fprintf(stdout, "Thread execution started.\n");
   libusb_device::TListTransfers& listTransfers (*(libusb_device::TListTransfers*)lpParameter);
-	while(!listTransfers.Empty())
+
+  mutexReady.Enter();
+  assert(mapDeviceTransfersReady.find(&listTransfers) == mapDeviceTransfersReady.end());
+  mapDeviceTransfersReady[&listTransfers] = new libusb_device::TListTransfers;
+  libusb_device::TListTransfers& lstReady = *mapDeviceTransfersReady[&listTransfers];
+  mutexReady.Leave();
+
+  while(!listTransfers.Empty() || !lstReady.Empty())
 	{
-    listTransfers.Head()->libusb.dev_handle->dev->ctx->processing.Wait();
-		transfer_wrapper* wrapper = listTransfers.Head();
-		if (NULL != wrapper)
-			ReapTransfer(wrapper, 1000);
+    if (!listTransfers.Empty())
+    {
+		  transfer_wrapper* wrapper = listTransfers.Head();
+		  if (NULL != wrapper)
+			  //ReapTransfer(wrapper, 10000, &lstReady);  // producer-consumer model
+        ReapTransfer(wrapper, 10000);
+    }
+    else
+    {
+      // This is important! Otherwise the thread may "take control" of the CPU
+      // if it happens to be running at TIME_CRITICAL priority...
+      fprintf(stdout, "ReapThreadProc(): nothing to do, sleeping...\n");
+      QuickThread::Yield();
+    }
 
     if (hProblem.Check())
     {
@@ -507,11 +554,22 @@ int ReapThreadProc(void* lpParameter)
       }
     }
 	}
+
+  mutexReady.Enter();
+  SAFE_DELETE(mapDeviceTransfersReady[&listTransfers]);
+  mapDeviceTransfersReady.erase(&listTransfers);
+  mutexReady.Leave();
+
   fprintf(stdout, "Thread execution finished.\n");
 	return(0);
 }
-// ReapThreaded Rationale: for each transfer list (stream), delegate the reap
-// to a dedicated thread for that stream
+
+void PreprocessTransferNaive(libusb_transfer* transfer, const int read);
+void PreprocessTransferFreenect(libusb_transfer* transfer, const int read);
+static void(*PreprocessTransfer)(libusb_transfer*, const int) (PreprocessTransferFreenect);
+
+// ReapThreaded Rationale: for each transfer list (stream) of a given device,
+// delegate the reap to a dedicated thread for that stream
 int ReapThreaded(const libusb_device& dev)
 {
   static std::map<const libusb_device*, std::map<int,QuickThread*> > mapDeviceEndPointThreads;
@@ -527,6 +585,30 @@ int ReapThreaded(const libusb_device& dev)
       if (NULL != hThread)
         if (hThread->TryJoin())
           SAFE_DELETE(hThread);
+    }
+
+    {
+      // On fail guard, release all "ready" transfers as well...
+      mutexReady.Enter();
+      std::map<libusb_device::TListTransfers*,libusb_device::TListTransfers*>::iterator it  = mapDeviceTransfersReady.begin();
+      std::map<libusb_device::TListTransfers*,libusb_device::TListTransfers*>::iterator end = mapDeviceTransfersReady.end();
+      for (; it!=end; ++it)
+      {
+        libusb_device::TListTransfers& lstReady (*(it->second));
+        while (!lstReady.Empty())
+        {
+          transfer_wrapper* wrapper = lstReady.Head();
+          libusb_device::TListTransfers::Remove(wrapper);
+          libusb_transfer* transfer = &wrapper->libusb;
+          transfer->status = LIBUSB_TRANSFER_CANCELLED;
+          int read = transfer->actual_length;
+          if (read > 0);
+            PreprocessTransfer(&wrapper->libusb, wrapper->libusb.actual_length);
+          transfer->callback(&wrapper->libusb);
+          libusbemu_clear_transfer(wrapper);
+        }
+      }
+      mutexReady.Leave();
     }
     return(-1);
   }
@@ -559,15 +641,43 @@ int ReapThreaded(const libusb_device& dev)
       }
     }
   }
-  QuickThread::Yield();
+
+
+  {
+  int procs (0);
+  libusb_device::TMapIsocTransfers::iterator it  (dev.isoTransfers->begin());
+	libusb_device::TMapIsocTransfers::iterator end (dev.isoTransfers->end());
+  for (; it!=end; ++it)
+  {
+    libusb_device::TListTransfers& listTransfers (it->second);
+    mutexReady.Enter();
+    std::map<libusb_device::TListTransfers*,libusb_device::TListTransfers*>::iterator itReady = mapDeviceTransfersReady.find(&listTransfers);
+    if (itReady != mapDeviceTransfersReady.end())
+    {
+      libusb_device::TListTransfers& listReady = *(itReady->second);
+      while (!listReady.Empty())
+      {
+        ++procs;
+        transfer_wrapper* wrapper = listReady.Head();
+        libusb_device::TListTransfers::Remove(wrapper);
+        libusb_transfer* transfer = &wrapper->libusb;
+        int read = transfer->actual_length;
+        if (read > 0);
+          PreprocessTransfer(&wrapper->libusb, wrapper->libusb.actual_length);
+        transfer->callback(&wrapper->libusb);
+        libusbemu_clear_transfer(wrapper);
+      }
+    }
+    mutexReady.Leave();
+  }
+  if (0 == procs)
+    QuickThread::Yield();
+  }
+
 	return(0);
 }
 
-void PreprocessTransferNaive(libusb_transfer* transfer, const int read);
-void PreprocessTransferFreenect(libusb_transfer* transfer, const int read);
-static void(*PreprocessTransfer)(libusb_transfer*, const int) (PreprocessTransferFreenect);
-
-int ReapTransfer(transfer_wrapper* wrapper, int timeout)
+int ReapTransfer(transfer_wrapper* wrapper, int timeout, libusb_device::TListTransfers* lstReady)
 {
   void* context (wrapper->usb);
   libusb_transfer* transfer (&wrapper->libusb);
@@ -575,6 +685,26 @@ int ReapTransfer(transfer_wrapper* wrapper, int timeout)
 	const int read = usb_reap_async_nocancel(context, timeout);
   if (read >= 0)
   {
+    // according to the official libusb_transfer struct reference:
+    // "int libusb_transfer::actual_length
+    //  Actual length of data that was transferred.
+    //  Read-only, and only for use within transfer callback function.
+    //  Not valid for isochronous endpoint transfers."
+    // since the client will allegedly not read from this field, we'll be using
+    // it here just to simplify the emulation implementation, more specifically
+    // the libusb_handle_events() and libusbemu_clear_transfer().
+    transfer->actual_length = read;
+
+    // are we using the producer/consumer model?
+    if (NULL != lstReady)
+    {
+      libusb_device::TListTransfers::Remove(wrapper);
+      mutexReady.Enter();
+        lstReady->Append(wrapper);
+      mutexReady.Leave();
+      return(read);
+    }
+
     // data successfully acquired (0 bytes is also a go!), which means that
     // the transfer should be removed from the head of the list and put into
     // an orphan state; it is up to the client code to resubmit the transfer
@@ -599,12 +729,7 @@ int ReapTransfer(transfer_wrapper* wrapper, int timeout)
     // assume that the client allegedly used that data; what remains to be
     // done is to set the data buffer - and the iso packed descriptors - to
     // some reliable state for the future...
-    if (read > 0)
-    {
-      memset(transfer->buffer, 0, transfer->length);
-      for (int i=0; i<transfer->num_iso_packets; ++i)
-        transfer->iso_packet_desc[i].actual_length = 0;
-    }
+    libusbemu_clear_transfer(wrapper);
   }
 	else
 	{
