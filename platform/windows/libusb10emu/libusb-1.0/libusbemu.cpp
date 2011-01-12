@@ -642,7 +642,6 @@ int ReapThreaded(const libusb_device& dev)
     }
   }
 
-
   {
   int procs (0);
   libusb_device::TMapIsocTransfers::iterator it  (dev.isoTransfers->begin());
