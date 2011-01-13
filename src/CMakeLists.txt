@@ -33,7 +33,7 @@ target_link_libraries (freenect ${LIBUSB_1_LIBRARIES})
 target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
 
 # Install the header file
-install (FILES "../include/libfreenect.h"
+install (FILES "../include/libfreenect.h" "../include/libfreenect_postprocessing.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 
 IF(UNIX AND NOT APPLE)

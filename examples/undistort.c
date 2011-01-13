@@ -30,6 +30,7 @@
 #include <string.h>
 #include <assert.h>
 #include "libfreenect.h"
+#include "libfreenect_postprocessing.h"
 
 #include <pthread.h>
 
@@ -58,6 +59,7 @@ pthread_mutex_t gl_backbuf_mutex = PTHREAD_MUTEX_INITIALIZER;
 // back: owned by libfreenect (implicit for depth)
 // mid: owned by callbacks, "latest frame ready"
 // front: owned by GL, "currently being drawn"
+uint16_t *depth16;
 uint8_t *depth_mid, *depth_front;
 uint8_t *rgb_back, *rgb_mid, *rgb_front;
 
@@ -72,12 +74,12 @@ int freenect_led;
 freenect_video_format requested_format = FREENECT_VIDEO_RGB;
 freenect_video_format current_format = FREENECT_VIDEO_RGB;
 
+freenect_param_undistort distV, distD;
+freenect_param_intrinsic intrV, intrD;
+
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
 int got_rgb = 0;
 int got_depth = 0;
-
-freenect_param_undistort distV;
-freenect_param_intrinsic intrV;
 
 void DrawGLScene()
 {
@@ -156,6 +158,7 @@ void keyPressed(unsigned char key, int x, int y)
 		die = 1;
 		pthread_join(freenect_thread, NULL);
 		glutDestroyWindow(window);
+		free(depth16);
 		free(depth_mid);
 		free(depth_front);
 		free(rgb_back);
@@ -270,10 +273,13 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
 	int i;
 	uint16_t *depth = (uint16_t*)v_depth;
+	//uint16_t *_depth = (uint16_t*)v_depth;
+	freenect_undistort_depth(dev, v_depth, depth16);
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	for (i=0; i<FREENECT_FRAME_PIX; i++) {
 		int pval = t_gamma[depth[i]];
+		//int pval = t_gamma[depth16[i]];
 		int lb = pval & 0xff;
 		switch (pval>>8) {
 			case 0:
@@ -323,11 +329,13 @@ void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 	pthread_mutex_lock(&gl_backbuf_mutex);
 
 	// swap buffers
-	assert (rgb_back == rgb);
-	freenect_undistort_rgb(dev, rgb, rgb_mid);
+	/*assert (rgb_back == rgb);
+	rgb_back = rgb_mid;
 	freenect_set_video_buffer(dev, rgb_back);
-	//rgb_mid = (uint8_t*)rgb;
-
+	rgb_mid = (uint8_t*)rgb;*/
+	//swap end
+	freenect_undistort_video(dev, rgb, rgb_mid);
+	freenect_set_video_buffer(dev, rgb_back);
 	got_rgb++;
 	pthread_cond_signal(&gl_frame_cond);
 	pthread_mutex_unlock(&gl_backbuf_mutex);
@@ -337,6 +345,9 @@ void *freenect_threadfunc(void *arg)
 {
 	int accelCount = 0;
 
+	freenect_init_undistort_map_video(f_dev, &distV, &intrV, FREENECT_MAP_INVERSE);
+	freenect_init_undistort_map_depth(f_dev, &distD, &intrD, FREENECT_MAP_INVERSE);
+
 	freenect_set_tilt_degs(f_dev,freenect_angle);
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
@@ -344,8 +355,6 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_video_format(f_dev, current_format);
 	freenect_set_depth_format(f_dev, FREENECT_DEPTH_11BIT);
 	freenect_set_video_buffer(f_dev, rgb_back);
-
-	freenect_init_undistort_map(f_dev, &distV, &intrV, FREENECT_MAP_INVERSE);
 
 	freenect_start_depth(f_dev);
 	freenect_start_video(f_dev);
@@ -389,28 +398,38 @@ void *freenect_threadfunc(void *arg)
 int main(int argc, char **argv)
 {
 	int res;
-
+	depth16 = (uint16_t*)malloc(640*480*2);
 	depth_mid = (uint8_t*)malloc(640*480*3);
 	depth_front = (uint8_t*)malloc(640*480*3);
 	rgb_back = (uint8_t*)malloc(640*480*3);
 	rgb_mid = (uint8_t*)malloc(640*480*3);
 	rgb_front = (uint8_t*)malloc(640*480*3);
 
+	/* parameter for video camera */
 	distV.k1 = 2.6172416643533958e-01;
 	distV.k2 = -8.2104703257074252e-01;
 	distV.k3 = 8.9012728224037985e-01;
 	distV.p1 = -1.0637850248230928e-03;
 	distV.p2 = 8.4946289275097779e-04;
-//	distV.k1 = 0;
-//	distV.k2 = 0;
-//	distV.k3 = 0;
-//	distV.p1 = 0;
-//	distV.p2 = 0;
+
 	intrV.fx = 5.3009194943536181e+02;
 	intrV.fy = 5.2635860167133876e+02;
 	intrV.cx = 3.2821930715948992e+02;
 	intrV.cy = 2.6872781351282777e+02;
-	
+
+	/* parameter for depth camera */
+	distD.k1 = -2.6167161458989197e-01;
+	distD.k2 = 9.9319844495479259e-01;
+	distD.k3 = -1.2966457585622253e+00;
+	distD.p1 = -1.0221823575713733e-03;
+	distD.p2 = 5.3621541487535148e-03;
+
+	intrD.fx = 5.9425464969100040e+02;
+	intrD.fy = 5.9248479436384002e+02;
+	intrD.cx = 3.3978729959351779e+02;
+	intrD.cy = 2.4250301427866111e+02;
+
+
 	printf("Kinect camera test\n");
 
 	int i;

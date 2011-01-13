@@ -30,6 +30,7 @@
 #include <stdint.h>
 
 #include "libfreenect.h"
+#include "libfreenect_postprocessing.h"
 
 typedef void (*fnusb_iso_cb)(freenect_device *dev, uint8_t *buf, int len);
 
@@ -122,6 +123,36 @@ typedef struct {
 	void *proc_buf;
 } packet_stream;
 
+
+/** 
+ * Post-processing part
+ */
+
+/** distortion map */
+typedef struct{
+	float u[FREENECT_FRAME_PIX];
+	float v[FREENECT_FRAME_PIX];
+} freenect_undistort_map;
+
+/** projection matrix */
+typedef struct{
+	float p11;
+	float p12;
+	float p13;
+	float p14;
+	float p21;
+	float p22;
+	float p23;
+	float p24;
+	float p31;
+	float p32;
+	float p33;
+	float p34;
+} freenect_projection_matrix;
+
+void freenect_calculate_undistort_map(freenect_param_undistort* dist_coeffs, freenect_param_intrinsic* intr, freenect_undistort_map* map, int inverse);
+
+
 struct _freenect_device {
 	freenect_context *parent;
 	freenect_device *next;
@@ -149,29 +180,9 @@ struct _freenect_device {
 	freenect_raw_tilt_state raw_state;
 
 	//Post processing: distortion correction
-	float map_v[FREENECT_FRAME_PIX];
-	float map_u[FREENECT_FRAME_PIX];
-};
-
-/** 
- * Post-processing part
- */
-
-
-/** projection matrix */
-struct _freenect_projection_matrix{
-	float p11;
-	float p12;
-	float p13;
-	float p14;
-	float p21;
-	float p22;
-	float p23;
-	float p24;
-	float p31;
-	float p32;
-	float p33;
-	float p34;
+	freenect_undistort_map map_video; 
+	freenect_undistort_map map_depth;
+	//freenect_projection_matrix pm;
 };
 
 #endif

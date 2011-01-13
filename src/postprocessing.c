@@ -70,7 +70,17 @@ uint8_t interpolate(uint8_t* bufin, float x, float y, int height, int width){
 	return *p3;
 }
 
-void freenect_init_undistort_map(freenect_device* dev, freenect_param_undistort* dist_coeffs, freenect_param_intrinsic* intr, int inverse)
+void freenect_init_undistort_map_video(freenect_device* dev, freenect_param_undistort* dist_coeffs, freenect_param_intrinsic* intr, int inverse)
+{
+	freenect_calculate_undistort_map(dist_coeffs, intr, &dev->map_video, inverse);
+}
+
+void freenect_init_undistort_map_depth(freenect_device* dev, freenect_param_undistort* dist_coeffs, freenect_param_intrinsic* intr, int inverse)
+{
+	freenect_calculate_undistort_map(dist_coeffs, intr, &dev->map_depth, inverse);
+}
+
+void freenect_calculate_undistort_map(freenect_param_undistort* dist_coeffs, freenect_param_intrinsic* intr, freenect_undistort_map* map, int inverse)
 {
 	int i, j, width=640, height=480;
 	float xsq=0, x=0, ysq=0, y=0;
@@ -103,23 +113,24 @@ void freenect_init_undistort_map(freenect_device* dev, freenect_param_undistort*
 			ii = uu+cx+0.5;
 			vv = yy*fy;
 			jj = vv+cy+0.5;
-			dev->map_u[j*640+i] = ii;
-			dev->map_v[j*640+i] = jj;
+			map->u[j*640+i] = ii;
+			map->v[j*640+i] = jj;
 		}
 	}
 }
 
-void freenect_undistort_rgb(freenect_device *dev, void* _bufin, void* _bufout)
+// this function undistorts the actual buffer according to the
+// map  freenect_device::map_u and map_v
+void freenect_undistort_video(freenect_device *dev, void* _bufin, void* _bufout)
 {
 	uint8_t *bufin = (uint8_t*) _bufin;
 	uint8_t *bufout = (uint8_t*) _bufout;
-	//float r, g, b;
 	int i, j, width=640, height=480;
 	int i1, j1, i2, j2;
 	for(j=0; j<height; j++){
 		for(i=0; i<width; i++){
-			i1 = dev->map_u[j*640+i];
-			j1 = dev->map_v[j*640+i];
+			i1 = dev->map_video.u[j*640+i];
+			j1 = dev->map_video.v[j*640+i];
 			i2 = i1 +1;
 			j2 = j1 +1;
 			if(i1 >=0 && i1 <= 640 && j1 >= 0 && j1 <= 480){ /* check if not out of bounds */
@@ -131,23 +142,20 @@ void freenect_undistort_rgb(freenect_device *dev, void* _bufin, void* _bufout)
 	}
 }
 
-// this function undistorts the actual buffer according to the
-// polynomial function (from opencv)
-// TODO: get format and buffer sizes from *dev!
 void freenect_undistort_depth(freenect_device *dev, void* _bufin, void* _bufout)
 {
 	uint16_t *bufin = (uint16_t*) _bufin;
 	uint16_t *bufout = (uint16_t*) _bufout;
 	int i, j, width=640, height=480;
-	int iu, iv;
-	for(i=0; i<width; i++){
-		for(j=0; j<height; j++){
-			iu = dev->map_u[j*640+i];
-			iv = dev->map_v[j*640+i];
-			if(iu >=0 && iu <= 640 && iv >= 0 && iv <= 480){ /* check if not out of bounds */
-				bufout[(iv*640+iu)*3+0] = bufin[(j*640+i)*3 + 0]; /*r*/
-				bufout[(iv*640+iu)*3+1] = bufin[(j*640+i)*3 + 1]; /*g*/
-				bufout[(iv*640+iu)*3+2] = bufin[(j*640+i)*3 + 2]; /*b*/
+	int i1, j1, i2, j2;
+	for(j=0; j<height; j++){
+		for(i=0; i<width; i++){
+			i1 = dev->map_depth.u[j*640+i];
+			j1 = dev->map_depth.v[j*640+i];
+			i2 = i1 +1;
+			j2 = j1 +1;
+			if(i1 >=0 && i1 < 640 && j1 >= 0 && j1 < 480){ // check if not out of bounds
+				bufout[j*640+i] = bufin[j1*640+i1]; // depth
 			}
 		}
 	}
@@ -171,34 +179,36 @@ void freenect_undistort_depth(freenect_device *dev, void* _bufin, void* _bufout)
  * t3
  */
 
-void freenect_init_projection_matrix(freenect_param_intrinsic* intr, freenect_param_extrinsic* extr, freenect_projection_matrix* pm)
+/*
+void freenect_init_projection_matrix(freenect_device *dev, freenect_param_intrinsic* intr, freenect_param_extrinsic* extr)
 {
-	/* zeile mal spalte */
-	pm->p11 = intr->fx * extr->r11 + intr->cx * extr->r31;
-	pm->p12 = intr->fx * extr->r12 + intr->cx * extr->r32;
-	pm->p13 = intr->fx * extr->r13 + intr->cx * extr->r33;
-	pm->p14 = intr->fx * extr->t1  + intr->cx * extr->t3;
-	pm->p21 = intr->fy * extr->r21 + intr->cx * extr->r31;
-	pm->p22 = intr->fy * extr->r22 + intr->cx * extr->r32;
-	pm->p23 = intr->fy * extr->r23 + intr->cx * extr->r33;
-	pm->p24 = intr->fy * extr->t1  + intr->cx * extr->t3;
-	pm->p31 = extr->r31;
-	pm->p32 = extr->r32;
-	pm->p33 = extr->r33;
-	pm->p34 = extr->t3;
-}
+	// zeile mal spalte
+	dev->pm.p11 = intr->fx * extr->r11 + intr->cx * extr->r31;
+	dev->pm.p12 = intr->fx * extr->r12 + intr->cx * extr->r32;
+	dev->pm.p13 = intr->fx * extr->r13 + intr->cx * extr->r33;
+	dev->pm.p14 = intr->fx * extr->t1  + intr->cx * extr->t3;
+	dev->pm.p21 = intr->fy * extr->r21 + intr->cx * extr->r31;
+	dev->pm.p22 = intr->fy * extr->r22 + intr->cx * extr->r32;
+	dev->pm.p23 = intr->fy * extr->r23 + intr->cx * extr->r33;
+	dev->pm.p24 = intr->fy * extr->t1  + intr->cx * extr->t3;
+	dev->pm.p31 = extr->r31;
+	dev->pm.p32 = extr->r32;
+	dev->pm.p33 = extr->r33;
+	dev->pm.p34 = extr->t3;
+}*/
 
-void freenect_xyz2uv(float* in, int* out, freenect_projection_matrix* pm){
+//void freenect_xyz2uv(float* in, int* out, freenect_projection_matrix* pm){
 	/* zeile mal spalte
 	 * out[0] = u      in[0] = X
 	 * out[1] = v      in[1] = Y
 	 *                 in[2] = Z
 	 */		
-	out[0] = pm->p11*in[0] + pm->p12*in[1] + pm->p13*in[2];
-	out[1] = pm->p21*in[0] + pm->p22*in[1] + pm->p23*in[2];
-}
+//	out[0] = pm->p11*in[0] + pm->p12*in[1] + pm->p13*in[2];
+//	out[1] = pm->p21*in[0] + pm->p22*in[1] + pm->p23*in[2];
+//}
 
 
-void freenect_uv2xyz(int* in, float* out, freenect_projection_matrix* pm){
+//void freenect_uv2xyz(int* in, float* out, freenect_projection_matrix* pm)
+//{
+//}
 
-}
