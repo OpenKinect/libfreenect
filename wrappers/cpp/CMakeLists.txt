@@ -1,6 +1,8 @@
 INSTALL(FILES libfreenect.hpp
   DESTINATION include)
 
+IF(BUILD_EXAMPLES)
+
 set(CMAKE_C_FLAGS "-Wall")
 
 if (WIN32)
@@ -36,3 +38,5 @@ endif()
 
 install (TARGETS cppview
   DESTINATION bin)
+
+ENDIF()
