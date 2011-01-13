@@ -14,7 +14,7 @@
  * 
  * If you redistribute this file in source form, modified or unmodified, 
  * you may:
- * 1) Leave this header intact and distribute it under the same terms, 
+ * 1) Leave this header intact and distribute it under the same terms,
  * accompanying it with the APACHE20 and GPL20 files, or
  * 2) Delete the Apache 2.0 clause and accompany it with the GPL20 file, or
  * 3) Delete the GPL v2.0 clause and accompany it with the APACHE20 file
@@ -25,18 +25,20 @@
  * 
  */
  
-package org.libfreenect.events
+package org.as3kinect.events
 {
 	import flash.events.Event;
 	
-		public class libfreenectDataEvent extends Event
+		public class as3kinectSocketEvent extends Event
 		{
 			
-		public static const DATA_RECEIVED:String = "DATA_RECEIVED";
+		public static const ONCONNECT:String = "ONCONNECT";
+		public static const ONDATA:String = "ONDATA";
+		public static const ONERROR:String = "ONERROR";
 		
 		public var data:*;
 		
-		public function libfreenectDataEvent(type:String, data:*)
+		public function as3kinectSocketEvent(type:String, data:*)
 		{
 			this.data = data;
 			super(type);
