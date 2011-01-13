@@ -30,7 +30,7 @@
 #include <stdint.h>
 
 #include "libfreenect.h"
-#include "libfreenect_processing.h"
+#include "libfreenect_postprocessing.h"
 
 /** 
  * Post-processing part

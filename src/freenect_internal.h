@@ -31,6 +31,7 @@
 
 #include "libfreenect.h"
 #include "libfreenect_postprocessing.h"
+#include "freenect_internal_postprocessing.h"
 
 typedef void (*fnusb_iso_cb)(freenect_device *dev, uint8_t *buf, int len);
 
