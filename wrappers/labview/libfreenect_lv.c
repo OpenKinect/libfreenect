@@ -57,7 +57,6 @@ EXPORT char *freenect_lv_get_image_frame(int index, freenect_video_format fmt)
 	{
 	    return NULL;
 	}
-	
 	return rgb;
 }
 
