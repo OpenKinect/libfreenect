@@ -11,9 +11,7 @@ current_depth = 0
 
 def change_threshold(value):
     global threshold
-    global current_depth
     threshold = value
-    change_depth(current_depth)
 
 
 def change_depth(value):
