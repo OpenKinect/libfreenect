@@ -64,6 +64,7 @@ uint8_t *rgb_back, *rgb_mid, *rgb_front;
 
 GLuint gl_depth_tex;
 GLuint gl_rgb_tex;
+GLenum gl_texture_target = GL_TEXTURE_2D;
 
 freenect_context *f_ctx;
 freenect_device *f_dev;
@@ -76,6 +77,7 @@ freenect_video_format current_format = FREENECT_VIDEO_RGB;
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
 int got_rgb = 0;
 int got_depth = 0;
+int got_compat_mode = 0;
 
 void DrawGLScene()
 {
@@ -118,31 +120,31 @@ void DrawGLScene()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
 
-	glEnable(GL_TEXTURE_2D);
+	glEnable(gl_texture_target);
 
-	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
-	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, depth_front);
+	glBindTexture(gl_texture_target, gl_depth_tex);
+	glTexImage2D(gl_texture_target, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, depth_front);
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
 	glTexCoord2f(0, 0); glVertex3f(0,0,0);
-	glTexCoord2f(1, 0); glVertex3f(640,0,0);
-	glTexCoord2f(1, 1); glVertex3f(640,480,0);
-	glTexCoord2f(0, 1); glVertex3f(0,480,0);
+	glTexCoord2f(640, 0); glVertex3f(640,0,0);
+	glTexCoord2f(640, 480); glVertex3f(640,480,0);
+	glTexCoord2f(0, 480); glVertex3f(0,480,0);
 	glEnd();
 
-	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
+	glBindTexture(gl_texture_target, gl_rgb_tex);
 	if (current_format == FREENECT_VIDEO_RGB || current_format == FREENECT_VIDEO_YUV_RGB)
-		glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
+		glTexImage2D(gl_texture_target, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
 	else
-		glTexImage2D(GL_TEXTURE_2D, 0, 1, 640, 480, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front+640*4);
+		glTexImage2D(gl_texture_target, 0, 1, 640, 480, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front+640*4);
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
 	glTexCoord2f(0, 0); glVertex3f(640,0,0);
-	glTexCoord2f(1, 0); glVertex3f(1280,0,0);
-	glTexCoord2f(1, 1); glVertex3f(1280,480,0);
-	glTexCoord2f(0, 1); glVertex3f(640,480,0);
+	glTexCoord2f(640, 0); glVertex3f(1280,0,0);
+	glTexCoord2f(640, 480); glVertex3f(1280,480,0);
+	glTexCoord2f(0, 480); glVertex3f(640,480,0);
 	glEnd();
 
 	glutSwapBuffers();
@@ -184,6 +186,17 @@ void keyPressed(unsigned char key, int x, int y)
 			freenect_angle = -30;
 		}
 	}
+  if (key == 'c') {
+    if ( got_compat_mode == 0 ) {
+      got_compat_mode = 1;
+      gl_texture_target = GL_TEXTURE_RECTANGLE_EXT;    // A.Miller's workaround for the NPOT problem of older graphics cards
+      printf ( "\nToggle ON - compatible mode (GL_TEXTURE_RECTANGLE_EXT)\n" );
+    } else {
+      got_compat_mode = 0;
+      gl_texture_target = GL_TEXTURE_2D;
+      printf ( "\nToggle OFF - compatible mode (GL_TEXTURE_2D)\n" );
+    }
+  }
 	if (key == '1') {
 		freenect_set_led(f_dev,LED_GREEN);
 	}
@@ -228,13 +241,13 @@ void InitGL(int Width, int Height)
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glShadeModel(GL_SMOOTH);
 	glGenTextures(1, &gl_depth_tex);
-	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(gl_texture_target, gl_depth_tex);
+	glTexParameteri(gl_texture_target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(gl_texture_target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	glGenTextures(1, &gl_rgb_tex);
-	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glBindTexture(gl_texture_target, gl_rgb_tex);
+	glTexParameteri(gl_texture_target, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(gl_texture_target, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	ReSizeGLScene(Width, Height);
 }
 
@@ -346,7 +359,7 @@ void *freenect_threadfunc(void *arg)
 	freenect_start_depth(f_dev);
 	freenect_start_video(f_dev);
 
-	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format\n");
+	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format 'c'-toggle compat mode for old graphics cards on/off\n");
 
 	while (!die && freenect_process_events(f_ctx) >= 0) {
 		//Throttle the text output
