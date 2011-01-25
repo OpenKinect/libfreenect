@@ -1,4 +1,3 @@
-import cv
 import numpy as np
 
 
@@ -30,6 +29,7 @@ def pretty_depth_cv(depth):
     Returns:
         An opencv image who's datatype is unspecified
     """
+    import cv
     depth = pretty_depth(depth)
     image = cv.CreateImageHeader((depth.shape[1], depth.shape[0]),
                                  cv.IPL_DEPTH_8U,
@@ -50,6 +50,7 @@ def video_cv(video):
     Returns:
         An opencv image who's datatype is 1 byte, 3 channel BGR
     """
+    import cv
     video = video[:, :, ::-1]  # RGB -> BGR
     image = cv.CreateImageHeader((video.shape[1], video.shape[0]),
                                  cv.IPL_DEPTH_8U,

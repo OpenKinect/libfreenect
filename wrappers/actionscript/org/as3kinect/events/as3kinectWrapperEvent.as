@@ -14,7 +14,7 @@
  * 
  * If you redistribute this file in source form, modified or unmodified, 
  * you may:
- * 1) Leave this header intact and distribute it under the same terms, 
+ * 1) Leave this header intact and distribute it under the same terms,
  * accompanying it with the APACHE20 and GPL20 files, or
  * 2) Delete the Apache 2.0 clause and accompany it with the GPL20 file, or
  * 3) Delete the GPL v2.0 clause and accompany it with the APACHE20 file
@@ -25,18 +25,22 @@
  * 
  */
  
-package org.libfreenect.events
+package org.as3kinect.events
 {
 	import flash.events.Event;
+	import flash.sampler.StackFrame;
 	
-		public class libfreenectMotorEvent extends Event
+		public class as3kinectWrapperEvent extends Event
 		{
 			
-		public static const MOVED:String = "MOVED";
+		public static const ON_DEPTH:String = "ON_DEPTH";
+		public static const ON_DEBUG:String = "ON_DEBUG";
+		public static const ON_VIDEO:String = "ON_VIDEO";
+		public static const ON_ACCELEROMETER:String = "ON_ACCELEROMETER";
 		
 		public var data:*;
 		
-		public function libfreenectMotorEvent(type:String, data:*)
+		public function as3kinectWrapperEvent(type:String, data:*)
 		{
 			this.data = data;
 			super(type);

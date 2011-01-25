@@ -14,7 +14,7 @@
  * 
  * If you redistribute this file in source form, modified or unmodified, 
  * you may:
- * 1) Leave this header intact and distribute it under the same terms, 
+ * 1) Leave this header intact and distribute it under the same terms,
  * accompanying it with the APACHE20 and GPL20 files, or
  * 2) Delete the Apache 2.0 clause and accompany it with the GPL20 file, or
  * 3) Delete the GPL v2.0 clause and accompany it with the APACHE20 file
@@ -24,11 +24,11 @@
  * either License.
  * 
  */
- 
- package org.libfreenect {
+
+ package org.as3kinect {
 	 
-	import org.libfreenect.libfreenect;
-	import org.libfreenect.events.libfreenectSocketEvent;
+	import org.as3kinect.as3kinect;
+	import org.as3kinect.events.as3kinectSocketEvent;
 	import flash.events.Event;
 	import flash.events.EventDispatcher;
 	import flash.events.ProgressEvent;
@@ -39,35 +39,41 @@
 	import flash.utils.Endian;
 
 	/**
-	 * LibFreenectSocket class recieves Kinect data from the libfreenect driver.
+	 * as3kinectSocket class recieves Kinect data from the as3kinect driver.
 	 */
-	public class libfreenectSocket extends EventDispatcher
+	public class as3kinectSocket extends EventDispatcher
 	{
-		private static var _instance:libfreenectSocket;
+		private static var _instance:as3kinectSocket;
+		private static var _singleton_lock:Boolean = false;
+		
+		private var _first_byte:Number;
+		private var _second_byte:Number;
 		private var _packet_size:Number;
 		private var _socket:Socket;
 		private var _buffer:ByteArray;
+		private var _data_obj:Object;
 		private var _port:Number;
-		private var _policy_file:Boolean = false;
 
-		public function libfreenectSocket()
+		public function as3kinectSocket()
 		{		
+			if ( !_singleton_lock ) throw new Error( 'Use as3kinectSocket.instance' );
 			_socket = new Socket();
 			_buffer = new ByteArray();
+			_data_obj = new Object();
 
 			_socket.addEventListener(ProgressEvent.SOCKET_DATA, onSocketData);
 			_socket.addEventListener(IOErrorEvent.IO_ERROR, onSocketError);
 			_socket.addEventListener(Event.CONNECT, onSocketConnect);
 		}
 		
-		public function connect(host:String = 'localhost', port:uint = 6003):void
+		public function connect(host:String = 'localhost', port:uint = 6001):void
 		{
 			_port = port;
-			_packet_size = (_port == 6003) ? libfreenect.DATA_IN_SIZE : libfreenect.RAW_IMG_SIZE;
+			_packet_size = 0;
 			if (!this.connected) 
 				_socket.connect(host, port);
 			else
-				dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.ONCONNECT, null));
+				dispatchEvent(new as3kinectSocketEvent(as3kinectSocketEvent.ONCONNECT, null));
 		}
 		
 		public function get connected():Boolean
@@ -80,54 +86,59 @@
 			_socket.close();
 		}
 		
-		public function sendData(data:ByteArray):int{
-			if(data.length == libfreenect.DATA_OUT_SIZE){
-				trace("sendData");
-				_socket.writeBytes(data, 0, libfreenect.DATA_OUT_SIZE);
+		public function sendCommand(data:ByteArray):int{
+			if(data.length == as3kinect.COMMAND_SIZE){
+				_socket.writeBytes(data, 0, as3kinect.COMMAND_SIZE);
 				_socket.flush();
-				return libfreenect.SUCCESS;
+				return as3kinect.SUCCESS;
 			} else {
-				throw new Error( 'Incorrect data size (' + data.length + '). Expected: ' + libfreenect.DATA_OUT_SIZE);
-				return libfreenect.ERROR;
+				throw new Error( 'Incorrect data size (' + data.length + '). Expected: ' + as3kinect.COMMAND_SIZE);
+				return as3kinect.ERROR;
 			}
 		}
 		
 		private function onSocketData(event:ProgressEvent):void
 		{
-			if(!_policy_file){
-				var _byte_arr:ByteArray = new ByteArray();
-				_socket.readBytes(_byte_arr, 0, 235);
-				trace("policy_file : " + _byte_arr);
-				_policy_file = true;
-			}
 			if(_socket.bytesAvailable > 0) {
-				if(_socket.bytesAvailable >= _packet_size){
+				if(_packet_size == 0) {
+					_socket.endian = Endian.LITTLE_ENDIAN;
+					_first_byte = _socket.readByte();
+					_second_byte = _socket.readByte();
+					_packet_size = _socket.readInt();
+				}
+				if(_socket.bytesAvailable >= _packet_size && _packet_size != 0){
 					_socket.readBytes(_buffer, 0, _packet_size);
 					_buffer.endian = Endian.LITTLE_ENDIAN;
 					_buffer.position = 0;
-					dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.ONDATA, _buffer));
+					_data_obj.first = _first_byte;
+					_data_obj.second = _second_byte;
+					_data_obj.buffer = _buffer;
+					_packet_size = 0;
+					dispatchEvent(new as3kinectSocketEvent(as3kinectSocketEvent.ONDATA, _data_obj));
 				}
 			}
 		}
 		
 		private function onSocketError(event:IOErrorEvent):void{
-			dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.ONERROR, null));
+			dispatchEvent(new as3kinectSocketEvent(as3kinectSocketEvent.ONERROR, null));
 		}
 		
 		private function onSocketConnect(event:Event):void{
-			dispatchEvent(new libfreenectSocketEvent(libfreenectSocketEvent.ONCONNECT, null));
+			dispatchEvent(new as3kinectSocketEvent(as3kinectSocketEvent.ONCONNECT, null));
 		}
 
-		public function set instance(instance:libfreenectSocket):void 
+		public function set instance(instance:as3kinectSocket):void 
 		{
-			throw new Error('libfreenectSocket.instance is read-only');
+			throw new Error('as3kinectSocket.instance is read-only');
 		}
 		
-		public static function get instance():libfreenectSocket 
+		public static function get instance():as3kinectSocket 
 		{
 			if ( _instance == null )
 			{
-				_instance = new libfreenectSocket();
+				_singleton_lock = true;
+				_instance = new as3kinectSocket();
+				_singleton_lock = false;
 			}
 			return _instance;
 		}

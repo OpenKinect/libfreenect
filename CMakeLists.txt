@@ -55,6 +55,9 @@ OPTION(BUILD_CPP "Build C++ Library (currently header only)" ON)
 OPTION(BUILD_CV "Build OpenCV wrapper" OFF)
 OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
 OPTION(BUILD_PYTHON "Build Python extension" OFF)
+IF(WIN32)
+	OPTION(BUILD_LABVIEW "Build LabView extension" OFF)
+ENDIF()
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
@@ -135,6 +138,10 @@ ENDIF()
 
 IF(BUILD_PYTHON)
   add_subdirectory (wrappers/python)
+ENDIF()
+
+IF(BUILD_LABVIEW)
+  add_subdirectory (wrappers/labview)
 ENDIF()
 
 ######################################################################################
