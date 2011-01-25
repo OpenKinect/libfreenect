@@ -168,9 +168,9 @@ libusbemu exists.
 3) libusbemu: Tips, Hints and Best Practices
    *****************************************
 
-----------------------------------------------------------------------------
-TIP: Configure your project to build your application with a console window!
-----------------------------------------------------------------------------
+---------------------------------------------------------------
+TIP: Trigger the Fail Guard if the system becomes unresponsive.
+---------------------------------------------------------------
 
 Since libusbemu is quite experimental, there is a fail guard within it. If for some
 reason your system renders unresponsive, try focusing any window of the application
@@ -181,6 +181,9 @@ interrupt the execution of any internal thread of libusbemu and prompt a message
 to the user asking for action. You can either resume execution (if you unintentionally
 pressed [CTRL] + [ALT] in the console window) or abort libusbemu. The fail guard will
 never trigger if there is no incoming video or depth streams.
+
+The Fail Guard is important since in such situations one would most likely be forced
+to shutdown the computer (in a not so graceful way, by holding the power button!).
 
 ----------------------------------------
 TIP: Only use a single freenect context.
