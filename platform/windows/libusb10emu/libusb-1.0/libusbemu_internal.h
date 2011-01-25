@@ -78,6 +78,7 @@ struct QuickList
 		end.prev = &ini;
 		end.next = NULL;
 	}
+  ~QuickList() {};
 	const bool Empty() const
 	{
 		return(ini.next == &end);  // could also be (end.prev == &ini)
@@ -93,6 +94,7 @@ struct QuickList
 		node->prev = end.prev;
 		node->next = &end;
 		end.prev = node;
+    node->list = this;
 	}
 	T* Head() const
 	{
@@ -110,11 +112,7 @@ struct QuickList
 	}
 	const bool Member(T* node) const
 	{
-		bool member (false);
-		for (T* it=ini.next; it!=&end, member!=true; it=Next(it))
-			if (it == node)
-				member = true;
-		return(member);
+    return(this == node->list);
 	}
 	static T* Prev(T* node)
 	{
@@ -130,19 +128,107 @@ struct QuickList
 			next = node->next;
 		return(next);
 	}
-	static void Remove(T* node)
-	{
-		if (Orphan(node))
-			return;
+  const bool Remove (T* node)
+  {
+    if (!Member(node))
+      return(false);
 		node->prev->next = node->next;
 		node->next->prev = node->prev;
 		node->prev = NULL;
 		node->next = NULL;
+    node->list = NULL;
+    return(true);
+  }
+	static void RemoveNode(T* node)
+	{
+		if (Orphan(node))
+			return;
+    node->list->Remove(node);
 	}
 	static const bool Orphan(T* node)
 	{
-		return((NULL == node->prev) && (NULL == node->next)); // (node->prev == node->next)
+    return(NULL == node->list);
 	}
+};
+
+template<typename T>
+struct QuickListMutexed : QuickList<T>
+{
+protected:
+  // 'mutable' required to allow operations within 'const methods'
+  mutable QuickMutex mutex;
+  mutable QuickEvent chomp;   // signals whether there is (or not) transfers in the list 
+
+public:
+  QuickListMutexed() {};
+  QuickListMutexed(const QuickListMutexed& rhs) : QuickList<T>(rhs) {};
+  ~QuickListMutexed() { /*this->~QuickListMutexed()*/ mutex.Enter(); mutex.Leave(); };
+	const bool Empty() const
+	{
+		mutex.Enter();
+      const bool empty = QuickList<T>::Empty();
+    mutex.Leave();
+    return(empty);
+	}
+	void Append(T* node)
+	{
+    mutex.Enter();
+      const bool empty = QuickList<T>::Empty();
+      QuickList<T>::Append(node);
+      if (empty)
+        chomp.Signal();
+    mutex.Leave();
+	}
+	T* Head() const
+	{
+    mutex.Enter();
+      T* head = QuickList<T>::Head();
+    mutex.Leave();
+    return(head);
+	}
+	T* Last() const
+	{
+    mutex.Enter();
+      T* last = QuickList<T>::Last();
+    mutex.Leave();
+    return(last);
+	}
+	const bool Member(T* node) const
+	{
+    mutex.Enter();
+      const bool member = QuickList<T>::Member(node);
+    mutex.Leave();
+    return(member);
+	}
+	const bool Remove(T* node)
+	{
+    mutex.Enter();
+      const bool removed = QuickList<T>::Remove(node);
+      if (QuickList<T>::Empty())
+        chomp.Reset();
+    mutex.Leave();
+    return(removed);
+	}
+	static const bool Orphan(T* node)
+	{
+    //node->list->mutex.Enter();
+      const bool orphan = QuickList<T>::Orphan(node);
+    //node->list->mutex.Leave();
+    return(orphan);
+	}
+
+  const bool WaitUntilTimeout(unsigned int milliseconds) const
+  {
+    return(chomp.WaitUntilTimeout(milliseconds));
+  }
+  void Wait() const
+  {
+    chomp.Wait();
+  }
+  const bool Check() const
+  {
+    return(chomp.Check());
+  }
 };
 
 } // end of 'namespace libusbemu'
@@ -155,6 +241,7 @@ struct transfer_wrapper
 {
 	transfer_wrapper* prev;
 	transfer_wrapper* next;
+  QuickList<transfer_wrapper>* list;
 	void* usb;
 	libusb_transfer libusb;
 };
@@ -192,7 +279,7 @@ namespace libusbemu {
 transfer_wrapper* libusbemu_get_transfer_wrapper(libusb_transfer* transfer)
 {
   char* raw_address ((char*)transfer);
-  char* off_address (raw_address - sizeof(void*) - 2*sizeof(transfer_wrapper*));
+  char* off_address (raw_address - sizeof(void*) - 2*sizeof(transfer_wrapper*) - sizeof(QuickList<transfer_wrapper>*));
   return((transfer_wrapper*)off_address);
 }
 
@@ -230,7 +317,7 @@ void libusbemu_unregister_device(libusb_device* dev)
         {
           transfer_wrapper* transfer (listTransfers.Head());
           // make it orphan so that it can be deleted:
-          libusb_device::TListTransfers::Remove(transfer);
+          listTransfers.Remove(transfer);
           // the following will free the wrapper object as well:
           libusb_free_transfer(&transfer->libusb);
         }
