@@ -269,7 +269,6 @@ struct libusb_context_t
   typedef std::map<struct usb_device*, libusb_device> TMapDevices;
   TMapDevices devices;
   QuickMutex mutex;
-  QuickEvent processing;
 };
 
 
@@ -285,6 +284,7 @@ transfer_wrapper* libusbemu_get_transfer_wrapper(libusb_transfer* transfer)
 
 libusb_device* libusbemu_register_device(libusb_context* ctx, struct usb_device* dev)
 {
+  RAIIMutex lock (ctx->mutex);
   // register the device (if not already there) ...
   libusb_device dummy = { ctx, dev, 0, NULL, NULL };
   libusb_context::TMapDevices::iterator it = ctx->devices.insert(std::make_pair(dev,dummy)).first;
@@ -299,6 +299,8 @@ libusb_device* libusbemu_register_device(libusb_context* ctx, struct usb_device*
 
 void libusbemu_unregister_device(libusb_device* dev)
 {
+  libusb_context* ctx (dev->ctx);
+  RAIIMutex lock (ctx->mutex);
   // decrement the reference count of the device ...
   --(dev->refcount);
   // ... and unregister device if the reference count reaches zero
@@ -325,7 +327,6 @@ void libusbemu_unregister_device(libusb_device* dev)
       }
       SAFE_DELETE(dev->isoTransfers);
     }
-    libusb_context* ctx (dev->ctx);
     ctx->devices.erase(dev->device);
   }
 }
@@ -333,8 +334,10 @@ void libusbemu_unregister_device(libusb_device* dev)
 int libusbemu_setup_transfer(transfer_wrapper* wrapper)
 {
   void*& context = wrapper->usb;
-  if (NULL != context)  // Paranoid check...
+  if (NULL != context)
     return(LIBUSB_ERROR_OTHER);
+
+  RAIIMutex lock (wrapper->libusb.dev_handle->dev->ctx->mutex);
 
   int ret (LIBUSB_ERROR_OTHER);
   libusb_transfer* transfer = &wrapper->libusb;
