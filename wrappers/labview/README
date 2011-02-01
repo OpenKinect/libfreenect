@@ -2,8 +2,9 @@ General information:
 These drivers are still very very experimental and while they work, they are not 100% stable. There will probably be problems we haven't discovered yet. Please keep this in mind!
 
 Needed first before this works: 
-1) Windows machine with a (preferably) new version of LabVIEW (8.6+). Older versions untested.
-2) inf files (driver files) Please see: http://openkinect.org/wiki/Getting_Started_Windows and follow the Driver Installation instructions. You don't need the dependencies or the other instructions unless you actually want to mess with and compile the code that makes up the dlls. 
+1) Microsoft Visual C++ 2010 Redistributable Package http://www.microsoft.com/downloads/en/details.aspx?FamilyID=a7b7a05e-6de6-4d3a-a423-37bf0912db84&displaylang=en
+2) Windows machine with a (preferably) new version of LabVIEW (8.6+). Older versions untested.
+3) inf files (driver files) Please see: http://openkinect.org/wiki/Getting_Started_Windows and follow the Driver Installation instructions. You don't need the dependencies or the other instructions unless you actually want to mess with and compile the code that makes up the dlls. 
 
 Known issues:
 1) Only 11Bit Depth Format and RGB Format work currently. Support for the others is being added soon.
@@ -12,7 +13,7 @@ Known issues:
 Information:
 - The depth frame image in example.vi uses an arbitrary gray-scale false-color rendering. The raw resultant array can be accessed from the vi "get depth frame.vi" included in libfreenect.lvlib. Please see: http://openkinect.org/wiki/Protocol_Documentation for more information
 - The RGB frame image in example.vi can be directly accessed from the raw resultant array in "get image frame.vi" included in libfreenect.lvlib. Please see: http://openkinect.org/wiki/Imaging_Information for more information
-- The dlls in this project are 32bit compiled with MSVC 2010
+- The dlls in this project are 32bit compiled with MSVC 2010 in release format
 - Only has been tested with 1 Kinect
 - Timing is very important to frame rate speed. Please be considerate to cycles when developing algorithms on top of these drivers
 
