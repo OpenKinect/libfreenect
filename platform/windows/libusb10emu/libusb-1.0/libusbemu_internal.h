@@ -258,7 +258,12 @@ struct libusb_device_t
   struct usb_device* device;
   int refcount;
   typedef QuickList<transfer_wrapper> TListTransfers;
-  typedef std::map<int, TListTransfers> TMapIsocTransfers;
+  struct isoc_handle
+  {
+    TListTransfers listTransfers;
+    QuickThread* poReapThread;
+  };
+  typedef std::map<int, isoc_handle> TMapIsocTransfers;
   TMapIsocTransfers* isoTransfers;
   typedef std::map<usb_dev_handle*, libusb_device_handle> TMapHandles;
   TMapHandles* handles;
@@ -269,11 +274,31 @@ struct libusb_context_t
   typedef std::map<struct usb_device*, libusb_device> TMapDevices;
   TMapDevices devices;
   QuickMutex mutex;
+
+  QuickMutex mutDeliveryPool;
+  EventList hWantToDeliverPool;
+  EventList hAllowDeliveryPool;
+  EventList hDoneDeliveringPool;
 };
 
 
 
+#define LIBUSBEMU_ERROR(msg) libusbemu_report_error(__FILE__, __LINE__, msg)
+#define LIBUSBEMU_ERROR_LIBUSBWIN32() LIBUSBEMU_ERROR(usb_strerror())
+
 namespace libusbemu {
+
+void libusbemu_report_error(const char* file, const int line, const char* msg)
+{
+  // remove source file path:
+  int i = strlen(file);
+  while (-1 != --i)
+    if ((file[i] == '/') || (file[i] == '\\'))
+      break;
+  file = &file[++i];
+
+  fprintf(stderr, "ERROR in libusbemu -- source file '%s' at line %d -- %s\n", file, line, msg);
+}
 
 transfer_wrapper* libusbemu_get_transfer_wrapper(libusb_transfer* transfer)
 {
@@ -314,7 +339,7 @@ void libusbemu_unregister_device(libusb_device* dev)
       while (!allTransfers.empty())
       {
         libusb_device::TMapIsocTransfers::iterator it (allTransfers.begin());
-        libusb_device::TListTransfers& listTransfers (it->second);
+        libusb_device::TListTransfers& listTransfers (it->second.listTransfers);
         while (!listTransfers.Empty())
         {
           transfer_wrapper* transfer (listTransfers.Head());
@@ -334,17 +359,19 @@ void libusbemu_unregister_device(libusb_device* dev)
 int libusbemu_setup_transfer(transfer_wrapper* wrapper)
 {
   void*& context = wrapper->usb;
+  // paranoid check...
   if (NULL != context)
     return(LIBUSB_ERROR_OTHER);
 
   RAIIMutex lock (wrapper->libusb.dev_handle->dev->ctx->mutex);
 
   int ret (LIBUSB_ERROR_OTHER);
-  libusb_transfer* transfer = &wrapper->libusb;
+  libusb_transfer* transfer (&wrapper->libusb);
+  usb_dev_handle* handle (transfer->dev_handle->handle);
   switch(transfer->type)
   {
     case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS :
-      ret = usb_isochronous_setup_async(transfer->dev_handle->handle, &context, transfer->endpoint, transfer->iso_packet_desc[0].length);
+      ret = usb_isochronous_setup_async(handle, &context, transfer->endpoint, transfer->iso_packet_desc[0].length);
       break;
     case LIBUSB_TRANSFER_TYPE_CONTROL :
       // libusb-0.1 does not actually support asynchronous control transfers, but this should be
@@ -366,6 +393,7 @@ int libusbemu_setup_transfer(transfer_wrapper* wrapper)
   {
     // TODO: better error handling...
     // what do the functions usb_***_setup_async() actually return on error?
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
     return(ret);
   }
 
