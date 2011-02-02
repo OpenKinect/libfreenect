@@ -192,6 +192,23 @@ TIP: Only use a single freenect context.
 Multiple freenect contexts should be no problem in the future. Having more than one
 device attached to the same context should work fine, but no tests were made so far.
 
+-----------------------------------------------------
+TIP: Yield the rendering thread after each iteration.
+-----------------------------------------------------
+
+In case your application performs direct rendering (OpenGL, Direct3D), it is highly
+recommended to yield the rendering thread after finishing rendering each frame. This
+can alleviate a lot of CPU usage. The ideal place for this yield is right after the
+swap-buffers call (SwapBuffers(), glutSwapBuffers(), Present(), etc). The best way to
+yield is by calling Sleep(1). Note that Sleep(0) is also possible, but the former is
+more "democratic".
+
+Note that some graphics drivers or platforms may already yield after swap-buffers.
+This seems to be the case with OpenGL NVIDIA drivers for Linux. In Windows, however,
+the same driver (version) does not yield. Maybe in Linux the "yielder" is not the
+driver itself, but the underlying implementation of glXSwapBuffers()... Anyway, when
+in doubt, it will not hurt to explicitly yield again.
+
 --------------------------------------------------------------------------------------
 TIP: Perform stream operations only in the thread that calls freenect_process_events()
 --------------------------------------------------------------------------------------
@@ -238,71 +255,74 @@ Hardware:
 * RAM: 4GB RAM
 * GPU: GeForce 8600M GT 256MB VRAM
 
+
+
 Task: display of simultaneous RGB (Bayer-to-RGB) and depth streams (16bit unpadded) on
 the screen through OpenGL textures. Application source code is identical for all tests
 (except for the Zephod's version that required some interface adaptation).
 
-The performance results below refer to the average frame time (one loop iteration).
 
-Linux: Ubuntu Notebook 10.10
-* compiler: gcc 4.4.5
-* time measured via POSIX gettime()
-  * Debug:   1.22ms (libfreenect also built in debug mode)
-  * Release: 1.15ms
 
-Win32: Windows 7 Enterprise 32bit
+Results: performance measurements refer to the average frame time (one loop iteration).
+
+Linux: Ubuntu Notebook 10.10 -- gcc 4.4.5
+* Debug:   1.22ms | CPU @ 77% | video @ 30Hz | depth @ 30Hz
+* Release: 1.15ms | CPU @ 72% | video @ 30Hz | depth @ 30Hz
+
+Win32: Windows 7 Enterprise 32bit -- VC++ (Professional) 2010
 1) libfreenect with libusbemu:
-   * compiler: VC++ 2010
-   * time measured via QueryPerformanceFrequency() / QueryPerformanceCounter()
-     * Debug:   4.01ms (libfreenect also built in debug mode)
-     * Release: 2.75ms (run without debug)
-2) Zephod's dedicated driver V16:
-   * compiler: VC++ 2010
-   * time measured via QueryPerformanceFrequency() / QueryPerformanceCounter()
-     * Debug:   2.91ms (Zephod's driver also built in debug mode)
-     * Release: 2.57ms (run without debug)
+   * Debug:   2.44ms | CPU @ 75% | video @ 30Hz | depth @ 30Hz
+   * Release: 1.93ms | CPU @ 63% | video @ 30Hz | depth @ 30Hz
+2) Zephod's dedicated driver (V16):
+   * Debug:   2.87ms | CPU @ 82% | video @ 30Hz | depth @ 30Hz
+   * Release: 2.55ms | CPU @ 77% | video @ 30Hz | depth @ 30Hz
 
-A Win32 MinGW-based (gcc/g++ 3.4.5) build of libfreenect with libusbemu using POSIX
+
+
+Remarks:
+
+Debug builds account for the library itself being built in Debug mode (libfreenect or
+Zaphod's driver, whichever applies). Release builds also imply that the program was
+started without any debug information embedded.
+
+In Windows, time was measured through the Win32 exclusive QueryPerformanceFrequency()
+and QueryPerformanceCounter() routines. In Linux, the measurement was performed via
+POSIX gettime() function.
+
+A Win32 MinGW-based (gcc/g++ 4.5.0) build of libfreenect with libusbemu using POSIX
 gettime() also yielded to nearly identical performance results than VC++ 2010 with
-Performance Counters. All of the Win32 performance results were also double-checked
-with Fraps.
+Performance Counters.
 
-In all platforms and build configurations, video and depth were streamed at 30Hz,
-which seems to be the maximum throughput available from Kinect.
+All of the Win32 performance results were also double-checked with Fraps.
+
+In Windows, a single thread yield call was placed after rendering each screen frame
+(as recommended in Item 3-3). In Linux, the graphics driver - possibly glXSwapBuffers
+itself - seems to be already yielding the rendering thread, and forcing it in the code
+did not incur into any extra impact on performance.
+
+
 
 Discussion:
 
 Even though there are no streaming frequency discrepancies between platforms, one may
 infer, just from the frame times, that Windows clearly has an overhead disadvantage.
 However, this does not hold true: there is still plenty of time for the application
-logic to run. For a steady 60FPS (16.66ms per frame) real-time performance, a Release
-build in Windows would still have about 14ms per frame available for the application,
-while in Linux the available time would be around 15.5ms, a 1.5ms overhead difference
+logic to run.
+
+For a steady 60FPS (~16.66ms per frame) real-time performance, a Release build using
+libusbemu in Windows would still have about 14.70ms per frame available for the client
+code, while in Linux the available time would be around 15.50ms, a 0.8ms overhead
 between the platforms. Such a small difference should not impose any special design
 considerations for the client code.
 
-The overhead between libusbemu and Zephod's code is due the fact that libusbemu has
-to inspect the usb packages before forwarding them to libfreenect which will then be
-checked again within libfreenect. Another performance consideration is the fact that
-Zephod's Bayer-to-RGB and bit-unpacking seem to be faster than the stream conversion
-procedures provided by libfreenect.
-
-Another performance impact between libusbemu and Zephod's code, is due the fact that
-libusbemu makes heavy use of STL containers which in Debug mode tend to introduce a
-significative overhead; such overhead disappears in Release mode since STL containers
-are prone to be "inlined" and further optimized, besides the fact that many security
-checks of the STL are disabled in Release builds. Moreover, libusbemu also uses lots
-of synchronization directives, such as mutexes and conditional variables (events),
-that impose extra overhead. Anyway, the overall overhead between the libusbemu and the
-Zephod's dedicated Win32 driver is negligible (1.1ms for Debug builds and 0.2ms for
-Release builds).
-
-TODO:
-* CPU consumption: CPU should be at 100% in either Linux or Windows
-  But in Windows, there are two critical-time threads inside the libusbemu which will
-  compete for CPU resources with the main program (and the freenect_process_events()
-  thread) which may also explain the overhead.
-* Memory consumption: no known leaks in the libusbemu; double checked with VC++ memory
-  leak detection tools.
+Furthermore, note that the CPU usage in Windows tend to be lower than in Linux. The
+reason behind this difference is quite difficult to summarize here, but it is probably
+related to the way Windows and Linux perform asynchronous I/O in USB-mapped files.
+The interested reader is encouraged to refer to the following links:
+  > http://www.unwesen.de/articles/waitformultipleobjects_considered_expensive
+  > http://softwarecommunity.intel.com/articles/eng/2807.htm
+  > http://software.intel.com/en-us/blogs/2006/10/19/why-windows-threads-are-better-than-posix-threads/
+The memory consumption overhead of libusbemu in Windows is negligible, and as far as
+the VC++ memory leak detection goes, libusbemu has no memory leaks.
 
 ======================================================================================
