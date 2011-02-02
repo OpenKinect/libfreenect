@@ -34,7 +34,45 @@
 
 namespace libusbemu {
 
-struct QuickEvent;
+struct QuickEvent
+{
+friend struct EventList;
+
+private:
+  HANDLE hEvent;
+
+public:
+  inline QuickEvent(const bool signaled=false) : hEvent(NULL)
+  {
+    hEvent = CreateEvent(NULL, TRUE, (BOOL)signaled, NULL);
+  }
+  inline ~QuickEvent()
+  {
+    CloseHandle(hEvent);
+  }
+  inline void Signal()
+  {
+    SetEvent(hEvent);
+  }
+  inline void Reset()
+  {
+    ResetEvent(hEvent);
+  }
+  inline bool Check()
+  {
+    return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, 0));
+  }
+  inline const bool WaitUntilTimeout(const unsigned int milliseconds)
+  {
+    return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, (DWORD)milliseconds));
+  }
+  inline void Wait()
+  {
+    WaitUntilTimeout(INFINITE);
+  }
+};
+
+
 
 struct QuickThread
 {
@@ -199,46 +237,6 @@ public:
   inline void Leave()
   {
     LeaveCriticalSection(&cs);
-  }
-};
-
-
-
-struct QuickEvent
-{
-friend struct EventList;
-
-private:
-  HANDLE hEvent;
-
-public:
-  inline QuickEvent(const bool signaled=false) : hEvent(NULL)
-  {
-    hEvent = CreateEvent(NULL, TRUE, (BOOL)signaled, NULL);
-  }
-  inline ~QuickEvent()
-  {
-    CloseHandle(hEvent);
-  }
-  inline void Signal()
-  {
-    SetEvent(hEvent);
-  }
-  inline void Reset()
-  {
-    ResetEvent(hEvent);
-  }
-  inline bool Check()
-  {
-    return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, 0));
-  }
-  inline const bool WaitUntilTimeout(const unsigned int milliseconds)
-  {
-    return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, (DWORD)milliseconds));
-  }
-  inline void Wait()
-  {
-    WaitUntilTimeout(INFINITE);
   }
 };
 
