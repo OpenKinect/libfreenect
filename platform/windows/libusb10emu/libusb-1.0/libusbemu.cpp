@@ -66,14 +66,13 @@
 
 #include "libusb.h"
 #include "libusbemu_internal.h"
+#include "failguard.h"
 #include <cassert>
 #include <algorithm>
 #include <conio.h>
 #include "freenect_internal.h"
 
 using namespace libusbemu;
-
-static bool producer_consumer (true);
 
 int libusb_init(libusb_context** context)
 {
@@ -93,6 +92,7 @@ int libusb_init(libusb_context** context)
 
 void libusb_exit(libusb_context* ctx)
 {
+  ctx->mutex.Enter();
   // before deleting the context, delete all devices/transfers still in there:
   while (!ctx->devices.empty())
   {
@@ -114,6 +114,7 @@ void libusb_exit(libusb_context* ctx)
       }
     }
   }
+  ctx->mutex.Leave();
 	delete(ctx);
 }
 
@@ -140,6 +141,7 @@ ssize_t libusb_get_device_list(libusb_context* ctx, libusb_device*** list)
 	};
   // populate the device list that will be returned to the client:
   // the list must be NULL-terminated to follow the semantics of libusb-1.0!
+  RAIIMutex lock (ctx->mutex);
   libusb_device**& devlist = *list;
   devlist = new libusb_device* [ctx->devices.size()+1];   // +1 is for a finalization mark
   libusb_context::TMapDevices::iterator it  (ctx->devices.begin());
@@ -181,9 +183,14 @@ int libusb_get_device_descriptor(libusb_device* dev, struct libusb_device_descri
 
 int libusb_open(libusb_device* dev, libusb_device_handle** handle)
 {
+  RAIIMutex lock (dev->ctx->mutex);
+
   usb_dev_handle* usb_handle (usb_open(dev->device));
   if (NULL == usb_handle)
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
     return(LIBUSB_ERROR_OTHER);
+  }
 
   if (NULL == dev->handles)
     dev->handles = new libusb_device::TMapHandles;
@@ -208,10 +215,11 @@ int libusb_open(libusb_device* dev, libusb_device_handle** handle)
 
 void libusb_close(libusb_device_handle*	dev_handle)
 {
+  RAIIMutex lock (dev_handle->dev->ctx->mutex);
   libusb_device* device (dev_handle->dev);
   if (device->handles->find(dev_handle->handle) == device->handles->end())
   {
-    fprintf(stderr, "libusb_close() attempted to close an unregistered handle...\n");
+    LIBUSBEMU_ERROR("libusb_close() attempted to close an unregistered handle!\n");
     return;
   }
   usb_close(dev_handle->handle);
@@ -221,6 +229,7 @@ void libusb_close(libusb_device_handle*	dev_handle)
 
 int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
 {
+  RAIIMutex lock (dev->dev->ctx->mutex);
   // according to the official libusb-win32 usb_set_configuration() documentation:
   // http://sourceforge.net/apps/trac/libusb-win32/wiki/libusbwin32_documentation
   // "Must be called!: usb_set_configuration() must be called with a valid
@@ -228,9 +237,15 @@ int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
   //  not be be necessary in the future. This behavior is different from
   //  Linux libusb-0.1."
   if (0 != usb_set_configuration(dev->handle, 1))
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
     return(LIBUSB_ERROR_OTHER);
+  }
 	if (0 != usb_claim_interface(dev->handle, interface_number))
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
     return(LIBUSB_ERROR_OTHER);
+  }
   /*
   if (0 != usb_set_altinterface(dev->handle, 0))
     return(LIBUSB_ERROR_OTHER);
@@ -245,8 +260,12 @@ int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
 
 int libusb_release_interface(libusb_device_handle* dev, int interface_number)
 {
+  RAIIMutex lock (dev->dev->ctx->mutex);
 	if (0 != usb_release_interface(dev->handle, interface_number))
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
     return(LIBUSB_ERROR_OTHER);
+  }
 	// LIBUSB_ERROR_NOT_FOUND if the interface was not claimed
 	// LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
 	// another LIBUSB_ERROR code on other failure
@@ -259,6 +278,11 @@ int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestT
 	// in libusb-1.0 a timeout of zero it means 'wait indefinitely'; in libusb-0.1, a timeout of zero means 'return immediatelly'!
 	timeout = (0 == timeout) ? 60000 : timeout;   // wait 60000ms (60s = 1min) if the transfer is supposed to wait indefinitely...
 	int bytes_transferred = usb_control_msg(dev_handle->handle, bmRequestType, bRequest, wValue, wIndex, (char*)data, wLength, timeout);
+  if (bytes_transferred < 0)
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+    return(LIBUSB_ERROR_OTHER);
+  }
 	// on success, the number of bytes actually transferred
 	// LIBUSB_ERROR_TIMEOUT if the transfer timed out
 	// LIBUSB_ERROR_PIPE if the control request was not supported by the device
@@ -296,7 +320,7 @@ void libusb_free_transfer(struct libusb_transfer* transfer)
   transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
   if (!libusb_device::TListTransfers::Orphan(wrapper))
   {
-    fprintf(stderr, "ERROR: libusb_free_transfer() attempted to free an active transfer!\n");
+    LIBUSBEMU_ERROR("libusb_free_transfer() attempted to free an active transfer!");
     return;
   }
 
@@ -350,6 +374,8 @@ void libusb_set_iso_packet_lengths(struct libusb_transfer* transfer, unsigned in
 		transfer->iso_packet_desc[i].length = length;
 }
 
+int ReapThreadProc(void* params);
+
 int libusb_submit_transfer(struct libusb_transfer* transfer)
 {
   transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
@@ -363,10 +389,8 @@ int libusb_submit_transfer(struct libusb_transfer* transfer)
   if (NULL == wrapper->usb)
     libusbemu_setup_transfer(wrapper);
 
-  libusb_device::TMapIsocTransfers& isoTransfers (*transfer->dev_handle->dev->isoTransfers);
   libusbemu_clear_transfer(wrapper);
-  isoTransfers[transfer->endpoint].Append(wrapper);
-  transfer->status = LIBUSB_TRANSFER_COMPLETED;
+
   int ret = usb_submit_async(wrapper->usb, (char*)transfer->buffer, transfer->length);
   if (ret < 0)
   {
@@ -375,14 +399,36 @@ int libusb_submit_transfer(struct libusb_transfer* transfer)
     // LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
     // LIBUSB_ERROR_BUSY if the transfer has already been submitted.
     // another LIBUSB_ERROR code on other failure
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
     return(ret);
   }
+
+  libusb_device::TMapIsocTransfers& isoTransfers (*transfer->dev_handle->dev->isoTransfers);
+  libusb_device::TMapIsocTransfers::iterator it = isoTransfers.find(transfer->endpoint);
+  if (isoTransfers.end() == it)
+  {
+    libusb_device::isoc_handle dummy = { libusb_device::TListTransfers(), NULL };
+    it = isoTransfers.insert(std::make_pair(transfer->endpoint, dummy)).first;
+  }
+  libusb_device::isoc_handle& iso (it->second);
+  iso.listTransfers.Append(wrapper);
+
+  if (NULL == iso.poReapThread)
+  {
+    void** state = new void* [3];
+    state[0] = transfer->dev_handle->dev->ctx;
+    state[1] = &iso.poReapThread;
+    state[2] = &iso.listTransfers;
+    iso.poReapThread = new QuickThread(ReapThreadProc, (void*)state, true);
+  }
+
   // 0 on success
   return(0);
 }
 
 int libusb_cancel_transfer(struct libusb_transfer* transfer)
 {
+  RAIIMutex lock (transfer->dev_handle->dev->ctx->mutex);
   transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
   // according to the official libusb_cancel_transfer() documentation:
   // "This function returns immediately, but this does not indicate
@@ -400,178 +446,74 @@ int libusb_cancel_transfer(struct libusb_transfer* transfer)
 
 // FROM HERE ON CODE BECOMES REALLY REALLY REALLY MESSY: HANDLE EVENTS STUFF
 
-int ReapSequential(const libusb_device&);         // EXPERIMENTAL
-int ReapJohnnieWalker(const libusb_device& dev);  // EXPERIMENTAL
-int ReapThreaded(const libusb_device&);           // WORKS FINE
+int libusbemu_handle_isochronous(libusb_context* ctx, const unsigned int milliseconds)
+{
+  //QuickThread::Myself().RaisePriority();
+  int index = ctx->hWantToDeliverPool.WaitAnyUntilTimeout(milliseconds);
+  if (-1 != index)
+  {
+    EventList hDoneDeliveringPoolLocal;
+    while (-1 != (index = ctx->hWantToDeliverPool.CheckAny()))
+    {
+      ctx->hWantToDeliverPool[index]->Reset();
+      ctx->hAllowDeliveryPool[index]->Signal();
+      hDoneDeliveringPoolLocal.AttachEvent(ctx->hDoneDeliveringPool[index]);
+    }
+    hDoneDeliveringPoolLocal.WaitAll();
+  }
+  //QuickThread::Myself().LowerPriority();
+  return(0);
+}
+
+int libusb_handle_events(libusb_context* ctx)
+{
+  if (failguard::Abort())
+    return(LIBUSB_ERROR_INTERRUPTED);
+
+  RAIIMutex lock (ctx->mutex);
+
+  libusbemu_handle_isochronous(ctx, 60000);
+
+  // 0 on success, or a LIBUSB_ERROR code on failure
+  return(0);
+}
 
 void PreprocessTransferNaive(libusb_transfer* transfer, const int read);
 void PreprocessTransferFreenect(libusb_transfer* transfer, const int read);
 static void(*PreprocessTransfer)(libusb_transfer*, const int) (PreprocessTransferFreenect);
 
-static volatile bool boProblem (false);
-static QuickEvent hReaction;
-static volatile int nDecision (0);  // 0: resume | -1: abort
-static QuickThread* poFailGuardThread (NULL);
-
-static QuickEvent hWantToDeliver;
-static QuickEvent hAllowDelivery;
-static QuickEvent hDoneDelivering;
-
-static QuickMutex mutDeliveryPool;
-static EventList hWantToDeliverPool;
-static EventList hAllowDeliveryPool;
-static EventList hDoneDeliveringPool;
-
-int libusb_handle_events(libusb_context* ctx)
+void libusbemu_deliver_transfer(transfer_wrapper* wrapper)
 {
-  RAIIMutex lock (ctx->mutex);
+  // paranoid check...
+  assert(libusb_device::TListTransfers::Orphan(wrapper));
 
-  int ret (0);
+  libusb_transfer* transfer = &wrapper->libusb;
 
-  int(*ReapStrategy)(const libusb_device&) (ReapThreaded);
+  // if data is effectively acquired (non-zero bytes transfer), all of the
+  // associated iso packed descriptors must be filled properly; this is an
+  // application specific task and requires knowledge of the logic behind
+  // the streams being transferred: PreprocessTransfer() is an user-defined
+  // "library-injected" routine that should perform this task.
+  if (transfer->actual_length > 0)
+    PreprocessTransfer(transfer, transfer->actual_length);
 
-  // ReapThreaded() is already spawning threads (one per stream) at very high
-  // (time-critical) priority; the other stream reap strategies perform more
-  // sequentially and the thread must be promoted to higher priority in order
-  // to alleviate sequence losses; however, even at such extreme conditions,
-  // sequence losses still happen at frequent pace without ReapThreaded().
-  if (ReapStrategy != ReapThreaded)
-    QuickThread::Myself().RaisePriority();
-
-  //HANDLE hMyself (GetCurrentThread());
-  libusb_context::TMapDevices::iterator it  (ctx->devices.begin());
-  libusb_context::TMapDevices::iterator end (ctx->devices.end());
-  for (; it!=end; ++it)
-  {
-    const libusb_device& dev (it->second);
-    if (dev.refcount > 0)
-      ReapStrategy(dev);
-  }
-
-  if (producer_consumer)
-  {
-    int index = hWantToDeliverPool.WaitAnyUntilTimeout(60000);
-    if (-1 != index)
-    {
-      EventList hDoneDeliveringPoolLocal;
-      while (-1 != (index = hWantToDeliverPool.CheckAny()))
-      {
-        hWantToDeliverPool[index]->Reset();
-        hAllowDeliveryPool[index]->Signal();
-        hDoneDeliveringPoolLocal.AttachEvent(hDoneDeliveringPool[index]);
-      }
-      hDoneDeliveringPoolLocal.WaitAll();
-    }
-  }
-  else
-  {
-    QuickThread::Yield();
-  }
-
-  if (-1 == nDecision)
-    return(LIBUSB_ERROR_INTERRUPTED);
-
-  // 0 on success, or a LIBUSB_ERROR code on failure
-  return(ret);
+  // callback the library client through the callback; at this point, the
+  // client is assumed to do whatever it wants to the data and, possibly,
+  // resubmitting the transfer, which would then place the transfer at the
+  // end of its related asynchronous list (orphan transfer is adopted).
+  transfer->callback(transfer);
 }
 
-enum EReapResult { ETIMEOUT = -116, ECANCELLED = -998 };
-int ReapTransfer(transfer_wrapper*,int=0,libusb_device::TListTransfers* = NULL);
-
-// EXPERIMENTAL:
-// ReapSequential Rationale: reap only the head of each transfer list (stream)
-int ReapSequential(const libusb_device& dev)
-{
-	// This reap strategy is very buggy and it is not working properly...
-  libusb_device::TMapIsocTransfers::iterator it  (dev.isoTransfers->begin());
-	libusb_device::TMapIsocTransfers::iterator end (dev.isoTransfers->end());
-	for (; it!=end; ++it)
-	{
-    libusb_device::TListTransfers& list (it->second);
-		transfer_wrapper* wrapper (list.Head());
-		if (NULL != wrapper)
-			ReapTransfer(wrapper, 0); // zero-timeout to avoid streaming to stop coming
-	}
-  //QuickThread::Yield();
-	return(0);
-}
-
-// EXPERIMENTAL: Keep walking, Johnnie Walker...
-// ReapJohnnieWalker Rationale: similar to ReapSequential, but instead of
-// processing only the head of the streams at a time, the list is sweeped
-// until a timeout is reached (hence the "Johnnie Walker, keep walking" :-)
-// which then switches to the next stream where the same process repeats.
-int ReapJohnnieWalker(const libusb_device& dev)
-{
-  libusb_device::TMapIsocTransfers::iterator it  (dev.isoTransfers->begin());
-	libusb_device::TMapIsocTransfers::iterator end (dev.isoTransfers->end());
-	for (; it!=end; ++it)
-	{
-    libusb_device::TListTransfers& list (it->second);
-    while (!list.Empty())
-    {
-      transfer_wrapper* wrapper (list.Head());
-      if (0 != ReapTransfer(wrapper, 0))  // zero-timeout to avoid streaming to stop coming
-        break;
-    }
-	}
-  return(0);
-}
-
-int ThreadFailGuardProc(void* params)
-{
-  int user_option =
-  MessageBoxA(GetDesktopWindow(),
-              "The libusb_handle_events() fail guard of libusbemu was reached!\n"
-              "This was caused by pressing the [ESC] key on the console window.\n"
-              "If it was unintentional, click Cancel to resume normal execution;\n"
-              "otherwise, click OK to effectively terminate the thread (note that\n"
-              "the host program might run abnormally after such termination).",
-              "WARNING: libusbemu thread fail guard reached!", MB_ICONWARNING | MB_OKCANCEL);
-
-  if (IDOK == user_option)
-    nDecision = -1;
-  else
-  {
-    nDecision = 0;
-    boProblem = false;
-  }
-
-  poFailGuardThread = NULL;
-
-  hReaction.Signal();
-
-  return(0);
-}
-
-const bool CheckFailGuard()
-{
-  // CTRL + ALT pressed?
-  if ((GetKeyState(VK_CONTROL) & 0x8000) && (GetKeyState(VK_MENU) & 0x8000))
-  {
-    // only one thread is allowed to activate the guard
-    static QuickMutex mutexFailGuard;
-    if (mutexFailGuard.TryEnter())
-    {
-      if (!boProblem && (NULL == poFailGuardThread))
-      {
-        hReaction.Reset();
-        boProblem = true;
-        poFailGuardThread = new QuickThread(ThreadFailGuardProc, NULL, true);
-      }
-      mutexFailGuard.Leave();
-    }
-  }
-  return(boProblem);
-}
+int ReapTransfer(transfer_wrapper*, unsigned int, libusb_device::TListTransfers*);
 
 int ReapThreadProc(void* params)
 {
   fprintf(stdout, "Thread execution started.\n");
 
   void** state = (void**)params;
-  QuickThread*& poThreadObject = *((QuickThread**)state[0]);
-  libusb_device::TListTransfers& listTransfers = *(libusb_device::TListTransfers*)state[1];
+  libusb_context* ctx ((libusb_context*)state[0]);
+  QuickThread*& poThreadObject = *((QuickThread**)state[1]);
+  libusb_device::TListTransfers& listTransfers = *(libusb_device::TListTransfers*)state[2];
   delete[](state);
 
   bool boAbort (false);
@@ -580,11 +522,11 @@ int ReapThreadProc(void* params)
   QuickEvent wannaDeliver;
   QuickEvent allowDeliver;
   QuickEvent doneDelivering;
-  mutDeliveryPool.Enter();
-    hWantToDeliverPool.AttachEvent(&wannaDeliver);
-    hAllowDeliveryPool.AttachEvent(&allowDeliver);
-    hDoneDeliveringPool.AttachEvent(&doneDelivering);
-  mutDeliveryPool.Leave();
+  ctx->mutDeliveryPool.Enter();
+    ctx->hWantToDeliverPool.AttachEvent(&wannaDeliver);
+    ctx->hAllowDeliveryPool.AttachEvent(&allowDeliver);
+    ctx->hDoneDeliveringPool.AttachEvent(&doneDelivering);
+  ctx->mutDeliveryPool.Leave();
 
   libusb_device::TListTransfers listReadyLocal;
 
@@ -592,7 +534,7 @@ int ReapThreadProc(void* params)
 
   while(!listTransfers.Empty() || !listReadyLocal.Empty())
 	{
-    if (producer_consumer && !listReadyLocal.Empty())
+    if (!listReadyLocal.Empty())
     {
       if (!boDeliverRequested)
       {
@@ -607,10 +549,7 @@ int ReapThreadProc(void* params)
         {
           transfer_wrapper* wrapper = listReadyLocal.Head();
           listReadyLocal.Remove(wrapper);
-          libusb_transfer* transfer = &wrapper->libusb;
-          if (transfer->actual_length > 0)
-            PreprocessTransfer(transfer, transfer->actual_length);
-          transfer->callback(transfer);
+          libusbemu_deliver_transfer(wrapper);
         }
         doneDelivering.Signal();
       }
@@ -622,7 +561,7 @@ int ReapThreadProc(void* params)
 		  if (NULL != wrapper)
 			  ReapTransfer(wrapper, 10000, &listReadyLocal);
     }
-    else if (producer_consumer)
+    else
     {
       fprintf(stdout, "ReapThreadProc(): no pending transfers, sleeping until delivery...\n");
       if (!boDeliverRequested)
@@ -634,20 +573,14 @@ int ReapThreadProc(void* params)
       allowDeliver.Wait();
     }
 
-    if (CheckFailGuard() && !boAbort)
+    if (failguard::Check() && !boAbort)
     {
-      hReaction.Wait();
-      switch(nDecision)
+      failguard::WaitDecision();
+      if (failguard::Abort())
       {
-        case -1 : // ABORT!
-          fprintf(stderr, "Thread is aborting: releasing transfers...\n");
-          boAbort = true;
-          // Set the CANCEL/INTERRUPT flag on each pending/ready transfer?
-          break;
-        case 0 :  // RESUME!
-          break;
-        default : // SHOULD NEVER HIT!
-          break;
+        fprintf(stderr, "Thread is aborting: releasing transfers...\n");
+        boAbort = true;
+        // Set the CANCEL/INTERRUPT flag on each pending/ready transfer?
       }
     }
 	}
@@ -656,12 +589,14 @@ int ReapThreadProc(void* params)
     fprintf(stderr, "Thread aborted.\n");
 
   wannaDeliver.Signal();
+  allowDeliver.Wait();
   doneDelivering.Signal();
-  mutDeliveryPool.Enter();
-    hWantToDeliverPool.DetachEvent(&wannaDeliver);
-    hAllowDeliveryPool.DetachEvent(&allowDeliver);
-    hDoneDeliveringPool.DetachEvent(&doneDelivering);
-  mutDeliveryPool.Leave();
+
+  ctx->mutDeliveryPool.Enter();
+    ctx->hWantToDeliverPool.DetachEvent(&wannaDeliver);
+    ctx->hAllowDeliveryPool.DetachEvent(&allowDeliver);
+    ctx->hDoneDeliveringPool.DetachEvent(&doneDelivering);
+  ctx->mutDeliveryPool.Leave();
 
   poThreadObject = NULL;
 
@@ -669,35 +604,7 @@ int ReapThreadProc(void* params)
 	return(0);
 }
 
-// ReapThreaded Rationale: for each transfer list (stream) of a given device,
-// delegate the reap to a dedicated thread for that stream
-int ReapThreaded(const libusb_device& dev)
-{
-  if (boProblem)
-    return(-1);
-
-  static std::map<const libusb_device*, std::map<int,QuickThread*> > mapDeviceEndPointThreads;
-  std::map<int,QuickThread*>& mThreads = mapDeviceEndPointThreads[&dev];
-  libusb_device::TMapIsocTransfers::iterator it  (dev.isoTransfers->begin());
-	libusb_device::TMapIsocTransfers::iterator end (dev.isoTransfers->end());
-  for (; it!=end; ++it)
-  {
-    const int endpoint (it->first);
-    QuickThread*& hThread = mThreads[endpoint];
-    libusb_device::TListTransfers& listTransfers (it->second);
-    if ((NULL == hThread) && (!listTransfers.Empty()))
-    {
-      void** state = new void* [2];
-      state[0] = &hThread;
-      state[1] = &listTransfers;
-      hThread = new QuickThread(ReapThreadProc, (void*)state, true);
-    }
-  }
-
-	return(0);
-}
-
-int ReapTransfer(transfer_wrapper* wrapper, int timeout, libusb_device::TListTransfers* lstReady)
+int ReapTransfer(transfer_wrapper* wrapper, unsigned int timeout, libusb_device::TListTransfers* lstReady)
 {
   void* context (wrapper->usb);
   libusb_transfer* transfer (&wrapper->libusb);
@@ -705,11 +612,8 @@ int ReapTransfer(transfer_wrapper* wrapper, int timeout, libusb_device::TListTra
 	const int read = usb_reap_async_nocancel(context, timeout);
   if (read >= 0)
   {
-    // data successfully acquired (0 bytes is also a go!), which means that
-    // the transfer should be removed from the head of the list and put into
-    // an orphan state; it is up to the client code to resubmit the transfer
-    // which will possibly happen during the client callback.
-    libusb_device::TListTransfers::RemoveNode(wrapper);
+    // data successfully acquired (0 bytes is also a go!)
+    transfer->status = LIBUSB_TRANSFER_COMPLETED;
 
     // according to the official libusb_transfer struct reference:
     // "int libusb_transfer::actual_length
@@ -721,41 +625,40 @@ int ReapTransfer(transfer_wrapper* wrapper, int timeout, libusb_device::TListTra
     // the libusb_handle_events() and libusbemu_clear_transfer().
     transfer->actual_length = read;
 
-    // are we using the producer/consumer model?
-    if (NULL != lstReady && producer_consumer)
-    {
+    // the transfer should be removed from the head of the list and put into
+    // an orphan state; it is up to the client code to resubmit the transfer
+    // which will possibly happen during the client callback.
+    libusb_device::TListTransfers::RemoveNode(wrapper);
+
+    // two possibilities here: either deliver the transfer now or postpone the
+    // delivery to keep it in sync with libusb_handle_events(); in the latter
+    // case, a destination list must be provided.
+    if (NULL != lstReady)
       lstReady->Append(wrapper);
-      return(read);
-    }
-
-    // if data is effectively acquired (non-zero bytes transfer), all of the
-    // associated iso packed descriptors must be filled properly; this is an
-    // application specific task and requires knowledge of the logic behind
-    // the streams being transferred: PreprocessTransfer() is an user-defined
-    // "library-injected" routine that should perform this task.
-    if (read > 0)
-      PreprocessTransfer(transfer, read);
-
-    // callback the library client through the callback; at this point, the
-    // client is assumed to do whatever it wants to the data and, possibly,
-    // resubmitting the transfer, which would then place the transfer at the
-    // end of its related asynchronous list (orphan transfer is adopted).
-    transfer->callback(transfer);
+    else
+      libusbemu_deliver_transfer(wrapper);
   }
 	else
 	{
+    // something bad happened:
+    // (a) the timeout passed to usb_reap_async_nocancel() expired;
+    // (b) the transfer was cancelled via usb_cancel_async();
+    // (c) some fatal error triggered.
+    enum EReapResult { EIO = -5, EINVAL = -22, ETIMEOUT = -116 };
     switch(read)
     {
       // When usb_reap_async_nocancel() returns ETIMEOUT, then either:
-      // (a) the timeout passed to usb_reap_async_nocancel() indeed expired;
-      // (b) the transfer was previously cancelled via usb_cancel_async().
-      // In case of (a), the transfer must remain as the head of the list
-      // (do not remove the node) and just return without calling back (well,
-      // it might be a good idea to set the status to LIBUSB_TRANSFER_TIMED_OUT
-      // and then callback...) MORE INVESTIGATION NEEDED!
-      // In case of (b), the transfer was cancelled and it should be removed
-      // from the list and reported through the callback.
+      // (a) the timeout indeed expired;
+      // (b) the transfer was cancelled.
       case ETIMEOUT :
+        // when usb_reap_async_nocancel() returns ETIMEOUT, then either:
+        // (a) the timeout indeed expired: in this case the transfer should
+        //     remain as the head of the transfer list (do not remove the node)
+        //     and silently return without calling back the client (or perhaps
+        //     set the transfer status to LIBUSB_TRANSFER_TIMED_OUT and then
+        //     call back - MORE INVESTIGATION REQUIRED)
+        // (b) the transfer was cancelled: in this case the transfer should be
+        //     removed from the list and reported back through the callback.
         if (LIBUSB_TRANSFER_CANCELLED == transfer->status)
         {
           libusb_device::TListTransfers::RemoveNode(wrapper);
@@ -764,18 +667,25 @@ int ReapTransfer(transfer_wrapper* wrapper, int timeout, libusb_device::TListTra
           transfer->callback(transfer);
           for (int i=0; i<transfer->num_iso_packets; ++i)
             transfer->iso_packet_desc[i].status = LIBUSB_TRANSFER_COMPLETED;
-          return(ECANCELLED);
         }
         break;
-      case -22 :
+      case EINVAL :
         // I guess -22 is returned if one attempts to reap a context that does
         // not exist anymore (one that has already been deleted)
-        return(-22);
+        LIBUSBEMU_ERROR_LIBUSBWIN32();
+        break;
+      case EIO :
+        LIBUSBEMU_ERROR_LIBUSBWIN32();
+        libusb_device::TListTransfers::RemoveNode(wrapper);
+        transfer->status = LIBUSB_TRANSFER_NO_DEVICE;
+        transfer->callback(transfer);
+        libusb_cancel_transfer(transfer);
         break;
       default :
         // I have not stumbled into any other negative value coming from the
         // usb_reap_async_nocancel()... Anyway, cancel seems to be a simple yet
         // plausible preemptive approach... MORE INVESTIGATION NEEDED!
+        LIBUSBEMU_ERROR_LIBUSBWIN32();
         libusb_cancel_transfer(transfer);
         break;
     }
@@ -811,7 +721,7 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 	freenect_device* dev = xferstrm->parent->parent;
 	packet_stream* pktstrm = (transfer->endpoint == 0x81) ? &dev->video : &dev->depth;
 
-	// Kinect Camera Frame Packed Header:
+	// Kinect Camera Frame Packet Header:
 	struct pkt_hdr
 	{
 		uint8_t magic[2];
