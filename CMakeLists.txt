@@ -180,3 +180,7 @@ IF ( BUILD_CPACK )
 
 ENDIF ( BUILD_CPACK )
 
+# Create a cmake file for importing the project easily with cmake
+
+CONFIGURE_FILE("${PROJECT_SOURCE_DIR}/config.cmake.in" "${PROJECT_BINARY_DIR}/Find${PROJECT_NAME}.cmake" @ONLY)
+INSTALL(FILES "${PROJECT_BINARY_DIR}/Find${PROJECT_NAME}.cmake" DESTINATION lib/cmake/ )
