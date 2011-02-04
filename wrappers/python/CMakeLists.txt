@@ -9,7 +9,7 @@ find_program(CYTHON_EXECUTABLE cython)
 
 # Figure out installation path
 execute_process(COMMAND
-  ${PYTHON_EXECUTABLE} -c "from distutils.sysconfig import get_python_lib; print get_python_lib()"
+  ${PYTHON_EXECUTABLE} -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='${CMAKE_INSTALL_PREFIX}')"
   OUTPUT_VARIABLE PYTHON_SITE_PACKAGES OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # How to Cython the .pyx file
