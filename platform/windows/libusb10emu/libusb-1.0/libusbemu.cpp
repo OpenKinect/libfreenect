@@ -69,7 +69,6 @@
 #include "failguard.h"
 #include <cassert>
 #include <algorithm>
-#include <conio.h>
 #include "freenect_internal.h"
 
 using namespace libusbemu;
@@ -84,10 +83,13 @@ using namespace libusbemu;
 int libusb_init(libusb_context** context)
 {
 	usb_init();
-  const usb_version* version = usb_get_version();
-  fprintf(stdout, "libusb-win32 version %d.%d.%d.%d (driver %d.%d.%d.%d)\n",
-    version->dll.major, version->dll.minor, version->dll.micro, version->dll.nano,
-    version->driver.major, version->driver.minor, version->driver.micro, version->driver.nano);
+  LIBUSB_DEBUG_CMD
+  (
+    const usb_version* version = usb_get_version();
+    fprintf(stdout, "libusb-win32: dll version %d.%d.%d.%d | driver (libusb0.sys) version %d.%d.%d.%d\n",
+      version->dll.major, version->dll.minor, version->dll.micro, version->dll.nano,
+      version->driver.major, version->driver.minor, version->driver.micro, version->driver.nano);
+  );
 	// there is no such a thing like 'context' in libusb-0.1...
 	// however, it is wise to emulate such context structure to localize and
   // keep track of any resource and/or internal data structures, as well as
@@ -434,7 +436,7 @@ int libusb_submit_transfer(struct libusb_transfer* transfer)
 
 int libusb_cancel_transfer(struct libusb_transfer* transfer)
 {
-  RAIIMutex lock (transfer->dev_handle->dev->ctx->mutex);
+  //RAIIMutex lock (transfer->dev_handle->dev->ctx->mutex);
   transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
   // according to the official libusb_cancel_transfer() documentation:
   // "This function returns immediately, but this does not indicate
@@ -590,8 +592,10 @@ int ReapThreadProc(void* params)
       if (failguard::Abort())
       {
         LIBUSB_DEBUG_CMD(fprintf(stderr, "Thread is aborting: releasing transfers...\n"));
+        QuickThread::Myself().LowerPriority();
+        boDeliverRequested = true;
+        allowDeliver.Signal();
         boAbort = true;
-        // Set the CANCEL/INTERRUPT flag on each pending/ready transfer?
       }
     }
 	}
@@ -599,7 +603,7 @@ int ReapThreadProc(void* params)
   LIBUSB_DEBUG_CMD
   (
     if (boAbort)
-      fprintf(stderr, "Thread aborted.\n");
+      fprintf(stderr, "Thread loop aborted.\n");
   );
 
   wannaDeliver.Signal();
@@ -735,7 +739,7 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 	freenect_device* dev = xferstrm->parent->parent;
 	packet_stream* pktstrm = (transfer->endpoint == 0x81) ? &dev->video : &dev->depth;
 
-	// Kinect Camera Frame Packet Header:
+	// Kinect Camera Frame Packet Header (12 bytes total):
 	struct pkt_hdr
 	{
 		uint8_t magic[2];
@@ -746,7 +750,7 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 		uint8_t unk2;
 		uint8_t unk3;
 		uint32_t timestamp;
-	};  // 12 bytes
+	};
 
 	//packet sizes:
 	//          first  middle  last
@@ -769,11 +773,11 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 		{
 			switch(header.flag & 0x0F)
 			{
-			case 0x01 : // begin
-			case 0x02 : // middle
+			case 0x01 : // first frame packet
+			case 0x02 : // intermediate frame packets
 				desc.actual_length = MIN(remaining, pktlen);
 				break;
-			case 0x05 : // final
+			case 0x05 : // last frame packet
 				desc.actual_length = MIN(remaining, pktend);
 				break;
 			default :
