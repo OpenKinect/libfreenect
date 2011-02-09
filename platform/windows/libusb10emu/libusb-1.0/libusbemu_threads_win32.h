@@ -122,8 +122,6 @@ public:
   template<typename F>
   inline QuickThread(F* proc, void* params, const bool auto_release=false) : hThread(NULL)
   {
-    fprintf(stdout, "Thread created.\n");
-
     // the 'typename' is required here because of dependent names...
     // MSVC relaxes this constraint, but it goes against the standard.
     typename ThreadWrapper<F>::State state;
@@ -152,7 +150,6 @@ public:
     if (hThread == GetCurrentThread())
       return;
     CloseHandle(hThread);
-    fprintf(stdout, "Thread resources released.\n");
   }
 
   static inline QuickThread Myself()

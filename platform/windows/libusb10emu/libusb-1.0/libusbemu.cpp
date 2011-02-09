@@ -74,6 +74,13 @@
 
 using namespace libusbemu;
 
+//#define LIBUSBEMU_DEBUG_BUILD
+#ifdef  LIBUSBEMU_DEBUG_BUILD
+  #define LIBUSB_DEBUG_CMD(cmd) cmd
+#else
+  #define LIBUSB_DEBUG_CMD(cmd)
+#endif//LIBUSBEMU_DEBUG_BUILD
+
 int libusb_init(libusb_context** context)
 {
 	usb_init();
@@ -415,10 +422,9 @@ int libusb_submit_transfer(struct libusb_transfer* transfer)
 
   if (NULL == iso.poReapThread)
   {
-    void** state = new void* [3];
-    state[0] = transfer->dev_handle->dev->ctx;
-    state[1] = &iso.poReapThread;
-    state[2] = &iso.listTransfers;
+    void** state = new void* [2];
+    state[0] = transfer->dev_handle;
+    state[1] = (void*)transfer->endpoint;
     iso.poReapThread = new QuickThread(ReapThreadProc, (void*)state, true);
   }
 
@@ -508,13 +514,18 @@ int ReapTransfer(transfer_wrapper*, unsigned int, libusb_device::TListTransfers*
 
 int ReapThreadProc(void* params)
 {
-  fprintf(stdout, "Thread execution started.\n");
+  LIBUSB_DEBUG_CMD(fprintf(stdout, "Thread execution started.\n"));
 
   void** state = (void**)params;
-  libusb_context* ctx ((libusb_context*)state[0]);
-  QuickThread*& poThreadObject = *((QuickThread**)state[1]);
-  libusb_device::TListTransfers& listTransfers = *(libusb_device::TListTransfers*)state[2];
+  libusb_device_handle* dev_handle = (libusb_device_handle*)state[0];
+  const int endpoint = (int)state[1];
   delete[](state);
+
+  libusb_device::TMapIsocTransfers& isocTransfers = *(dev_handle->dev->isoTransfers);
+  libusb_device::isoc_handle& isocHandle = isocTransfers[endpoint];
+  libusb_device::TListTransfers& listTransfers (isocHandle.listTransfers);
+  QuickThread*& poThreadObject = isocHandle.poReapThread;
+  libusb_context* ctx (dev_handle->dev->ctx);
 
   bool boAbort (false);
 
@@ -563,7 +574,7 @@ int ReapThreadProc(void* params)
     }
     else
     {
-      fprintf(stdout, "ReapThreadProc(): no pending transfers, sleeping until delivery...\n");
+      LIBUSB_DEBUG_CMD(fprintf(stdout, "ReapThreadProc(): no pending transfers, sleeping until delivery...\n"));
       if (!boDeliverRequested)
       {
         wannaDeliver.Signal();
@@ -578,15 +589,18 @@ int ReapThreadProc(void* params)
       failguard::WaitDecision();
       if (failguard::Abort())
       {
-        fprintf(stderr, "Thread is aborting: releasing transfers...\n");
+        LIBUSB_DEBUG_CMD(fprintf(stderr, "Thread is aborting: releasing transfers...\n"));
         boAbort = true;
         // Set the CANCEL/INTERRUPT flag on each pending/ready transfer?
       }
     }
 	}
 
-  if (boAbort)
-    fprintf(stderr, "Thread aborted.\n");
+  LIBUSB_DEBUG_CMD
+  (
+    if (boAbort)
+      fprintf(stderr, "Thread aborted.\n");
+  );
 
   wannaDeliver.Signal();
   allowDeliver.Wait();
@@ -600,7 +614,7 @@ int ReapThreadProc(void* params)
 
   poThreadObject = NULL;
 
-  fprintf(stdout, "Thread execution finished.\n");
+  LIBUSB_DEBUG_CMD(fprintf(stdout, "Thread execution finished.\n"));
 	return(0);
 }
 
@@ -776,12 +790,13 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 		leftover  -= desc.length;   // a.k.a: -= 1920
 	}
 
-#ifdef _DEBUG
-	if (remaining > 0)
-	{
-		fprintf(stdout, "%d remaining out of %d\n", remaining, read);
-		if (remaining == read)
-			fprintf(stdout, "no bytes consumed!\n");
-	}
-#endif//_DEBUG
+  LIBUSB_DEBUG_CMD
+  (
+	  if (remaining > 0)
+	  {
+		  fprintf(stdout, "%d remaining out of %d\n", remaining, read);
+		  if (remaining == read)
+        fprintf(stdout, "no bytes consumed!\n");
+	  }
+  );
 }
