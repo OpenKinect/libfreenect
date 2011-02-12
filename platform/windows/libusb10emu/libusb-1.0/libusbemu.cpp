@@ -73,7 +73,10 @@
 
 using namespace libusbemu;
 
-//#define LIBUSBEMU_DEBUG_BUILD
+#ifdef _DEBUG
+  #define LIBUSBEMU_DEBUG_BUILD
+#endif//_DEBUG
+
 #ifdef  LIBUSBEMU_DEBUG_BUILD
   #define LIBUSB_DEBUG_CMD(cmd) cmd
 #else
@@ -231,7 +234,11 @@ void libusb_close(libusb_device_handle*	dev_handle)
     LIBUSBEMU_ERROR("libusb_close() attempted to close an unregistered handle!\n");
     return;
   }
-  usb_close(dev_handle->handle);
+  if (0 != usb_close(dev_handle->handle))
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+    return;
+  }
   device->handles->erase(dev_handle->handle);
   libusbemu_unregister_device(device);
 }
@@ -255,10 +262,10 @@ int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
     LIBUSBEMU_ERROR_LIBUSBWIN32();
     return(LIBUSB_ERROR_OTHER);
   }
-  /*
-  if (0 != usb_set_altinterface(dev->handle, 0))
-    return(LIBUSB_ERROR_OTHER);
-  */
+
+  //if (0 != usb_set_altinterface(dev->handle, 0))
+  //  return(LIBUSB_ERROR_OTHER);
+
   // LIBUSB_ERROR_NOT_FOUND if the requested interface does not exist
 	// LIBUSB_ERROR_BUSY if another program or driver has claimed the interface
 	// LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
@@ -333,15 +340,22 @@ void libusb_free_transfer(struct libusb_transfer* transfer)
     return;
   }
 
+  if (0 != usb_free_async(&wrapper->usb))
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+    return;
+  }
+
+  if (NULL != transfer->iso_packet_desc)
+    delete[](transfer->iso_packet_desc);
+
   // according to the official libusb_free_transfer() documentation:
   // "If the LIBUSB_TRANSFER_FREE_BUFFER flag is set and the transfer buffer
   //  is non-NULL, this function will also free the transfer buffer using the
   //  standard system memory allocator (e.g. free())."
-  usb_free_async(&wrapper->usb);
   if (transfer->flags & LIBUSB_TRANSFER_FREE_BUFFER)
     free(transfer->buffer);
-  delete[](transfer->iso_packet_desc);
-  memset(wrapper, 0, sizeof(transfer_wrapper)); // Paranoid clean...
+
   delete(wrapper);
 }
 
@@ -436,7 +450,6 @@ int libusb_submit_transfer(struct libusb_transfer* transfer)
 
 int libusb_cancel_transfer(struct libusb_transfer* transfer)
 {
-  //RAIIMutex lock (transfer->dev_handle->dev->ctx->mutex);
   transfer_wrapper* wrapper = libusbemu_get_transfer_wrapper(transfer);
   // according to the official libusb_cancel_transfer() documentation:
   // "This function returns immediately, but this does not indicate
@@ -446,6 +459,8 @@ int libusb_cancel_transfer(struct libusb_transfer* transfer)
   // LIBUSB_TRANSFER_CANCELLED, leaving the rest to libusb_handle_events().
 	transfer->status = LIBUSB_TRANSFER_CANCELLED;
 	int ret = usb_cancel_async(wrapper->usb);
+  if (ret != 0)
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
 	// 0 on success
 	// LIBUSB_ERROR_NOT_FOUND if the transfer is already complete or cancelled.
 	// a LIBUSB_ERROR code on failure
@@ -457,18 +472,20 @@ int libusb_cancel_transfer(struct libusb_transfer* transfer)
 int libusbemu_handle_isochronous(libusb_context* ctx, const unsigned int milliseconds)
 {
   //QuickThread::Myself().RaisePriority();
+  ctx->mutDeliveryPool.Enter();
   int index = ctx->hWantToDeliverPool.WaitAnyUntilTimeout(milliseconds);
   if (-1 != index)
   {
     EventList hDoneDeliveringPoolLocal;
     while (-1 != (index = ctx->hWantToDeliverPool.CheckAny()))
     {
-      ctx->hWantToDeliverPool[index]->Reset();
       ctx->hAllowDeliveryPool[index]->Signal();
+      ctx->hWantToDeliverPool[index]->Reset();
       hDoneDeliveringPoolLocal.AttachEvent(ctx->hDoneDeliveringPool[index]);
     }
     hDoneDeliveringPoolLocal.WaitAll();
   }
+  ctx->mutDeliveryPool.Leave();
   //QuickThread::Myself().LowerPriority();
   return(0);
 }
@@ -543,18 +560,24 @@ int ReapThreadProc(void* params)
 
   libusb_device::TListTransfers listReadyLocal;
 
+  // isochronous I/O must be handled in high-priority! (at least TIME_CRITICAL)
+  // otherwise, sequence losses are prone to happen...
   QuickThread::Myself().RaisePriority();
 
+  // keep the thread alive as long as there are pending or ready transfers
   while(!listTransfers.Empty() || !listReadyLocal.Empty())
 	{
+    // prioritize transfers that are ready to be delivered 
     if (!listReadyLocal.Empty())
     {
+      // signal the delivery request, if not signaled yet
       if (!boDeliverRequested)
       {
-        wannaDeliver.Signal();
         doneDelivering.Reset();
+        wannaDeliver.Signal();
         boDeliverRequested = true;
       }
+      // delivery request already signaled; wait for the delivery permission
       else if (allowDeliver.WaitUntilTimeout(1))
       {
         boDeliverRequested = false;
@@ -568,12 +591,13 @@ int ReapThreadProc(void* params)
       }
     }
 
+    // check for pending transfers coming from the device stream
     if (!listTransfers.Empty())
     {
 		  transfer_wrapper* wrapper = listTransfers.Head();
-		  if (NULL != wrapper)
-			  ReapTransfer(wrapper, 10000, &listReadyLocal);
+  	  ReapTransfer(wrapper, 10000, &listReadyLocal);
     }
+    // if there are no pending transfers, wait the ready ones to be delivered
     else
     {
       LIBUSB_DEBUG_CMD(fprintf(stdout, "ReapThreadProc(): no pending transfers, sleeping until delivery...\n"));
@@ -586,6 +610,7 @@ int ReapThreadProc(void* params)
       allowDeliver.Wait();
     }
 
+    // finally, check the thread failguard
     if (failguard::Check() && !boAbort)
     {
       failguard::WaitDecision();
@@ -683,8 +708,6 @@ int ReapTransfer(transfer_wrapper* wrapper, unsigned int timeout, libusb_device:
           for (int i=0; i<transfer->num_iso_packets; ++i)
             transfer->iso_packet_desc[i].status = LIBUSB_TRANSFER_CANCELLED;
           transfer->callback(transfer);
-          for (int i=0; i<transfer->num_iso_packets; ++i)
-            transfer->iso_packet_desc[i].status = LIBUSB_TRANSFER_COMPLETED;
         }
         break;
       case EINVAL :
@@ -721,6 +744,7 @@ void PreprocessTransferNaive(libusb_transfer* transfer, const int read)
 	for (int i=0; i<pkts; ++i)
 	{
 		libusb_iso_packet_descriptor& desc (transfer->iso_packet_desc[i]);
+    desc.status = LIBUSB_TRANSFER_COMPLETED;
 		desc.actual_length = MIN(remaining, desc.length);
 		remaining -= desc.actual_length;
 	}
@@ -767,8 +791,9 @@ void PreprocessTransferFreenect(libusb_transfer* transfer, const int read)
 	const int pkts (transfer->num_iso_packets);
 	for (int i=0; i<pkts; ++i)
 	{
-		const pkt_hdr& header (*(pkt_hdr*)pktbuffer);
 		libusb_iso_packet_descriptor& desc (transfer->iso_packet_desc[i]);
+    desc.status = LIBUSB_TRANSFER_COMPLETED;
+    const pkt_hdr& header (*(pkt_hdr*)pktbuffer);
 		if ((header.magic[0] == 'R') && (header.magic[1] == 'B'))
 		{
 			switch(header.flag & 0x0F)
