@@ -72,19 +72,11 @@ static int alloc_buffer_ring_video(freenect_video_format fmt, buffer_ring_t *buf
 	int sz, i;
 	switch (fmt) {
 		case FREENECT_VIDEO_RGB:
-			sz = FREENECT_VIDEO_RGB_SIZE;
-			break;
 		case FREENECT_VIDEO_BAYER:
-			sz = FREENECT_VIDEO_BAYER_SIZE;
-			break;
 		case FREENECT_VIDEO_IR_8BIT:
-			sz = FREENECT_VIDEO_IR_8BIT_SIZE;
-			break;
 		case FREENECT_VIDEO_IR_10BIT:
-			sz = FREENECT_VIDEO_IR_10BIT;
-			break;
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
-			sz = FREENECT_VIDEO_IR_10BIT_PACKED_SIZE;
+			sz = freenect_get_video_frame_size(fmt, FREENECT_RESOLUTION_MEDIUM).bytes;
 			break;
 		default:
 			printf("Invalid video format %d\n", fmt);

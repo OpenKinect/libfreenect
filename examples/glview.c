@@ -269,7 +269,7 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 	uint16_t *depth = (uint16_t*)v_depth;
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
-	for (i=0; i<FREENECT_FRAME_PIX; i++) {
+	for (i=0; i<640*480; i++) {
 		int pval = t_gamma[depth[i]];
 		int lb = pval & 0xff;
 		switch (pval>>8) {
@@ -339,6 +339,7 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_video_callback(f_dev, rgb_cb);
 	freenect_set_video_format(f_dev, current_format);
+	freenect_set_video_resolution(f_dev, FREENECT_RESOLUTION_MEDIUM);
 	freenect_set_depth_format(f_dev, FREENECT_DEPTH_11BIT);
 	freenect_set_video_buffer(f_dev, rgb_back);
 

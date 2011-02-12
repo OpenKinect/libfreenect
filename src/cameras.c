@@ -291,10 +291,10 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
-			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 11, FREENECT_FRAME_PIX);
+			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 11, 640*480);
 			break;
 		case FREENECT_DEPTH_10BIT:
-			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 10, FREENECT_FRAME_PIX);
+			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 10, 640*480);
 			break;
 		case FREENECT_DEPTH_10BIT_PACKED:
 		case FREENECT_DEPTH_11BIT_PACKED:
@@ -305,12 +305,12 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 }
 
 #define CLAMP(x) if (x < 0) {x = 0;} if (x > 255) {x = 255;}
-static void convert_uyvy_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
+static void convert_uyvy_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_frame_size frame_size)
 {
 	int x, y;
-	for(y = 0; y < 480; ++y) {
-		for(x = 0; x < 640; x+=2) {
-			int i = (640 * y + x);
+	for(y = 0; y < frame_size.height; ++y) {
+		for(x = 0; x < frame_size.width; x+=2) {
+			int i = (frame_size.width * y + x);
 			int u  = raw_buf[2*i];
 			int y1 = raw_buf[2*i+1];
 			int v  = raw_buf[2*i+2];
@@ -338,7 +338,7 @@ static void convert_uyvy_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
 }
 #undef CLAMP
 
-static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
+static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_frame_size frame_size)
 {
 	int x,y;
 	/* Pixel arrangement:
@@ -408,11 +408,11 @@ static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
 
 	// init curLine and nextLine pointers
 	curLine  = raw_buf;
-	nextLine = curLine + 640;
-	for (y = 0; y < 480; ++y) {
+	nextLine = curLine + frame_size.width;
+	for (y = 0; y < frame_size.height; ++y) {
 
-		if ((y > 0) && (y < 479))
-			prevLine = curLine - 640; // normal case
+		if ((y > 0) && (y < frame_size.height-1))
+			prevLine = curLine - frame_size.width; // normal case
 		else if (y == 0)
 			prevLine = nextLine;      // top boundary case
 		else
@@ -431,7 +431,7 @@ static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf)
 		uint8_t yOdd = y & 1;
 		// the right column boundary case is not handled inside this loop
 		// thus the "639"
-		for (x = 0; x < 639; ++x) {
+		for (x = 0; x < frame_size.width-1; ++x) {
 			// place next value in shift buffers
 			hVals |= *(curLine++);
 			vSums |= (*(prevLine++) + *(nextLine++)) >> 1;
@@ -520,22 +520,23 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 	FN_SPEW("Got video frame of size %d/%d, %d/%d packets arrived, TS %08x\n", got_frame_size,
 	        dev->video.frame_size, dev->video.valid_pkts, dev->video.pkts_per_frame, dev->video.timestamp);
 
+	freenect_frame_size frame_size = freenect_get_video_frame_size(dev->video_format, dev->video_resolution);
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
-			convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf);
+			convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_size);
 			break;
 		case FREENECT_VIDEO_BAYER:
 			break;
 		case FREENECT_VIDEO_IR_10BIT:
-			convert_packed_to_16bit(dev->video.raw_buf, (uint16_t*)dev->video.proc_buf, 10, FREENECT_IR_FRAME_PIX);
+			convert_packed_to_16bit(dev->video.raw_buf, (uint16_t*)dev->video.proc_buf, 10, frame_size.width * frame_size.height);
 			break;
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
 			break;
 		case FREENECT_VIDEO_IR_8BIT:
-			convert_packed_to_8bit(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, 10, FREENECT_IR_FRAME_PIX);
+			convert_packed_to_8bit(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, 10, frame_size.width * frame_size.height);
 			break;
 		case FREENECT_VIDEO_YUV_RGB:
-			convert_uyvy_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf);
+			convert_uyvy_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_size);
 			break;
 		case FREENECT_VIDEO_YUV_RAW:
 			break;
@@ -703,27 +704,102 @@ int freenect_start_video(freenect_device *dev)
 	dev->video.flag = 0x80;
 	dev->video.variable_length = 0;
 
-	switch (dev->video_format) {
+	uint16_t mode_reg, mode_value;
+	uint16_t res_reg, res_value;
+	uint16_t fps_reg, fps_value;
+
+	switch(dev->video_format) {
 		case FREENECT_VIDEO_RGB:
-			stream_init(ctx, &dev->video, FREENECT_VIDEO_BAYER_SIZE, FREENECT_VIDEO_RGB_SIZE);
-			break;
 		case FREENECT_VIDEO_BAYER:
-			stream_init(ctx, &dev->video, 0, FREENECT_VIDEO_BAYER_SIZE);
+			if(dev->video_resolution == FREENECT_RESOLUTION_HIGH) {
+				mode_value = 0x00; // Bayer
+				res_value = 0x02; // 1280x1024
+				fps_value = 0x0f; // "15" Hz
+			} else if (dev->video_resolution == FREENECT_RESOLUTION_MEDIUM) {
+				mode_value = 0x00; // Bayer
+				res_value = 0x01; // 640x480
+				fps_value = 0x1e; // 30 Hz
+			} else {
+				FN_ERROR("freenect_start_video(): called with invalid format/resolution combination\n");
+				return -1;
+			}
+			mode_reg = 0x0c;
+			res_reg = 0x0d;
+			fps_reg = 0x0e;
 			break;
 		case FREENECT_VIDEO_IR_8BIT:
-			stream_init(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_IR_8BIT_SIZE);
-			break;
 		case FREENECT_VIDEO_IR_10BIT:
-			stream_init(ctx, &dev->video, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE, FREENECT_VIDEO_BAYER_SIZE);
-			break;
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
-			stream_init(ctx, &dev->video, 0, FREENECT_VIDEO_IR_10BIT_PACKED_SIZE);
+			if(dev->video_resolution == FREENECT_RESOLUTION_HIGH) {
+				if(dev->depth.running) {
+					FN_ERROR("freenect_start_video(): cannot stream high-resolution IR at same time as depth stream\n");
+					return -1;
+				}
+
+				// Due to some ridiculous condition in the firmware, we have to start and stop the
+				// depth stream before the camera will hand us 1280x1024 IR.  This is a stupid
+				// workaround, but we've yet to find a better solution.
+				write_register(dev, 0x13, 0x01); // set depth camera resolution (640x480)
+				write_register(dev, 0x14, 0x1e); // set depth camera FPS (30)
+				write_register(dev, 0x06, 0x02); // start depth camera
+				write_register(dev, 0x06, 0x00); // stop depth camera
+
+				mode_value = 0x00; // Luminance, 10-bit packed
+				res_value = 0x02; // 1280x1024
+				fps_value = 0x0f; // "15" Hz
+			} else if (dev->video_resolution == FREENECT_RESOLUTION_MEDIUM) {
+				mode_value = 0x00; // Luminance, 10-bit packed
+				res_value = 0x01; // 640x480
+				fps_value = 0x1e; // 30 Hz
+			} else {
+				FN_ERROR("freenect_start_video(): called with invalid format/resolution combination\n");
+				return -1;
+			}
+			mode_reg = 0x19;
+			res_reg = 0x1a;
+			fps_reg = 0x1b;
 			break;
 		case FREENECT_VIDEO_YUV_RGB:
-			stream_init(ctx, &dev->video, FREENECT_VIDEO_YUV_RAW_SIZE, FREENECT_VIDEO_RGB_SIZE);
+		case FREENECT_VIDEO_YUV_RAW:
+			if(dev->video_resolution == FREENECT_RESOLUTION_MEDIUM) {
+				mode_value = 0x05; // UYUV mode
+				res_value = 0x01; // 640x480
+				fps_value = 0x0f; // 15Hz
+			} else {
+				FN_ERROR("freenect_start_video(): called with invalid format/resolution combination\n");
+				return -1;
+			}
+			mode_reg = 0x0c;
+			res_reg = 0x0d;
+			fps_reg = 0x0e;
+			break;
+		default:
+			FN_ERROR("freenect_start_video(): called with invalid video format %d\n", dev->video_format);
+			return -1;
+	}
+
+	freenect_frame_size frame_size = freenect_get_video_frame_size(dev->video_format, dev->video_resolution);
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+			stream_init(ctx, &dev->video, freenect_get_video_frame_size(FREENECT_VIDEO_BAYER, dev->video_resolution).bytes, frame_size.bytes);
+			break;
+		case FREENECT_VIDEO_BAYER:
+			stream_init(ctx, &dev->video, 0, frame_size.bytes);
+			break;
+		case FREENECT_VIDEO_IR_8BIT:
+			stream_init(ctx, &dev->video, freenect_get_video_frame_size(FREENECT_VIDEO_IR_10BIT_PACKED, dev->video_resolution).bytes, frame_size.bytes);
+			break;
+		case FREENECT_VIDEO_IR_10BIT:
+			stream_init(ctx, &dev->video, freenect_get_video_frame_size(FREENECT_VIDEO_IR_10BIT_PACKED, dev->video_resolution).bytes, frame_size.bytes);
+			break;
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			stream_init(ctx, &dev->video, 0, frame_size.bytes);
+			break;
+		case FREENECT_VIDEO_YUV_RGB:
+			stream_init(ctx, &dev->video, freenect_get_video_frame_size(FREENECT_VIDEO_YUV_RAW, dev->video_resolution).bytes, frame_size.bytes);
 			break;
 		case FREENECT_VIDEO_YUV_RAW:
-			stream_init(ctx, &dev->video, 0, FREENECT_VIDEO_YUV_RAW_SIZE);
+			stream_init(ctx, &dev->video, 0, frame_size.bytes);
 			break;
 	}
 
@@ -731,16 +807,10 @@ int freenect_start_video(freenect_device *dev)
 	if (res < 0)
 		return res;
 
-	write_register(dev, 0x05, 0x00); // reset video stream
-	if (dev->video_format == FREENECT_VIDEO_YUV_RGB || dev->video_format == FREENECT_VIDEO_YUV_RAW) {
-		write_register(dev, 0x0c, 0x05); // UYUV mode
-		write_register(dev, 0x0d, 0x01); // 640x480
-		write_register(dev, 0x0e, 0x0f); // 15Hz
-	} else {
-		write_register(dev, 0x0c, 0x00); // Bayer
-		write_register(dev, 0x0d, 0x01); // 640x480
-		write_register(dev, 0x0e, 0x1e); // 30Hz
-	}
+	write_register(dev, mode_reg, mode_value);
+	write_register(dev, res_reg, res_value);
+	write_register(dev, fps_reg, fps_value);
+
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
 		case FREENECT_VIDEO_BAYER:
@@ -837,6 +907,24 @@ int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt)
 	}
 }
 
+int freenect_set_video_resolution(freenect_device *dev, freenect_video_resolution res) {
+	freenect_context *ctx = dev->parent;
+	if (dev->video.running) {
+		FN_ERROR("Tried to set video resolution while stream is active\n");
+		return -1;
+	}
+	switch (res) {
+		case FREENECT_RESOLUTION_LOW:
+		case FREENECT_RESOLUTION_MEDIUM:
+		case FREENECT_RESOLUTION_HIGH:
+			dev->video_resolution = res;
+			return 0;
+		default:
+			FN_ERROR("Invalid video resolution %d\n", res);
+			return -1;
+	}
+}
+
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
 {
 	freenect_context *ctx = dev->parent;
@@ -866,4 +954,87 @@ int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 int freenect_set_video_buffer(freenect_device *dev, void *buf)
 {
 	return stream_setbuf(dev->parent, &dev->video, buf);
+}
+
+freenect_frame_size freenect_get_video_frame_size(freenect_video_format fmt, freenect_video_resolution res) {
+	freenect_frame_size retval;
+	retval.width = 0; // invalid
+	retval.height = 0; // invalid
+	retval.bytes = 0;
+	switch(res) {
+		case FREENECT_RESOLUTION_LOW:
+			// Unimplemented, needs more reverse engineering
+			break;
+		case FREENECT_RESOLUTION_MEDIUM:
+			switch(fmt) {
+				case FREENECT_VIDEO_RGB:
+				case FREENECT_VIDEO_YUV_RGB:
+					retval.width = 640;
+					retval.height = 480;
+					retval.bytes = retval.width * retval.height * 3;
+					return retval;
+				case FREENECT_VIDEO_BAYER:
+					retval.width = 640;
+					retval.height = 480;
+					retval.bytes = retval.width * retval.height;
+					return retval;
+				case FREENECT_VIDEO_IR_8BIT:
+					retval.width = 640;
+					retval.height = 488;
+					retval.bytes = retval.width * retval.height;
+					return retval;
+				case FREENECT_VIDEO_IR_10BIT:
+					retval.width = 640;
+					retval.height = 488;
+					retval.bytes = retval.width * retval.height * 2;
+					return retval;
+				case FREENECT_VIDEO_IR_10BIT_PACKED:
+					retval.width = 640;
+					retval.height = 488;
+					retval.bytes = (retval.width * retval.height * 10) / 8;
+					return retval;
+				case FREENECT_VIDEO_YUV_RAW:
+					retval.width = 640;
+					retval.height = 480;
+					retval.bytes = retval.width * retval.height * 2;
+					return retval;
+				default:
+					break;
+			}
+			break;
+		case FREENECT_RESOLUTION_HIGH:
+			retval.width = 1280;
+			retval.height = 1024;
+			switch(fmt) {
+				case FREENECT_VIDEO_RGB:
+					retval.bytes = retval.width * retval.height * 3;
+					break;
+				case FREENECT_VIDEO_BAYER:
+					retval.bytes = retval.width * retval.height;
+					break;
+				case FREENECT_VIDEO_IR_8BIT:
+					retval.bytes = retval.width * retval.height;
+					break;
+				case FREENECT_VIDEO_IR_10BIT:
+					retval.bytes = retval.width * retval.height * 2;
+					break;
+				case FREENECT_VIDEO_IR_10BIT_PACKED:
+					retval.bytes = (retval.width * retval.height * 10) / 8;
+					break;
+				case FREENECT_VIDEO_YUV_RGB: // YUV unsupported at 1280x1024 since sensor
+				case FREENECT_VIDEO_YUV_RAW: // is 1280x1024 Bayer pattern anyway
+				default:
+					retval.width = 0;
+					retval.height = 0;
+					break;
+			}
+			break;
+		default:
+			break;
+	}
+	return retval;
+}
+
+freenect_frame_size freenect_get_current_video_frame_size(freenect_device *dev) {
+	return freenect_get_video_frame_size(dev->video_format, dev->video_resolution);
 }

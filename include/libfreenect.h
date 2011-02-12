@@ -33,28 +33,31 @@
 extern "C" {
 #endif
 
-#define FREENECT_FRAME_W 640 /**< Default video frame width */
-#define FREENECT_FRAME_H 480 /**< Default video frame height */
-#define FREENECT_FRAME_PIX (FREENECT_FRAME_H*FREENECT_FRAME_W) /**< Pixel count for default video frame */
-
-#define FREENECT_IR_FRAME_W 640 /**< Default depth frame width */
-#define FREENECT_IR_FRAME_H 488	/**< Default depth frame height */
-#define FREENECT_IR_FRAME_PIX (FREENECT_IR_FRAME_H*FREENECT_IR_FRAME_W)	/**< Pixel count for default depth frame */
-
-#define FREENECT_VIDEO_RGB_SIZE (FREENECT_FRAME_PIX*3) /**< Size of the decompressed rgb frame */
-#define FREENECT_VIDEO_BAYER_SIZE (FREENECT_FRAME_PIX) /**< Size of the bayer frame */
-#define FREENECT_VIDEO_YUV_RGB_SIZE (FREENECT_VIDEO_RGB_SIZE) /**< Size of the rgb YUV frame */
-#define FREENECT_VIDEO_YUV_RAW_SIZE (FREENECT_FRAME_PIX*2) /**< Size of the raw YUV frame */
-#define FREENECT_VIDEO_IR_8BIT_SIZE (FREENECT_IR_FRAME_PIX)	/**< Size of the 8 bit IR video frame */
-#define FREENECT_VIDEO_IR_10BIT_SIZE (FREENECT_IR_FRAME_PIX*sizeof(uint16_t)) /**< Size of the 10 bit IR video frame */
-#define FREENECT_VIDEO_IR_10BIT_PACKED_SIZE 390400 /**< Size of the packed 10 bit IR video frame */
-
-#define FREENECT_DEPTH_11BIT_SIZE (FREENECT_FRAME_PIX*sizeof(uint16_t)) /**< Size of the 11 bit depth frame */
+#define FREENECT_DEPTH_11BIT_SIZE (640*480*sizeof(uint16_t)) /**< Size of the 11 bit depth frame */
 #define FREENECT_DEPTH_10BIT_SIZE FREENECT_DEPTH_11BIT_SIZE	/**< Size of the 10 bit depth frame */
 #define FREENECT_DEPTH_11BIT_PACKED_SIZE 422400	/**< Size of the packed 11 bit depth frame */
 #define FREENECT_DEPTH_10BIT_PACKED_SIZE 384000	/**< Size of the packed 10 bit depth frame */
 
 #define FREENECT_COUNTS_PER_G 819 /**< Ticks per G for accelerometer as set per http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf */
+
+/// Structure to give information about the width and height of a
+/// frame, as well as the total number of bytes needed to hold a
+/// single frame.  Negative values for width and height indicate
+/// an invalid video format and resolution combination, as does
+/// a value of 0 for bytes.
+typedef struct {
+	int width;  /**< Width of this frame, in pixels */
+	int height; /**< Height of this frame, in pixels */
+	int bytes;  /**< Total number of bytes needed to hold a single frame at the given resolution and pixel format */
+} freenect_frame_size;
+
+/// Enumeration of available resolutions.
+/// Not all available resolutions are actually supported for all video formats.
+typedef enum {
+	FREENECT_RESOLUTION_LOW    = 0, /**< QVGA - 320x240 */
+	FREENECT_RESOLUTION_MEDIUM = 1, /**< VGA  - 640x480 */
+	FREENECT_RESOLUTION_HIGH   = 2, /**< SXGA - 1280x1024 */
+} freenect_video_resolution;
 
 /// Enumeration of video frame information states.
 /// See http://openkinect.org/wiki/Protocol_Documentation#RGB_Camera for more information.
@@ -424,6 +427,42 @@ FREENECTAPI int freenect_set_led(freenect_device *dev, freenect_led_options opti
  * @param z Stores Z-axis accelerometer state
  */
 FREENECTAPI void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z);
+
+/**
+ * Return the resolution implied and buffer size needed for the given
+ * pixel format and resolution enum values.
+ *
+ * @param fmt Video format (pixel format) to return information about
+ * @param res Resolution enum value to return information about
+ *
+ * @return Frame information structure, containing width, height, and
+ * bytes-per-frame.  If width, height, or bytes is 0, the requested
+ * format/resolution combination is unsupported and can be considered
+ * invalid.
+ */
+FREENECTAPI freenect_frame_size freenect_get_video_frame_size(freenect_video_format fmt, freenect_video_resolution res);
+
+/**
+ * Convenience function to return the resolution and buffer size for
+ * the current pixel format and resolution of a given freenect device.
+ *
+ * @param dev Device to return current frame format information about
+ *
+ * @return Frame information structure.  As in freenect_get_video_frame_size(),
+ * if width, height, or bytes is 0, the requested format/resolution
+ * combination is unsupported.
+ */
+FREENECTAPI freenect_frame_size freenect_get_current_video_frame_size(freenect_device *dev);
+
+/**
+ * Set which resolution the video stream should run at for a given freenect device.
+ *
+ * @param dev Device for which to set video stream resolution
+ * @param res Desired stream resolution
+ *
+ * @return 0 on success, < 0 on error.
+ */
+FREENECTAPI int freenect_set_video_resolution(freenect_device *dev, freenect_video_resolution res);
 
 #ifdef __cplusplus
 }

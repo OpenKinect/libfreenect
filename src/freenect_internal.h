@@ -85,10 +85,6 @@ static inline uint32_t fn_le32(uint32_t d)
 #define fn_le32(x) (x)
 #endif
 
-#define FRAME_H FREENECT_FRAME_H
-#define FRAME_W FREENECT_FRAME_W
-#define FRAME_PIX FREENECT_FRAME_PIX
-
 #define DEPTH_PKTSIZE 1760
 #define VIDEO_PKTSIZE 1920
 
@@ -136,6 +132,7 @@ struct _freenect_device {
 	freenect_video_cb video_cb;
 	freenect_video_format video_format;
 	freenect_depth_format depth_format;
+	freenect_video_resolution video_resolution;
 
 	int cam_inited;
 	uint16_t cam_tag;
