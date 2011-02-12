@@ -78,7 +78,7 @@ private:
 class MyFreenectDevice : public Freenect::FreenectDevice {
 public:
 	MyFreenectDevice(freenect_context *_ctx, int _index)
-		: Freenect::FreenectDevice(_ctx, _index), m_buffer_depth(FREENECT_VIDEO_RGB_SIZE),m_buffer_video(FREENECT_VIDEO_RGB_SIZE), m_gamma(2048), m_new_rgb_frame(false), m_new_depth_frame(false)
+		: Freenect::FreenectDevice(_ctx, _index), m_buffer_depth(freenect_get_video_frame_size(FREENECT_VIDEO_RGB, FREENECT_RESOLUTION_MEDIUM).bytes),m_buffer_video(freenect_get_video_frame_size(FREENECT_VIDEO_RGB, FREENECT_RESOLUTION_MEDIUM).bytes), m_gamma(2048), m_new_rgb_frame(false), m_new_depth_frame(false)
 	{
 		for( unsigned int i = 0 ; i < 2048 ; i++) {
 			float v = i/2048.0;
@@ -98,7 +98,7 @@ public:
 	void DepthCallback(void* _depth, uint32_t timestamp) {
 		Mutex::ScopedLock lock(m_depth_mutex);
 		uint16_t* depth = static_cast<uint16_t*>(_depth);
-		for( unsigned int i = 0 ; i < FREENECT_FRAME_PIX ; i++) {
+		for( unsigned int i = 0 ; i < 640*480 ; i++) {
 			int pval = m_gamma[depth[i]];
 			int lb = pval & 0xff;
 			switch (pval>>8) {

@@ -37,6 +37,8 @@ volatile sig_atomic_t running = 1;
 uint32_t last_timestamp = 0;
 FILE *index_fp = NULL;
 
+#define FREENECT_FRAME_W 640
+#define FREENECT_FRAME_H 480
 
 double get_time()
 {
@@ -117,7 +119,7 @@ void depth_cb(freenect_device *dev, void *depth, uint32_t timestamp)
 
 void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 {
-	dump('r', timestamp, rgb, FREENECT_VIDEO_RGB_SIZE);
+	dump('r', timestamp, rgb, freenect_get_current_video_frame_size(dev).bytes);
 }
 
 void init()
@@ -136,6 +138,7 @@ void init()
 	freenect_set_depth_format(dev, FREENECT_DEPTH_11BIT);
 	freenect_start_depth(dev);
 	freenect_set_video_format(dev, FREENECT_VIDEO_RGB);
+	freenect_set_video_resolution(dev, FREENECT_RESOLUTION_MEDIUM);
 	freenect_start_video(dev);
 	freenect_set_depth_callback(dev, depth_cb);
 	freenect_set_video_callback(dev, rgb_cb);

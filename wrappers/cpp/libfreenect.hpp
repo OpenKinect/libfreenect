@@ -65,6 +65,7 @@ namespace Freenect {
 			if(freenect_open_device(_ctx, &m_dev, _index) < 0) throw std::runtime_error("Cannot open Kinect");
 			freenect_set_user(m_dev, this);
 			freenect_set_video_format(m_dev, FREENECT_VIDEO_RGB);
+			freenect_set_video_resolution(m_dev, FREENECT_RESOLUTION_MEDIUM);
 			freenect_set_depth_format(m_dev, FREENECT_DEPTH_11BIT);
 			freenect_set_depth_callback(m_dev, freenect_depth_callback);
 			freenect_set_video_callback(m_dev, freenect_video_callback);
@@ -124,14 +125,18 @@ namespace Freenect {
 		virtual void DepthCallback(void *depth, uint32_t timestamp) = 0;
 	  protected:
 		int getVideoBufferSize(){
-			if(m_video_format == FREENECT_VIDEO_RGB) return FREENECT_VIDEO_RGB_SIZE;
-			if(m_video_format == FREENECT_VIDEO_BAYER) return FREENECT_VIDEO_BAYER_SIZE;
-			if(m_video_format == FREENECT_VIDEO_IR_8BIT) return FREENECT_VIDEO_IR_8BIT_SIZE;
-			if(m_video_format == FREENECT_VIDEO_IR_10BIT) return FREENECT_VIDEO_IR_10BIT_SIZE;
-			if(m_video_format == FREENECT_VIDEO_IR_10BIT_PACKED) return FREENECT_VIDEO_IR_10BIT_PACKED_SIZE;
-			if(m_video_format == FREENECT_VIDEO_YUV_RGB) return FREENECT_VIDEO_YUV_RGB_SIZE;
-			if(m_video_format == FREENECT_VIDEO_YUV_RAW) return FREENECT_VIDEO_YUV_RAW_SIZE;
-			return 0;
+			switch(m_video_format) {
+				case FREENECT_VIDEO_RGB:
+				case FREENECT_VIDEO_BAYER:
+				case FREENECT_VIDEO_IR_8BIT:
+				case FREENECT_VIDEO_IR_10BIT:
+				case FREENECT_VIDEO_IR_10BIT_PACKED:
+				case FREENECT_VIDEO_YUV_RGB:
+				case FREENECT_VIDEO_YUV_RAW:
+					return freenect_get_video_frame_size(m_video_format, FREENECT_RESOLUTION_MEDIUM).bytes;
+				default:
+					return 0;
+			}
 		}
 		int getDepthBufferSize(){
 			if(m_depth_format == FREENECT_DEPTH_11BIT) return FREENECT_DEPTH_11BIT_SIZE;

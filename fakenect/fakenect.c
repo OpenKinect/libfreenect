@@ -194,7 +194,7 @@ int freenect_process_events(freenect_context *ctx)
 			if (cur_rgb_cb && rgb_running) {
 				void *cur_rgb = skip_line(data);
 				if (rgb_buffer) {
-					memcpy(rgb_buffer, cur_rgb, FREENECT_VIDEO_RGB_SIZE);
+					memcpy(rgb_buffer, cur_rgb, freenect_get_video_frame_size(FREENECT_VIDEO_RGB, FREENECT_RESOLUTION_MEDIUM).bytes);
 					cur_rgb = rgb_buffer;
 				}
 				cur_rgb_cb(fake_dev, cur_rgb, timestamp);
