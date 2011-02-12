@@ -5,7 +5,7 @@ SUMMARY
 
 1) libfreenect: incompatibilities with Visual C++
    This section is here merely for historical reasons. All of the issues documented
-   there were already fixed in the libfreenect repository and CMake should be able to
+   here were already fixed in the libfreenect repository and CMake should be able to
    produce a project that is ready to build libfreenect in Windows with Visual Studio.
    Consider browsing this section if experiencing compilation issues under different
    platforms, compilers and/or IDEs.
@@ -15,7 +15,7 @@ SUMMARY
    a proper port of libusb-1.0 for Windows is not yet available. Such emulation layer
    allows Windows development to keep in sync with the official development branch of
    libfreenect, without the need of dedicated drivers/implementations. This section
-   discusses how and why the current libfreenect Windows port moved in this direction.
+   discusses why and how the current libfreenect Windows port moved in this direction.
 
 3) libusbemu: Tips, Hints and Best Practices
    The current status of libusbemu is quite reliable under normal usage circumstances,
@@ -40,8 +40,8 @@ Language issues: The Microsoft C compiler does not implement all the C99 standar
 ----------------------------------------------------------------------------------
 
 An attempt to compile the current libfreenect with Visual C++ will trigger a lot
-of errors. A simple workaround is to tell Visual Studio to force compilation all .c
-files within the project using the C++ compiler:
+of errors. A simple workaround is to tell Visual Studio to force compilation all the
+".c" files within the project using the C++ compiler:
   Project >> Properties >> C/C++ >> Advanced >> Compile As: Compile as C++ Code (/TP)
 
 This will get rid of most errors, except those regarding implicit pointer casts.
