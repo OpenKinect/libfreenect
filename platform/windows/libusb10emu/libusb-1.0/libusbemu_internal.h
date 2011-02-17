@@ -78,6 +78,7 @@ struct QuickList
 		end.prev = &ini;
 		end.next = NULL;
 	}
+  ~QuickList() {};
 	const bool Empty() const
 	{
 		return(ini.next == &end);  // could also be (end.prev == &ini)
@@ -93,6 +94,7 @@ struct QuickList
 		node->prev = end.prev;
 		node->next = &end;
 		end.prev = node;
+    node->list = this;
 	}
 	T* Head() const
 	{
@@ -110,11 +112,7 @@ struct QuickList
 	}
 	const bool Member(T* node) const
 	{
-		bool member (false);
-		for (T* it=ini.next; it!=&end, member!=true; it=Next(it))
-			if (it == node)
-				member = true;
-		return(member);
+    return(this == node->list);
 	}
 	static T* Prev(T* node)
 	{
@@ -130,19 +128,107 @@ struct QuickList
 			next = node->next;
 		return(next);
 	}
-	static void Remove(T* node)
-	{
-		if (Orphan(node))
-			return;
+  const bool Remove (T* node)
+  {
+    if (!Member(node))
+      return(false);
 		node->prev->next = node->next;
 		node->next->prev = node->prev;
 		node->prev = NULL;
 		node->next = NULL;
+    node->list = NULL;
+    return(true);
+  }
+	static void RemoveNode(T* node)
+	{
+		if (Orphan(node))
+			return;
+    node->list->Remove(node);
 	}
 	static const bool Orphan(T* node)
 	{
-		return((NULL == node->prev) && (NULL == node->next)); // (node->prev == node->next)
+    return(NULL == node->list);
 	}
+};
+
+template<typename T>
+struct QuickListMutexed : QuickList<T>
+{
+protected:
+  // 'mutable' required to allow operations within 'const methods'
+  mutable QuickMutex mutex;
+  mutable QuickEvent chomp;   // signals whether there is (or not) transfers in the list 
+
+public:
+  QuickListMutexed() {};
+  QuickListMutexed(const QuickListMutexed& rhs) : QuickList<T>(rhs) {};
+  ~QuickListMutexed() { /*this->~QuickListMutexed()*/ mutex.Enter(); mutex.Leave(); };
+	const bool Empty() const
+	{
+		mutex.Enter();
+      const bool empty = QuickList<T>::Empty();
+    mutex.Leave();
+    return(empty);
+	}
+	void Append(T* node)
+	{
+    mutex.Enter();
+      const bool empty = QuickList<T>::Empty();
+      QuickList<T>::Append(node);
+      if (empty)
+        chomp.Signal();
+    mutex.Leave();
+	}
+	T* Head() const
+	{
+    mutex.Enter();
+      T* head = QuickList<T>::Head();
+    mutex.Leave();
+    return(head);
+	}
+	T* Last() const
+	{
+    mutex.Enter();
+      T* last = QuickList<T>::Last();
+    mutex.Leave();
+    return(last);
+	}
+	const bool Member(T* node) const
+	{
+    mutex.Enter();
+      const bool member = QuickList<T>::Member(node);
+    mutex.Leave();
+    return(member);
+	}
+	const bool Remove(T* node)
+	{
+    mutex.Enter();
+      const bool removed = QuickList<T>::Remove(node);
+      if (QuickList<T>::Empty())
+        chomp.Reset();
+    mutex.Leave();
+    return(removed);
+	}
+	static const bool Orphan(T* node)
+	{
+    //node->list->mutex.Enter();
+      const bool orphan = QuickList<T>::Orphan(node);
+    //node->list->mutex.Leave();
+    return(orphan);
+	}
+
+  const bool WaitUntilTimeout(unsigned int milliseconds) const
+  {
+    return(chomp.WaitUntilTimeout(milliseconds));
+  }
+  void Wait() const
+  {
+    chomp.Wait();
+  }
+  const bool Check() const
+  {
+    return(chomp.Check());
+  }
 };
 
 } // end of 'namespace libusbemu'
@@ -155,6 +241,7 @@ struct transfer_wrapper
 {
 	transfer_wrapper* prev;
 	transfer_wrapper* next;
+  QuickList<transfer_wrapper>* list;
 	void* usb;
 	libusb_transfer libusb;
 };
@@ -171,7 +258,12 @@ struct libusb_device_t
   struct usb_device* device;
   int refcount;
   typedef QuickList<transfer_wrapper> TListTransfers;
-  typedef std::map<int, TListTransfers> TMapIsocTransfers;
+  struct isoc_handle
+  {
+    TListTransfers listTransfers;
+    QuickThread* poReapThread;
+  };
+  typedef std::map<int, isoc_handle> TMapIsocTransfers;
   TMapIsocTransfers* isoTransfers;
   typedef std::map<usb_dev_handle*, libusb_device_handle> TMapHandles;
   TMapHandles* handles;
@@ -182,22 +274,42 @@ struct libusb_context_t
   typedef std::map<struct usb_device*, libusb_device> TMapDevices;
   TMapDevices devices;
   QuickMutex mutex;
-  QuickEvent processing;
+
+  QuickMutex mutDeliveryPool;
+  EventList hWantToDeliverPool;
+  EventList hAllowDeliveryPool;
+  EventList hDoneDeliveringPool;
 };
 
 
 
+#define LIBUSBEMU_ERROR(msg) libusbemu_report_error(__FILE__, __LINE__, msg)
+#define LIBUSBEMU_ERROR_LIBUSBWIN32() LIBUSBEMU_ERROR(usb_strerror())
+
 namespace libusbemu {
+
+void libusbemu_report_error(const char* file, const int line, const char* msg)
+{
+  // remove source file path:
+  int i = strlen(file);
+  while (-1 != --i)
+    if ((file[i] == '/') || (file[i] == '\\'))
+      break;
+  file = &file[++i];
+
+  fprintf(stderr, "ERROR in libusbemu -- source file '%s' at line %d -- %s\n", file, line, msg);
+}
 
 transfer_wrapper* libusbemu_get_transfer_wrapper(libusb_transfer* transfer)
 {
   char* raw_address ((char*)transfer);
-  char* off_address (raw_address - sizeof(void*) - 2*sizeof(transfer_wrapper*));
+  char* off_address (raw_address - sizeof(void*) - 2*sizeof(transfer_wrapper*) - sizeof(QuickList<transfer_wrapper>*));
   return((transfer_wrapper*)off_address);
 }
 
 libusb_device* libusbemu_register_device(libusb_context* ctx, struct usb_device* dev)
 {
+  RAIIMutex lock (ctx->mutex);
   // register the device (if not already there) ...
   libusb_device dummy = { ctx, dev, 0, NULL, NULL };
   libusb_context::TMapDevices::iterator it = ctx->devices.insert(std::make_pair(dev,dummy)).first;
@@ -212,6 +324,8 @@ libusb_device* libusbemu_register_device(libusb_context* ctx, struct usb_device*
 
 void libusbemu_unregister_device(libusb_device* dev)
 {
+  libusb_context* ctx (dev->ctx);
+  RAIIMutex lock (ctx->mutex);
   // decrement the reference count of the device ...
   --(dev->refcount);
   // ... and unregister device if the reference count reaches zero
@@ -225,12 +339,12 @@ void libusbemu_unregister_device(libusb_device* dev)
       while (!allTransfers.empty())
       {
         libusb_device::TMapIsocTransfers::iterator it (allTransfers.begin());
-        libusb_device::TListTransfers& listTransfers (it->second);
+        libusb_device::TListTransfers& listTransfers (it->second.listTransfers);
         while (!listTransfers.Empty())
         {
           transfer_wrapper* transfer (listTransfers.Head());
           // make it orphan so that it can be deleted:
-          libusb_device::TListTransfers::Remove(transfer);
+          listTransfers.Remove(transfer);
           // the following will free the wrapper object as well:
           libusb_free_transfer(&transfer->libusb);
         }
@@ -238,7 +352,6 @@ void libusbemu_unregister_device(libusb_device* dev)
       }
       SAFE_DELETE(dev->isoTransfers);
     }
-    libusb_context* ctx (dev->ctx);
     ctx->devices.erase(dev->device);
   }
 }
@@ -246,15 +359,19 @@ void libusbemu_unregister_device(libusb_device* dev)
 int libusbemu_setup_transfer(transfer_wrapper* wrapper)
 {
   void*& context = wrapper->usb;
-  if (NULL != context)  // Paranoid check...
+  // paranoid check...
+  if (NULL != context)
     return(LIBUSB_ERROR_OTHER);
 
+  RAIIMutex lock (wrapper->libusb.dev_handle->dev->ctx->mutex);
+
   int ret (LIBUSB_ERROR_OTHER);
-  libusb_transfer* transfer = &wrapper->libusb;
+  libusb_transfer* transfer (&wrapper->libusb);
+  usb_dev_handle* handle (transfer->dev_handle->handle);
   switch(transfer->type)
   {
     case LIBUSB_TRANSFER_TYPE_ISOCHRONOUS :
-      ret = usb_isochronous_setup_async(transfer->dev_handle->handle, &context, transfer->endpoint, transfer->iso_packet_desc[0].length);
+      ret = usb_isochronous_setup_async(handle, &context, transfer->endpoint, transfer->iso_packet_desc[0].length);
       break;
     case LIBUSB_TRANSFER_TYPE_CONTROL :
       // libusb-0.1 does not actually support asynchronous control transfers, but this should be
@@ -276,6 +393,7 @@ int libusbemu_setup_transfer(transfer_wrapper* wrapper)
   {
     // TODO: better error handling...
     // what do the functions usb_***_setup_async() actually return on error?
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
     return(ret);
   }
 
