@@ -46,4 +46,16 @@
   // #include "libusbemu_threads_pthread.h"
 #endif
 
+namespace libusbemu
+{
+
+struct RAIIMutex
+{
+  QuickMutex& m_mutex;
+  RAIIMutex(QuickMutex& mutex) : m_mutex(mutex) { m_mutex.Enter(); }
+  ~RAIIMutex() { m_mutex.Leave(); }
+};
+
+};
+
 #endif//LIBUSBEMU_THREAD_INTERFACE_WRAPPER_H
