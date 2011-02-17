@@ -29,16 +29,60 @@
 
 #include <windows.h>
 #include <stdio.h>
+#include <vector>
+#include <algorithm>
 
 namespace libusbemu {
+
+struct QuickEvent
+{
+friend struct EventList;
+
+private:
+  HANDLE hEvent;
+
+public:
+  inline QuickEvent(const bool signaled=false) : hEvent(NULL)
+  {
+    hEvent = CreateEvent(NULL, TRUE, (BOOL)signaled, NULL);
+  }
+  inline ~QuickEvent()
+  {
+    CloseHandle(hEvent);
+  }
+  inline void Signal()
+  {
+    SetEvent(hEvent);
+  }
+  inline void Reset()
+  {
+    ResetEvent(hEvent);
+  }
+  inline bool Check()
+  {
+    return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, 0));
+  }
+  inline const bool WaitUntilTimeout(const unsigned int milliseconds)
+  {
+    return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, (DWORD)milliseconds));
+  }
+  inline void Wait()
+  {
+    WaitUntilTimeout(INFINITE);
+  }
+};
+
+
 
 struct QuickThread
 {
 private:
   HANDLE hThread;
 
-  // Type-safe wrapper to convert arbitrary function signatures into the
+  // Type-safe wrapper that converts arbitrary function signatures into the
   // required signature of Win32 Thread Procedures (LPTHREAD_START_ROUTINE).
+  // Any Win32 LPTHREAD_START_ROUTINE declared routine can be wrapped as well.
+  // The wrapper is also capable of cleaning up itself upon thread termination.
   // This wrapper can be extended in the future to support member-functions
   // to run as thread procedures.
   template<typename F>
@@ -46,15 +90,26 @@ private:
   {
     struct State
     {
-      F* threadproc;
-      void* threadparams;
+      F* routine;
+      void* params;
+      bool release;
+      QuickThread* instance;
+      QuickEvent* sigclone;
     };
-    static DWORD WINAPI Thunk(/*__in*/ LPVOID lpParameter)
+    static DWORD WINAPI Thunk(LPVOID lpParameter)
     {
-      State* state ((State*)lpParameter);
-      state->threadproc(state->threadparams);
-      delete(state);
-      return(0);
+      State state = *((State*)lpParameter); // clone state (no heap alloc!)
+      state.sigclone->Signal(); // done cloning, signal back to creator
+      state.sigclone = NULL;
+
+      // start wrapped thread procedure
+      DWORD ret = (DWORD)state.routine(state.params);
+
+      // release the associated QuickThread instance if requested
+      if (state.release)
+        delete(state.instance);
+
+      return(ret);
     }
   };
 
@@ -65,31 +120,36 @@ private:
 
 public:
   template<typename F>
-  inline QuickThread(F* proc, void* params) : hThread(NULL)
+  inline QuickThread(F* proc, void* params, const bool auto_release=false) : hThread(NULL)
   {
-    fprintf(stdout, "Thread created.\n");
     // the 'typename' is required here because of dependent names...
-    // VC++ relaxes this constraint, but it goes against the standard.
-    // 'State' is allocated here, but will be released once the thread
-    // terminates within the 'thunk' function that wraps the thread.
-    typename ThreadWrapper<F>::State* state = new typename ThreadWrapper<F>::State;
-    state->threadproc   = proc;
-    state->threadparams = params;
-    hThread = CreateThread(NULL, 0, &ThreadWrapper<F>::Thunk, (LPVOID)state, 0, NULL);
-  }
+    // MSVC relaxes this constraint, but it goes against the standard.
+    typename ThreadWrapper<F>::State state;
+    state.routine  = proc;
+    state.params   = params;
+    state.release  = auto_release;
+    state.instance = this;
+    // in order to prevent heap allocation, an event is created so that the
+    // thunk function can signal back when it is done cloning the state; this
+    // may look like unnecessary overhead, but the less heap memory control,
+    // the better becomes the management and maintenance of this class.
+    QuickEvent hWaitThunkCloneState;
+    state.sigclone = &hWaitThunkCloneState;
 
-  inline QuickThread(LPTHREAD_START_ROUTINE proc, void* params)  : hThread(NULL)
-  {
-    fprintf(stdout, "Thread created.\n");
-    hThread = CreateThread(NULL, 0, proc, params, 0, NULL);
+    // Ready to issue the thread creation:
+    hThread = CreateThread(NULL, 0, &ThreadWrapper<F>::Thunk, (LPVOID)&state, 0, NULL);
+
+    // Wait for the thread thunk to clone the state...
+    hWaitThunkCloneState.Wait();
+    // Event object will then be automatically released upon return
   }
 
   inline ~QuickThread()
   {
+    // only if not a pseudo-handle...
+    if (hThread == GetCurrentThread())
+      return;
     CloseHandle(hThread);
-    // echo only if not a pseudo-handle...
-    if (hThread != GetCurrentThread())
-      fprintf(stdout, "Thread resources released.\n");
   }
 
   static inline QuickThread Myself()
@@ -136,6 +196,9 @@ public:
     // Sleep(0) or Sleep(1) ?!
     // http://stackoverflow.com/questions/1413630/switchtothread-thread-yield-vs-thread-sleep0-vs-thead-sleep1
     ::Sleep(1);
+    // could also use the following (but the semantics are quite shady...):
+    // http://msdn.microsoft.com/en-us/library/ms686352(v=vs.85).aspx
+    // SwitchToThread();
   }
 //#pragma pop_macro("Yield")
 };
@@ -158,6 +221,11 @@ public:
     DeleteCriticalSection(&cs);
   }
 
+  inline const bool TryEnter()
+  {
+    return(0 != TryEnterCriticalSection(&cs));
+  }
+
   inline void Enter()
   {
     EnterCriticalSection(&cs);
@@ -171,36 +239,84 @@ public:
 
 
 
-struct QuickEvent
+struct EventList
 {
-private:
-  HANDLE hEvent;
+  QuickMutex mutex;
+  std::vector<QuickEvent*> m_vEvents;
+  std::vector<HANDLE> m_vHandles;
 
-public:
-  inline QuickEvent() : hEvent(NULL)
+  EventList() {};
+  ~EventList() {};
+
+  const bool AttachEvent(QuickEvent* poEvent)
   {
-    hEvent = CreateEvent(NULL, TRUE, FALSE, NULL);
+    mutex.Enter();
+      m_vEvents.push_back(poEvent);
+      m_vHandles.push_back(poEvent->hEvent);
+    mutex.Leave();
+    return(true);
   }
-  inline ~QuickEvent()
+
+  const bool DetachEvent(QuickEvent* poEvent)
   {
-    CloseHandle(hEvent);
+    mutex.Enter();
+      std::vector<QuickEvent*>::iterator it1 = std::find(m_vEvents.begin(), m_vEvents.end(), poEvent);
+      m_vEvents.erase(it1);
+      std::vector<HANDLE>::iterator it2 = std::find(m_vHandles.begin(), m_vHandles.end(), poEvent->hEvent);
+      m_vHandles.erase(it2);
+    mutex.Leave();
+    return(true);
   }
-  inline void Signal()
+
+  int WaitAnyUntilTimeout(const unsigned int milliseconds)
   {
-    SetEvent(hEvent);
+    int index (-1);
+    mutex.Enter();
+      DWORD ret (WAIT_FAILED);
+      const unsigned int nHandles (m_vHandles.size());
+      if (nHandles > 0)
+        ret = WaitForMultipleObjects(nHandles, &m_vHandles[0], FALSE, milliseconds);
+      if (ret - WAIT_OBJECT_0 < nHandles)
+        index = (int)(ret - WAIT_OBJECT_0);
+    mutex.Leave();
+    return(index);
   }
-  inline void Reset()
+
+  int WaitAny()
   {
-    ResetEvent(hEvent);
+    return(WaitAnyUntilTimeout(INFINITE));
   }
-  inline bool Check()
+
+  int CheckAny()
   {
-    return(WAIT_OBJECT_0 == WaitForSingleObject(hEvent, 0));
+    return(WaitAnyUntilTimeout(0));
   }
-  inline void Wait()
+
+  const bool WaitAllUntilTimeout(const unsigned int milliseconds)
   {
-    WaitForSingleObject(hEvent, INFINITE);
+    bool waited (false);
+    mutex.Enter();
+      const unsigned int nHandles (m_vHandles.size());
+      if (nHandles > 0)
+        waited = (WAIT_TIMEOUT != WaitForMultipleObjects(nHandles, &m_vHandles[0], FALSE, milliseconds));
+    mutex.Leave();
+    return(waited);
   }
+
+  const bool WaitAll()
+  {
+    return(WaitAllUntilTimeout(INFINITE));
+  }
+
+  QuickEvent* operator [] (const unsigned int index)
+  {
+    QuickEvent* poEvent (NULL);
+    mutex.Enter();
+      poEvent = m_vEvents[index];
+    mutex.Leave();
+    return(poEvent);
+  }
+
 };
 
 } //end of 'namespace libusbemu'
