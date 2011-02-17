@@ -43,6 +43,9 @@ LED_YELLOW = 3
 LED_BLINK_YELLOW = 4
 LED_BLINK_GREEN = 5
 LED_BLINK_RED_YELLOW = 6
+RESOLUTION_LOW = 0
+RESOLUTION_MEDIUM = 1
+RESOLUTION_HIGH = 2
 
 
 cdef struct freenect_raw_tilt_state:
@@ -81,6 +84,7 @@ cdef extern from "libfreenect.h":
     void freenect_set_depth_callback(void *dev, freenect_depth_cb cb)
     void freenect_set_video_callback(void *dev, freenect_video_cb cb)
     int freenect_set_video_format(void *dev, int fmt)
+    int freenect_set_video_resolution(void *dev, int fmt)
     int freenect_set_depth_format(void *dev, int fmt)
     int freenect_start_depth(void *dev)
     int freenect_start_video(void *dev)
@@ -278,6 +282,7 @@ def runloop(depth=None, video=None, body=None):
     freenect_set_depth_format(devp, 0)
     freenect_start_depth(devp)
     freenect_set_video_format(devp, VIDEO_RGB)
+    freenect_set_video_resolution(devp, RESOLUTION_MEDIUM)
     freenect_start_video(devp)
     freenect_set_depth_callback(devp, depth_cb)
     freenect_set_video_callback(devp, video_cb)
