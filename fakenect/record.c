@@ -171,11 +171,13 @@ int main(int argc, char **argv)
 	index_fp = fopen(fn, "r");
 	if (index_fp) {
 		printf("Error: Index already exists, to avoid overwriting use a different directory.\n");
+		free(fn);
 		return 1;
 	}
 	index_fp = fopen(fn, "w");
 	if (!index_fp) {
 		printf("Error: Cannot open file [%s]\n", fn);
+		free(fn);
 		return 1;
 	}
 	free(fn);

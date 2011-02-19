@@ -118,6 +118,9 @@ static int parse_line(char *type, double *cur_time, unsigned int *timestamp, uns
 	*data = malloc(*data_size);
 	if (fread(*data, *data_size, 1, cur_fp) != 1) {
 		printf("Error: Couldn't read entire file.\n");
+		fclose(cur_fp);
+		free(line);
+		free(file_path);
 		return -1;
 	}
 	fclose(cur_fp);
