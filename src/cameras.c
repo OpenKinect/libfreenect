@@ -687,6 +687,7 @@ int freenect_start_depth(freenect_device *dev)
 	write_register(dev, 0x13, 0x01);
 	write_register(dev, 0x14, 0x1e);
 	write_register(dev, 0x06, 0x02); // start depth stream
+	write_register(dev, 0x17, 0x00); // disable depth hflip
 
 	dev->depth.running = 1;
 	return 0;
@@ -707,6 +708,7 @@ int freenect_start_video(freenect_device *dev)
 	uint16_t mode_reg, mode_value;
 	uint16_t res_reg, res_value;
 	uint16_t fps_reg, fps_value;
+	uint16_t hflip_reg;
 
 	switch(dev->video_format) {
 		case FREENECT_VIDEO_RGB:
@@ -726,6 +728,7 @@ int freenect_start_video(freenect_device *dev)
 			mode_reg = 0x0c;
 			res_reg = 0x0d;
 			fps_reg = 0x0e;
+			hflip_reg = 0x47;
 			break;
 		case FREENECT_VIDEO_IR_8BIT:
 		case FREENECT_VIDEO_IR_10BIT:
@@ -758,6 +761,7 @@ int freenect_start_video(freenect_device *dev)
 			mode_reg = 0x19;
 			res_reg = 0x1a;
 			fps_reg = 0x1b;
+			hflip_reg = 0x48;
 			break;
 		case FREENECT_VIDEO_YUV_RGB:
 		case FREENECT_VIDEO_YUV_RAW:
@@ -772,6 +776,7 @@ int freenect_start_video(freenect_device *dev)
 			mode_reg = 0x0c;
 			res_reg = 0x0d;
 			fps_reg = 0x0e;
+			hflip_reg = 0x47;
 			break;
 		default:
 			FN_ERROR("freenect_start_video(): called with invalid video format %d\n", dev->video_format);
@@ -825,7 +830,7 @@ int freenect_start_video(freenect_device *dev)
 			write_register(dev, 0x05, 0x03); // start video stream
 			break;
 	}
-	write_register(dev, 0x47, 0x00); // disable Hflip
+	write_register(dev, hflip_reg, 0x00); // disable Hflip
 
 	dev->video.running = 1;
 	return 0;
