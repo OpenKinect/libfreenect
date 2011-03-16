@@ -44,6 +44,7 @@
 
 #include <string.h>
 #include "libfreenect_sync.h"
+#include "libfreenect.h"
 #include <pthread.h>
 #include <signal.h>
 #include <math.h>
@@ -53,7 +54,7 @@ char **g_argv;
 
 char *_current_version = "v9.0b";
 
-#define AS3_BITMAPDATA_LEN FREENECT_FRAME_PIX * 4
+#define AS3_BITMAPDATA_LEN 640 * 480 * 4
 
 pthread_t wait_for_client_thread, connection_thread;
 
@@ -211,19 +212,20 @@ void sendDepth(){
 	uint32_t ts, x, y, i, j;
 	freenect_sync_get_depth(&buf_depth_temp, &ts, 0, FREENECT_DEPTH_11BIT);
 	uint16_t *depth = (uint16_t*) buf_depth_temp;
-	uint16_t *tmp_depth = (uint16_t*) malloc(FREENECT_DEPTH_11BIT_SIZE);
+	freenect_frame_mode depth_mode = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT);
+	uint16_t *tmp_depth = (uint16_t*) malloc(depth_mode.bytes);
 	if(_depth_mirrored){	//MIRROR DEPTH DATA
-		for(x = 0; x < FREENECT_FRAME_W; x++){
-			for(y = 0; y < FREENECT_FRAME_H; y++){
-				i = x + (y  * FREENECT_FRAME_W);
-				j = (FREENECT_FRAME_W - x - 1) + (y  * FREENECT_FRAME_W);
+		for(x = 0; x < depth_mode.width; x++){
+			for(y = 0; y < depth_mode.height; y++){
+				i = x + (y  * depth_mode.width);
+				j = (depth_mode.width - x - 1) + (y  * depth_mode.width);
 				tmp_depth[i] = depth[j];
 			}
 		}
 		depth = tmp_depth;
 	}
 	
-	for (i=0; i<FREENECT_FRAME_PIX; i++) {
+	for (i=0; i< depth_mode.width * depth_mode.height; i++) {
 		buf_depth[4 * i + 0] = 0x00;
 		buf_depth[4 * i + 1] = 0x00;
 		buf_depth[4 * i + 2] = 0x00;
@@ -250,15 +252,16 @@ void sendVideo(){
 	uint32_t ts,x, y, i, j;
 	freenect_sync_get_video(&buf_rgb_temp, &ts, 0, FREENECT_VIDEO_RGB);
 	uint8_t *rgb = (uint8_t*)buf_rgb_temp;
+	freenect_frame_mode video_mode = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB);
 
 	//MIRROR RGB DATA AND ADD ALPHA
-	for(x = 0; x < FREENECT_FRAME_W; x++){
-		for(y = 0; y < FREENECT_FRAME_H; y++){
-			i = x + (y  * FREENECT_FRAME_W);
+	for(x = 0; x < video_mode.width; x++){
+		for(y = 0; y < video_mode.height; y++){
+			i = x + (y  * video_mode.width);
 			if(!_video_mirrored)
 				j = i;
 			else
-				j = (FREENECT_FRAME_W - x - 1) + (y  * FREENECT_FRAME_W);
+				j = (video_mode.width - x - 1) + (y  * video_mode.width);
 			buf_rgb[4 * i + 0] = rgb[3 * j + 2];
 			buf_rgb[4 * i + 1] = rgb[3 * j + 1];
 			buf_rgb[4 * i + 2] = rgb[3 * j + 0];

@@ -7,7 +7,7 @@ IplImage *GlViewColor(IplImage *depth)
 {
 	static IplImage *image = 0;
 	if (!image) image = cvCreateImage(cvSize(640,480), 8, 3);
-	unsigned char *depth_mid = image->imageData;
+	unsigned char *depth_mid = (unsigned char*)(image->imageData);
 	int i;
 	for (i = 0; i < 640*480; i++) {
 		int lb = ((short *)depth->imageData)[i] % 256;
@@ -70,4 +70,5 @@ int main(int argc, char **argv)
 		cvShowImage("RGB", image);
 		cvShowImage("Depth", GlViewColor(depth));
 	}
+	return 0;
 }

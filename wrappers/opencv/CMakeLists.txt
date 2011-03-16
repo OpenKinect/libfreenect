@@ -6,6 +6,8 @@ set_target_properties (freenect_cv PROPERTIES
   VERSION ${PROJECT_VER}
   SOVERSION ${PROJECT_APIVER})
 
+include_directories (../c_sync)
+
 target_link_libraries (freenect_cv freenect_sync cv)
 
 install (TARGETS freenect_cv
