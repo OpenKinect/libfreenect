@@ -31,6 +31,42 @@
 
 #include "freenect_internal.h"
 
+#define MAKE_RESERVED(res, fmt) (((uint8_t)(res) << 8) | (((uint8_t)(fmt))) )
+#define RESERVED_TO_RESOLUTION(reserved) ((uint8_t)(reserved >> 8))
+#define RESERVED_TO_FORMAT(reserved) ((uint8_t)(reserved))
+
+#define video_mode_count 12
+freenect_frame_mode supported_video_modes[video_mode_count] = {
+	// reserved,                                           is_valid,       bytes,width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate
+	{MAKE_RESERVED(FREENECT_RESOLUTION_HIGH,   FREENECT_VIDEO_RGB), 1, 1280*1024*3, 1280, 1024,                  24,                      0,        10 },
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB), 1, 640*480*3,    640,  480,                  24,                      0,        30 },
+
+	{MAKE_RESERVED(FREENECT_RESOLUTION_HIGH,   FREENECT_VIDEO_BAYER), 1, 1280*1024, 1280,  1024,                  8,                      0,        10 },
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_BAYER), 1, 640*480,    640,  480,                   8,                      0,        30 },
+
+	{MAKE_RESERVED(FREENECT_RESOLUTION_HIGH,   FREENECT_VIDEO_IR_8BIT), 1, 1280*1024, 1280,  1024,                8,                      0,        10 },
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_IR_8BIT), 1, 640*488,    640,  488,                 8,                      0,        30 },
+
+	{MAKE_RESERVED(FREENECT_RESOLUTION_HIGH,   FREENECT_VIDEO_IR_10BIT), 1, 1280*1024*2, 1280,  1024,             10,                     6,        10 },
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_IR_10BIT), 1, 640*488*2,    640,  488,              10,                     6,        30 },
+
+	{MAKE_RESERVED(FREENECT_RESOLUTION_HIGH,   FREENECT_VIDEO_IR_10BIT_PACKED), 1, 1280*1024*10/8, 1280,  1024,   10,                     0,        10 },
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_IR_10BIT_PACKED), 1, 640*488*10/8,    640,  488,    10,                     0,        30 },
+
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_YUV_RGB), 1, 640*480*3,    640,  480,    24,                     0,        15 },
+
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_YUV_RAW), 1, 640*480*2,    640,  480,    16,                     0,        15 },
+};
+
+#define depth_mode_count 4
+freenect_frame_mode supported_depth_modes[depth_mode_count] = {
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT), 1, 640*480*2, 640, 480,    11, 5, 30},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT), 1, 640*480*2, 640, 480,    11, 5, 30},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT_PACKED), 1, 640*480*11/8, 640, 480,    11, 0, 30},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT_PACKED), 1, 640*480*10/8, 640, 480,    10, 0, 30},
+};
+static const freenect_frame_mode invalid_mode = {0, 0, 0, 0, 0, 0, 0, 0};
+
 struct pkt_hdr {
 	uint8_t magic[2];
 	uint8_t pad;
@@ -305,12 +341,12 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 }
 
 #define CLAMP(x) if (x < 0) {x = 0;} if (x > 255) {x = 255;}
-static void convert_uyvy_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_frame_size frame_size)
+static void convert_uyvy_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_frame_mode frame_mode)
 {
 	int x, y;
-	for(y = 0; y < frame_size.height; ++y) {
-		for(x = 0; x < frame_size.width; x+=2) {
-			int i = (frame_size.width * y + x);
+	for(y = 0; y < frame_mode.height; ++y) {
+		for(x = 0; x < frame_mode.width; x+=2) {
+			int i = (frame_mode.width * y + x);
 			int u  = raw_buf[2*i];
 			int y1 = raw_buf[2*i+1];
 			int v  = raw_buf[2*i+2];
@@ -338,7 +374,7 @@ static void convert_uyvy_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_fr
 }
 #undef CLAMP
 
-static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_frame_size frame_size)
+static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_frame_mode frame_mode)
 {
 	int x,y;
 	/* Pixel arrangement:
@@ -408,11 +444,11 @@ static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_f
 
 	// init curLine and nextLine pointers
 	curLine  = raw_buf;
-	nextLine = curLine + frame_size.width;
-	for (y = 0; y < frame_size.height; ++y) {
+	nextLine = curLine + frame_mode.width;
+	for (y = 0; y < frame_mode.height; ++y) {
 
-		if ((y > 0) && (y < frame_size.height-1))
-			prevLine = curLine - frame_size.width; // normal case
+		if ((y > 0) && (y < frame_mode.height-1))
+			prevLine = curLine - frame_mode.width; // normal case
 		else if (y == 0)
 			prevLine = nextLine;      // top boundary case
 		else
@@ -431,7 +467,7 @@ static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_f
 		uint8_t yOdd = y & 1;
 		// the right column boundary case is not handled inside this loop
 		// thus the "639"
-		for (x = 0; x < frame_size.width-1; ++x) {
+		for (x = 0; x < frame_mode.width-1; ++x) {
 			// place next value in shift buffers
 			hVals |= *(curLine++);
 			vSums |= (*(prevLine++) + *(nextLine++)) >> 1;
@@ -520,23 +556,23 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 	FN_SPEW("Got video frame of size %d/%d, %d/%d packets arrived, TS %08x\n", got_frame_size,
 	        dev->video.frame_size, dev->video.valid_pkts, dev->video.pkts_per_frame, dev->video.timestamp);
 
-	freenect_frame_size frame_size = freenect_get_video_frame_size(dev->video_format, dev->video_resolution);
+	freenect_frame_mode frame_mode = freenect_get_current_video_mode(dev);
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
-			convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_size);
+			convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode);
 			break;
 		case FREENECT_VIDEO_BAYER:
 			break;
 		case FREENECT_VIDEO_IR_10BIT:
-			convert_packed_to_16bit(dev->video.raw_buf, (uint16_t*)dev->video.proc_buf, 10, frame_size.width * frame_size.height);
+			convert_packed_to_16bit(dev->video.raw_buf, (uint16_t*)dev->video.proc_buf, 10, frame_mode.width * frame_mode.height);
 			break;
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
 			break;
 		case FREENECT_VIDEO_IR_8BIT:
-			convert_packed_to_8bit(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, 10, frame_size.width * frame_size.height);
+			convert_packed_to_8bit(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, 10, frame_mode.width * frame_mode.height);
 			break;
 		case FREENECT_VIDEO_YUV_RGB:
-			convert_uyvy_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_size);
+			convert_uyvy_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode);
 			break;
 		case FREENECT_VIDEO_YUV_RAW:
 			break;
@@ -783,28 +819,28 @@ int freenect_start_video(freenect_device *dev)
 			return -1;
 	}
 
-	freenect_frame_size frame_size = freenect_get_video_frame_size(dev->video_format, dev->video_resolution);
+	freenect_frame_mode frame_mode = freenect_get_current_video_mode(dev);
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
-			stream_init(ctx, &dev->video, freenect_get_video_frame_size(FREENECT_VIDEO_BAYER, dev->video_resolution).bytes, frame_size.bytes);
+			stream_init(ctx, &dev->video, freenect_find_video_mode(dev->video_resolution, FREENECT_VIDEO_BAYER).bytes, frame_mode.bytes);
 			break;
 		case FREENECT_VIDEO_BAYER:
-			stream_init(ctx, &dev->video, 0, frame_size.bytes);
+			stream_init(ctx, &dev->video, 0, frame_mode.bytes);
 			break;
 		case FREENECT_VIDEO_IR_8BIT:
-			stream_init(ctx, &dev->video, freenect_get_video_frame_size(FREENECT_VIDEO_IR_10BIT_PACKED, dev->video_resolution).bytes, frame_size.bytes);
+			stream_init(ctx, &dev->video, freenect_find_video_mode(dev->video_resolution, FREENECT_VIDEO_IR_10BIT_PACKED).bytes, frame_mode.bytes);
 			break;
 		case FREENECT_VIDEO_IR_10BIT:
-			stream_init(ctx, &dev->video, freenect_get_video_frame_size(FREENECT_VIDEO_IR_10BIT_PACKED, dev->video_resolution).bytes, frame_size.bytes);
+			stream_init(ctx, &dev->video, freenect_find_video_mode(dev->video_resolution, FREENECT_VIDEO_IR_10BIT_PACKED).bytes, frame_mode.bytes);
 			break;
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
-			stream_init(ctx, &dev->video, 0, frame_size.bytes);
+			stream_init(ctx, &dev->video, 0, frame_mode.bytes);
 			break;
 		case FREENECT_VIDEO_YUV_RGB:
-			stream_init(ctx, &dev->video, freenect_get_video_frame_size(FREENECT_VIDEO_YUV_RAW, dev->video_resolution).bytes, frame_size.bytes);
+			stream_init(ctx, &dev->video, freenect_find_video_mode(dev->video_resolution, FREENECT_VIDEO_YUV_RAW).bytes, frame_mode.bytes);
 			break;
 		case FREENECT_VIDEO_YUV_RAW:
-			stream_init(ctx, &dev->video, 0, frame_size.bytes);
+			stream_init(ctx, &dev->video, 0, frame_mode.bytes);
 			break;
 	}
 
@@ -888,69 +924,123 @@ void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb)
 	dev->video_cb = cb;
 }
 
-int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt)
+int freenect_get_video_mode_count()
 {
-	freenect_context *ctx = dev->parent;
-	if (dev->video.running) {
-		FN_ERROR("Tried to set video format while stream is active\n");
-		return -1;
-	}
-
-	switch (fmt) {
-		case FREENECT_VIDEO_RGB:
-		case FREENECT_VIDEO_BAYER:
-		case FREENECT_VIDEO_IR_8BIT:
-		case FREENECT_VIDEO_IR_10BIT:
-		case FREENECT_VIDEO_IR_10BIT_PACKED:
-		case FREENECT_VIDEO_YUV_RGB:
-		case FREENECT_VIDEO_YUV_RAW:
-			dev->video_format = fmt;
-			return 0;
-		default:
-			FN_ERROR("Invalid video format %d\n", fmt);
-			return -1;
-	}
+	return video_mode_count;
 }
 
-int freenect_set_video_resolution(freenect_device *dev, freenect_video_resolution res) {
-	freenect_context *ctx = dev->parent;
-	if (dev->video.running) {
-		FN_ERROR("Tried to set video resolution while stream is active\n");
-		return -1;
-	}
-	switch (res) {
-		case FREENECT_RESOLUTION_LOW:
-		case FREENECT_RESOLUTION_MEDIUM:
-		case FREENECT_RESOLUTION_HIGH:
-			dev->video_resolution = res;
-			return 0;
-		default:
-			FN_ERROR("Invalid video resolution %d\n", res);
-			return -1;
-	}
+const freenect_frame_mode freenect_get_video_mode(int mode_num)
+{
+	if (mode_num >= 0 && mode_num < video_mode_count)
+		return supported_video_modes[mode_num];
+	freenect_frame_mode retval;
+	retval.is_valid = 0;
+	return retval;
 }
 
-int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
+const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 {
+	return freenect_find_video_mode(dev->video_resolution, dev->video_format);
+}
+
+const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
+{
+	int unique_id = MAKE_RESERVED(res, fmt);
+	int i;
+	for(i = 0 ; i < video_mode_count; i++) {
+		if (supported_video_modes[i].reserved == unique_id)
+			return supported_video_modes[i];
+	}
+	freenect_frame_mode retval;
+	retval.is_valid = 0;
+	return retval;
+}
+
+int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode) {
 	freenect_context *ctx = dev->parent;
-	if (dev->depth.running) {
-		FN_ERROR("Tried to set depth format while stream is active\n");
+	if (dev->video.running) {
+		FN_ERROR("Tried to set video mode while stream is active\n");
 		return -1;
 	}
-	switch (fmt) {
-		case FREENECT_DEPTH_11BIT:
-		case FREENECT_DEPTH_10BIT:
-		case FREENECT_DEPTH_11BIT_PACKED:
-		case FREENECT_DEPTH_10BIT_PACKED:
-			dev->depth_format = fmt;
-			return 0;
-		default:
-			FN_ERROR("Invalid depth format %d\n", fmt);
-			return -1;
+	// Verify that the mode passed in is actually in the supported mode list
+	int found = 0;
+	int i;
+	for(i = 0 ; i < video_mode_count; i++) {
+		if (supported_video_modes[i].reserved == mode.reserved) {
+			found = 1;
+			break;
+		}
 	}
+	if (!found) {
+		FN_ERROR("freenect_set_video_mode: freenect_frame_mode provided is invalid\n");
+		return -1;
+	}
+
+	freenect_resolution res = RESERVED_TO_RESOLUTION(mode.reserved);
+	freenect_video_format fmt = RESERVED_TO_FORMAT(mode.reserved);
+	dev->video_format = fmt;
+	dev->video_resolution = res;
 	return 0;
 }
 
+int freenect_get_depth_mode_count()
+{
+	return depth_mode_count;
+}
+
+const freenect_frame_mode freenect_get_depth_mode(int mode_num)
+{
+	if (mode_num >= 0 && mode_num < depth_mode_count)
+		return supported_depth_modes[mode_num];
+	freenect_frame_mode retval;
+	retval.is_valid = 0;
+	return retval;
+}
+
+const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
+{
+	return freenect_find_video_mode(dev->depth_resolution, dev->depth_format);
+}
+
+const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
+{
+	int unique_id = MAKE_RESERVED(res, fmt);
+	int i;
+	for(i = 0 ; i < depth_mode_count; i++) {
+		if (supported_depth_modes[i].reserved == unique_id)
+			return supported_depth_modes[i];
+	}
+	freenect_frame_mode retval;
+	retval.is_valid = 0;
+	return retval;
+}
+
+int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode)
+{
+	freenect_context *ctx = dev->parent;
+	if (dev->depth.running) {
+		FN_ERROR("Tried to set depth mode while stream is active\n");
+		return -1;
+	}
+	// Verify that the mode passed in is actually in the supported mode list
+	int found = 0;
+	int i;
+	for(i = 0 ; i < depth_mode_count; i++) {
+		if (supported_depth_modes[i].reserved == mode.reserved) {
+			found = 1;
+			break;
+		}
+	}
+	if (!found) {
+		FN_ERROR("freenect_set_depth_mode: freenect_frame_mode provided is invalid\n");
+		return -1;
+	}
+	freenect_resolution res = RESERVED_TO_RESOLUTION(mode.reserved);
+	freenect_depth_format fmt = RESERVED_TO_FORMAT(mode.reserved);
+	dev->depth_format = fmt;
+	dev->depth_resolution = res;
+	return 0;
+}
 int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 {
 	return stream_setbuf(dev->parent, &dev->depth, buf);
@@ -961,85 +1051,3 @@ int freenect_set_video_buffer(freenect_device *dev, void *buf)
 	return stream_setbuf(dev->parent, &dev->video, buf);
 }
 
-freenect_frame_size freenect_get_video_frame_size(freenect_video_format fmt, freenect_video_resolution res) {
-	freenect_frame_size retval;
-	retval.width = 0; // invalid
-	retval.height = 0; // invalid
-	retval.bytes = 0;
-	switch(res) {
-		case FREENECT_RESOLUTION_LOW:
-			// Unimplemented, needs more reverse engineering
-			break;
-		case FREENECT_RESOLUTION_MEDIUM:
-			switch(fmt) {
-				case FREENECT_VIDEO_RGB:
-				case FREENECT_VIDEO_YUV_RGB:
-					retval.width = 640;
-					retval.height = 480;
-					retval.bytes = retval.width * retval.height * 3;
-					return retval;
-				case FREENECT_VIDEO_BAYER:
-					retval.width = 640;
-					retval.height = 480;
-					retval.bytes = retval.width * retval.height;
-					return retval;
-				case FREENECT_VIDEO_IR_8BIT:
-					retval.width = 640;
-					retval.height = 488;
-					retval.bytes = retval.width * retval.height;
-					return retval;
-				case FREENECT_VIDEO_IR_10BIT:
-					retval.width = 640;
-					retval.height = 488;
-					retval.bytes = retval.width * retval.height * 2;
-					return retval;
-				case FREENECT_VIDEO_IR_10BIT_PACKED:
-					retval.width = 640;
-					retval.height = 488;
-					retval.bytes = (retval.width * retval.height * 10) / 8;
-					return retval;
-				case FREENECT_VIDEO_YUV_RAW:
-					retval.width = 640;
-					retval.height = 480;
-					retval.bytes = retval.width * retval.height * 2;
-					return retval;
-				default:
-					break;
-			}
-			break;
-		case FREENECT_RESOLUTION_HIGH:
-			retval.width = 1280;
-			retval.height = 1024;
-			switch(fmt) {
-				case FREENECT_VIDEO_RGB:
-					retval.bytes = retval.width * retval.height * 3;
-					break;
-				case FREENECT_VIDEO_BAYER:
-					retval.bytes = retval.width * retval.height;
-					break;
-				case FREENECT_VIDEO_IR_8BIT:
-					retval.bytes = retval.width * retval.height;
-					break;
-				case FREENECT_VIDEO_IR_10BIT:
-					retval.bytes = retval.width * retval.height * 2;
-					break;
-				case FREENECT_VIDEO_IR_10BIT_PACKED:
-					retval.bytes = (retval.width * retval.height * 10) / 8;
-					break;
-				case FREENECT_VIDEO_YUV_RGB: // YUV unsupported at 1280x1024 since sensor
-				case FREENECT_VIDEO_YUV_RAW: // is 1280x1024 Bayer pattern anyway
-				default:
-					retval.width = 0;
-					retval.height = 0;
-					break;
-			}
-			break;
-		default:
-			break;
-	}
-	return retval;
-}
-
-freenect_frame_size freenect_get_current_video_frame_size(freenect_device *dev) {
-	return freenect_get_video_frame_size(dev->video_format, dev->video_resolution);
-}

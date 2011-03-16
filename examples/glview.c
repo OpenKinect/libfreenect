@@ -338,9 +338,8 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_video_callback(f_dev, rgb_cb);
-	freenect_set_video_format(f_dev, current_format);
-	freenect_set_video_resolution(f_dev, FREENECT_RESOLUTION_MEDIUM);
-	freenect_set_depth_format(f_dev, FREENECT_DEPTH_11BIT);
+	freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, current_format));
+	freenect_set_depth_mode(f_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
 	freenect_set_video_buffer(f_dev, rgb_back);
 
 	freenect_start_depth(f_dev);
@@ -364,7 +363,7 @@ void *freenect_threadfunc(void *arg)
 
 		if (requested_format != current_format) {
 			freenect_stop_video(f_dev);
-			freenect_set_video_format(f_dev, requested_format);
+			freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, requested_format));
 			freenect_start_video(f_dev);
 			current_format = requested_format;
 		}

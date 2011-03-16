@@ -40,24 +40,29 @@ extern "C" {
 
 #define FREENECT_COUNTS_PER_G 819 /**< Ticks per G for accelerometer as set per http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf */
 
-/// Structure to give information about the width and height of a
-/// frame, as well as the total number of bytes needed to hold a
-/// single frame.  Negative values for width and height indicate
-/// an invalid video format and resolution combination, as does
-/// a value of 0 for bytes.
+/// Structure to give information about the width, height, bitrate,
+/// framerate, and buffer size of a frame in a particular mode, as
+/// well as the total number of bytes needed to hold a single frame.
 typedef struct {
-	int width;  /**< Width of this frame, in pixels */
-	int height; /**< Height of this frame, in pixels */
-	int bytes;  /**< Total number of bytes needed to hold a single frame at the given resolution and pixel format */
-} freenect_frame_size;
+	uint32_t reserved;               /**< unique ID used internally.  The meaning of values may change without notice.  Don't touch or depend on the contents of this field.  We mean it. */
+	int is_valid;               /**< If 0, this freenect_frame_mode is invalid and does not describe a supported mode.  Otherwise, the frame_mode is valid. */
+	int bytes;                  /**< Total buffer size in bytes to hold a single frame of data.  Should be equivalent to width * height * (data_bits_per_pixel+padding_bits_per_pixel) / 8 */
+	int width;                  /**< Width of the frame, in pixels */
+	int height;                 /**< Height of the frame, in pixels */
+	int data_bits_per_pixel;    /**< Number of bits of information needed for each pixel */
+	int padding_bits_per_pixel; /**< Number of bits of padding for alignment used for each pixel */
+	int framerate;              /**< Approximate expected frame rate, in Hz */
+} freenect_frame_mode ;
 
 /// Enumeration of available resolutions.
 /// Not all available resolutions are actually supported for all video formats.
+/// Frame modes may not perfectly match resolutions.  For instance,
+/// FREENECT_RESOLUTION_MEDIUM is 640x488 for the IR camera.
 typedef enum {
 	FREENECT_RESOLUTION_LOW    = 0, /**< QVGA - 320x240 */
 	FREENECT_RESOLUTION_MEDIUM = 1, /**< VGA  - 640x480 */
 	FREENECT_RESOLUTION_HIGH   = 2, /**< SXGA - 1280x1024 */
-} freenect_video_resolution;
+} freenect_resolution;
 
 /// Enumeration of video frame information states.
 /// See http://openkinect.org/wiki/Protocol_Documentation#RGB_Camera for more information.
@@ -272,26 +277,6 @@ FREENECTAPI void freenect_set_depth_callback(freenect_device *dev, freenect_dept
 FREENECTAPI void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb);
 
 /**
- * Set the format for depth information
- *
- * @param dev Device to set depth information format for
- * @param fmt Format of depth information. See freenect_depth_format enum.
- *
- * @return 0 on success, < 0 on error
- */
-FREENECTAPI int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt);
-
-/**
- * Set the format for video information
- *
- * @param dev Device to set video information format for
- * @param fmt Format of video information. See freenect_video_format enum.
- *
- * @return 0 on success, < 0 on error
- */
-FREENECTAPI int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt);
-
-/**
  * Set the buffer to store depth information to. Size of buffer is
  * dependant on depth format. See FREENECT_DEPTH_*_SIZE defines for
  * more information.
@@ -429,40 +414,105 @@ FREENECTAPI int freenect_set_led(freenect_device *dev, freenect_led_options opti
 FREENECTAPI void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z);
 
 /**
- * Return the resolution implied and buffer size needed for the given
- * pixel format and resolution enum values.
+ * Get the number of video camera modes supported by the driver.  This includes both RGB and IR modes.
  *
- * @param fmt Video format (pixel format) to return information about
- * @param res Resolution enum value to return information about
- *
- * @return Frame information structure, containing width, height, and
- * bytes-per-frame.  If width, height, or bytes is 0, the requested
- * format/resolution combination is unsupported and can be considered
- * invalid.
+ * @return Number of video modes supported by the driver
  */
-FREENECTAPI freenect_frame_size freenect_get_video_frame_size(freenect_video_format fmt, freenect_video_resolution res);
+FREENECTAPI int freenect_get_video_mode_count();
 
 /**
- * Convenience function to return the resolution and buffer size for
- * the current pixel format and resolution of a given freenect device.
+ * Get the frame descriptor of the nth supported video mode for the
+ * video camera.
  *
- * @param dev Device to return current frame format information about
+ * @param n Which of the supported modes to return information about
  *
- * @return Frame information structure.  As in freenect_get_video_frame_size(),
- * if width, height, or bytes is 0, the requested format/resolution
- * combination is unsupported.
+ * @return A freenect_frame_mode describing the nth video mode
  */
-FREENECTAPI freenect_frame_size freenect_get_current_video_frame_size(freenect_device *dev);
+FREENECTAPI const freenect_frame_mode freenect_get_video_mode(int mode_num);
 
 /**
- * Set which resolution the video stream should run at for a given freenect device.
+ * Get the frame descriptor of the current video mode for the specified
+ * freenect device.
  *
- * @param dev Device for which to set video stream resolution
- * @param res Desired stream resolution
+ * @param dev Which device to return the currently-set video mode for
  *
- * @return 0 on success, < 0 on error.
+ * @return A freenect_frame_mode describing the current video mode of the specified device
  */
-FREENECTAPI int freenect_set_video_resolution(freenect_device *dev, freenect_video_resolution res);
+FREENECTAPI const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev);
+
+/**
+ * Convenience function to return a mode descriptor matching the
+ * specified resolution and video camera pixel format, if one exists.
+ *
+ * @param res Resolution desired
+ * @param fmt Pixel format desired
+ *
+ * @return A freenect_frame_mode that matches the arguments specified, if such a valid mode exists; otherwise, an invalid freenect_frame_mode.
+ */
+FREENECTAPI const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt);
+
+/**
+ * Sets the current video mode for the specified device.  If the
+ * freenect_frame_mode specified is not one provided by the driver
+ * e.g. from freenect_get_video_mode() or freenect_find_video_mode()
+ * then behavior is undefined.  The current video mode cannot be
+ * changed while streaming is active.
+ *
+ * @param dev Device for which to set the video mode
+ * @param mode Frame mode to set
+ *
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode);
+
+/**
+ * Get the number of depth camera modes supported by the driver.  This includes both RGB and IR modes.
+ *
+ * @return Number of depth modes supported by the driver
+ */
+FREENECTAPI int freenect_get_depth_mode_count();
+
+/**
+ * Get the frame descriptor of the nth supported depth mode for the
+ * depth camera.
+ *
+ * @param n Which of the supported modes to return information about
+ *
+ * @return A freenect_frame_mode describing the nth depth mode
+ */
+FREENECTAPI const freenect_frame_mode freenect_get_depth_mode(int mode_num);
+
+/**
+ * Get the frame descriptor of the current depth mode for the specified
+ * freenect device.
+ *
+ * @param dev Which device to return the currently-set depth mode for
+ *
+ * @return A freenect_frame_mode describing the current depth mode of the specified device
+ */
+FREENECTAPI const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev);
+
+/**
+ * Convenience function to return a mode descriptor matching the
+ * specified resolution and depth camera pixel format, if one exists.
+ *
+ * @param res Resolution desired
+ * @param fmt Pixel format desired
+ *
+ * @return A freenect_frame_mode that matches the arguments specified, if such a valid mode exists; otherwise, an invalid freenect_frame_mode.
+ */
+FREENECTAPI const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt);
+
+/**
+ * Sets the current depth mode for the specified device.  The mode
+ * cannot be changed while streaming is active.
+ *
+ * @param dev Device for which to set the depth mode
+ * @param mode Frame mode to set
+ *
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode);
 
 #ifdef __cplusplus
 }

@@ -14,6 +14,6 @@ install (FILES "libfreenect_cv.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 
 add_executable(cvdemo cvdemo.c)
-target_link_libraries(cvdemo freenect freenect_sync freenect_cv cv highgui)
+target_link_libraries(cvdemo freenect freenect_sync freenect_cv cv cxcore highgui)
 install (TARGETS cvdemo
   DESTINATION bin)

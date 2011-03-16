@@ -78,7 +78,7 @@ private:
 class MyFreenectDevice : public Freenect::FreenectDevice {
 public:
 	MyFreenectDevice(freenect_context *_ctx, int _index)
-		: Freenect::FreenectDevice(_ctx, _index), m_buffer_depth(freenect_get_video_frame_size(FREENECT_VIDEO_RGB, FREENECT_RESOLUTION_MEDIUM).bytes),m_buffer_video(freenect_get_video_frame_size(FREENECT_VIDEO_RGB, FREENECT_RESOLUTION_MEDIUM).bytes), m_gamma(2048), m_new_rgb_frame(false), m_new_depth_frame(false)
+		: Freenect::FreenectDevice(_ctx, _index), m_buffer_depth(freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB).bytes),m_buffer_video(freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB).bytes), m_gamma(2048), m_new_rgb_frame(false), m_new_depth_frame(false)
 	{
 		for( unsigned int i = 0 ; i < 2048 ; i++) {
 			float v = i/2048.0;

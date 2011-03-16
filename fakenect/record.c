@@ -119,7 +119,7 @@ void depth_cb(freenect_device *dev, void *depth, uint32_t timestamp)
 
 void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 {
-	dump('r', timestamp, rgb, freenect_get_current_video_frame_size(dev).bytes);
+	dump('r', timestamp, rgb, freenect_get_current_video_mode(dev).bytes);
 }
 
 void init()
@@ -135,10 +135,9 @@ void init()
 		printf("Error: Cannot get device\n");
 		return;
 	}
-	freenect_set_depth_format(dev, FREENECT_DEPTH_11BIT);
+	freenect_set_depth_mode(dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
 	freenect_start_depth(dev);
-	freenect_set_video_format(dev, FREENECT_VIDEO_RGB);
-	freenect_set_video_resolution(dev, FREENECT_RESOLUTION_MEDIUM);
+	freenect_set_video_mode(dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
 	freenect_start_video(dev);
 	freenect_set_depth_callback(dev, depth_cb);
 	freenect_set_video_callback(dev, rgb_cb);

@@ -64,9 +64,8 @@ namespace Freenect {
 		FreenectDevice(freenect_context *_ctx, int _index) {
 			if(freenect_open_device(_ctx, &m_dev, _index) < 0) throw std::runtime_error("Cannot open Kinect");
 			freenect_set_user(m_dev, this);
-			freenect_set_video_format(m_dev, FREENECT_VIDEO_RGB);
-			freenect_set_video_resolution(m_dev, FREENECT_RESOLUTION_MEDIUM);
-			freenect_set_depth_format(m_dev, FREENECT_DEPTH_11BIT);
+			freenect_set_video_mode(m_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
+			freenect_set_depth_mode(m_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
 			freenect_set_depth_callback(m_dev, freenect_depth_callback);
 			freenect_set_video_callback(m_dev, freenect_video_callback);
 		}
@@ -100,7 +99,9 @@ namespace Freenect {
 		void setVideoFormat(freenect_video_format requested_format) {
 			if (requested_format != m_video_format) {
 				freenect_stop_video(m_dev);
-				if (freenect_set_video_format(m_dev, requested_format) < 0) throw std::runtime_error("Cannot set video format");
+				freenect_frame_mode mode = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, requested_format);
+				if (!mode.is_valid) throw std::runtime_error("Cannot set video format: invalid mode");
+				if (freenect_set_video_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set video format");
 				freenect_start_video(m_dev);
 				m_video_format = requested_format;
 			}
@@ -111,7 +112,9 @@ namespace Freenect {
 		void setDepthFormat(freenect_depth_format requested_format) {
 			if (requested_format != m_depth_format) {
 				freenect_stop_depth(m_dev);
-				if (freenect_set_depth_format(m_dev, requested_format) < 0) throw std::runtime_error("Cannot set depth format");
+				freenect_frame_mode mode = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, requested_format);
+				if (!mode.is_valid) throw std::runtime_error("Cannot set depth format: invalid mode");
+				if (freenect_set_depth_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set depth format");
 				freenect_start_depth(m_dev);
 				m_depth_format = requested_format;
 			}
@@ -133,7 +136,7 @@ namespace Freenect {
 				case FREENECT_VIDEO_IR_10BIT_PACKED:
 				case FREENECT_VIDEO_YUV_RGB:
 				case FREENECT_VIDEO_YUV_RAW:
-					return freenect_get_video_frame_size(m_video_format, FREENECT_RESOLUTION_MEDIUM).bytes;
+					return freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, m_video_format).bytes;
 				default:
 					return 0;
 			}

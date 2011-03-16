@@ -72,8 +72,8 @@ int freenect_led;
 
 freenect_video_format requested_format = FREENECT_VIDEO_RGB;
 freenect_video_format current_format = FREENECT_VIDEO_RGB;
-freenect_video_resolution requested_resolution = FREENECT_RESOLUTION_HIGH;
-freenect_video_resolution current_resolution = FREENECT_RESOLUTION_HIGH;
+freenect_resolution requested_resolution = FREENECT_RESOLUTION_HIGH;
+freenect_resolution current_resolution = FREENECT_RESOLUTION_HIGH;
 
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
 int got_rgb = 0;
@@ -133,7 +133,7 @@ void DrawVideoScene()
 
 	pthread_mutex_lock(&video_mutex);
 
-	freenect_frame_size frame_size = freenect_get_video_frame_size(current_format, current_resolution);
+	freenect_frame_mode frame_mode = freenect_get_current_video_mode(f_dev);
 
 	if (got_rgb) {
 		uint8_t *tmp = rgb_front;
@@ -151,16 +151,16 @@ void DrawVideoScene()
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
 	if (current_format == FREENECT_VIDEO_RGB || current_format == FREENECT_VIDEO_YUV_RGB) {
-		glTexImage2D(GL_TEXTURE_2D, 0, 3, frame_size.width, frame_size.height, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
+		glTexImage2D(GL_TEXTURE_2D, 0, 3, frame_mode.width, frame_mode.height, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
 	} else {
-		glTexImage2D(GL_TEXTURE_2D, 0, 1, frame_size.width, frame_size.height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front);
+		glTexImage2D(GL_TEXTURE_2D, 0, 1, frame_mode.width, frame_mode.height, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front);
 	}
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	glTexCoord2f(0, 0); glVertex3f(0,0,0);
-	glTexCoord2f(1, 0); glVertex3f(frame_size.width,0,0);
-	glTexCoord2f(1, 1); glVertex3f(frame_size.width,frame_size.height,0);
-	glTexCoord2f(0, 1); glVertex3f(0,frame_size.height,0);
+	glTexCoord2f(1, 0); glVertex3f(frame_mode.width,0,0);
+	glTexCoord2f(1, 1); glVertex3f(frame_mode.width,frame_mode.height,0);
+	glTexCoord2f(0, 1); glVertex3f(0,frame_mode.height,0);
 	glEnd();
 
 	glutSwapBuffers();
@@ -211,7 +211,7 @@ void keyPressed(unsigned char key, int x, int y)
 			}
 		}
 		glutSetWindow(video_window);
-		freenect_frame_size s = freenect_get_video_frame_size(requested_format, requested_resolution);
+		freenect_frame_mode s = freenect_find_video_mode(requested_resolution, requested_format);
 		glutReshapeWindow(s.width, s.height);
 	}
 	if (key == 'd') { // Toggle depth camera.
@@ -272,9 +272,9 @@ void *gl_threadfunc(void *arg)
 	glutKeyboardFunc(&keyPressed);
 	InitGL(640, 480);
 
-	freenect_frame_size frame = freenect_get_video_frame_size(current_format, current_resolution);
+	freenect_frame_mode mode = freenect_find_video_mode(current_resolution, current_format);
 	glutInitWindowPosition(640,0);
-	glutInitWindowSize(frame.width, frame.height);
+	glutInitWindowSize(mode.width, mode.height);
 	video_window = glutCreateWindow("Video");
 
 	glutDisplayFunc(&DrawVideoScene);
@@ -283,7 +283,7 @@ void *gl_threadfunc(void *arg)
 	glutKeyboardFunc(&keyPressed);
 
 	InitGL(640, 480);
-	ReSizeGLScene(frame.width, frame.height);
+	ReSizeGLScene(mode.width, mode.height);
 
 	glutMainLoop();
 
@@ -362,12 +362,11 @@ void *freenect_threadfunc(void *arg)
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_video_callback(f_dev, video_cb);
-	freenect_set_video_format(f_dev, current_format);
-	freenect_set_video_resolution(f_dev, current_resolution);
-	freenect_set_depth_format(f_dev, FREENECT_DEPTH_11BIT);
-	rgb_back = (uint8_t*)malloc(freenect_get_video_frame_size(current_format, current_resolution).bytes);
-	rgb_mid = (uint8_t*)malloc(freenect_get_video_frame_size(current_format, current_resolution).bytes);
-	rgb_front = (uint8_t*)malloc(freenect_get_video_frame_size(current_format, current_resolution).bytes);
+	freenect_set_video_mode(f_dev, freenect_find_video_mode(current_resolution, current_format));
+	freenect_set_depth_mode(f_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
+	rgb_back = (uint8_t*)malloc(freenect_find_video_mode(current_resolution, current_format).bytes);
+	rgb_mid = (uint8_t*)malloc(freenect_find_video_mode(current_resolution, current_format).bytes);
+	rgb_front = (uint8_t*)malloc(freenect_find_video_mode(current_resolution, current_format).bytes);
 	freenect_set_video_buffer(f_dev, rgb_back);
 
 	freenect_start_depth(f_dev);
@@ -378,15 +377,14 @@ void *freenect_threadfunc(void *arg)
 		status = freenect_process_events(f_ctx);
 		if (requested_format != current_format || requested_resolution != current_resolution) {
 			freenect_stop_video(f_dev);
-			freenect_set_video_format(f_dev, requested_format);
-			freenect_set_video_resolution(f_dev, requested_resolution);
+			freenect_set_video_mode(f_dev, freenect_find_video_mode(requested_resolution, requested_format));
 			pthread_mutex_lock(&video_mutex);
 			free(rgb_back);
 			free(rgb_mid);
 			free(rgb_front);
-			rgb_back = (uint8_t*)malloc(freenect_get_video_frame_size(requested_format, requested_resolution).bytes);
-			rgb_mid = (uint8_t*)malloc(freenect_get_video_frame_size(requested_format, requested_resolution).bytes);
-			rgb_front = (uint8_t*)malloc(freenect_get_video_frame_size(requested_format, requested_resolution).bytes);
+			rgb_back = (uint8_t*)malloc(freenect_find_video_mode(requested_resolution, requested_format).bytes);
+			rgb_mid = (uint8_t*)malloc(freenect_find_video_mode(requested_resolution, requested_format).bytes);
+			rgb_front = (uint8_t*)malloc(freenect_find_video_mode(requested_resolution, requested_format).bytes);
 			current_format = requested_format;
 			current_resolution = requested_resolution;
 			pthread_mutex_unlock(&video_mutex);
