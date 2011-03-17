@@ -255,7 +255,6 @@ static sync_kinect_t *alloc_kinect(int index)
 	}
 	kinect->video.fmt = -1;
 	kinect->depth.fmt = -1;
-  freenect_set_video_resolution(kinect->dev, FREENECT_RESOLUTION_MEDIUM);
 	freenect_set_video_callback(kinect->dev, video_producer_cb);
 	freenect_set_depth_callback(kinect->dev, depth_producer_cb);
 	pthread_mutex_init(&kinect->video.lock, NULL);
