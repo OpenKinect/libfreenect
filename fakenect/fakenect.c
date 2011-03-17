@@ -184,7 +184,7 @@ int freenect_process_events(freenect_context *ctx)
 			if (cur_depth_cb && depth_running) {
 				void *cur_depth = skip_line(data);
 				if (depth_buffer) {
-					memcpy(depth_buffer, cur_depth, FREENECT_DEPTH_11BIT_SIZE);
+					memcpy(depth_buffer, cur_depth, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT).bytes);
 					cur_depth = depth_buffer;
 				}
 				cur_depth_cb(fake_dev, cur_depth, timestamp);

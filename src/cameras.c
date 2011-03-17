@@ -691,16 +691,14 @@ int freenect_start_depth(freenect_device *dev)
 
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
-			stream_init(ctx, &dev->depth, FREENECT_DEPTH_11BIT_PACKED_SIZE, FREENECT_DEPTH_11BIT_SIZE);
+			stream_init(ctx, &dev->depth, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_11BIT_PACKED).bytes, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_11BIT).bytes);
 			break;
 		case FREENECT_DEPTH_10BIT:
-			stream_init(ctx, &dev->depth, FREENECT_DEPTH_10BIT_PACKED_SIZE, FREENECT_DEPTH_10BIT_SIZE);
+			stream_init(ctx, &dev->depth, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_10BIT_PACKED).bytes, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_10BIT).bytes);
 			break;
 		case FREENECT_DEPTH_11BIT_PACKED:
-			stream_init(ctx, &dev->depth, 0, FREENECT_DEPTH_11BIT_PACKED_SIZE);
-			break;
 		case FREENECT_DEPTH_10BIT_PACKED:
-			stream_init(ctx, &dev->depth, 0, FREENECT_DEPTH_10BIT_PACKED_SIZE);
+			stream_init(ctx, &dev->depth, 0, freenect_find_depth_mode(dev->depth_resolution, dev->depth_format).bytes);
 			break;
 	}
 

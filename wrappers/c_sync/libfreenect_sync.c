@@ -95,16 +95,10 @@ static int alloc_buffer_ring_depth(freenect_depth_format fmt, buffer_ring_t *buf
 	int sz, i;
 	switch (fmt) {
 		case FREENECT_DEPTH_11BIT:
-			sz = FREENECT_DEPTH_11BIT_SIZE;
-			break;
 		case FREENECT_DEPTH_10BIT:
-			sz = FREENECT_DEPTH_10BIT_SIZE;
-			break;
 		case FREENECT_DEPTH_11BIT_PACKED:
-			sz = FREENECT_DEPTH_11BIT_PACKED_SIZE;
-			break;
 		case FREENECT_DEPTH_10BIT_PACKED:
-			sz = FREENECT_DEPTH_10BIT_PACKED_SIZE;
+			sz = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, fmt).bytes;
 			break;
 		default:
 			printf("Invalid depth format %d\n", fmt);

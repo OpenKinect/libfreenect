@@ -142,11 +142,7 @@ namespace Freenect {
 			}
 		}
 		int getDepthBufferSize(){
-			if(m_depth_format == FREENECT_DEPTH_11BIT) return FREENECT_DEPTH_11BIT_SIZE;
-			if(m_depth_format == FREENECT_DEPTH_10BIT) return FREENECT_DEPTH_11BIT_SIZE;
-			if(m_depth_format == FREENECT_DEPTH_11BIT_PACKED) return FREENECT_DEPTH_11BIT_PACKED_SIZE;
-			if(m_depth_format == FREENECT_DEPTH_10BIT_PACKED) return FREENECT_DEPTH_10BIT_PACKED_SIZE;
-			return 0;
+			return freenect_get_current_depth_mode(m_dev).bytes;
 		}
 	  private:
 		freenect_device *m_dev;

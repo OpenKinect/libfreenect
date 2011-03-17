@@ -33,11 +33,6 @@
 extern "C" {
 #endif
 
-#define FREENECT_DEPTH_11BIT_SIZE (640*480*sizeof(uint16_t)) /**< Size of the 11 bit depth frame */
-#define FREENECT_DEPTH_10BIT_SIZE FREENECT_DEPTH_11BIT_SIZE	/**< Size of the 10 bit depth frame */
-#define FREENECT_DEPTH_11BIT_PACKED_SIZE 422400	/**< Size of the packed 11 bit depth frame */
-#define FREENECT_DEPTH_10BIT_PACKED_SIZE 384000	/**< Size of the packed 10 bit depth frame */
-
 #define FREENECT_COUNTS_PER_G 819 /**< Ticks per G for accelerometer as set per http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf */
 
 /// Structure to give information about the width, height, bitrate,

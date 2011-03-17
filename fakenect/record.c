@@ -113,7 +113,7 @@ void snapshot_accel(freenect_device *dev)
 
 void depth_cb(freenect_device *dev, void *depth, uint32_t timestamp)
 {
-	dump('d', timestamp, depth, FREENECT_DEPTH_11BIT_SIZE);
+	dump('d', timestamp, depth, freenect_get_current_depth_mode(dev).bytes);
 }
 
 
