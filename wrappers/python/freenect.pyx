@@ -55,6 +55,16 @@ cdef struct freenect_raw_tilt_state:
     char tilt_angle
     int tilt_status
 
+ctypedef struct freenect_frame_mode:
+    int reserved
+    int is_valid
+    int nbytes
+    int width
+    int height
+    int data_bits_per_pixel
+    int padding_bits_per_pixel
+    int framerate
+
 cdef extern from "numpy/arrayobject.h":
     void import_array()
     cdef object PyArray_SimpleNewFromData(int nd, npc.npy_intp *dims,
@@ -83,9 +93,19 @@ cdef extern from "libfreenect.h":
     int freenect_close_device(void *dev)
     void freenect_set_depth_callback(void *dev, freenect_depth_cb cb)
     void freenect_set_video_callback(void *dev, freenect_video_cb cb)
-    int freenect_set_video_format(void *dev, int fmt)
-    int freenect_set_video_resolution(void *dev, int fmt)
-    int freenect_set_depth_format(void *dev, int fmt)
+
+    int freenect_get_video_mode_count()
+    freenect_frame_mode freenect_get_video_mode(int mode_num)
+    freenect_frame_mode freenect_get_current_video_mode(void *dev)
+    freenect_frame_mode freenect_find_video_mode(int res, int fmt)
+    int freenect_set_video_mode(void *dev, freenect_frame_mode mode)
+
+    int freenect_get_depth_mode_count()
+    freenect_frame_mode freenect_get_depth_mode(int mode_num)
+    freenect_frame_mode freenect_get_current_depth_mode(void *dev)
+    freenect_frame_mode freenect_find_depth_mode(int res, int fmt)
+    int freenect_set_depth_mode(void *dev, freenect_frame_mode mode)
+
     int freenect_start_depth(void *dev)
     int freenect_start_video(void *dev)
     int freenect_stop_depth(void *dev)
@@ -133,12 +153,11 @@ cdef class StatePtr:
     tilt_angle = property(_get_tilt_angle)
     tilt_status = property(_get_tilt_status)
 
+def set_depth_mode(DevPtr dev, int res, int mode):
+    return freenect_set_depth_mode(dev._ptr, freenect_find_depth_mode(res, mode))
 
-def set_video_format(DevPtr dev, int fmt):
-    return freenect_set_video_format(dev._ptr, fmt)
-
-def set_depth_format(DevPtr dev, int fmt):
-    return freenect_set_depth_format(dev._ptr, fmt)
+def set_video_mode(DevPtr dev, int res, int mode):
+    return freenect_set_video_mode(dev._ptr, freenect_find_video_mode(res, mode))
 
 def start_depth(DevPtr dev):
     return freenect_start_depth(dev._ptr)
@@ -279,10 +298,9 @@ def runloop(depth=None, video=None, body=None):
         return
     devp = dev._ptr
     ctxp = ctx._ptr
-    freenect_set_depth_format(devp, 0)
+    freenect_set_depth_mode(devp, freenect_find_depth_mode(RESOLUTION_MEDIUM, 0))
     freenect_start_depth(devp)
-    freenect_set_video_format(devp, VIDEO_RGB)
-    freenect_set_video_resolution(devp, RESOLUTION_MEDIUM)
+    freenect_set_video_mode(devp, freenect_find_video_mode(RESOLUTION_MEDIUM, VIDEO_RGB))
     freenect_start_video(devp)
     freenect_set_depth_callback(devp, depth_cb)
     freenect_set_video_callback(devp, video_cb)
