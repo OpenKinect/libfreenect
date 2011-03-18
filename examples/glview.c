@@ -123,7 +123,7 @@ void DrawGLScene()
 	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, depth_front);
 
 	glBegin(GL_TRIANGLE_FAN);
-	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	glTexCoord2f(0, 0); glVertex3f(0,0,0);
 	glTexCoord2f(1, 0); glVertex3f(640,0,0);
 	glTexCoord2f(1, 1); glVertex3f(640,480,0);
@@ -137,7 +137,7 @@ void DrawGLScene()
 		glTexImage2D(GL_TEXTURE_2D, 0, 1, 640, 480, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front+640*4);
 
 	glBegin(GL_TRIANGLE_FAN);
-	glColor4f(255.0f, 255.0f, 255.0f, 255.0f);
+	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
 	glTexCoord2f(0, 0); glVertex3f(640,0,0);
 	glTexCoord2f(1, 0); glVertex3f(1280,0,0);
 	glTexCoord2f(1, 1); glVertex3f(1280,480,0);
