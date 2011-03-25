@@ -1,7 +1,7 @@
 ######################################################################################
 # Fakenect Mock Library
 ######################################################################################
-SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/utils)
+SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib/fakenect)
 add_library (fakenect SHARED fakenect.c)
 set_target_properties ( fakenect PROPERTIES
@@ -14,3 +14,5 @@ install (TARGETS fakenect
 
 add_executable(record record.c)
 target_link_libraries(record freenect m)
+install (TARGETS record
+  DESTINATION bin)
