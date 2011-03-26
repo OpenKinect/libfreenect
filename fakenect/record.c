@@ -196,6 +196,17 @@ void init_ffmpeg_streams()
 	rgb_stream = open_ffmpeg(rgb_name);
 }
 
+void print_mode(const char *name, freenect_frame_mode mode) {
+    /* This is just a courtesy function to let the user know the mode
+       if it becomes a bother for maintainability just comment out the
+       code in its body.  It will only break if struct entries go missing.
+     */
+    printf("%s Mode: {%d, %d, %d, %d, %d, %d, %d, %d}\n", name,
+	   mode.reserved, mode.is_valid, mode.bytes, mode.width,
+	   mode.height, mode.data_bits_per_pixel, mode.padding_bits_per_pixel,
+	   mode.framerate);
+}
+
 void init()
 {
 	freenect_context *ctx;
@@ -209,6 +220,8 @@ void init()
 		printf("Error: Cannot get device\n");
 		return;
 	}
+	print_mode("Depth", freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
+	print_mode("Video", freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
 	freenect_set_depth_mode(dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
 	freenect_start_depth(dev);
 	freenect_set_video_mode(dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
