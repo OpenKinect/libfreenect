@@ -266,7 +266,7 @@ namespace KinectDemo
 			}
 			
 			// Swap mid and back
-			GCHandle tmp = rgbHandleBack;
+			GCHandle tmp = rgbHandleMid;
 			rgbHandleMid = rgbHandleBack;
 			rgbHandleBack = tmp;
 			
