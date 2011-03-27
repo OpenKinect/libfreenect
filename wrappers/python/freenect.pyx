@@ -57,6 +57,8 @@ cdef struct freenect_raw_tilt_state:
 
 ctypedef struct freenect_frame_mode:
     int reserved
+    int resolution
+    int pixel_format
     int is_valid
     int nbytes
     int width
