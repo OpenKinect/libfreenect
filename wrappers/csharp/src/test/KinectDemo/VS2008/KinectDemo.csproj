@@ -49,15 +49,15 @@
     <Reference Include="System" />
     <Reference Include="OpenTK.GLControl, Version=1.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Desktop\opentk\Binaries\OpenTK\Release\OpenTK.GLControl.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\..\OpenTK\OpenTK.GLControl.dll</HintPath>
     </Reference>
     <Reference Include="OpenTK, Version=1.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Desktop\opentk\Binaries\OpenTK\Release\OpenTK.dll</HintPath>
+      <HintPath>..\..\..\..\..\..\..\OpenTK\OpenTK.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\lib\MonoDevelop\freenectdotnet.csproj">
+    <ProjectReference Include="..\..\..\lib\VS2008\freenectdotnet.csproj">
       <Project>{360413F9-4D9B-46BE-BEC7-9B666850ED8C}</Project>
       <Name>freenectdotnet</Name>
     </ProjectReference>
