@@ -161,7 +161,7 @@ namespace freenect
 		public static extern int freenect_init(ref IntPtr context, IntPtr freenectUSBContext);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_process_events(IntPtr context);
+		public static extern int freenect_shutdown(IntPtr context);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern void freenect_set_log_level(IntPtr context, Kinect.LogLevelOptions level);
@@ -170,7 +170,7 @@ namespace freenect
 		public static extern void freenect_set_log_callback(IntPtr context, FreenectLogCallback callback);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_shutdown(IntPtr context);
+		public static extern int freenect_process_events(IntPtr context);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_num_devices(IntPtr context);
@@ -182,34 +182,28 @@ namespace freenect
 		public static extern int freenect_close_device(IntPtr device);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_set_led(IntPtr device, LED.ColorOption option);
-		
-		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_set_tilt_degs(IntPtr device, double angle);
-		
-		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_set_video_format(IntPtr device, VideoCamera.DataFormatOption rgbFormat);
+		public static extern void freenect_set_depth_callback(IntPtr device, FreenectDepthDataCallback callback);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern void freenect_set_video_callback(IntPtr device, FreenectVideoDataCallback callback);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_start_video(IntPtr device);
+		public static extern int freenect_set_depth_buffer(IntPtr device, IntPtr buf);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_stop_video(IntPtr device);
-		
-		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_set_depth_format(IntPtr device, DepthCamera.DataFormatOption depthFormat);
-		
-		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern void freenect_set_depth_callback(IntPtr device, FreenectDepthDataCallback callback);
+		public static extern int freenect_set_video_buffer(IntPtr device, IntPtr buf);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_start_depth(IntPtr device);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern int freenect_start_video(IntPtr device);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_stop_depth(IntPtr device);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern int freenect_stop_video(IntPtr device);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_update_tilt_state(IntPtr device);
@@ -218,10 +212,75 @@ namespace freenect
 		public static extern IntPtr freenect_get_tilt_state(IntPtr device);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_set_depth_buffer(IntPtr device, IntPtr buf);
+		public static extern double freenect_get_tilt_degs(IntPtr device);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_set_video_buffer(IntPtr device, IntPtr buf);
+		public static extern int freenect_set_tilt_degs(IntPtr device, double angle);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern Motor.TiltStatusOption freenect_get_tilt_status(IntPtr device);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern int freenect_set_led(IntPtr device, LED.ColorOption option);	
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern int freenect_get_video_mode_count(IntPtr device);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern FreenectFrameMode freenect_get_video_mode(int modeNum);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern FreenectFrameMode freenect_get_current_video_mode();
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern FreenectFrameMode freenect_find_video_mode(FreenectResolution resolution, VideoCamera.DataFormatOption videoFormat);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern int freenect_set_video_mode(IntPtr device, FreenectFrameMode mode);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern int freenect_get_depth_mode_count(IntPtr device);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern FreenectFrameMode freenect_get_depth_mode(int modeNum);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern FreenectFrameMode freenect_get_current_depth_mode();
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern FreenectFrameMode freenect_find_depth_mode(FreenectResolution resolution, DepthCamera.DataFormatOption depthFormat);
+		
+		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
+		public static extern int freenect_set_depth_mode(IntPtr device, FreenectFrameMode mode);
+		
+	}
+	
+	/// <summary>
+	/// Frame capture settings for all video/depth feeds
+	/// </summary>
+	internal struct FreenectFrameMode
+	{
+		public UInt32 Reserved;
+		public int IsValid;
+		public int Bytes;
+		public int Width;
+		public int Height;
+		public int DataBitsPerPixel;
+		public int PaddingBitsPerPixel;
+		public int Framerate;
+	}
+	
+	/// <summary>
+	/// Resolution settings.
+	/// LOW = QVGA (320x240)
+	/// MEDIUM = VGA (640x480 for video, 640x488 for IR)
+	/// HIGH = SXGA (1280x1024)
+	/// </summary>
+	internal enum FreenectResolution
+	{
+		LOW = 1,
+		MEDIUM = 2,
+		HIGH = 3
 	}
 	
 	/// <summary>
@@ -233,7 +292,7 @@ namespace freenect
 		public Int16 					AccelerometerY;
 		public Int16 					AccelerometerZ;
 		public SByte  					TiltAngle;
-		public Motor.TiltStatusOption  TiltStatus;
+		public Motor.TiltStatusOption   TiltStatus;
 	}
 	
 	/// <summary>
