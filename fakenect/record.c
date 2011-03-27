@@ -201,8 +201,8 @@ void print_mode(const char *name, freenect_frame_mode mode) {
        if it becomes a bother for maintainability just comment out the
        code in its body.  It will only break if struct entries go missing.
      */
-    printf("%s Mode: {%d, %d, %d, %d, %d, %d, %d, %d}\n", name,
-	   mode.reserved, mode.is_valid, mode.bytes, mode.width,
+    printf("%s Mode: {%d, %d, %d, %d, %d, %d, %d, %d, %d, %d}\n", name,
+	   mode.reserved, (int)mode.resolution, (int)mode.video_format, mode.is_valid, mode.bytes, mode.width,
 	   mode.height, mode.data_bits_per_pixel, mode.padding_bits_per_pixel,
 	   mode.framerate);
 }
