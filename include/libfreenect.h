@@ -43,6 +43,7 @@ typedef enum {
 	FREENECT_RESOLUTION_LOW    = 0, /**< QVGA - 320x240 */
 	FREENECT_RESOLUTION_MEDIUM = 1, /**< VGA  - 640x480 */
 	FREENECT_RESOLUTION_HIGH   = 2, /**< SXGA - 1280x1024 */
+	FREENECT_RESOLUTION_DUMMY  = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_resolution;
 
 /// Enumeration of video frame information states.
@@ -55,6 +56,7 @@ typedef enum {
 	FREENECT_VIDEO_IR_10BIT_PACKED = 4, /**< 10-bit packed IR mode */
 	FREENECT_VIDEO_YUV_RGB         = 5, /**< YUV RGB mode */
 	FREENECT_VIDEO_YUV_RAW         = 6, /**< YUV Raw mode */
+	FREENECT_VIDEO_DUMMY           = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_video_format;
 
 /// Enumeration of depth frame states
@@ -64,25 +66,26 @@ typedef enum {
 	FREENECT_DEPTH_10BIT        = 1, /**< 10 bit depth information in one uint16_t/pixel */
 	FREENECT_DEPTH_11BIT_PACKED = 2, /**< 11 bit packed depth information */
 	FREENECT_DEPTH_10BIT_PACKED = 3, /**< 10 bit packed depth information */
+	FREENECT_DEPTH_DUMMY        = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_depth_format;
 
 /// Structure to give information about the width, height, bitrate,
 /// framerate, and buffer size of a frame in a particular mode, as
 /// well as the total number of bytes needed to hold a single frame.
 typedef struct {
-	uint32_t reserved;               /**< unique ID used internally.  The meaning of values may change without notice.  Don't touch or depend on the contents of this field.  We mean it. */
-	freenect_resolution resolution;  /**< Resolution this freenect_frame_mode describes, should you want to find it again with freenect_find_*_frame_mode(). */
+	uint32_t reserved;              /**< unique ID used internally.  The meaning of values may change without notice.  Don't touch or depend on the contents of this field.  We mean it. */
+	freenect_resolution resolution; /**< Resolution this freenect_frame_mode describes, should you want to find it again with freenect_find_*_frame_mode(). */
 	union {
 		freenect_video_format video_format;
 		freenect_depth_format depth_format;
-	};                          /**< The video or depth format that this freenect_frame_mode describes.  The caller should know which of video_format or depth_format to use, since they called freenect_get_*_frame_mode() */
-	int is_valid;               /**< If 0, this freenect_frame_mode is invalid and does not describe a supported mode.  Otherwise, the frame_mode is valid. */
-	int bytes;                  /**< Total buffer size in bytes to hold a single frame of data.  Should be equivalent to width * height * (data_bits_per_pixel+padding_bits_per_pixel) / 8 */
-	int width;                  /**< Width of the frame, in pixels */
-	int height;                 /**< Height of the frame, in pixels */
-	int data_bits_per_pixel;    /**< Number of bits of information needed for each pixel */
-	int padding_bits_per_pixel; /**< Number of bits of padding for alignment used for each pixel */
-	int framerate;              /**< Approximate expected frame rate, in Hz */
+	};                              /**< The video or depth format that this freenect_frame_mode describes.  The caller should know which of video_format or depth_format to use, since they called freenect_get_*_frame_mode() */
+	int32_t bytes;                  /**< Total buffer size in bytes to hold a single frame of data.  Should be equivalent to width * height * (data_bits_per_pixel+padding_bits_per_pixel) / 8 */
+	int16_t width;                  /**< Width of the frame, in pixels */
+	int16_t height;                 /**< Height of the frame, in pixels */
+	int8_t data_bits_per_pixel;     /**< Number of bits of information needed for each pixel */
+	int8_t padding_bits_per_pixel;  /**< Number of bits of padding for alignment used for each pixel */
+	int8_t framerate;               /**< Approximate expected frame rate, in Hz */
+	int8_t is_valid;                /**< If 0, this freenect_frame_mode is invalid and does not describe a supported mode.  Otherwise, the frame_mode is valid. */
 } freenect_frame_mode;
 
 /// Enumeration of LED states

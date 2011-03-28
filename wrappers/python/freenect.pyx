@@ -59,13 +59,13 @@ ctypedef struct freenect_frame_mode:
     int reserved
     int resolution
     int pixel_format
-    int is_valid
     int nbytes
-    int width
-    int height
-    int data_bits_per_pixel
-    int padding_bits_per_pixel
-    int framerate
+    short width
+    short height
+    char data_bits_per_pixel
+    char padding_bits_per_pixel
+    char framerate
+    char is_valid
 
 cdef extern from "numpy/arrayobject.h":
     void import_array()
