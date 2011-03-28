@@ -92,21 +92,6 @@ namespace KinectDemo
 				gamma[i] = (UInt16)(v * 6.0 * 256.0);
 			}
 			
-			// Allocate swap bufers
-			this.rgbBufferFront = new byte[VideoCamera.DataFormatSizes[VideoCamera.DataFormatOption.RGB]];
-			this.rgbBufferMid 	= new byte[VideoCamera.DataFormatSizes[VideoCamera.DataFormatOption.RGB]];
-			this.rgbBufferBack 	= new byte[VideoCamera.DataFormatSizes[VideoCamera.DataFormatOption.RGB]];
-			this.rgbHandleFront = GCHandle.Alloc(this.rgbBufferFront, GCHandleType.Pinned);
-			this.rgbHandleMid 	= GCHandle.Alloc(this.rgbBufferMid, GCHandleType.Pinned);
-			this.rgbHandleBack 	= GCHandle.Alloc(this.rgbBufferBack, GCHandleType.Pinned);
-			
-			this.depthBufferFront 	= new byte[640 * 480 * 3];
-			this.depthBufferMid 	= new byte[640 * 480 * 3];
-			this.depthBufferBack 	= new byte[640 * 480 * 3];
-			this.depthHandleFront 	= GCHandle.Alloc(this.depthBufferFront, GCHandleType.Pinned);
-			this.depthHandleMid 	= GCHandle.Alloc(this.depthBufferMid, GCHandleType.Pinned);
-			this.depthHandleBack 	= GCHandle.Alloc(this.depthBufferBack, GCHandleType.Pinned);
-			
 			// Check for kinect devices
 			if(Kinect.DeviceCount == 0)
 			{
@@ -114,7 +99,7 @@ namespace KinectDemo
 			}
 			else
 			{
-				Kinect.LogLevel = Kinect.LogLevelOptions.Warning;
+				Kinect.LogLevel = LoggingLevel.Warning;
 				Kinect.Log += new LogEventHandler(HandleLogMessage);
 				
 				// Atleast one connected, fill the select box with w/e devices available
@@ -133,15 +118,28 @@ namespace KinectDemo
 		{
 			// Create device instance and open the connection
 			this.kinect = new Kinect(this.kinectDeviceSelectCombo.SelectedIndex);
+			
+			// Allocate swap bufers
+			this.rgbBufferFront = new byte[this.kinect.VideoCamera.Mode.Size];
+			this.rgbBufferMid 	= new byte[this.kinect.VideoCamera.Mode.Size];
+			this.rgbBufferBack 	= new byte[this.kinect.VideoCamera.Mode.Size];
+			this.rgbHandleFront = GCHandle.Alloc(this.rgbBufferFront, GCHandleType.Pinned);
+			this.rgbHandleMid 	= GCHandle.Alloc(this.rgbBufferMid, GCHandleType.Pinned);
+			this.rgbHandleBack 	= GCHandle.Alloc(this.rgbBufferBack, GCHandleType.Pinned);
+			
+			this.depthBufferFront 	= new byte[this.kinect.DepthCamera.Mode.Size];
+			this.depthBufferMid 	= new byte[this.kinect.DepthCamera.Mode.Size];
+			this.depthBufferBack 	= new byte[this.kinect.DepthCamera.Mode.Size];
+			this.depthHandleFront 	= GCHandle.Alloc(this.depthBufferFront, GCHandleType.Pinned);
+			this.depthHandleMid 	= GCHandle.Alloc(this.depthBufferMid, GCHandleType.Pinned);
+			this.depthHandleBack 	= GCHandle.Alloc(this.depthBufferBack, GCHandleType.Pinned);
+			
+			// Open the kinect
 			this.kinect.Open();
 			
 			// Set the buffer to back first
 			this.kinect.VideoCamera.DataBuffer = rgbHandleBack.AddrOfPinnedObject();
 			this.kinect.DepthCamera.DataBuffer = depthHandleBack.AddrOfPinnedObject();
-			
-			// Set modes
-			this.kinect.VideoCamera.DataFormat = VideoCamera.DataFormatOption.RGB;
-			this.kinect.DepthCamera.DataFormat = DepthCamera.DataFormatOption.Format11Bit;
 			
 			// Enable controls and info
 			this.bottomPanel.Enabled = true;
@@ -187,7 +185,7 @@ namespace KinectDemo
 					{
 						this.imagePanel.Invalidate();
 					}
-					catch(Exception e)
+					catch
 					{
 					}
 				}
@@ -372,7 +370,7 @@ namespace KinectDemo
 			{
 				return;	
 			}
-			this.kinect.LED.Color = (LED.ColorOption)Enum.Parse(typeof(LED.ColorOption), colorName);
+			this.kinect.LED.Color = (LEDColor)Enum.Parse(typeof(LEDColor), colorName);
 		}
 		
 		/// <summary>
@@ -467,7 +465,7 @@ namespace KinectDemo
 				
 				// Draw RGB texture
 				GL.BindTexture(TextureTarget.Texture2D, this.rgbTexture);
-				if(this.kinect.VideoCamera.DataFormat == VideoCamera.DataFormatOption.RGB)
+				if(this.kinect.VideoCamera.Mode.Format == VideoFormat.RGB)
 				{
 					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Three, 640, 480, 0, OpenTK.Graphics.OpenGL.PixelFormat.Rgb, PixelType.UnsignedByte, (byte[])rgbHandleFront.Target);
 				}
@@ -640,7 +638,7 @@ namespace KinectDemo
 			//
 			this.ledControlCombo = new ComboBox();
 			this.ledControlCombo.DropDownStyle = ComboBoxStyle.DropDownList;
-			foreach(string color in Enum.GetNames(typeof(LED.ColorOption)))
+			foreach(string color in Enum.GetNames(typeof(LEDColor)))
 			{
 				this.ledControlCombo.Items.Add(color);
 			}
@@ -697,14 +695,7 @@ namespace KinectDemo
 			this.videoFormatControlCombo.Font = this.regularFont;
 			this.videoFormatControlCombo.SelectedIndexChanged += delegate(object sender, EventArgs e) {
 				this.kinect.VideoCamera.Stop();
-				if(this.videoFormatControlCombo.SelectedIndex == 0)
-				{
-					this.kinect.VideoCamera.DataFormat = VideoCamera.DataFormatOption.RGB;
-				}
-				else
-				{
-					this.kinect.VideoCamera.DataFormat = VideoCamera.DataFormatOption.IR8Bit;
-				}
+				
 				this.kinect.VideoCamera.Start();
 			};
 			
