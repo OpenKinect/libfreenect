@@ -72,6 +72,12 @@
     <Compile Include="..\SwapBufferCollection.cs">
       <Link>SwapBufferCollection.cs</Link>
     </Compile>
+    <Compile Include="..\Enumerations.cs">
+      <Link>Enumerations.cs</Link>
+    </Compile>
+    <Compile Include="..\FrameMode.cs">
+      <Link>FrameMode.cs</Link>
+    </Compile>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>
