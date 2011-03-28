@@ -33,80 +33,45 @@ using System.Collections.Generic;
 namespace freenect
 {
 	/// <summary>
-	/// Data formats for the video camera
+	/// Depth frame mode.
 	/// </summary>
-	public enum VideoFormat : int
+	public class VideoFrameMode : FrameMode
 	{
-		RGB 				= 0,
-		Bayer 				= 1,
-		Infrared8Bit 		= 2,
-		Infrared10Bit 		= 3,
-		InfraredPacked10Bit = 4,
-		YUVRGB 				= 5,
-		YUVRaw 				= 6
-	}
-	
-	/// <summary>
-	/// Data formats for the depth camera
-	/// </summary>
-	public enum DepthFormat : int
-	{
-		Depth11Bit 			= 0,
-		Depth10Bit 			= 1,
-		DepthPacked11Bit 	= 2,
-		DepthPacked10Bit 	= 3
-	}
-	
-	/// <summary>
-	/// Resolution settings.
-	/// 
-	/// LOW = QVGA (320x240)
-	/// MEDIUM = VGA (640x480 for video, 640x488 for IR)
-	/// HIGH = SXGA (1280x1024)
-	/// </summary>
-	public enum Resolution : int
-	{
-		Low 	= 0,
-		Medium 	= 1,
-		High 	= 2
-	}
-	
-	/// <summary>
-	/// LED colors. None means LED is off.
-	/// </summary>
-	public enum LEDColor : int
-	{
-		None    		= 0,
-		Green  			= 1,
-		Red    			= 2,
-		Yellow 			= 3,
-		BlinkYellow 	= 4,
-		BlinkGreen 		= 5,
-		BlinkRedYellow	= 6
-	}
-	
-	/// <summary>
-	/// Different states the tilt motor can be in operation
-	/// </summary>
-	public enum MotorTiltStatus : int
-	{
-		Stopped 	= 0x00,
-	 	AtLimit 	= 0x01,
-		Moving 		= 0x04
-	}
-	
-	/// <summary>
-	/// Logging levels from the C library
-	/// </summary>
-	public enum LoggingLevel : int
-	{
-		Fatal = 0,
-		Error,
-		Warning,
-		Notice,
-		Info,
-		Debug,
-		Spew,
-		Flood,
+		
+		/// <summary>
+		/// Gets the format for this video frame mode
+		/// </summary>
+		public VideoFormat Format
+		{
+			get
+			{
+				return this.videoFormat;	
+			}
+		}
+		
+		/// <summary>
+		/// Ninja constructor
+		/// </summary>
+		internal VideoFrameMode()
+		{
+			
+		}
+		
+		/// <summary>
+		/// Finds a mode, given a format and resolution.
+		/// </summary>
+		/// <param name="format">
+		/// Video format for the mode
+		/// </param>
+		/// <param name="resolution">
+		/// Resolution for the mode
+		/// </param>
+		/// <returns>
+		/// Mode with the format/resolution combo. Null if the combination is invalid.
+		/// </returns>
+		public static VideoFrameMode Find(VideoFormat format, Resolution resolution)
+		{
+			return (VideoFrameMode)FrameMode.FromInterop(KinectNative.freenect_find_video_mode(resolution, format));
+		}
 	}
 }

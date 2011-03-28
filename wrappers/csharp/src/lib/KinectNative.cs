@@ -261,16 +261,31 @@ namespace freenect
 	/// <summary>
 	/// Frame capture settings for all video/depth feeds
 	/// </summary>
+	[StructLayout(LayoutKind.Explicit)]
 	internal struct FreenectFrameMode
 	{
+		[FieldOffset(0)]
 		public UInt32 Reserved;
-		public int IsValid;
+		[FieldOffset(4)]
+		public Resolution Resolution;
+		[FieldOffset(8)]
+		public VideoFormat VideoFormat;
+		[FieldOffset(8)]
+		public DepthFormat DepthFormat;
+		[FieldOffset(12)]
 		public int Bytes;
+		[FieldOffset(16)]
 		public int Width;
+		[FieldOffset(20)]
 		public int Height;
+		[FieldOffset(24)]
 		public int DataBitsPerPixel;
+		[FieldOffset(28)]
 		public int PaddingBitsPerPixel;
+		[FieldOffset(32)]
 		public int Framerate;
+		[FieldOffset(36)]
+		public int IsValid;
 	}
 	
 	/// <summary>

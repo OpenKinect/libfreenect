@@ -29,6 +29,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace freenect
 {
@@ -45,14 +46,9 @@ namespace freenect
 		private Kinect parentDevice;
 		
 		/// <summary>
-		/// Current video format
+		/// Current video mode
 		/// </summary>
-		private VideoFormat videoFormat;
-		
-		/// <summary>
-		/// Current video resolution
-		/// </summary>
-		private Resolution videoResolution;
+		private VideoFrameMode videoMode;
 		
 		/// <summary>
 		/// Direct access data buffer for the video camera
@@ -84,20 +80,18 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Gets or sets the data format this camera will send images in.
+		/// Gets and sets the current video mode for the video camera. For best results, 
+		/// use one of the modes in the VideoCamera.Modes collection.
 		/// </summary>
-		/// <value>
-		/// Gets or sets the 'dataFormat' member
-		/// </value>
-		public VideoFormat Format
+		public VideoFrameMode Mode
 		{
 			get
 			{
-				return this.videoFormat;
+				return this.videoMode;
 			}
-			set
+			private set
 			{
-				this.SetDataFormat(value);
+				this.SetVideoMode(value);
 			}
 		}
 		
@@ -120,6 +114,15 @@ namespace freenect
 		}
 		
 		/// <summary>
+		/// Gets a list of available, valid video modes
+		/// </summary>
+		public VideoFrameMode[] Modes
+		{
+			get;
+			private set;
+		}
+		
+		/// <summary>
 		/// Constructor
 		/// </summary>
 		/// <param name="parent">
@@ -133,8 +136,11 @@ namespace freenect
 			// Not running by default
 			this.IsRunning = false;
 			
-			// Set format to RGB by default
-			this.Format = VideoFormat.RGB;
+			// Update modes available for this video camera
+			this.UpdateVideoModes();
+			
+			// Use the first mode by default
+			this.Mode = this.Modes[0];
 			
 			// Setup callbacks
 			KinectNative.freenect_set_video_callback(parent.devicePointer, VideoCallback);
@@ -189,23 +195,29 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Sets the VideoCamera's data format. Support function for VideoCamera.DataFormat property.
+		/// Sets the current video mode
 		/// </summary>
-		/// <param name="format">
-		/// Format to change the video camera to
+		/// <param name="mode">
+		/// Video mode to switch to.
 		/// </param>
-		protected void SetDataFormat(VideoFormat format)
+		protected void SetVideoMode(VideoFrameMode mode)
 		{
-			// change imagemap that's waiting cause format has changed
-			this.UpdateNextFrameImageMap();
+			// Check to make sure mode is valid by finding it again
+			VideoFrameMode foundMode = VideoFrameMode.Find(mode.Format, mode.Resolution);
+			if(foundMode == null)
+			{
+				throw new Exception("Invalid Video Mode: [" + mode.Format + ", " + mode.Resolution + "]");
+			}
 			
-			// change format
-			int result = KinectNative.freenect_set_video_format(this.parentDevice.devicePointer, format);
+			// All good, switch to new mode
+			int result = KinectNative.freenect_set_video_mode(this.parentDevice.devicePointer, foundMode.nativeMode);
 			if(result != 0)
 			{
-				throw new Exception("Could not switch to video format " + format + ". Error Code: " + result);
+				throw new Exception("Mode switch failed. Error Code: " + result);
 			}
-			this.videoFormat = format;
+			
+			// Update image map
+			this.UpdateNextFrameImageMap();
 		}
 		
 		/// <summary>
@@ -216,14 +228,40 @@ namespace freenect
 			if(this.DataBuffer == IntPtr.Zero)
 			{
 				// have to set our own buffer as the video buffer
-				this.nextFrameImage = new ImageMap(this.Format);
-				KinectNative.freenect_set_video_buffer(this.parentDevice.devicePointer, this.nextFrameImage.DataPointer);
+				this.nextFrameImage = new ImageMap(this.Mode);
 			}
 			else	
 			{
 				// already have a buffer from user
-				this.nextFrameImage = new ImageMap(this.Format, this.DataBuffer);
+				this.nextFrameImage = new ImageMap(this.Mode, this.DataBuffer);
 			}
+			
+			// Set video buffer
+			KinectNative.freenect_set_video_buffer(this.parentDevice.devicePointer, this.nextFrameImage.DataPointer);
+		}
+		
+		/// <summary>
+		/// Updates list of video modes that this camera has.
+		/// </summary>
+		private void UpdateVideoModes()
+		{
+			List<VideoFrameMode> modes = new List<VideoFrameMode>();
+			
+			// Get number of modes
+			int numModes = KinectNative.freenect_get_video_mode_count(this.parentDevice.devicePointer);
+			
+			// Go through modes
+			for(int i = 0; i < numModes; i++)
+			{
+				VideoFrameMode mode = (VideoFrameMode)FrameMode.FromInterop(KinectNative.freenect_get_video_mode(i), FrameMode.FrameModeType.VideoFormat);
+				if(mode != null)
+				{
+					modes.Add(mode);
+				}
+			}
+			
+			// All done
+			this.Modes = modes.ToArray();
 		}
 		
 		/// <summary>
