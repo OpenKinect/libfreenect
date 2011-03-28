@@ -79,47 +79,44 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Gets the format this depth map is in
+		/// Gets the mode in which this depth frame was captured.
 		/// </summary>
-		public DepthCamera.DataFormatOption DataFormat
+		public DepthFrameMode CaptureMode
 		{
 			get;
 			private set;
 		}
 		
 		/// <summary>
-		/// Constructor that allocates a pinned buffer
+		/// Constructor. Only mode specified. Buffer is created.
 		/// </summary>
-		/// <param name="dataFormat">
-		/// A <see cref="DepthCamera.DataFormatOption"/>
+		/// <param name="mode">
+		/// A <see cref="DepthFrameMode"/>
 		/// </param>
-		/// <param name="allocateBuffer">
-		/// 
-		/// </param>
-		internal DepthMap(DepthCamera.DataFormatOption dataFormat)
+		internal DepthMap(DepthFrameMode mode)
 		{
-			this.Width = DepthCamera.DataFormatDimensions[dataFormat].X;
-			this.Height = DepthCamera.DataFormatDimensions[dataFormat].Y;
-			this.DataFormat = dataFormat;
-			this.Data = new byte[DepthCamera.DataFormatSizes[dataFormat]];
+			this.Width = mode.Width;
+			this.Height = mode.Height;
+			this.CaptureMode = mode;
+			this.Data = new byte[mode.Size];
 			this.dataHandle = GCHandle.Alloc(this.Data, GCHandleType.Pinned);
 			this.DataPointer = this.dataHandle.AddrOfPinnedObject();
 		}
 		
 		/// <summary>
-		/// Constructor where a buffer allocation isn't needed
+		/// Constructor where user's data pointer is specified.
 		/// </summary>
-		/// <param name="dataFormat">
-		/// A <see cref="DepthCamera.DataFormatOption"/>
+		/// <param name="mode">
+		/// A <see cref="DepthFrameMode"/>
 		/// </param>
 		/// <param name="bufferPointer">
 		/// A <see cref="IntPtr"/>
 		/// </param>
-		internal DepthMap(DepthCamera.DataFormatOption dataFormat, IntPtr bufferPointer)
+		internal DepthMap(DepthFrameMode mode, IntPtr bufferPointer)
 		{
-			this.Width = DepthCamera.DataFormatDimensions[dataFormat].X;
-			this.Height = DepthCamera.DataFormatDimensions[dataFormat].Y;
-			this.DataFormat = dataFormat;
+			this.Width = mode.Width;
+			this.Height = mode.Height;
+			this.CaptureMode = mode;
 			this.Data = null;
 			this.dataHandle = default(GCHandle);
 			this.DataPointer = bufferPointer;

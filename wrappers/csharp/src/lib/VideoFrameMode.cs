@@ -71,7 +71,7 @@ namespace freenect
 		/// </returns>
 		public static VideoFrameMode Find(VideoFormat format, Resolution resolution)
 		{
-			return (VideoFrameMode)FrameMode.FromInterop(KinectNative.freenect_find_video_mode(resolution, format));
+			return (VideoFrameMode)FrameMode.FromInterop(KinectNative.freenect_find_video_mode(resolution, format), FrameMode.FrameModeType.VideoFormat);
 		}
 	}
 }

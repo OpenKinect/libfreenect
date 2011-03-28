@@ -209,6 +209,9 @@ namespace freenect
 				throw new Exception("Invalid Video Mode: [" + mode.Format + ", " + mode.Resolution + "]");
 			}
 			
+			// Save mode
+			this.videoMode = mode;
+			
 			// All good, switch to new mode
 			int result = KinectNative.freenect_set_video_mode(this.parentDevice.devicePointer, foundMode.nativeMode);
 			if(result != 0)

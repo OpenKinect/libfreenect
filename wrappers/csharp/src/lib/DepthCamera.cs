@@ -45,12 +45,12 @@ namespace freenect
 		private Kinect parentDevice;
 		
 		/// <summary>
-		/// Current data format
+		/// Current depth camera mode
 		/// </summary>
-		private DataFormatOption dataFormat;
+		private DepthFrameMode depthMode;
 		
 		/// <summary>
-		/// Direct access data buffer for the video camera
+		/// Direct access data buffer for the depth camera
 		/// </summary>
 		private IntPtr dataBuffer = IntPtr.Zero;
 		
@@ -60,10 +60,13 @@ namespace freenect
 		private DepthMap nextFrameDepthMap = null;
 		
 		/// <summary>
-		/// Event raised when video data (an image) has been received.
+		/// Event raised when depth data has been received.
 		/// </summary>
 		public event DataReceivedEventHandler DataReceived = delegate { };
 
+		/// <summary>
+		/// Callback (delegate) for depth data
+		/// </summary>
 		private FreenectDepthDataCallback DepthCallback = new FreenectDepthDataCallback(DepthCamera.HandleDataReceived);
 
 		/// <summary>
@@ -76,40 +79,19 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Gets or sets the data format this camera will send depth data in.
+		/// Gets or sets the depth camera's mode.
 		/// </summary>
-		/// <value>
-		/// Gets or sets the 'dataFormat' member
-		/// </value>
-		public DataFormatOption DataFormat
+		public DepthFrameMode Mode
 		{
 			get
 			{
-				return this.dataFormat;
+				return this.depthMode;
 			}
 			set
 			{
-				this.SetDataFormat(value);
+				this.SetDepthMode(value);
 			}
-		}
-		
-		/// <summary>
-		/// Gets sizes in bytes for a frame in each of the formats supported by the depth camera.
-		/// </summary>
-		public static DataFormatSizeCollection DataFormatSizes
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets dimensions for a frame for each of the formats supported by the depth camera.
-		/// </summary>
-		public static DataFormatDimensionCollection DataFormatDimensions
-		{
-			get;
-			private set;
-		}
+		}		
 		
 		/// <summary>
 		/// Gets or sets the direct data buffer the USB stream will use for 
@@ -130,6 +112,15 @@ namespace freenect
 		}
 		
 		/// <summary>
+		/// List of available, valid modes for the depth camera
+		/// </summary>
+		public DepthFrameMode[] Modes
+		{
+			get;
+			private set;
+		}
+		
+		/// <summary>
 		/// Constructor
 		/// </summary>
 		/// <param name="parent">
@@ -143,20 +134,14 @@ namespace freenect
 			// Not running by default
 			this.IsRunning = false;
 			
-			// Set format to 11 bit by default
-			this.DataFormat = DataFormatOption.Format11Bit;
+			// Update lsit of available modes for this camera
+			this.UpdateDepthModes();
+			
+			// Set the mode to the first available mode
+			this.Mode = this.Modes[0];
 			
 			// Setup callbacks
 			KinectNative.freenect_set_depth_callback(parent.devicePointer, DepthCallback);
-		}
-		
-		/// <summary>
-		/// Static constructor
-		/// </summary>
-		static DepthCamera()
-		{
-			DepthCamera.DataFormatSizes = new DepthCamera.DataFormatSizeCollection();
-			DepthCamera.DataFormatDimensions = new DepthCamera.DataFormatDimensionCollection();
 		}
 		
 		/// <summary>
@@ -208,22 +193,56 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Sets the DepthCameras's data format. Support function for DepthCamera.DataFormat
+		/// Sets the current depth camera mode
 		/// </summary>
-		/// <param name="format">
-		/// A <see cref="DepthCamera.DataFormatOptions"/>
+		/// <param name="mode">
+		/// Depth camera mode to switch to.
 		/// </param>
-		private void SetDataFormat(DepthCamera.DataFormatOption format)
+		protected void SetDepthMode(DepthFrameMode mode)
 		{
-			// change depth map that's waiting cause format has changed
-			this.UpdateNextFrameDepthMap();
+			// Check to make sure mode is valid by finding it again
+			DepthFrameMode foundMode = DepthFrameMode.Find(mode.Format, mode.Resolution);
+			if(foundMode == null)
+			{
+				throw new Exception("Invalid Depth Camera Mode: [" + mode.Format + ", " + mode.Resolution + "]");
+			}
 			
-			int result = KinectNative.freenect_set_depth_format(this.parentDevice.devicePointer, format);
+			// Save mode
+			this.depthMode = mode;
+			
+			// All good, switch to new mode
+			int result = KinectNative.freenect_set_depth_mode(this.parentDevice.devicePointer, foundMode.nativeMode);
 			if(result != 0)
 			{
-				throw new Exception("Could not switch to depth format " + format + ". Error Code: " + result);
+				throw new Exception("Mode switch failed. Error Code: " + result);
 			}
-			this.dataFormat = format;
+			
+			// Update depth map
+			this.UpdateNextFrameDepthMap();
+		}
+		
+		/// <summary>
+		/// Updates list of depth modes that this camera has.
+		/// </summary>
+		private void UpdateDepthModes()
+		{
+			List<DepthFrameMode> modes = new List<DepthFrameMode>();
+			
+			// Get number of modes
+			int numModes = KinectNative.freenect_get_depth_mode_count(this.parentDevice.devicePointer);
+			
+			// Go through modes
+			for(int i = 0; i < numModes; i++)
+			{
+				DepthFrameMode mode = (DepthFrameMode)FrameMode.FromInterop(KinectNative.freenect_get_depth_mode(i), FrameMode.FrameModeType.DepthFormat);
+				if(mode != null)
+				{
+					modes.Add(mode);
+				}
+			}
+			
+			// All done
+			this.Modes = modes.ToArray();
 		}
 		
 		/// <summary>
@@ -234,14 +253,16 @@ namespace freenect
 			if(this.DataBuffer == IntPtr.Zero)
 			{
 				// have to set our own buffer as the depth buffer
-				this.nextFrameDepthMap = new DepthMap(this.DataFormat);
-				KinectNative.freenect_set_depth_buffer(this.parentDevice.devicePointer, this.nextFrameDepthMap.DataPointer);
+				this.nextFrameDepthMap = new DepthMap(this.Mode);
 			}
 			else	
 			{
 				// already have a buffer from user
-				this.nextFrameDepthMap = new DepthMap(this.DataFormat, this.DataBuffer);
+				this.nextFrameDepthMap = new DepthMap(this.Mode, this.DataBuffer);
 			}
+			
+			// Set new buffer at library level;
+			KinectNative.freenect_set_depth_buffer(this.parentDevice.devicePointer, this.nextFrameDepthMap.DataPointer);
 		}
 		
 		/// <summary>
@@ -267,91 +288,6 @@ namespace freenect
 			
 			// Send out event
 			realDevice.DepthCamera.DataReceived(realDevice, new DataReceivedEventArgs(dateTime, realDevice.DepthCamera.nextFrameDepthMap));
-		}
-		
-		/// <summary>
-		/// Format for Depth data coming in
-		/// </summary>
-		public enum DataFormatOption
-		{
-			Format11Bit = 0,
-			Format10Bit = 1,
-			FormatPacked11Bit = 2,
-			FormatPacked10Bit = 3
-		}
-		
-		/// <summary>
-		/// Format dimensions
-		/// </summary>
-		public class DataFormatDimensionCollection
-		{
-			/// <summary>
-			/// Map of sizes
-			/// </summary>
-			private Dictionary<DataFormatOption, Point> dimensions;
-			
-			/// <summary>
-			/// Gets the dimensions of the specified format
-			/// </summary>
-			/// <param name="format">
-			/// Format to get the size for
-			/// </param>
-			public Point this[DataFormatOption format]
-			{
-				get
-				{
-					return this.dimensions[format];
-				}
-			}
-			
-			/// <summary>
-			/// constructor
-			/// </summary>
-			public DataFormatDimensionCollection()
-			{
-				this.dimensions = new Dictionary<DataFormatOption, Point>();
-				this.dimensions.Add(DataFormatOption.Format11Bit, new Point(640, 480));
-				this.dimensions.Add(DataFormatOption.Format10Bit, new Point(640, 480));
-				this.dimensions.Add(DataFormatOption.FormatPacked11Bit, new Point(640, 480));
-				this.dimensions.Add(DataFormatOption.FormatPacked10Bit, new Point(640, 480));
-			}
-		}
-		
-		/// <summary>
-		/// Format sizes
-		/// </summary>
-		public class DataFormatSizeCollection
-		{
-			/// <summary>
-			/// Map of sizes
-			/// </summary>
-			private Dictionary<DataFormatOption, int> sizes;
-			
-			/// <summary>
-			/// Gets the size of the specified format
-			/// </summary>
-			/// <param name="format">
-			/// Format to get the size for
-			/// </param>
-			public int this[DataFormatOption format]
-			{
-				get
-				{
-					return this.sizes[format];
-				}
-			}
-			
-			/// <summary>
-			/// constructor
-			/// </summary>
-			public DataFormatSizeCollection()
-			{
-				this.sizes = new Dictionary<DataFormatOption, int>();
-				this.sizes.Add(DataFormatOption.Format11Bit, 614400);
-				this.sizes.Add(DataFormatOption.Format10Bit, 614400);
-				this.sizes.Add(DataFormatOption.FormatPacked11Bit, 422400);
-				this.sizes.Add(DataFormatOption.FormatPacked10Bit, 384000);
-			}
 		}
 		
 		/// <summary>

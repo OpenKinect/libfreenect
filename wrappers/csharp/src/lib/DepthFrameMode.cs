@@ -70,7 +70,7 @@ namespace freenect
 		/// </returns>
 		public static DepthFrameMode Find(DepthFormat format, Resolution resolution)
 		{
-			return (DepthFrameMode)FrameMode.FromInterop(KinectNative.freenect_find_depth_mode(resolution, format));
+			return (DepthFrameMode)FrameMode.FromInterop(KinectNative.freenect_find_depth_mode(resolution, format), FrameMode.FrameModeType.DepthFormat);
 		}
 		
 	}

@@ -132,7 +132,7 @@ namespace freenect
 			FrameMode mode = null;
 			
 			// Make sure mode is valid
-			if(nativeMode.IsValid)
+			if(nativeMode.IsValid == 0)
 			{
 				return null;
 			}

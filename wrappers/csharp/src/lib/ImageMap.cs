@@ -62,15 +62,6 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Gets the total size of the data in the image map in bytes
-		/// </summary>
-		public int Size
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
 		/// Gets the raw data in the ImageMap. This data is in a 1-dimensional 
 		/// array so it's easy to work with in unsafe code. 
 		/// </summary>
@@ -90,42 +81,45 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Gets the format this image is in
+		/// Gets the mode in which this image was captured.
 		/// </summary>
-		public VideoFormat Format
+		public VideoFrameMode CaptureMode
 		{
 			get;
 			private set;
 		}
 		
 		/// <summary>
-		/// Gets the resolution for this image map
+		/// Constructor with only mode speicifed. Data is allocated inside.
 		/// </summary>
-		public Resolution Resolution
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Constructor that allocates a pinned buffer
-		/// </summary>
-		/// <param name="dataFormat">
-		/// A <see cref="VideoCamera.DataFormatOption"/>
+		/// <param name="mode">
+		/// A <see cref="VideoFrameMode"/>
 		/// </param>
-		/// <param name="allocateBuffer">
-		/// 
-		/// </param>
-		internal ImageMap(VideoFormat videoFormat, Resolution resolution)
+		internal ImageMap(VideoFrameMode mode)
 		{
 			// Save format and resolution
-			this.Format = videoFormat;
-			this.Resolution = resolution;
-			
-			//
-			
+			this.Width = mode.Width;
+			this.Height = mode.Height;
+			this.CaptureMode = mode;
+			this.Data = new byte[mode.Size];
 			this.dataHandle = GCHandle.Alloc(this.Data, GCHandleType.Pinned);
 			this.DataPointer = this.dataHandle.AddrOfPinnedObject();
+		}
+		
+		/// <summary>
+		/// Constructor with only mode and data pointer specified. No allocation is made.
+		/// </summary>
+		/// <param name="mode">
+		/// A <see cref="VideoFrameMode"/>
+		/// </param>
+		internal ImageMap(VideoFrameMode mode, IntPtr bufferPointer)
+		{
+			this.Width = mode.Width;
+			this.Height = mode.Height;
+			this.CaptureMode = mode;
+			this.Data = null;
+			this.dataHandle = default(GCHandle);
+			this.DataPointer = bufferPointer;
 		}
 		
 		/// <summary>
