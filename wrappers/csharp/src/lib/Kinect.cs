@@ -39,7 +39,7 @@ namespace freenect
 		/// <summary>
 		/// Current logging level for the kinect session (for all devices)
 		/// </summary>
-		private static LogLevelOptions logLevel;
+		private static LoggingLevel logLevel;
 		
 		/// <summary>
 		/// Pointer to native device object
@@ -56,7 +56,7 @@ namespace freenect
 		/// Gets or sets the logging level for the Kinect library. This controls
 		/// how much debugging information is sent to the logging callback
 		/// </summary>
-		public static LogLevelOptions LogLevel
+		public static LoggingLevel LogLevel
 		{
 			get
 			{
@@ -291,7 +291,7 @@ namespace freenect
 		/// <param name="level">
 		/// A <see cref="LogLevel"/>
 		/// </param>
-		private static void SetLogLevel(LogLevelOptions level)
+		private static void SetLogLevel(LoggingLevel level)
 		{
 			KinectNative.freenect_set_log_level(KinectNative.Context, level);
 			Kinect.logLevel = level;
@@ -309,27 +309,11 @@ namespace freenect
 		/// <param name="message">
 		/// A <see cref="System.String"/>
 		/// </param>
-		internal static void LogCallback(IntPtr device, Kinect.LogLevelOptions logLevel, string message)
+		internal static void LogCallback(IntPtr device, LoggingLevel logLevel, string message)
 		{
 			Kinect realDevice = KinectNative.GetDevice(device);
 			Kinect.Log(null, new LogEventArgs(realDevice, logLevel, message));
-		}
-		
-		/// <summary>
-		/// Logging levels from the C library
-		/// </summary>
-		public enum LogLevelOptions
-		{
-			Fatal = 0,
-			Error,
-			Warning,
-			Notice,
-			Info,
-			Debug,
-			Spew,
-			Flood,
-		}
-		
+		}		
 	}
 }
 

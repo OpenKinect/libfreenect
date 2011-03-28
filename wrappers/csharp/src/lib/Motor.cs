@@ -91,7 +91,7 @@ namespace freenect
 		/// <summary>
 		/// Gets the status of the tilt motor.
 		/// </summary>
-		public TiltStatusOption TiltStatus
+		public MotorTiltStatus TiltStatus
 		{
 			get
 			{
@@ -156,16 +156,7 @@ namespace freenect
 			// Save commanded tilt
 			this.commandedTilt = angle;
 		}
-		
-		/// <summary>
-		/// Different states the tilt motor can be in operation
-		/// </summary>
-		public enum TiltStatusOption
-		{
-			Stopped 	= 0x00,
-		 	AtLimit 	= 0x01,
-			Moving 		= 0x04
-		}
+
 	}
 }
 

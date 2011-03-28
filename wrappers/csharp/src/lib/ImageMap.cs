@@ -62,6 +62,15 @@ namespace freenect
 		}
 		
 		/// <summary>
+		/// Gets the total size of the data in the image map in bytes
+		/// </summary>
+		public int Size
+		{
+			get;
+			private set;
+		}
+		
+		/// <summary>
 		/// Gets the raw data in the ImageMap. This data is in a 1-dimensional 
 		/// array so it's easy to work with in unsafe code. 
 		/// </summary>
@@ -83,7 +92,16 @@ namespace freenect
 		/// <summary>
 		/// Gets the format this image is in
 		/// </summary>
-		public VideoCamera.DataFormatOption DataFormat
+		public VideoFormat Format
+		{
+			get;
+			private set;
+		}
+		
+		/// <summary>
+		/// Gets the resolution for this image map
+		/// </summary>
+		public Resolution Resolution
 		{
 			get;
 			private set;
@@ -98,33 +116,16 @@ namespace freenect
 		/// <param name="allocateBuffer">
 		/// 
 		/// </param>
-		internal ImageMap(VideoCamera.DataFormatOption dataFormat)
+		internal ImageMap(VideoFormat videoFormat, Resolution resolution)
 		{
-			this.Width = VideoCamera.DataFormatDimensions[dataFormat].X;
-			this.Height = VideoCamera.DataFormatDimensions[dataFormat].Y;
-			this.DataFormat = dataFormat;
-			this.Data = new byte[VideoCamera.DataFormatSizes[dataFormat]];
+			// Save format and resolution
+			this.Format = videoFormat;
+			this.Resolution = resolution;
+			
+			//
+			
 			this.dataHandle = GCHandle.Alloc(this.Data, GCHandleType.Pinned);
 			this.DataPointer = this.dataHandle.AddrOfPinnedObject();
-		}
-		
-		/// <summary>
-		/// Constructor where a buffer allocation isn't needed
-		/// </summary>
-		/// <param name="dataFormat">
-		/// A <see cref="VideoCamera.DataFormatOption"/>
-		/// </param>
-		/// <param name="bufferPointer">
-		/// A <see cref="IntPtr"/>
-		/// </param>
-		internal ImageMap(VideoCamera.DataFormatOption dataFormat, IntPtr bufferPointer)
-		{
-			this.Width = VideoCamera.DataFormatDimensions[dataFormat].X;
-			this.Height = VideoCamera.DataFormatDimensions[dataFormat].Y;
-			this.DataFormat = dataFormat;
-			this.Data = null;
-			this.dataHandle = default(GCHandle);
-			this.DataPointer = bufferPointer;
 		}
 		
 		/// <summary>

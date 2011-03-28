@@ -49,6 +49,9 @@ namespace freenect
 		/// </summary>
 		private static Dictionary<IntPtr, Kinect> deviceMap = new Dictionary<IntPtr, Kinect>();
 		
+		/// <summary>
+		/// Callback delegate for log messages coming in from the C library.
+		/// </summary>
 		private static FreenectLogCallback LogCallback = new FreenectLogCallback(Kinect.LogCallback);
 		
 		/// <summary>
@@ -164,7 +167,7 @@ namespace freenect
 		public static extern int freenect_shutdown(IntPtr context);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern void freenect_set_log_level(IntPtr context, Kinect.LogLevelOptions level);
+		public static extern void freenect_set_log_level(IntPtr context, LoggingLevel level);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern void freenect_set_log_callback(IntPtr context, FreenectLogCallback callback);
@@ -218,10 +221,10 @@ namespace freenect
 		public static extern int freenect_set_tilt_degs(IntPtr device, double angle);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern Motor.TiltStatusOption freenect_get_tilt_status(IntPtr device);
+		public static extern MotorTiltStatus freenect_get_tilt_status(IntPtr device);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern int freenect_set_led(IntPtr device, LED.ColorOption option);	
+		public static extern int freenect_set_led(IntPtr device, LEDColor color);	
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_get_video_mode_count(IntPtr device);
@@ -233,7 +236,7 @@ namespace freenect
 		public static extern FreenectFrameMode freenect_get_current_video_mode();
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern FreenectFrameMode freenect_find_video_mode(FreenectResolution resolution, VideoCamera.DataFormatOption videoFormat);
+		public static extern FreenectFrameMode freenect_find_video_mode(Resolution resolution, VideoFormat videoFormat);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_video_mode(IntPtr device, FreenectFrameMode mode);
@@ -248,7 +251,7 @@ namespace freenect
 		public static extern FreenectFrameMode freenect_get_current_depth_mode();
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern FreenectFrameMode freenect_find_depth_mode(FreenectResolution resolution, DepthCamera.DataFormatOption depthFormat);
+		public static extern FreenectFrameMode freenect_find_depth_mode(Resolution resolution, DepthFormat depthFormat);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_depth_mode(IntPtr device, FreenectFrameMode mode);
@@ -271,35 +274,22 @@ namespace freenect
 	}
 	
 	/// <summary>
-	/// Resolution settings.
-	/// LOW = QVGA (320x240)
-	/// MEDIUM = VGA (640x480 for video, 640x488 for IR)
-	/// HIGH = SXGA (1280x1024)
-	/// </summary>
-	internal enum FreenectResolution
-	{
-		LOW = 1,
-		MEDIUM = 2,
-		HIGH = 3
-	}
-	
-	/// <summary>
 	/// Device tilt state values. This holds stuff like accel and tilt status
 	/// </summary>
 	internal struct FreenectTiltState
 	{
-		public Int16 					AccelerometerX;
-		public Int16 					AccelerometerY;
-		public Int16 					AccelerometerZ;
-		public SByte  					TiltAngle;
-		public Motor.TiltStatusOption   TiltStatus;
+		public Int16 			AccelerometerX;
+		public Int16 			AccelerometerY;
+		public Int16 			AccelerometerZ;
+		public SByte  			TiltAngle;
+		public MotorTiltStatus  TiltStatus;
 	}
 	
 	/// <summary>
 	/// "Native" callback for freelect library logging
 	/// </summary>
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-	delegate void FreenectLogCallback(IntPtr device, Kinect.LogLevelOptions logLevel, string message);
+	delegate void FreenectLogCallback(IntPtr device, LoggingLevel logLevel, string message);
 	
 	/// <summary>
 	/// "Native" callback for depth data
@@ -312,5 +302,4 @@ namespace freenect
 	/// </summary>
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
 	delegate void FreenectVideoDataCallback(IntPtr device, IntPtr imageData, UInt32 timestamp);
-	
 }

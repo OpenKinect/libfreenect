@@ -39,16 +39,20 @@ namespace freenect
 	/// 
 	public class VideoCamera
 	{
-		
 		/// <summary>
 		/// Parent Kinect instance
 		/// </summary>
 		private Kinect parentDevice;
 		
 		/// <summary>
-		/// Current data format
+		/// Current video format
 		/// </summary>
-		private DataFormatOption dataFormat;
+		private VideoFormat videoFormat;
+		
+		/// <summary>
+		/// Current video resolution
+		/// </summary>
+		private Resolution videoResolution;
 		
 		/// <summary>
 		/// Direct access data buffer for the video camera
@@ -65,6 +69,9 @@ namespace freenect
 		/// </summary>
 		public event DataReceivedEventHandler DataReceived = delegate { };
 		
+		/// <summary>
+		/// Callback (delegate) for video data
+		/// </summary>
 		private FreenectVideoDataCallback VideoCallback = new FreenectVideoDataCallback(VideoCamera.HandleDataReceived);
 
 		/// <summary>
@@ -82,34 +89,16 @@ namespace freenect
 		/// <value>
 		/// Gets or sets the 'dataFormat' member
 		/// </value>
-		public DataFormatOption DataFormat
+		public VideoFormat Format
 		{
 			get
 			{
-				return this.dataFormat;
+				return this.videoFormat;
 			}
 			set
 			{
 				this.SetDataFormat(value);
 			}
-		}
-		
-		/// <summary>
-		/// Gets sizes in bytes for a frame in each of the formats supported by the video camera.
-		/// </summary>
-		public static DataFormatSizeCollection DataFormatSizes
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets dimensions for a frame for each of the formats supported by the video camera.
-		/// </summary>
-		public static DataFormatDimensionCollection DataFormatDimensions
-		{
-			get;
-			private set;
 		}
 		
 		/// <summary>
@@ -131,15 +120,6 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Static constructor
-		/// </summary>
-		static VideoCamera()
-		{
-			VideoCamera.DataFormatSizes = new VideoCamera.DataFormatSizeCollection();
-			VideoCamera.DataFormatDimensions = new VideoCamera.DataFormatDimensionCollection();
-		}
-		
-		/// <summary>
 		/// Constructor
 		/// </summary>
 		/// <param name="parent">
@@ -154,7 +134,7 @@ namespace freenect
 			this.IsRunning = false;
 			
 			// Set format to RGB by default
-			this.DataFormat = DataFormatOption.RGB;
+			this.Format = VideoFormat.RGB;
 			
 			// Setup callbacks
 			KinectNative.freenect_set_video_callback(parent.devicePointer, VideoCallback);
@@ -214,7 +194,7 @@ namespace freenect
 		/// <param name="format">
 		/// Format to change the video camera to
 		/// </param>
-		protected void SetDataFormat(VideoCamera.DataFormatOption format)
+		protected void SetDataFormat(VideoFormat format)
 		{
 			// change imagemap that's waiting cause format has changed
 			this.UpdateNextFrameImageMap();
@@ -225,7 +205,7 @@ namespace freenect
 			{
 				throw new Exception("Could not switch to video format " + format + ". Error Code: " + result);
 			}
-			this.dataFormat = format;
+			this.videoFormat = format;
 		}
 		
 		/// <summary>
@@ -236,13 +216,13 @@ namespace freenect
 			if(this.DataBuffer == IntPtr.Zero)
 			{
 				// have to set our own buffer as the video buffer
-				this.nextFrameImage = new ImageMap(this.DataFormat);
+				this.nextFrameImage = new ImageMap(this.Format);
 				KinectNative.freenect_set_video_buffer(this.parentDevice.devicePointer, this.nextFrameImage.DataPointer);
 			}
 			else	
 			{
 				// already have a buffer from user
-				this.nextFrameImage = new ImageMap(this.DataFormat, this.DataBuffer);
+				this.nextFrameImage = new ImageMap(this.Format, this.DataBuffer);
 			}
 		}
 		
@@ -268,94 +248,6 @@ namespace freenect
 			
 			// Send out event
 			realDevice.VideoCamera.DataReceived(realDevice, new DataReceivedEventArgs(dateTime, realDevice.VideoCamera.nextFrameImage));
-		}
-		
-		/// <summary>
-		/// Format for VideoCamera data coming in
-		/// </summary>
-		public enum DataFormatOption
-		{
-			RGB 			= 0,
-			Bayer 			= 1,
-			IR8Bit 			= 2,
-			IR10Bit 		= 3,
-			IR10BitPacked 	= 4
-		}
-		
-		/// <summary>
-		/// Format dimensions
-		/// </summary>
-		public class DataFormatDimensionCollection
-		{
-			/// <summary>
-			/// Map of sizes
-			/// </summary>
-			private Dictionary<DataFormatOption, Point> dimensions;
-			
-			/// <summary>
-			/// Gets the dimensions of the specified format
-			/// </summary>
-			/// <param name="format">
-			/// Format to get the size for
-			/// </param>
-			public Point this[DataFormatOption format]
-			{
-				get
-				{
-					return this.dimensions[format];
-				}
-			}
-			
-			/// <summary>
-			/// constructor
-			/// </summary>
-			public DataFormatDimensionCollection()
-			{
-				this.dimensions = new Dictionary<DataFormatOption, Point>();
-				this.dimensions.Add(DataFormatOption.RGB, new Point(640, 480));
-				this.dimensions.Add(DataFormatOption.Bayer, new Point(640, 480));
-				this.dimensions.Add(DataFormatOption.IR8Bit, new Point(640, 488));
-				this.dimensions.Add(DataFormatOption.IR10Bit, new Point(640, 488));
-				this.dimensions.Add(DataFormatOption.IR10BitPacked, new Point(640, 488));
-			}
-		}
-		
-		/// <summary>
-		/// Format sizes
-		/// </summary>
-		public class DataFormatSizeCollection
-		{
-			/// <summary>
-			/// Map of sizes
-			/// </summary>
-			private Dictionary<DataFormatOption, int> sizes;
-			
-			/// <summary>
-			/// Gets the size of the specified format
-			/// </summary>
-			/// <param name="format">
-			/// Format to get the size for
-			/// </param>
-			public int this[DataFormatOption format]
-			{
-				get
-				{
-					return this.sizes[format];
-				}
-			}
-			
-			/// <summary>
-			/// constructor
-			/// </summary>
-			public DataFormatSizeCollection()
-			{
-				this.sizes = new Dictionary<DataFormatOption, int>();
-				this.sizes.Add(DataFormatOption.RGB, 921600);
-				this.sizes.Add(DataFormatOption.Bayer, 307200);
-				this.sizes.Add(DataFormatOption.IR8Bit, 312320);
-				this.sizes.Add(DataFormatOption.IR10Bit, 614400);
-				this.sizes.Add(DataFormatOption.IR10BitPacked, 390400);
-			}
 		}
 		
 		/// <summary>
