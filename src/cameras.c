@@ -308,6 +308,39 @@ static inline void convert_packed_to_8bit(uint8_t *raw, uint8_t *frame, int vw, 
 	}
 }
 
+// Loop-unrolled version of the 11-to-16 bit unpacker.  n must be a multiple of 8.
+static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
+{
+	uint16_t baseMask = (1 << 11) - 1;
+	while(n >= 8)
+	{
+		uint8_t r0  = *(raw+0);
+		uint8_t r1  = *(raw+1);
+		uint8_t r2  = *(raw+2);
+		uint8_t r3  = *(raw+3);
+		uint8_t r4  = *(raw+4);
+		uint8_t r5  = *(raw+5);
+		uint8_t r6  = *(raw+6);
+		uint8_t r7  = *(raw+7);
+		uint8_t r8  = *(raw+8);
+		uint8_t r9  = *(raw+9);
+		uint8_t r10 = *(raw+10);
+
+		frame[0] =  (r0<<3)  | (r1>>5);
+		frame[1] = ((r1<<6)  | (r2>>2) )           & baseMask;
+		frame[2] = ((r2<<9)  | (r3<<1) | (r4>>7) ) & baseMask;
+		frame[3] = ((r4<<4)  | (r5>>4) )           & baseMask;
+		frame[4] = ((r5<<7)  | (r6>>1) )           & baseMask;
+		frame[5] = ((r6<<10) | (r7<<2) | (r8>>6) ) & baseMask;
+		frame[6] = ((r8<<5)  | (r9>>3) )           & baseMask;
+		frame[7] = ((r9<<8)  | (r10)   )           & baseMask;
+
+		n -= 8;
+		raw += 11;
+		frame += 8;
+	}
+}
+
 static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 {
 	freenect_context *ctx = dev->parent;
@@ -328,7 +361,7 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
-			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 11, 640*480);
+			convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
 			break;
 		case FREENECT_DEPTH_10BIT:
 			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 10, 640*480);
