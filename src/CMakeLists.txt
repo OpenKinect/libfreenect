@@ -14,6 +14,10 @@ ELSE(WIN32)
   LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c)
 ENDIF(WIN32)
 
+IF(BUILD_AUDIO)
+  LIST(APPEND SRC audio.c)
+ENDIF()
+
 add_library (freenect SHARED ${SRC})
 set_target_properties ( freenect PROPERTIES
   VERSION ${PROJECT_VER}

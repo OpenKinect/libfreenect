@@ -98,6 +98,10 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 	dev->usb_cam.dev = NULL;
 	dev->usb_motor.parent = dev;
 	dev->usb_motor.dev = NULL;
+#ifdef BUILD_AUDIO
+	dev->usb_audio.parent = dev;
+	dev->usb_audio.dev = NULL;
+#endif
 
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
@@ -105,6 +109,9 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 		return -1;
 
 	int i = 0, nr_cam = 0, nr_mot = 0;
+#ifdef BUILD_AUDIO
+	int nr_audio = 0;
+#endif
 	int res;
 	struct libusb_device_descriptor desc;
 
@@ -170,11 +177,41 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 				nr_mot++;
 			}
 		}
+
+#ifdef BUILD_AUDIO
+		// TODO: check that the firmware has already been loaded; if not, upload firmware.
+		// Search for the audio
+		if (!dev->usb_audio.dev && desc.idProduct == PID_NUI_AUDIO) {
+			// If the index given by the user matches our audio index
+			if (nr_audio == index) {
+				res = libusb_open (devs[i], &dev->usb_audio.dev);
+				if (res < 0 || !dev->usb_audio.dev) {
+					FN_ERROR("Could not open audio: %d\n", res);
+					dev->usb_audio.dev = NULL;
+					break;
+				}
+				res = libusb_claim_interface (dev->usb_audio.dev, 0);
+				if (res < 0) {
+					FN_ERROR("Could not claim interface on audio: %d\n", res);
+					libusb_close(dev->usb_audio.dev);
+					dev->usb_audio.dev = NULL;
+					break;
+				}
+			} else {
+				nr_audio++;
+			}
+		}
+#endif
+
 	}
 
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
+#ifdef BUILD_AUDIO
+	if (dev->usb_cam.dev && dev->usb_motor.dev && dev->usb_audio.dev) {
+#else
 	if (dev->usb_cam.dev && dev->usb_motor.dev) {
+#endif
 		return 0;
 	} else {
 		if (dev->usb_cam.dev) {
@@ -185,6 +222,12 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 			libusb_release_interface(dev->usb_motor.dev, 0);
 			libusb_close(dev->usb_motor.dev);
 		}
+#ifdef BUILD_AUDIO
+		if (dev->usb_audio.dev) {
+			libusb_release_interface(dev->usb_audio.dev, 0);
+			libusb_close(dev->usb_audio.dev);
+		}
+#endif
 		return -1;
 	}
 }
@@ -202,6 +245,13 @@ int fnusb_close_subdevices(freenect_device *dev)
 		libusb_close(dev->usb_motor.dev);
 		dev->usb_motor.dev = NULL;
 	}
+#ifdef BUILD_AUDIO
+	if (dev->usb_audio.dev) {
+		libusb_release_interface(dev->usb_audio.dev, 0);
+		libusb_close(dev->usb_audio.dev);
+		dev->usb_audio.dev = NULL;
+	}
+#endif
 	return 0;
 }
 

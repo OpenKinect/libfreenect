@@ -48,6 +48,7 @@ set (PROJECT_VER
 set (PROJECT_APIVER 
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
 
+OPTION(BUILD_AUDIO "Build audio support" OFF)
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
 OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
@@ -78,6 +79,10 @@ include (TestBigEndian)
 test_big_endian(BIG_ENDIAN)
 if(BIG_ENDIAN)
   add_definitions(-DFN_BIGENDIAN)
+endif()
+
+if(BUILD_AUDIO)
+  add_definitions(-DBUILD_AUDIO)
 endif()
 
 ######################################################################################
