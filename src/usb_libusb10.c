@@ -126,6 +126,17 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 					dev->usb_cam.dev = NULL;
 					break;
 				}
+				// Detach an existing kernel driver for the device
+				res = libusb_kernel_driver_active(dev->usb_cam.dev, 0);
+				if (res == 1) {
+					res = libusb_detach_kernel_driver(dev->usb_cam.dev, 0);
+					if (res < 0) {
+						FN_ERROR("Could not detach kernel driver for camera: %d\n", res);
+						libusb_close(dev->usb_cam.dev);
+						dev->usb_cam.dev = NULL;
+						break;
+					}
+				}
 				res = libusb_claim_interface (dev->usb_cam.dev, 0);
 				if (res < 0) {
 					FN_ERROR("Could not claim interface on camera: %d\n", res);
@@ -182,6 +193,7 @@ int fnusb_close_subdevices(freenect_device *dev)
 {
 	if (dev->usb_cam.dev) {
 		libusb_release_interface(dev->usb_cam.dev, 0);
+		libusb_attach_kernel_driver(dev->usb_cam.dev, 0);
 		libusb_close(dev->usb_cam.dev);
 		dev->usb_cam.dev = NULL;
 	}
