@@ -15,17 +15,17 @@ ELSE(WIN32)
 ENDIF(WIN32)
 
 IF(BUILD_AUDIO)
-  LIST(APPEND SRC audio.c)
+  LIST(APPEND SRC audio.c loader.c)
   IF(BUILD_REDIST_PACKAGE)
     # If this build is intended for a redistributable package, we can't include audios.bin, so we should include fwfetcher.py
     # and the package should run "python fwfetcher.py $INSTALL_PREFIX/share" as a postinst hook
-    install (FILES "fwfetcher.py" DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/share")
+	install (FILES "fwfetcher.py" DESTINATION "${CMAKE_INSTALL_PREFIX}/share")
   ELSE(BUILD_REDIST_PACKAGE)
     # If the install is local only, we can just run fwfetcher.py and install the audios.bin firmware to the system folder
     add_custom_target(firmware ALL
         COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py" "${CMAKE_CURRENT_BINARY_DIR}/audios.bin"
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py")
-    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/audios.bin" DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/share")
+	install (FILES "${CMAKE_CURRENT_BINARY_DIR}/audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share")
   ENDIF()
 ENDIF()
 
@@ -47,9 +47,13 @@ install (TARGETS freenectstatic
 target_link_libraries (freenect ${LIBUSB_1_LIBRARIES})
 target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
 
-# Install the header file
+# Install the header files
 install (FILES "../include/libfreenect.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+if(BUILD_AUDIO)
+  install (FILES "../include/libfreenect-audio.h"
+    DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+endif()
 
 IF(UNIX AND NOT APPLE)
   # Produce a pkg-config file for linking against the shared lib

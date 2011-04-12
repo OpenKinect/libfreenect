@@ -32,6 +32,9 @@
 #include <unistd.h>
 
 #include "freenect_internal.h"
+#ifdef BUILD_AUDIO
+#include "loader.h"
+#endif
 
 FREENECTAPI int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 {
@@ -79,11 +82,35 @@ FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **de
 	pdev->parent = ctx;
 
 	res = fnusb_open_subdevices(pdev, index);
-
 	if (res < 0) {
 		free(pdev);
 		return res;
 	}
+#ifdef BUILD_AUDIO
+	res = fnusb_num_interfaces(&pdev->usb_audio);
+	if (res == 1) {
+		// Upload audio firmware, release devices, and reopen them
+		res = upload_firmware(&pdev->usb_audio);
+		if (res < 0) {
+			FN_ERROR("upload_firmware failed: %d\n", res);
+			free(pdev);
+			return res;
+		}
+
+		res = fnusb_close_subdevices(pdev);
+		if (res < 0) {
+			FN_ERROR("fnusb_close_subdevices failed: %d\n", res);
+			free(pdev);
+			return res;
+		}
+		sleep(1); // Give time for the device to reenumerate before trying to open it
+		res = fnusb_open_subdevices(pdev, index);
+		if (res < 0) {
+			free(pdev);
+			return res;
+		}
+	}
+#endif
 
 	if (!ctx->first) {
 		ctx->first = pdev;

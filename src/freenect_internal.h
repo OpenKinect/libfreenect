@@ -31,6 +31,10 @@
 
 #include "libfreenect.h"
 
+#ifdef BUILD_AUDIO
+#include "libfreenect-audio.h"
+#endif
+
 typedef void (*fnusb_iso_cb)(freenect_device *dev, uint8_t *buf, int len);
 
 #include "usb_libusb10.h"
@@ -194,7 +198,7 @@ struct _freenect_device {
 	freenect_audio_out_cb audio_out_cb;
 
 	audio_stream audio;
-	uint16_t audio_tag;
+	uint32_t audio_tag;
 #endif
 	// Motor
 	fnusb_dev usb_motor;

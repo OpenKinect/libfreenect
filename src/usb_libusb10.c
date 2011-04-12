@@ -345,3 +345,22 @@ int fnusb_control(fnusb_dev *dev, uint8_t bmRequestType, uint8_t bRequest, uint1
 {
 	return libusb_control_transfer(dev->dev, bmRequestType, bRequest, wValue, wIndex, data, wLength, 0);
 }
+
+#ifdef BUILD_AUDIO
+int fnusb_bulk(fnusb_dev *dev, uint8_t endpoint, uint8_t *data, int len, int *transferred) {
+	return libusb_bulk_transfer(dev->dev, endpoint, data, len, transferred, 0);
+}
+
+int fnusb_num_interfaces(fnusb_dev *dev) {
+	int retval = 0;
+	int res;
+	libusb_device* d = libusb_get_device(dev->dev);
+	struct libusb_config_descriptor* config;
+	res = libusb_get_active_config_descriptor(d, &config);
+	if (res < 0) // Something went wrong
+		return res;
+	retval = config->bNumInterfaces;
+	libusb_free_config_descriptor(config);
+	return retval;
+}
+#endif
