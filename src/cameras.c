@@ -277,7 +277,15 @@ static int stream_setbuf(freenect_context *ctx, packet_stream *strm, void *pbuf)
 	}
 }
 
-// Unpack buffer of (vw bit) data into padded 16bit buffer.
+/**
+ * Convert a packed array of n elements with vw useful bits into array of
+ * zero-padded 16bit elements.
+ *
+ * @param src The source packed array, of size (n * vw / 8) bytes
+ * @param dest The destination unpacked array, of size (n * 2) bytes
+ * @param vw The virtual width of elements, that is the number of useful bits for each of them
+ * @param n The number of elements (in particular, of the destination array), NOT a length in bytes
+ */
 static inline void convert_packed_to_16bit(uint8_t *src, uint16_t *dest, int vw, int n)
 {
 	unsigned int mask = (1 << vw) - 1;
@@ -293,7 +301,17 @@ static inline void convert_packed_to_16bit(uint8_t *src, uint16_t *dest, int vw,
 	}
 }
 
-// Unpack buffer of (vw bit) data into 8bit buffer, dropping LSBs
+/**
+ * Convert a packed array of n elements with vw useful bits into array of
+ * 8bit elements, dropping LSB.
+ *
+ * @param src The source packed array, of size (n * vw / 8) bytes
+ * @param dest The destination unpacked array, of size (n * 2) bytes
+ * @param vw The virtual width of elements, that is the number of useful bits for each of them
+ * @param n The number of elements (in particular, of the destination array), NOT a length in bytes
+ *
+ * @pre vw is expected to be >= 8.
+ */
 static inline void convert_packed_to_8bit(uint8_t *src, uint8_t *dest, int vw, int n)
 {
 	uint32_t buffer = 0;
