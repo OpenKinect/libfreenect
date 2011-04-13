@@ -30,6 +30,7 @@
 #include <string.h>
 #include <errno.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 static void dump_bl_cmd(freenect_context* ctx, bootloader_command cmd) {
 	int i;
@@ -127,19 +128,70 @@ int upload_firmware(fnusb_dev* dev) {
 	int res;
 	int transferred;
 
-	const char* fw_filename = "audios.bin";
-	/* TODO: support searching for files in several places:
+	/* Search for firmware file (audios.bin) in the following places:
 	 * $LIBFREENECT_FIRMWARE_PATH
 	 * .
 	 * ${HOME}/.libfreenect
 	 * /usr/local/share/libfreenect
 	 * /usr/share/libfreenect
 	 */
-	FILE* fw = fopen(fw_filename, "r");
-	if(fw == NULL) {
-		FN_ERROR("upload_firmware(): Failed to open %s: error %d\n", fw_filename, errno);
+	const char* fw_filename = "/audios.bin";
+	int filenamelen = strlen(fw_filename);
+	int i;
+	int searchpathcount;
+	FILE* fw = NULL;
+	for(i = 0, searchpathcount = 5; !fw && i < searchpathcount; i++) {
+		char* fwfile;
+		int needs_free = 0;
+		switch(i) {
+			case 0: {
+				char* envpath = getenv("LIBFREENECT_FIRMWARE_PATH");
+				if (!envpath)
+					continue;
+				int pathlen = strlen(envpath);
+				fwfile = malloc(pathlen + filenamelen + 1);
+				strcpy(fwfile, envpath);
+				strcat(fwfile, fw_filename);
+				needs_free = 1;
+				}
+				break;
+			case 1:
+				fwfile = "./audios.bin";
+				break;
+			case 2: {
+				// Construct $HOME/.libfreenect/
+				char* home = getenv("HOME");
+				if (!home)
+					continue;
+				int homelen = strlen(home);
+				char* dotfolder = "/.libfreenect";
+				int locallen = strlen(dotfolder);
+				fwfile = (char*)malloc(homelen + locallen + filenamelen + 1);
+				strcpy(fwfile, home);
+				strcat(fwfile, dotfolder);
+				strcat(fwfile, fw_filename);
+				needs_free = 1;
+				}
+				break;
+			case 3:
+				fwfile = "/usr/local/share/libfreenect/audios.bin";
+				break;
+			case 4:
+				fwfile = "/usr/share/libfreenect/audios.bin";
+				break;
+			default: break;
+		}
+		FN_INFO("Trying to open %s as firmware...\n", fwfile);
+		fw = fopen(fwfile, "rb");
+		if (needs_free) {
+			free(fwfile);
+		}
+	}
+	if (!fw) {
+		FN_ERROR("upload_firmware: failed to find firmware file.\n");
 		return -errno;
 	}
+	// Now we have an open firmware file handle.
 	uint32_t addr = 0x00080000;
 	int read;
 	unsigned char page[0x4000];

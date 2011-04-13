@@ -77,3 +77,7 @@ if (BUILD_C_SYNC)
   install (TARGETS glpclview tiltdemo
     DESTINATION bin)
 endif()
+
+if (BUILD_AUDIO)
+  install (TARGETS wavrecord DESTINATION bin)
+endif()
