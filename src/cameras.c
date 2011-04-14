@@ -1083,7 +1083,7 @@ const freenect_frame_mode freenect_get_depth_mode(int mode_num)
 
 const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
 {
-	return freenect_find_video_mode(dev->depth_resolution, dev->depth_format);
+	return freenect_find_depth_mode(dev->depth_resolution, dev->depth_format);
 }
 
 const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
