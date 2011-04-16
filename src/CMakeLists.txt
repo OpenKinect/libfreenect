@@ -15,6 +15,7 @@ ELSE(WIN32)
 ENDIF(WIN32)
 
 IF(BUILD_AUDIO)
+  include(FindPythonInterp)
   LIST(APPEND SRC audio.c loader.c)
   IF(BUILD_REDIST_PACKAGE)
     # If this build is intended for a redistributable package, we can't include audios.bin, so we should include fwfetcher.py
