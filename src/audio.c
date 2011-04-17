@@ -179,12 +179,12 @@ int freenect_start_audio(freenect_device* dev) {
 	}
 
 	// Start isochronous streams
-	res = fnusb_start_iso(&dev->usb_audio, &dev->audio_in_isoc, iso_in_callback, 0x82, 256, 1, 524);
+	res = fnusb_start_iso(&dev->usb_audio, &dev->audio_in_isoc, iso_in_callback, 0x82, NUM_XFERS, PKTS_PER_XFER, 524);
 	if (res < 0) {
 		FN_ERROR("audio: failed to start isochronous IN stream: %d\n", res);
 		return res;
 	}
-	res = fnusb_start_iso(&dev->usb_audio, &dev->audio_out_isoc, iso_out_callback, 0x02, 256, 1, 76);
+	res = fnusb_start_iso(&dev->usb_audio, &dev->audio_out_isoc, iso_out_callback, 0x02, NUM_XFERS, PKTS_PER_XFER, 76);
 	if (res < 0) {
 		FN_ERROR("audio: failed to start isochronous OUT stream: %d\n", res);
 		return res;
