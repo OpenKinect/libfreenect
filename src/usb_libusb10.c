@@ -126,6 +126,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 					dev->usb_cam.dev = NULL;
 					break;
 				}
+#ifndef _WIN32
 				// Detach an existing kernel driver for the device
 				res = libusb_kernel_driver_active(dev->usb_cam.dev, 0);
 				if (res == 1) {
@@ -137,6 +138,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 						break;
 					}
 				}
+#endif
 				res = libusb_claim_interface (dev->usb_cam.dev, 0);
 				if (res < 0) {
 					FN_ERROR("Could not claim interface on camera: %d\n", res);
