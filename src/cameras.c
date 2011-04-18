@@ -31,9 +31,9 @@
 
 #include "freenect_internal.h"
 
-#define MAKE_RESERVED(res, fmt) (((uint8_t)(res) << 8) | (((uint8_t)(fmt))) )
-#define RESERVED_TO_RESOLUTION(reserved) ((uint8_t)(reserved >> 8))
-#define RESERVED_TO_FORMAT(reserved) ((uint8_t)(reserved))
+#define MAKE_RESERVED(res, fmt) (uint32_t)(((res & 0xff) << 8) | (((fmt & 0xff))))
+#define RESERVED_TO_RESOLUTION(reserved) (freenect_resolution)((reserved >> 8) & 0xff)
+#define RESERVED_TO_FORMAT(reserved) ((reserved) & 0xff)
 
 #define video_mode_count 12
 freenect_frame_mode supported_video_modes[video_mode_count] = {
@@ -66,7 +66,7 @@ freenect_frame_mode supported_depth_modes[depth_mode_count] = {
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT_PACKED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT_PACKED}, 640*480*11/8, 640, 480, 11, 0, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT_PACKED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT_PACKED}, 640*480*10/8, 640, 480, 10, 0, 30, 1},
 };
-static const freenect_frame_mode invalid_mode = {0, 0, {0}, 0, 0, 0, 0, 0, 0, 0};
+static const freenect_frame_mode invalid_mode = {0, (freenect_resolution)0, {(freenect_video_format)0}, 0, 0, 0, 0, 0, 0, 0};
 
 struct pkt_hdr {
 	uint8_t magic[2];
@@ -647,7 +647,7 @@ typedef struct {
 	uint16_t tag;
 } cam_hdr;
 
-static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, unsigned int reply_len)
+static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, int reply_len)
 {
 	freenect_context *ctx = dev->parent;
 	int res, actual_len;
@@ -680,7 +680,7 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
 	} while (actual_len == 0);
 	FN_SPEW("Control reply: %d\n", res);
-	if (actual_len < sizeof(*rhdr)) {
+	if (actual_len < (int)sizeof(*rhdr)) {
 		FN_ERROR("send_cmd: Input control transfer failed (%d)\n", res);
 		return res;
 	}
@@ -1029,7 +1029,7 @@ const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 
 const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
 {
-	int unique_id = MAKE_RESERVED(res, fmt);
+	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
 	for(i = 0 ; i < video_mode_count; i++) {
 		if (supported_video_modes[i].reserved == unique_id)
@@ -1061,7 +1061,7 @@ int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode
 	}
 
 	freenect_resolution res = RESERVED_TO_RESOLUTION(mode.reserved);
-	freenect_video_format fmt = RESERVED_TO_FORMAT(mode.reserved);
+	freenect_video_format fmt = (freenect_video_format)RESERVED_TO_FORMAT(mode.reserved);
 	dev->video_format = fmt;
 	dev->video_resolution = res;
 	return 0;
@@ -1088,7 +1088,7 @@ const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
 
 const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
 {
-	int unique_id = MAKE_RESERVED(res, fmt);
+	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
 	for(i = 0 ; i < depth_mode_count; i++) {
 		if (supported_depth_modes[i].reserved == unique_id)
@@ -1120,7 +1120,7 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
 		return -1;
 	}
 	freenect_resolution res = RESERVED_TO_RESOLUTION(mode.reserved);
-	freenect_depth_format fmt = RESERVED_TO_FORMAT(mode.reserved);
+	freenect_depth_format fmt = (freenect_depth_format)RESERVED_TO_FORMAT(mode.reserved);
 	dev->depth_format = fmt;
 	dev->depth_resolution = res;
 	return 0;

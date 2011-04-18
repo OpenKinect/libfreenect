@@ -76,6 +76,7 @@ typedef struct {
 	uint32_t reserved;              /**< unique ID used internally.  The meaning of values may change without notice.  Don't touch or depend on the contents of this field.  We mean it. */
 	freenect_resolution resolution; /**< Resolution this freenect_frame_mode describes, should you want to find it again with freenect_find_*_frame_mode(). */
 	union {
+		int32_t dummy;
 		freenect_video_format video_format;
 		freenect_depth_format depth_format;
 	};                              /**< The video or depth format that this freenect_frame_mode describes.  The caller should know which of video_format or depth_format to use, since they called freenect_get_*_frame_mode() */
