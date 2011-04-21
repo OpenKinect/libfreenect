@@ -423,7 +423,99 @@ FREENECTAPI int freenect_set_led(freenect_device *dev, freenect_led_options opti
  * @param y Stores Y-axis accelerometer state
  * @param z Stores Z-axis accelerometer state
  */
-FREENECTAPI void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z);
+FREENECTAPI void freenect_get_mks_accel(freenect_raw_tilt_state *state, double *x, double *y, double *z);
+
+
+/**
+ *
+ * Enables/disables the horizontal flip function of the RGB camera.
+ *
+ * @param dev Device to toggle horizontal flip feature on/off.
+ * @param h_flip_enable Set to 0 to disable the hflip
+ *
+ */
+FREENECTAPI void freenect_set_hflip(freenect_device *dev, int h_flip_enable);
+
+/**
+ * Returns the firmware version of the CMOS Camera chip.
+ *
+ * @param device        pointer reference for the Kinect device in question
+ */
+FREENECTAPI uint16_t freenect_get_cmos_chip_version(freenect_device* device);
+
+/**
+ * Returns window parameters belonging to the CMOS Camara sensor.
+ *
+ * @param dev            pointer reference to the Kinect device in question
+ * @param window_setting 'x' Returns starting sensor row (Y position)
+ *                       'y' Returns starting sensor column (X position)
+ *                       'h' Returns sensor window Height
+ *                       'w' Returns sensor window Width
+ */
+FREENECTAPI uint16_t freenect_get_cmos_window_setting(freenect_device* device, char window_setting);
+
+/**
+ * Returns window parameters belonging to the CMOS Camara sensor.
+ *
+ * @param dev            pointer reference to the Kinect device in question
+ * @param window_setting 'x' Returns starting sensor row (Y position)
+ *                       'y' Returns starting sensor column (X position)
+ *                       'h' Returns sensor window Height
+ *                       'w' Returns sensor window Width
+ * @param setting_value  new value to change the window setting to
+ */
+FREENECTAPI void freenect_set_cmos_window_setting(freenect_device* device, char window_setting, uint16_t setting_value);
+
+
+/**
+ * Sets the window parameters for the CMOS Camara sensor.
+ *
+ * @param dev         pointer reference to the Kinect device in question
+ * @param apt_correct '0' disable, '1' enable
+ */
+FREENECTAPI void freenect_set_cmos_aperture_correction(freenect_device* device, int apt_correct);
+
+typedef enum
+{
+	FREENECT_SF_0 = 0,
+	FREENECT_SF_25,
+	FREENECT_SF_50,
+	FREENECT_SF_75,
+	FREENECT_SF_100,
+	FREENECT_SF_125,
+	FREENECT_SF_150,
+	FREENECT_SF_200
+} freenect_sharpening_factor;
+
+FREENECTAPI freenect_sharpening_factor freenect_get_cmos_aperture_correction_sharpening_factor(freenect_device* device);
+FREENECTAPI void freenect_set_cmos_aperture_correction_sharpening_factor(freenect_device* device, freenect_sharpening_factor factor);
+
+typedef enum
+{
+	FREENECT_CSA_0 = 0,
+	FREENECT_CSA_75,
+	FREENECT_CSA_50,
+	FREENECT_CSA_37_5,
+	FREENECT_CSA_25,
+	FREENECT_CSA_150,
+	FREENECT_CSA_BW
+} freenect_color_saturation_attenuation;
+
+FREENECTAPI freenect_color_saturation_attenuation freenect_get_cmos_color_saturation_attenuation(freenect_device* device);
+FREENECTAPI void freenect_set_cmos_color_saturation_attenuation(freenect_device* device, freenect_color_saturation_attenuation attenuation);
+
+typedef enum
+{
+	FREENECT_AL_0 = 0,
+	FREENECT_AL_216,
+	FREENECT_AL_208,
+	FREENECT_AL_192,
+	FREENECT_AL_160,
+	FREENECT_AL_96
+} freenect_attenuation_luminance;
+
+FREENECTAPI freenect_attenuation_luminance freenect_get_cmos_attenuation_luminance(freenect_device* device);
+FREENECTAPI void freenect_set_cmos_attenuation_luminance(freenect_device* device, freenect_attenuation_luminance luminance);
 
 #ifdef __cplusplus
 }

@@ -24,7 +24,6 @@
  * either License.
  */
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -545,81 +544,6 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 		dev->video_cb(dev, dev->video.proc_buf, dev->video.timestamp);
 }
 
-typedef struct {
-	uint8_t magic[2];
-	uint16_t len;
-	uint16_t cmd;
-	uint16_t tag;
-} cam_hdr;
-
-static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, unsigned int reply_len)
-{
-	freenect_context *ctx = dev->parent;
-	int res, actual_len;
-	uint8_t obuf[0x400];
-	uint8_t ibuf[0x200];
-	cam_hdr *chdr = (cam_hdr*)obuf;
-	cam_hdr *rhdr = (cam_hdr*)ibuf;
-
-	if (cmd_len & 1 || cmd_len > (0x400 - sizeof(*chdr))) {
-		FN_ERROR("send_cmd: Invalid command length (0x%x)\n", cmd_len);
-		return -1;
-	}
-
-	chdr->magic[0] = 0x47;
-	chdr->magic[1] = 0x4d;
-	chdr->cmd = fn_le16(cmd);
-	chdr->tag = fn_le16(dev->cam_tag);
-	chdr->len = fn_le16(cmd_len / 2);
-
-	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
-
-	res = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, cmd_len + sizeof(*chdr));
-	FN_SPEW("Control cmd=%04x tag=%04x len=%04x: %d\n", cmd, dev->cam_tag, cmd_len, res);
-	if (res < 0) {
-		FN_ERROR("send_cmd: Output control transfer failed (%d)\n", res);
-		return res;
-	}
-
-	do {
-		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
-	} while (actual_len == 0);
-	FN_SPEW("Control reply: %d\n", res);
-	if (actual_len < sizeof(*rhdr)) {
-		FN_ERROR("send_cmd: Input control transfer failed (%d)\n", res);
-		return res;
-	}
-	actual_len -= sizeof(*rhdr);
-
-	if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
-		FN_ERROR("send_cmd: Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
-		return -1;
-	}
-	if (rhdr->cmd != chdr->cmd) {
-		FN_ERROR("send_cmd: Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
-		return -1;
-	}
-	if (rhdr->tag != chdr->tag) {
-		FN_ERROR("send_cmd: Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
-		return -1;
-	}
-	if (fn_le16(rhdr->len) != (actual_len/2)) {
-		FN_ERROR("send_cmd: Bad len %04x != %04x\n", fn_le16(rhdr->len), (int)(actual_len/2));
-		return -1;
-	}
-
-	if (actual_len > reply_len) {
-		FN_WARNING("send_cmd: Data buffer is %d bytes long, but got %d bytes\n", reply_len, actual_len);
-		memcpy(replybuf, ibuf+sizeof(*rhdr), reply_len);
-	} else {
-		memcpy(replybuf, ibuf+sizeof(*rhdr), actual_len);
-	}
-
-	dev->cam_tag++;
-
-	return actual_len;
-}
-
 static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
 {
 	freenect_context *ctx = dev->parent;
@@ -734,11 +658,11 @@ int freenect_start_video(freenect_device *dev)
 	write_register(dev, 0x05, 0x00); // reset video stream
 	if (dev->video_format == FREENECT_VIDEO_YUV_RGB || dev->video_format == FREENECT_VIDEO_YUV_RAW) {
 		write_register(dev, 0x0c, 0x05); // UYUV mode
-		write_register(dev, 0x0d, 0x01); // 640x480
+		write_register(dev, 0x0d, 0x00); // 320x240
 		write_register(dev, 0x0e, 0x0f); // 15Hz
 	} else {
 		write_register(dev, 0x0c, 0x00); // Bayer
-		write_register(dev, 0x0d, 0x01); // 640x480
+		write_register(dev, 0x0d, 0x00); // 320x240
 		write_register(dev, 0x0e, 0x1e); // 30Hz
 	}
 	switch (dev->video_format) {
@@ -756,6 +680,9 @@ int freenect_start_video(freenect_device *dev)
 			break;
 	}
 	write_register(dev, 0x47, 0x00); // disable Hflip
+
+	// try to disable autoexposure
+	// write_register(dev, 0x106, 0x648E);
 
 	dev->video.running = 1;
 	return 0;
@@ -866,4 +793,20 @@ int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 int freenect_set_video_buffer(freenect_device *dev, void *buf)
 {
 	return stream_setbuf(dev->parent, &dev->video, buf);
+}
+
+void freenect_set_hflip(freenect_device *dev, int h_flip_enable)
+{
+	freenect_context *ctx = dev->parent;
+
+	if( !dev->video.running ) {
+		FN_ERROR("\nCamera video not running...\n");
+	}
+
+	if ( h_flip_enable != 0 )
+		write_register(dev, 0x47, 0x01);
+	else
+		write_register(dev, 0x47, 0x00);
+
+	ctx = NULL;
 }

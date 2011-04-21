@@ -149,4 +149,6 @@ struct _freenect_device {
 	freenect_raw_tilt_state raw_state;
 };
 
+int send_cmd(freenect_device* device, uint16_t cmd, void* cmdbuf, unsigned int cmd_len, void* replybuf, unsigned int reply_len);
+
 #endif
