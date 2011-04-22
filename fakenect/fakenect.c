@@ -184,7 +184,7 @@ int freenect_process_events(freenect_context *ctx)
 			if (cur_depth_cb && depth_running) {
 				void *cur_depth = skip_line(data);
 				if (depth_buffer) {
-					memcpy(depth_buffer, cur_depth, FREENECT_DEPTH_11BIT_SIZE);
+					memcpy(depth_buffer, cur_depth, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT).bytes);
 					cur_depth = depth_buffer;
 				}
 				cur_depth_cb(fake_dev, cur_depth, timestamp);
@@ -194,7 +194,7 @@ int freenect_process_events(freenect_context *ctx)
 			if (cur_rgb_cb && rgb_running) {
 				void *cur_rgb = skip_line(data);
 				if (rgb_buffer) {
-					memcpy(rgb_buffer, cur_rgb, FREENECT_VIDEO_RGB_SIZE);
+					memcpy(rgb_buffer, cur_rgb, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB).bytes);
 					cur_rgb = rgb_buffer;
 				}
 				cur_rgb_cb(fake_dev, cur_rgb, timestamp);
@@ -248,6 +248,38 @@ void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb)
 void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb)
 {
 	cur_rgb_cb = cb;
+}
+
+int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode)
+{
+        // Always say it was successful but continue to pass through the
+        // underlying data.  Would be better to check for conflict.
+        return 0;
+}
+
+int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode)
+{
+        // Always say it was successful but continue to pass through the
+        // underlying data.  Would be better to check for conflict.
+        return 0;
+}
+
+const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt) {
+    assert(FREENECT_RESOLUTION_MEDIUM == res);
+    assert(FREENECT_VIDEO_RGB == fmt);
+    // NOTE: This will leave uninitialized values if new fields are added.
+    // To update this line run the "record" program, look at the top output
+    freenect_frame_mode out = {256, 1, {0}, 921600, 640, 480, 24, 0, 30, 1};
+    return out;
+}
+
+const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt) {
+    assert(FREENECT_RESOLUTION_MEDIUM == res);
+    assert(FREENECT_DEPTH_11BIT == fmt);
+    // NOTE: This will leave uninitialized values if new fields are added.
+    // To update this line run the "record" program, look at the top output
+    freenect_frame_mode out = {256, 1, {0}, 614400, 640, 480, 11, 5, 30, 1};
+    return out;
 }
 
 int freenect_num_devices(freenect_context *ctx)

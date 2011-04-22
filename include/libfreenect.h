@@ -33,28 +33,18 @@
 extern "C" {
 #endif
 
-#define FREENECT_FRAME_W 640 /**< Default video frame width */
-#define FREENECT_FRAME_H 480 /**< Default video frame height */
-#define FREENECT_FRAME_PIX (FREENECT_FRAME_H*FREENECT_FRAME_W) /**< Pixel count for default video frame */
-
-#define FREENECT_IR_FRAME_W 640 /**< Default depth frame width */
-#define FREENECT_IR_FRAME_H 488	/**< Default depth frame height */
-#define FREENECT_IR_FRAME_PIX (FREENECT_IR_FRAME_H*FREENECT_IR_FRAME_W)	/**< Pixel count for default depth frame */
-
-#define FREENECT_VIDEO_RGB_SIZE (FREENECT_FRAME_PIX*3) /**< Size of the decompressed rgb frame */
-#define FREENECT_VIDEO_BAYER_SIZE (FREENECT_FRAME_PIX) /**< Size of the bayer frame */
-#define FREENECT_VIDEO_YUV_RGB_SIZE (FREENECT_VIDEO_RGB_SIZE) /**< Size of the rgb YUV frame */
-#define FREENECT_VIDEO_YUV_RAW_SIZE (FREENECT_FRAME_PIX*2) /**< Size of the raw YUV frame */
-#define FREENECT_VIDEO_IR_8BIT_SIZE (FREENECT_IR_FRAME_PIX)	/**< Size of the 8 bit IR video frame */
-#define FREENECT_VIDEO_IR_10BIT_SIZE (FREENECT_IR_FRAME_PIX*sizeof(uint16_t)) /**< Size of the 10 bit IR video frame */
-#define FREENECT_VIDEO_IR_10BIT_PACKED_SIZE 390400 /**< Size of the packed 10 bit IR video frame */
-
-#define FREENECT_DEPTH_11BIT_SIZE (FREENECT_FRAME_PIX*sizeof(uint16_t)) /**< Size of the 11 bit depth frame */
-#define FREENECT_DEPTH_10BIT_SIZE FREENECT_DEPTH_11BIT_SIZE	/**< Size of the 10 bit depth frame */
-#define FREENECT_DEPTH_11BIT_PACKED_SIZE 422400	/**< Size of the packed 11 bit depth frame */
-#define FREENECT_DEPTH_10BIT_PACKED_SIZE 384000	/**< Size of the packed 10 bit depth frame */
-
 #define FREENECT_COUNTS_PER_G 819 /**< Ticks per G for accelerometer as set per http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf */
+
+/// Enumeration of available resolutions.
+/// Not all available resolutions are actually supported for all video formats.
+/// Frame modes may not perfectly match resolutions.  For instance,
+/// FREENECT_RESOLUTION_MEDIUM is 640x488 for the IR camera.
+typedef enum {
+	FREENECT_RESOLUTION_LOW    = 0, /**< QVGA - 320x240 */
+	FREENECT_RESOLUTION_MEDIUM = 1, /**< VGA  - 640x480 */
+	FREENECT_RESOLUTION_HIGH   = 2, /**< SXGA - 1280x1024 */
+	FREENECT_RESOLUTION_DUMMY  = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
+} freenect_resolution;
 
 /// Enumeration of video frame information states.
 /// See http://openkinect.org/wiki/Protocol_Documentation#RGB_Camera for more information.
@@ -66,7 +56,38 @@ typedef enum {
 	FREENECT_VIDEO_IR_10BIT_PACKED = 4, /**< 10-bit packed IR mode */
 	FREENECT_VIDEO_YUV_RGB         = 5, /**< YUV RGB mode */
 	FREENECT_VIDEO_YUV_RAW         = 6, /**< YUV Raw mode */
+	FREENECT_VIDEO_DUMMY           = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_video_format;
+
+/// Enumeration of depth frame states
+/// See http://openkinect.org/wiki/Protocol_Documentation#RGB_Camera for more information.
+typedef enum {
+	FREENECT_DEPTH_11BIT        = 0, /**< 11 bit depth information in one uint16_t/pixel */
+	FREENECT_DEPTH_10BIT        = 1, /**< 10 bit depth information in one uint16_t/pixel */
+	FREENECT_DEPTH_11BIT_PACKED = 2, /**< 11 bit packed depth information */
+	FREENECT_DEPTH_10BIT_PACKED = 3, /**< 10 bit packed depth information */
+	FREENECT_DEPTH_DUMMY        = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
+} freenect_depth_format;
+
+/// Structure to give information about the width, height, bitrate,
+/// framerate, and buffer size of a frame in a particular mode, as
+/// well as the total number of bytes needed to hold a single frame.
+typedef struct {
+	uint32_t reserved;              /**< unique ID used internally.  The meaning of values may change without notice.  Don't touch or depend on the contents of this field.  We mean it. */
+	freenect_resolution resolution; /**< Resolution this freenect_frame_mode describes, should you want to find it again with freenect_find_*_frame_mode(). */
+	union {
+		int32_t dummy;
+		freenect_video_format video_format;
+		freenect_depth_format depth_format;
+	};                              /**< The video or depth format that this freenect_frame_mode describes.  The caller should know which of video_format or depth_format to use, since they called freenect_get_*_frame_mode() */
+	int32_t bytes;                  /**< Total buffer size in bytes to hold a single frame of data.  Should be equivalent to width * height * (data_bits_per_pixel+padding_bits_per_pixel) / 8 */
+	int16_t width;                  /**< Width of the frame, in pixels */
+	int16_t height;                 /**< Height of the frame, in pixels */
+	int8_t data_bits_per_pixel;     /**< Number of bits of information needed for each pixel */
+	int8_t padding_bits_per_pixel;  /**< Number of bits of padding for alignment used for each pixel */
+	int8_t framerate;               /**< Approximate expected frame rate, in Hz */
+	int8_t is_valid;                /**< If 0, this freenect_frame_mode is invalid and does not describe a supported mode.  Otherwise, the frame_mode is valid. */
+} freenect_frame_mode;
 
 /// Enumeration of LED states
 /// See http://openkinect.org/wiki/Protocol_Documentation#Setting_LED for more information.
@@ -79,15 +100,6 @@ typedef enum {
 	// 5 is same as 4, LED blink Green
 	LED_BLINK_RED_YELLOW = 6, /**< Make LED blink Red/Yellow */
 } freenect_led_options;
-
-/// Enumeration of depth frame states
-/// See http://openkinect.org/wiki/Protocol_Documentation#RGB_Camera for more information.
-typedef enum {
-	FREENECT_DEPTH_11BIT        = 0, /**< 11 bit depth information in one uint16_t/pixel */
-	FREENECT_DEPTH_10BIT        = 1, /**< 10 bit depth information in one uint16_t/pixel */
-	FREENECT_DEPTH_11BIT_PACKED = 2, /**< 11 bit packed depth information */
-	FREENECT_DEPTH_10BIT_PACKED = 3, /**< 10 bit packed depth information */
-} freenect_depth_format;
 
 
 /// Enumeration of tilt motor status
@@ -105,6 +117,53 @@ typedef struct {
 	int8_t                    tilt_angle;      /**< Raw tilt motor angle encoder information */
 	freenect_tilt_status_code tilt_status;     /**< State of the tilt motor (stopped, moving, etc...) */
 } freenect_raw_tilt_state;
+
+typedef enum
+{
+	HFLIP_DISABLE = 0,
+	HFLIP_ENABLE  = 1
+} freenect_hflip;
+
+typedef enum
+{
+	WINDOW_ATTRIBUTE_X  = 0,
+	WINDOW_ATTRIBUTE_Y,
+	WINODW_ATTRIBUTE_HEIGHT,
+	WINDOW_ATTRIBUTE_WIDTH
+} freenect_window_attribute;
+
+typedef enum
+{
+	FREENECT_SF_0 = 0,
+	FREENECT_SF_25,
+	FREENECT_SF_50,
+	FREENECT_SF_75,
+	FREENECT_SF_100,
+	FREENECT_SF_125,
+	FREENECT_SF_150,
+	FREENECT_SF_200
+} freenect_sharpening_factor;
+
+typedef enum
+{
+	FREENECT_CSA_0 = 0,
+	FREENECT_CSA_75,
+	FREENECT_CSA_50,
+	FREENECT_CSA_37_5,
+	FREENECT_CSA_25,
+	FREENECT_CSA_150,
+	FREENECT_CSA_BW
+} freenect_color_saturation_attenuation;
+
+typedef enum
+{
+	FREENECT_AL_0 = 0,
+	FREENECT_AL_216,
+	FREENECT_AL_208,
+	FREENECT_AL_192,
+	FREENECT_AL_160,
+	FREENECT_AL_96
+} freenect_attenuation_luminance;
 
 struct _freenect_context;
 typedef struct _freenect_context freenect_context; /**< Holds information about the usb context. */
@@ -269,26 +328,6 @@ FREENECTAPI void freenect_set_depth_callback(freenect_device *dev, freenect_dept
 FREENECTAPI void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb);
 
 /**
- * Set the format for depth information
- *
- * @param dev Device to set depth information format for
- * @param fmt Format of depth information. See freenect_depth_format enum.
- *
- * @return 0 on success, < 0 on error
- */
-FREENECTAPI int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt);
-
-/**
- * Set the format for video information
- *
- * @param dev Device to set video information format for
- * @param fmt Format of video information. See freenect_video_format enum.
- *
- * @return 0 on success, < 0 on error
- */
-FREENECTAPI int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt);
-
-/**
  * Set the buffer to store depth information to. Size of buffer is
  * dependant on depth format. See FREENECT_DEPTH_*_SIZE defines for
  * more information.
@@ -423,8 +462,108 @@ FREENECTAPI int freenect_set_led(freenect_device *dev, freenect_led_options opti
  * @param y Stores Y-axis accelerometer state
  * @param z Stores Z-axis accelerometer state
  */
-FREENECTAPI void freenect_get_mks_accel(freenect_raw_tilt_state *state, double *x, double *y, double *z);
+FREENECTAPI void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z);
 
+/**
+ * Get the number of video camera modes supported by the driver.  This includes both RGB and IR modes.
+ *
+ * @return Number of video modes supported by the driver
+ */
+FREENECTAPI int freenect_get_video_mode_count();
+
+/**
+ * Get the frame descriptor of the nth supported video mode for the
+ * video camera.
+ *
+ * @param n Which of the supported modes to return information about
+ *
+ * @return A freenect_frame_mode describing the nth video mode
+ */
+FREENECTAPI const freenect_frame_mode freenect_get_video_mode(int mode_num);
+
+/**
+ * Get the frame descriptor of the current video mode for the specified
+ * freenect device.
+ *
+ * @param dev Which device to return the currently-set video mode for
+ *
+ * @return A freenect_frame_mode describing the current video mode of the specified device
+ */
+FREENECTAPI const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev);
+
+/**
+ * Convenience function to return a mode descriptor matching the
+ * specified resolution and video camera pixel format, if one exists.
+ *
+ * @param res Resolution desired
+ * @param fmt Pixel format desired
+ *
+ * @return A freenect_frame_mode that matches the arguments specified, if such a valid mode exists; otherwise, an invalid freenect_frame_mode.
+ */
+FREENECTAPI const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt);
+
+/**
+ * Sets the current video mode for the specified device.  If the
+ * freenect_frame_mode specified is not one provided by the driver
+ * e.g. from freenect_get_video_mode() or freenect_find_video_mode()
+ * then behavior is undefined.  The current video mode cannot be
+ * changed while streaming is active.
+ *
+ * @param dev Device for which to set the video mode
+ * @param mode Frame mode to set
+ *
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode);
+
+/**
+ * Get the number of depth camera modes supported by the driver.  This includes both RGB and IR modes.
+ *
+ * @return Number of depth modes supported by the driver
+ */
+FREENECTAPI int freenect_get_depth_mode_count();
+
+/**
+ * Get the frame descriptor of the nth supported depth mode for the
+ * depth camera.
+ *
+ * @param n Which of the supported modes to return information about
+ *
+ * @return A freenect_frame_mode describing the nth depth mode
+ */
+FREENECTAPI const freenect_frame_mode freenect_get_depth_mode(int mode_num);
+
+/**
+ * Get the frame descriptor of the current depth mode for the specified
+ * freenect device.
+ *
+ * @param dev Which device to return the currently-set depth mode for
+ *
+ * @return A freenect_frame_mode describing the current depth mode of the specified device
+ */
+FREENECTAPI const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev);
+
+/**
+ * Convenience function to return a mode descriptor matching the
+ * specified resolution and depth camera pixel format, if one exists.
+ *
+ * @param res Resolution desired
+ * @param fmt Pixel format desired
+ *
+ * @return A freenect_frame_mode that matches the arguments specified, if such a valid mode exists; otherwise, an invalid freenect_frame_mode.
+ */
+FREENECTAPI const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt);
+
+/**
+ * Sets the current depth mode for the specified device.  The mode
+ * cannot be changed while streaming is active.
+ *
+ * @param dev Device for which to set the depth mode
+ * @param mode Frame mode to set
+ *
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode);
 
 /**
  *
@@ -433,88 +572,52 @@ FREENECTAPI void freenect_get_mks_accel(freenect_raw_tilt_state *state, double *
  * @param dev Device to toggle horizontal flip feature on/off.
  * @param h_flip_enable Set to 0 to disable the hflip
  *
+ * @return 0 on success, < 0 if error
  */
-FREENECTAPI void freenect_set_hflip(freenect_device *dev, int h_flip_enable);
+FREENECTAPI int freenect_set_hflip(freenect_device *dev, freenect_hflip setting);
 
 /**
- * Returns the firmware version of the CMOS Camera chip.
+ * Gets the CMOS chip version of the specified Kinect device.
  *
- * @param device        pointer reference for the Kinect device in question
+ * @param device      Specified Kinect device
  */
 FREENECTAPI uint16_t freenect_get_cmos_chip_version(freenect_device* device);
 
 /**
- * Returns window parameters belonging to the CMOS Camara sensor.
+ * Gets the specified window attribute from the specified Kinect device.
  *
- * @param dev            pointer reference to the Kinect device in question
- * @param window_setting 'x' Returns starting sensor row (Y position)
- *                       'y' Returns starting sensor column (X position)
- *                       'h' Returns sensor window Height
- *                       'w' Returns sensor window Width
+ * @param device     Specified Kinect device
+ * @param attribute  Requested window attribute
  */
-FREENECTAPI uint16_t freenect_get_cmos_window_setting(freenect_device* device, char window_setting);
+FREENECTAPI uint16_t freenect_get_cmos_window_attribute(freenect_device* device, freenect_window_attribute attribute);
 
 /**
- * Returns window parameters belonging to the CMOS Camara sensor.
+ * Sets the specified window attribute for the specified Kinect device.
  *
- * @param dev            pointer reference to the Kinect device in question
- * @param window_setting 'x' Returns starting sensor row (Y position)
- *                       'y' Returns starting sensor column (X position)
- *                       'h' Returns sensor window Height
- *                       'w' Returns sensor window Width
- * @param setting_value  new value to change the window setting to
+ * @param device     Specified Kinect device
+ * @param attribute  Window attribute to change
+ * @param value      New value of the window attribute
  */
-FREENECTAPI void freenect_set_cmos_window_setting(freenect_device* device, char window_setting, uint16_t setting_value);
-
+FREENECTAPI void freenect_set_cmos_window_attribute(freenect_device* device, freenect_window_attribute attribute, uint16_t value);
 
 /**
- * Sets the window parameters for the CMOS Camara sensor.
+ * Sets whether aperture correction is automatic or manual for the specified Kinect device.
  *
- * @param dev         pointer reference to the Kinect device in question
- * @param apt_correct '0' disable, '1' enable
+ * @param device      Specified Kinect device
+ * @param automatic   '0' disable, '1' enable
  */
-FREENECTAPI void freenect_set_cmos_aperture_correction(freenect_device* device, int apt_correct);
-
-typedef enum
-{
-	FREENECT_SF_0 = 0,
-	FREENECT_SF_25,
-	FREENECT_SF_50,
-	FREENECT_SF_75,
-	FREENECT_SF_100,
-	FREENECT_SF_125,
-	FREENECT_SF_150,
-	FREENECT_SF_200
-} freenect_sharpening_factor;
+FREENECTAPI void freenect_set_cmos_aperture_correction(freenect_device* device, int automatic);
 
 FREENECTAPI freenect_sharpening_factor freenect_get_cmos_aperture_correction_sharpening_factor(freenect_device* device);
+
 FREENECTAPI void freenect_set_cmos_aperture_correction_sharpening_factor(freenect_device* device, freenect_sharpening_factor factor);
 
-typedef enum
-{
-	FREENECT_CSA_0 = 0,
-	FREENECT_CSA_75,
-	FREENECT_CSA_50,
-	FREENECT_CSA_37_5,
-	FREENECT_CSA_25,
-	FREENECT_CSA_150,
-	FREENECT_CSA_BW
-} freenect_color_saturation_attenuation;
-
 FREENECTAPI freenect_color_saturation_attenuation freenect_get_cmos_color_saturation_attenuation(freenect_device* device);
+
 FREENECTAPI void freenect_set_cmos_color_saturation_attenuation(freenect_device* device, freenect_color_saturation_attenuation attenuation);
 
-typedef enum
-{
-	FREENECT_AL_0 = 0,
-	FREENECT_AL_216,
-	FREENECT_AL_208,
-	FREENECT_AL_192,
-	FREENECT_AL_160,
-	FREENECT_AL_96
-} freenect_attenuation_luminance;
-
 FREENECTAPI freenect_attenuation_luminance freenect_get_cmos_attenuation_luminance(freenect_device* device);
+
 FREENECTAPI void freenect_set_cmos_attenuation_luminance(freenect_device* device, freenect_attenuation_luminance luminance);
 
 #ifdef __cplusplus

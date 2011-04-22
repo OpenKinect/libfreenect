@@ -72,19 +72,11 @@ static int alloc_buffer_ring_video(freenect_video_format fmt, buffer_ring_t *buf
 	int sz, i;
 	switch (fmt) {
 		case FREENECT_VIDEO_RGB:
-			sz = FREENECT_VIDEO_RGB_SIZE;
-			break;
 		case FREENECT_VIDEO_BAYER:
-			sz = FREENECT_VIDEO_BAYER_SIZE;
-			break;
 		case FREENECT_VIDEO_IR_8BIT:
-			sz = FREENECT_VIDEO_IR_8BIT_SIZE;
-			break;
 		case FREENECT_VIDEO_IR_10BIT:
-			sz = FREENECT_VIDEO_IR_10BIT;
-			break;
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
-			sz = FREENECT_VIDEO_IR_10BIT_PACKED_SIZE;
+			sz = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, fmt).bytes;
 			break;
 		default:
 			printf("Invalid video format %d\n", fmt);
@@ -103,16 +95,10 @@ static int alloc_buffer_ring_depth(freenect_depth_format fmt, buffer_ring_t *buf
 	int sz, i;
 	switch (fmt) {
 		case FREENECT_DEPTH_11BIT:
-			sz = FREENECT_DEPTH_11BIT_SIZE;
-			break;
 		case FREENECT_DEPTH_10BIT:
-			sz = FREENECT_DEPTH_10BIT_SIZE;
-			break;
 		case FREENECT_DEPTH_11BIT_PACKED:
-			sz = FREENECT_DEPTH_11BIT_PACKED_SIZE;
-			break;
 		case FREENECT_DEPTH_10BIT_PACKED:
-			sz = FREENECT_DEPTH_10BIT_PACKED_SIZE;
+			sz = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, fmt).bytes;
 			break;
 		default:
 			printf("Invalid depth format %d\n", fmt);
@@ -231,7 +217,7 @@ static int change_video_format(sync_kinect_t *kinect, freenect_video_format fmt)
 	free_buffer_ring(&kinect->video);
 	if (alloc_buffer_ring_video(fmt, &kinect->video))
 		return -1;
-	freenect_set_video_format(kinect->dev, fmt);
+	freenect_set_video_mode(kinect->dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, fmt));
 	freenect_set_video_buffer(kinect->dev, kinect->video.bufs[2]);
 	freenect_start_video(kinect->dev);
 	return 0;
@@ -243,7 +229,7 @@ static int change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt)
 	free_buffer_ring(&kinect->depth);
 	if (alloc_buffer_ring_depth(fmt, &kinect->depth))
 		return -1;
-	freenect_set_depth_format(kinect->dev, fmt);
+	freenect_set_depth_mode(kinect->dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, fmt));
 	freenect_set_depth_buffer(kinect->dev, kinect->depth.bufs[2]);
 	freenect_start_depth(kinect->dev);
 	return 0;

@@ -136,6 +136,9 @@ struct _freenect_device {
 	freenect_video_cb video_cb;
 	freenect_video_format video_format;
 	freenect_depth_format depth_format;
+	freenect_resolution video_resolution;
+	freenect_resolution depth_resolution;
+	freenect_hflip hflip_setting;
 
 	int cam_inited;
 	uint16_t cam_tag;
