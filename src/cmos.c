@@ -283,133 +283,69 @@ const uint16_t CR_COLUMN_START = 0x0002;   //Starting X coordinate
 const uint16_t CR_ROW_COUNT = 0x0003;      //Height (in rows)
 const uint16_t CR_COLUMN_COUNT = 0x0004;   //Width (in columns)
 
-// :freenect_get_cmos_window_setting()
-// ?Gets an attribute of the CMOS window.
-uint16_t freenect_get_cmos_window_setting(freenect_device* device, char window_setting)
-{
-	switch(window_setting)
-	{
-		case 'y': case 'Y':
-			return read_cmos_register(device, CR_ROW_START, 1).value;
-			break;
-
-		case 'x': case 'X':
-			return read_cmos_register(device, CR_COLUMN_START, 1).value;
-			break;
-
-		case 'w': case 'W':
-			return read_cmos_register(device, CR_COLUMN_COUNT, 1).value;
-			break;
-
-		case 'h': case 'H':
-			return read_cmos_register(device, CR_ROW_COUNT, 1).value;
-			break;
-
-		default:
-			break;
-	}
-	return 0;
-}
-
-// :freenect_set_cmos_window_setting()
-// ?Sets an attribute of the CMOS window.
-void freenect_set_cmos_window_setting(freenect_device* device, char window_setting, uint16_t setting_value)
-{
-	switch(window_setting)
-	{
-		case 'y': case 'Y':
-			write_cmos_register(device, CR_ROW_START, setting_value);
-			break;
-
-		case 'x': case 'X':
-			write_cmos_register(device, CR_COLUMN_START, setting_value);
-			break;
-
-		case 'w': case 'W':
-			write_cmos_register(device, CR_COLUMN_COUNT, setting_value);
-			break;
-
-		case 'h': case 'H':
-			write_cmos_register(device, CR_ROW_COUNT, setting_value);
-			break;
-
-		default:
-			break;
-	}
-}
-
-/*
-// CMOS Register: Row Start
-const uint16_t CR_ROW_START = 0x0001;
-
-// :freenect_get_cmos_row_start()
-// ?Gets the first row to be read out.
-uint16_t freenect_get_cmos_row_start(freenect_device* device)
-{
-	return read_cmos_register(device, CR_ROW_START, 1).value;
-}
-
-// :freenect_set_cmos_row_start()
-// ?Sets the first row to be read out.
-void freenect_set_cmos_row_start(freenect_device* device, uint16_t row_start)
-{
-	write_cmos_register(device, CR_ROW_START, row_start);
-}
-
-// CMOS Register: Row Count
-const uint16_t CR_ROW_COUNT = 0x0003;
-
-// :freenect_get_cmos_row_count()
-// ?Gets the number of rows of the image to be read ("dark" rows not included).
-uint16_t freenect_get_cmos_row_count(freenect_device* device)
-{
-	return read_cmos_register(device, CR_ROW_COUNT, 1).value;
-}
-
-// :freenect_set_cmos_row_count()
-// ?Sets the number of rows of the image to be read (do not include "dark" rows).
-void freenect_set_cmos_row_count(freenect_device* device, uint16_t row_count)
-{
-	write_cmos_register(device, CR_ROW_COUNT, row_count);
-}
-
-// CMOS Register: Column Start
-const uint16_t CR_COLUMN_START = 0x0002;
-
-// :freenect_get_cmos_column_start()
-// ?Gets the first column to be read out.
-uint16_t freenect_get_cmos_column_start(freenect_device* device)
-{
-	return read_cmos_register(device, CR_COLUMN_START, 1).value;
-}
-
-// :freenect_set_cmos_column_start()
-// ?Sets the first column to be read out.
-void freenect_set_cmos_column_start(freenect_device* device, uint16_t column_start)
-{
-	write_cmos_register(device, CR_COLUMN_START, column_start);
-}
-
-// CMOS Register: Column Count
-const uint16_t CR_COLUMN_COUNT = 0x0004;
-
-// :freenect_get_cmos_column_count()
-// ?Gets the number of columns in the image to be read ("dark" columns not included).
-uint16_t freenect_get_cmos_column_count(freenect_device* device)
-{
-	return read_cmos_register(device, CR_COLUMN_COUNT, 1).value;
-}
-
-// :freenect_set_cmos_column_count()
-// ?Sets the number of columns in the image to be read (do not include "dark" columns).
-void freenect_set_cmos_column_count(freenect_device* device, uint16_t column_count)
-{
-	write_cmos_register(device, CR_COLUMN_COUNT, column_count);
-}
-*/
-
 // CMOS Register: CR_APERTURE_CORRECTION
 const uint16_t CR_APERTURE_CORRECTION = 0x0105;
+
+// CMOS Register R37:1 - Color Saturation Control (Read/Write)
+const uint16_t CR_COLOR_SATURATION = 0x0125;
+
+// :freenect_get_cmos_window_attribute()
+// ?Gets an attribute of the CMOS window.
+int freenect_get_cmos_window_attribute(freenect_device* device, freenect_window_attribute attribute)
+{
+	int result = -1;
+
+	switch(attribute)
+	{
+		case WINDOW_ATTRIBUTE_Y:
+			result = (int)read_cmos_register(device, CR_ROW_START, 1).value;
+			break;
+
+		case WINDOW_ATTRIBUTE_X:
+			result = (int)read_cmos_register(device, CR_COLUMN_START, 1).value;
+			break;
+
+		case WINDOW_ATTRIBUTE_WIDTH:
+			result = (int)read_cmos_register(device, CR_COLUMN_COUNT, 1).value;
+			break;
+
+		case WINDOW_ATTRIBUTE_HEIGHT:
+			result = (int)read_cmos_register(device, CR_ROW_COUNT, 1).value;
+			break;
+
+		default:
+			break;
+	}
+
+	return result;
+}
+
+// :freenect_set_cmos_window_attribute()
+// ?Sets an attribute of the CMOS window.
+void freenect_set_cmos_window_attribute(freenect_device* device, freenect_window_attribute attribute, uint16_t value)
+{
+	switch(attribute)
+	{
+		case WINDOW_ATTRIBUTE_Y:
+			write_cmos_register(device, CR_ROW_START, value);
+			break;
+
+		case WINDOW_ATTRIBUTE_X:
+			write_cmos_register(device, CR_COLUMN_START, value);
+			break;
+
+		case WINDOW_ATTRIBUTE_WIDTH:
+			write_cmos_register(device, CR_COLUMN_COUNT, value);
+			break;
+
+		case WINDOW_ATTRIBUTE_HEIGHT:
+			write_cmos_register(device, CR_ROW_COUNT, value);
+			break;
+
+		default:
+			break;
+	}
+}
 
 // :freenect_get_cmos_aperture_correction_sharpening_factor()
 // ?Gets the aperture correction sharpening factor.
@@ -425,22 +361,22 @@ void freenect_set_cmos_aperture_correction_sharpening_factor(freenect_device* de
 	write_cmos_register(device, CR_APERTURE_CORRECTION, factor);
 }
 
-// :freenect_disable_aperture_correction()
-// ?Disables the aperture correction.
-void freenect_disable_cmos_aperture_correction(freenect_device* device)
+void freenect_set_cmos_aperture_correction(freenect_device* device, freenect_aperture_control mode)
 {
-	write_cmos_register(device, CR_APERTURE_CORRECTION, 0x3);
-}
+	switch (mode)
+	{
+		case APERTURE_MANUAL:
+			write_cmos_register(device, CR_APERTURE_CORRECTION, 0x3);
+			break;
 
-// :freenect_enable_aperture_correction()
-// ?Enables the aperture correction.
-void freenect_enable_cmos_aperture_correction(freenect_device* device)
-{
-	write_cmos_register(device, CR_APERTURE_CORRECTION, 0xB);
-}
+		case APERTURE_AUTOMATIC:
+			write_cmos_register(device, CR_APERTURE_CORRECTION, 0xB);
+			break;
 
-// CMOS Register R37:1 - Color Saturation Control (Read/Write)
-const uint16_t CR_COLOR_SATURATION = 0x0125;
+		default:
+			break;
+	}
+}
 
 // :freenect_get_cmos_color_saturation_attenuation()
 // ?Gets the overall color saturation attenuation.

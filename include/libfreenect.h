@@ -128,9 +128,15 @@ typedef enum
 {
 	WINDOW_ATTRIBUTE_X  = 0,
 	WINDOW_ATTRIBUTE_Y,
-	WINODW_ATTRIBUTE_HEIGHT,
+	WINDOW_ATTRIBUTE_HEIGHT,
 	WINDOW_ATTRIBUTE_WIDTH
 } freenect_window_attribute;
+
+typedef enum
+{
+	APERTURE_MANUAL = 0,
+	APERTURE_AUTOMATIC
+} freenect_aperture_control;
 
 typedef enum
 {
@@ -588,8 +594,10 @@ FREENECTAPI uint16_t freenect_get_cmos_chip_version(freenect_device* device);
  *
  * @param device     Specified Kinect device
  * @param attribute  Requested window attribute
+ *
+ * @return < 0 is failure or useless value, > -1 is useful value
  */
-FREENECTAPI uint16_t freenect_get_cmos_window_attribute(freenect_device* device, freenect_window_attribute attribute);
+FREENECTAPI int freenect_get_cmos_window_attribute(freenect_device* device, freenect_window_attribute attribute);
 
 /**
  * Sets the specified window attribute for the specified Kinect device.
@@ -603,11 +611,18 @@ FREENECTAPI void freenect_set_cmos_window_attribute(freenect_device* device, fre
 /**
  * Sets whether aperture correction is automatic or manual for the specified Kinect device.
  *
- * @param device      Specified Kinect device
- * @param automatic   '0' disable, '1' enable
+ * @param device    Specified Kinect device
+ * @param mode      Option for automatic or manual aperture correction control
  */
-FREENECTAPI void freenect_set_cmos_aperture_correction(freenect_device* device, int automatic);
+FREENECTAPI void freenect_set_cmos_aperture_correction(freenect_device* device, freenect_aperture_control mode);
 
+/**
+ * Gets the current sharpening factor used in aperture correction for the specified Kinect device.
+ *
+ * @param device    Specified Kinect device
+ *
+ * @return The current sharpening factor
+ */
 FREENECTAPI freenect_sharpening_factor freenect_get_cmos_aperture_correction_sharpening_factor(freenect_device* device);
 
 FREENECTAPI void freenect_set_cmos_aperture_correction_sharpening_factor(freenect_device* device, freenect_sharpening_factor factor);
