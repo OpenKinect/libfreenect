@@ -195,7 +195,9 @@ int fnusb_close_subdevices(freenect_device *dev)
 {
 	if (dev->usb_cam.dev) {
 		libusb_release_interface(dev->usb_cam.dev, 0);
+#ifndef _WIN32
 		libusb_attach_kernel_driver(dev->usb_cam.dev, 0);
+#endif
 		libusb_close(dev->usb_cam.dev);
 		dev->usb_cam.dev = NULL;
 	}
