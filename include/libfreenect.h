@@ -118,6 +118,44 @@ typedef struct {
 	freenect_tilt_status_code tilt_status;     /**< State of the tilt motor (stopped, moving, etc...) */
 } freenect_raw_tilt_state;
 
+typedef struct {
+	int32_t nRGS_DX_CENTER;
+	int32_t nRGS_AX;
+	int32_t nRGS_BX;
+	int32_t nRGS_CX;
+	int32_t nRGS_DX;
+	int32_t nRGS_DX_START;
+	int32_t nRGS_AY;
+	int32_t nRGS_BY;
+	int32_t nRGS_CY;
+	int32_t nRGS_DY;
+	int32_t nRGS_DY_START;
+	int32_t nRGS_DX_BETA_START;
+	int32_t nRGS_DY_BETA_START;
+	int32_t nRGS_ROLLOUT_BLANK;
+	int32_t nRGS_ROLLOUT_SIZE;
+	int32_t nRGS_DX_BETA_INC;
+	int32_t nRGS_DY_BETA_INC;
+	int32_t nRGS_DXDX_START;
+	int32_t nRGS_DXDY_START;
+	int32_t nRGS_DYDX_START;
+	int32_t nRGS_DYDY_START;
+	int32_t nRGS_DXDXDX_START;
+	int32_t nRGS_DYDXDX_START;
+	int32_t nRGS_DXDXDY_START;
+	int32_t nRGS_DYDXDY_START;
+	int32_t nBACK_COMP1;
+	int32_t nRGS_DYDYDX_START;
+	int32_t nBACK_COMP2;
+	int32_t nRGS_DYDYDY_START;
+} RegistrationInfo;
+
+typedef struct {
+	uint16_t nStartLines;
+	uint16_t nEndLines;
+	uint16_t nCroppingLines;
+} RegistrationPadInfo;
+
 struct _freenect_context;
 typedef struct _freenect_context freenect_context; /**< Holds information about the usb context. */
 
@@ -517,6 +555,9 @@ FREENECTAPI const freenect_frame_mode freenect_find_depth_mode(freenect_resoluti
  * @return 0 on success, < 0 if error
  */
 FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode);
+
+FREENECTAPI RegistrationInfo freenect_get_reg_info(freenect_device* dev);
+FREENECTAPI RegistrationPadInfo freenect_get_reg_pad_info(freenect_device* dev);
 
 #ifdef __cplusplus
 }

@@ -1135,3 +1135,75 @@ int freenect_set_video_buffer(freenect_device *dev, void *buf)
 	return stream_setbuf(dev->parent, &dev->video, buf);
 }
 
+RegistrationInfo freenect_get_reg_info(freenect_device *dev) {
+	RegistrationInfo retval;
+	freenect_context *ctx = dev->parent;
+	char reply[0x200];
+	uint16_t cmd[5];
+	freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+	cmd[0] = 0x40; // ParamID
+	cmd[1] = 0; // Format
+	cmd[2] = (uint16_t)mode.resolution; // Resolution
+	cmd[3] = (uint16_t)mode.framerate; // FPS
+	cmd[4] = 0; // Offset
+
+	int res;
+	res = send_cmd(dev, 0x16, cmd, 10, reply, 118); // OPCODE_ALGORITHM_PARAMS
+	if(res != 118) {
+		FN_ERROR("freenect_get_reg_info: send_cmd read %d bytes (expected 118)\n", res);
+	}
+	retval = *(RegistrationInfo*)(&reply[2]);
+	FN_DEBUG("nRGS_DX_CENTER:         %d\n", retval.nRGS_DX_CENTER);
+	FN_DEBUG("nRGS_AX:                %d\n", retval.nRGS_AX);
+	FN_DEBUG("nRGS_BX:                %d\n", retval.nRGS_BX);
+	FN_DEBUG("nRGS_CX:                %d\n", retval.nRGS_CX);
+	FN_DEBUG("nRGS_DX:                %d\n", retval.nRGS_DX);
+	FN_DEBUG("nRGS_DX_START:          %d\n", retval.nRGS_DX_START);
+	FN_DEBUG("nRGS_AY:                %d\n", retval.nRGS_AY);
+	FN_DEBUG("nRGS_BY:                %d\n", retval.nRGS_BY);
+	FN_DEBUG("nRGS_CY:                %d\n", retval.nRGS_CY);
+	FN_DEBUG("nRGS_DY:                %d\n", retval.nRGS_DY);
+	FN_DEBUG("nRGS_DY_START:          %d\n", retval.nRGS_DY_START);
+	FN_DEBUG("nRGS_DX_BETA_START:     %d\n", retval.nRGS_DX_BETA_START);
+	FN_DEBUG("nRGS_DY_BETA_START:     %d\n", retval.nRGS_DY_BETA_START);
+	FN_DEBUG("nRGS_ROLLOUT_BLANK:     %d\n", retval.nRGS_ROLLOUT_BLANK);
+	FN_DEBUG("nRGS_ROLLOUT_SIZE:      %d\n", retval.nRGS_ROLLOUT_SIZE);
+	FN_DEBUG("nRGS_DX_BETA_INC:       %d\n", retval.nRGS_DX_BETA_INC);
+	FN_DEBUG("nRGS_DY_BETA_INC:       %d\n", retval.nRGS_DY_BETA_INC);
+	FN_DEBUG("nRGS_DXDX_START:        %d\n", retval.nRGS_DXDX_START);
+	FN_DEBUG("nRGS_DXDY_START:        %d\n", retval.nRGS_DXDY_START);
+	FN_DEBUG("nRGS_DYDX_START:        %d\n", retval.nRGS_DYDX_START);
+	FN_DEBUG("nRGS_DYDY_START:        %d\n", retval.nRGS_DYDY_START);
+	FN_DEBUG("nRGS_DXDXDX_START:      %d\n", retval.nRGS_DXDXDX_START);
+	FN_DEBUG("nRGS_DYDXDX_START:      %d\n", retval.nRGS_DYDXDX_START);
+	FN_DEBUG("nRGS_DXDXDY_START:      %d\n", retval.nRGS_DXDXDY_START);
+	FN_DEBUG("nRGS_DYDXDY_START:      %d\n", retval.nRGS_DYDXDY_START);
+	FN_DEBUG("nBACK_COMP1:            %d\n", retval.nBACK_COMP1);
+	FN_DEBUG("nRGS_DYDYDX_START:      %d\n", retval.nRGS_DYDYDX_START);
+	FN_DEBUG("nBACK_COMP2:            %d\n", retval.nBACK_COMP2);
+	FN_DEBUG("nRGS_DYDYDY_START:      %d\n", retval.nRGS_DYDYDY_START);
+	return retval;
+}
+
+RegistrationPadInfo freenect_get_reg_pad_info(freenect_device *dev) {
+	RegistrationPadInfo retval;
+	freenect_context *ctx = dev->parent;
+	char reply[0x200];
+	uint16_t cmd[5];
+	freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+	cmd[0] = 0x41; // ParamID
+	cmd[1] = 0; // Format
+	cmd[2] = (uint16_t)mode.resolution; // Resolution
+	cmd[3] = (uint16_t)mode.framerate; // FPS
+	cmd[4] = 0; // Offset
+	int res;
+	res = send_cmd(dev, 0x16, cmd, 10, reply, 8); // OPCODE_ALGORITHM_PARAMS
+	if(res != 8) {
+		FN_ERROR("freenect_get_reg_pad_info: send_cmd read %d bytes (expected 8)\n", res);
+	}
+	retval = *(RegistrationPadInfo*)(&reply[2]);
+	FN_DEBUG("nStartLines:    %u\n",retval.nStartLines);
+	FN_DEBUG("nEndLines:      %u\n",retval.nEndLines);
+	FN_DEBUG("nCroppingLines: %u\n",retval.nCroppingLines);
+	return retval;
+}
