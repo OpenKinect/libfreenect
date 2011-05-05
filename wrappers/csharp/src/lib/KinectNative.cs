@@ -275,17 +275,17 @@ namespace freenect
 		[FieldOffset(12)]
 		public int Bytes;
 		[FieldOffset(16)]
-		public int Width;
+		public short Width;
+		[FieldOffset(18)]
+		public short Height;
 		[FieldOffset(20)]
-		public int Height;
-		[FieldOffset(24)]
-		public int DataBitsPerPixel;
-		[FieldOffset(28)]
-		public int PaddingBitsPerPixel;
-		[FieldOffset(32)]
-		public int Framerate;
-		[FieldOffset(36)]
-		public int IsValid;
+		public byte DataBitsPerPixel;
+		[FieldOffset(21)]
+		public byte PaddingBitsPerPixel;
+		[FieldOffset(22)]
+		public byte Framerate;
+		[FieldOffset(23)]
+		public byte IsValid;
 	}
 	
 	/// <summary>

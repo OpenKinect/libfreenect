@@ -1,25 +1,21 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Windows.Forms;
 
 namespace KinectDemo
 {
-	public class Program
+	static class Program
 	{
-		public Program ()
-		{
-			
-		}
-		
 		/// <summary>
-		/// Driver
+		/// The main entry point for the application.
 		/// </summary>
-		/// <param name="args">
-		/// A <see cref="System.String[]"/>
-		/// </param>
-		public static void Main (string[] args)
+		[STAThread]
+		static void Main()
 		{
-			Application.Run(new MainForm());
+			Application.EnableVisualStyles();
+			Application.SetCompatibleTextRenderingDefault(false);
+			Application.Run(new MainWindow());
 		}
 	}
 }
-

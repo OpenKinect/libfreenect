@@ -158,6 +158,9 @@ namespace freenect
 			{
 				throw new Exception("Could not start depth stream. Error Code: " + result);
 			}
+			
+			Console.WriteLine("Depth started");
+			
 			this.IsRunning = true;
 		}
 		
@@ -166,10 +169,17 @@ namespace freenect
 		/// </summary>
 		public void Stop()
 		{
+			if(this.IsRunning == false)
+			{
+				// Not running, nothing to do
+				return;
+			}
+			
+			// Stop depth
 			int result = KinectNative.freenect_stop_depth(this.parentDevice.devicePointer);
 			if(result != 0)
 			{
-				throw new Exception("Could not depth RGB stream. Error Code: " + result);
+				throw new Exception("Could not stop depth stream. Error Code: " + result);
 			}
 			this.IsRunning = false;
 		}
