@@ -156,6 +156,11 @@ typedef struct {
 	uint16_t nCroppingLines;
 } RegistrationPadInfo;
 
+typedef struct {
+	float distance;
+	float pixel_size;
+} ZeroPlaneInfo;
+
 struct _freenect_context;
 typedef struct _freenect_context freenect_context; /**< Holds information about the usb context. */
 
@@ -558,6 +563,7 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
 
 FREENECTAPI RegistrationInfo freenect_get_reg_info(freenect_device* dev);
 FREENECTAPI RegistrationPadInfo freenect_get_reg_pad_info(freenect_device* dev);
+FREENECTAPI ZeroPlaneInfo freenect_get_zero_plane_info(freenect_device* dev);
 
 #ifdef __cplusplus
 }

@@ -1207,3 +1207,33 @@ RegistrationPadInfo freenect_get_reg_pad_info(freenect_device *dev) {
 	FN_DEBUG("nCroppingLines: %u\n",retval.nCroppingLines);
 	return retval;
 }
+
+ZeroPlaneInfo freenect_get_zero_plane_info(freenect_device *dev) {
+	ZeroPlaneInfo retval;
+	freenect_context *ctx = dev->parent;
+
+	char reply[0x200];
+	uint16_t cmd = 0; // Offset is the only field in this command
+
+	int res;
+	res = send_cmd(dev, 0x04, &cmd, 10, reply, 322); //OPCODE_GET_FIXED_PARAMS = 4,
+	FN_DEBUG("res = %d\n", res);
+
+	int i;
+	for(i = 0; i < res; i++) {
+		FN_DEBUG("%02X", reply[i] & 0xff);
+		if(i % 4 == 1)
+			FN_DEBUG(" ");
+	}
+	FN_DEBUG("\n");
+	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
+	FN_DEBUG("fDCmosEmitterDistance: %f\n", *((float*)(reply+94)));
+	FN_DEBUG("fDCmosRCmosDistance:   %f\n", *((float*)(reply+98)));
+	FN_DEBUG("fReferenceDistance:    %f\n", *((float*)(reply+102)));
+	FN_DEBUG("fReferencePixelSize:   %f\n", *((float*)(reply+106)));
+
+	retval.distance   = *((float*)(reply+102));
+	retval.pixel_size = *((float*)(reply+106));
+
+	return retval;
+}
