@@ -59,7 +59,7 @@ int ThreadFailGuardProc(void* params)
   int user_option =
   MessageBoxA(GetDesktopWindow(),
               "The libusb_handle_events() fail guard of libusbemu was reached!\n"
-              "This was caused by pressing the [ESC] key on the console window.\n"
+              "This was caused by pressing and holding the [CTRL] + [ALT] keys.\n"
               "If it was unintentional, click Cancel to resume normal execution;\n"
               "otherwise, click OK to effectively terminate the thread (note that\n"
               "the host program might run abnormally after such termination).",
