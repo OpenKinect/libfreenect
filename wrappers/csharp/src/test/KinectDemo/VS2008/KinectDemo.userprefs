@@ -2,11 +2,8 @@
   <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug|x86" ctype="Workspace" />
   <MonoDevelop.Ide.Workbench ActiveDocument="../MainWindow.cs" ctype="Workbench">
     <Files>
-      <File FileName="../Program.cs" Line="13" Column="14" />
-      <File FileName="../MainWindow.cs" Line="266" Column="44" />
-      <File FileName="../MainWindow.UI.cs" Line="79" Column="21" />
-      <File FileName="../PreviewWindow.cs" Line="14" Column="17" />
-      <File FileName="../PreviewWindow.UI.cs" Line="8" Column="2" />
+      <File FileName="../MainWindow.UI.cs" Line="214" Column="38" />
+      <File FileName="../MainWindow.cs" Line="58" Column="16" />
     </Files>
   </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.DebuggingService.Breakpoints>

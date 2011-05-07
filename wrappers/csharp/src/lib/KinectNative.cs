@@ -55,6 +55,21 @@ namespace freenect
 		private static FreenectLogCallback LogCallback = new FreenectLogCallback(Kinect.LogCallback);
 		
 		/// <summary>
+		/// Number of total running video or depth feeds across all kinects.
+		/// </summary>
+		private static volatile int runningFeedCount = 0;
+		
+		/// <summary>
+		/// Thread to take care of calling process events on the context
+		/// </summary>
+		private static Thread processEventsThread;
+		
+		/// <summary>
+		/// Is process events currently blocking?
+		/// </summary>
+		private static volatile bool isProcessEventsThreadBusy = false;
+		
+		/// <summary>
 		/// Gets a freenect context to work with.
 		/// </summary>
 		public static IntPtr Context
@@ -158,6 +173,56 @@ namespace freenect
 			
 			// Set callbacks for logging
 			KinectNative.freenect_set_log_callback(KinectNative.freenectContext, LogCallback);
+			
+			// Setup thread for calling process_events on the context
+			KinectNative.processEventsThread = new Thread(new ThreadStart(ProcessEventsThreadWork));
+			KinectNative.processEventsThread.Start();
+		}
+		
+		/// <summary>
+		/// Called by the video or depth cameras when they are started
+		/// </summary>
+		internal static void NotifyCameraStart()
+		{
+			KinectNative.runningFeedCount++;
+		}
+		
+		/// <summary>
+		/// Called by the video or depth cameras when they are stopped
+		/// </summary>
+		internal static void NotifyCameraStop()
+		{
+			KinectNative.runningFeedCount--;
+			if(KinectNative.runningFeedCount < 0)
+			{
+				throw new Exception("Called NotifyCameraStop too many times. What happened?");
+			}
+			
+			// Are any feeds runniung?
+			if(KinectNative.runningFeedCount == 0)
+			{
+				// Wait for process events thread to realize what's going on and stop working
+				while(KinectNative.isProcessEventsThreadBusy)
+				{
+						
+				}
+			}
+		}
+		
+		/// <summary>
+		/// Background thread function called by the processEventsThread
+		/// </summary>
+		private static void ProcessEventsThreadWork()
+		{
+			while(true)
+			{
+				if(KinectNative.runningFeedCount > 0)
+				{
+					KinectNative.isProcessEventsThreadBusy = true;
+					KinectNative.freenect_process_events(KinectNative.Context);
+					KinectNative.isProcessEventsThreadBusy = false;
+				}
+			}
 		}
 
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]

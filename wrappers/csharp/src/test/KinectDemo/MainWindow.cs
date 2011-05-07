@@ -30,19 +30,9 @@ namespace KinectDemo
 		private System.Windows.Forms.Timer statusUpdateTimer = new System.Windows.Forms.Timer();
 		
 		/// <summary>
-		/// Background thread that keeps the context running
-		/// </summary>
-		private Thread processEventsThread = null;
-		
-		/// <summary>
-		/// Are there events to process? This should only be true if the depth or video feed is active.
-		/// </summary>
-		private bool shouldProcessEvents = false;
-		
-		/// <summary>
 		/// Is a device connected and running?
 		/// </summary>
-		private bool isRunning = false;
+		private volatile bool isRunning = false;
 		
 		/// <summary>
 		/// Constructor
@@ -176,12 +166,11 @@ namespace KinectDemo
 			this.refreshButton.Visible = false;
 			this.selectDeviceCombo.Enabled = false;
 			
+			// Enable content areas
+			this.contentPanelLeft.Enabled = this.contentPanelRight.Enabled = true;
+			
 			// Now running
 			this.isRunning = true;
-			
-			// Start process events thread
-			this.processEventsThread = new Thread(new ThreadStart(this.ProcessEventsThreadWork));
-			this.processEventsThread.Start();
 		}
 		
 		/// <summary>
@@ -200,11 +189,6 @@ namespace KinectDemo
 			
 			// No longer running
 			this.isRunning = false;
-			this.shouldProcessEvents = false;
-			
-			// Interrupt thread
-			this.processEventsThread.Abort();
-			this.processEventsThread = null;
 			
 			// Disconnect from the kinect
 			this.kinect.Close();
@@ -222,20 +206,9 @@ namespace KinectDemo
 			this.connectButton.Visible = true;
 			this.refreshButton.Visible = true;
 			this.selectDeviceCombo.Enabled = true;
-		}
-		
-		/// <summary>
-		/// Background thread function called by the processEventsThread
-		/// </summary>
-		private void ProcessEventsThreadWork()
-		{
-			while(this.isRunning)
-			{
-				if(this.shouldProcessEvents)
-				{
-					Kinect.ProcessEvents();
-				}
-			}
+			
+			// Enable content areas
+			this.contentPanelLeft.Enabled = this.contentPanelRight.Enabled = false;
 		}
 		
 		/// <summary>
@@ -249,7 +222,7 @@ namespace KinectDemo
 		/// </param>
 		private void HandleKinectDepthCameraDataReceived (object sender, DepthCamera.DataReceivedEventArgs e)
 		{
-			//Console.Write(".");
+			
 		}
 
 		/// <summary>
@@ -263,7 +236,7 @@ namespace KinectDemo
 		/// </param>
 		private void HandleKinectVideoCameraDataReceived (object sender, VideoCamera.DataReceivedEventArgs e)
 		{
-			Console.Write("$");
+			
 		}
 		
 		/// <summary>
@@ -363,19 +336,21 @@ namespace KinectDemo
 		/// </param>
 		private void HandleSelectDepthModeComboSelectedIndexChanged (object sender, EventArgs e)
 		{
+			// Check to see if we are actually connected
+			if(this.isRunning == false)
+			{
+				// Not running, shouldn't even be here
+				return;
+			}
+			
+			// Get index selected
 			int index = this.selectDepthModeCombo.SelectedIndex;
 			
-			Console.WriteLine("Selected Depth Moe: " + index);
-			
+			// 0 means "Disabled", otherwise, it's a depth format
 			if(index == 0)
 			{
 				// Disabled
 				this.depthPreviewWindow.Visible = false;
-				if(this.kinect.VideoCamera.IsRunning == false)
-				{
-					// Both cameras about to be stopped. No more event processing
-					this.shouldProcessEvents = false;
-				}
 				this.kinect.DepthCamera.Stop();
 			}
 			else if(index > 0)
@@ -384,10 +359,8 @@ namespace KinectDemo
 				index -= 1;
 				
 				// Set mode
-				this.kinect.DepthCamera.Stop();
 				this.kinect.DepthCamera.Mode = this.kinect.DepthCamera.Modes[index];
 				this.kinect.DepthCamera.Start();
-				this.shouldProcessEvents = true;
 				this.depthPreviewWindow.Visible = true;
 			}
 		}
@@ -403,19 +376,21 @@ namespace KinectDemo
 		/// </param>
 		private void HandleSelectVideoModeComboSelectedIndexChanged (object sender, EventArgs e)
 		{
+			// Check to see if we are actually connected
+			if(this.isRunning == false)
+			{
+				// Not running, shouldn't even be here
+				return;
+			}
+			
+			// Get index selected
 			int index = this.selectVideoModeCombo.SelectedIndex;
 			
-			Console.WriteLine("Selected Video Moe: " + index);
-			
+			// 0 means "Disabled", otherwise, it's a depth format
 			if(index == 0)
 			{
 				// Disabled
 				this.videoPreviewWindow.Visible = false;
-				if(this.kinect.DepthCamera.IsRunning == false)
-				{
-					// Both cameras about to be stopped. No more event processing
-					this.shouldProcessEvents = false;
-				}
 				this.kinect.VideoCamera.Stop();
 			}
 			else if(index > 0)
@@ -424,10 +399,8 @@ namespace KinectDemo
 				index -= 1;
 				
 				// Set mode
-				this.kinect.VideoCamera.Stop();
 				this.kinect.VideoCamera.Mode = this.kinect.VideoCamera.Modes[index];
 				this.kinect.VideoCamera.Start();
-				this.shouldProcessEvents = true;
 				this.videoPreviewWindow.Visible = true;
 			}
 		}

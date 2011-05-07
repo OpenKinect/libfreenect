@@ -160,6 +160,11 @@ namespace freenect
 			{
 				throw new Exception("Could not start video stream. Error Code: " + result);
 			}
+			
+			// Let the context know we have started a camera
+			KinectNative.NotifyCameraStart();
+			
+			// All done
 			this.IsRunning = true;
 		}
 		
@@ -167,13 +172,17 @@ namespace freenect
 		/// Stops streaming video data from this camera
 		/// </summary>
 		public void Stop()
-		{
+		{	
 			if(this.IsRunning == false)
 			{
 				// Not running, nothing to do
 				return;
 			}
 			
+			// Let the context know we are about to stop a video camera
+			KinectNative.NotifyCameraStop();
+			
+			// Stop camera
 			int result = KinectNative.freenect_stop_video(this.parentDevice.devicePointer);
 			if(result != 0)
 			{
@@ -208,6 +217,19 @@ namespace freenect
 		/// </param>
 		protected void SetVideoMode(VideoFrameMode mode)
 		{
+			// Is this a different mode?
+			if(this.Mode == mode)
+			{
+				return;	
+			}
+			
+			// Stop camera first if running
+			bool running = this.IsRunning;
+			if(running)
+			{	
+				this.Stop();
+			}
+			
 			// Check to make sure mode is valid by finding it again
 			VideoFrameMode foundMode = VideoFrameMode.Find(mode.Format, mode.Resolution);
 			if(foundMode == null)
@@ -227,6 +249,12 @@ namespace freenect
 			
 			// Update image map
 			this.UpdateNextFrameImageMap();
+			
+			// If we were running before, start up again
+			if(running)
+			{
+				this.Start();	
+			}
 		}
 		
 		/// <summary>

@@ -112,6 +112,7 @@ namespace KinectDemo
 			this.contentPanelLeft.Dock = DockStyle.Left;
 			this.contentPanelLeft.Padding = new Padding(7);
 			this.contentPanelLeft.Width = 250;
+			this.contentPanelLeft.Enabled = false;
 			this.contentPanelLeft.Controls.Add(this.motorControlGroup);
 			this.contentPanelLeft.Controls.Add(this.selectVideoModeGroup);
 			
@@ -120,6 +121,7 @@ namespace KinectDemo
 			///
 			this.contentPanelRight = new Panel();
 			this.contentPanelRight.Dock = DockStyle.Fill;
+			this.contentPanelRight.Enabled = false;
 			this.contentPanelRight.Padding = new Padding(7);
 			
 			///

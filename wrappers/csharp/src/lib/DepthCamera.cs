@@ -159,6 +159,10 @@ namespace freenect
 				throw new Exception("Could not start depth stream. Error Code: " + result);
 			}
 			
+			// Let the context know we have started a camera
+			KinectNative.NotifyCameraStart();
+			
+			// All done
 			this.IsRunning = true;
 		}
 		
@@ -173,7 +177,10 @@ namespace freenect
 				return;
 			}
 			
-			// Stop depth
+			// Let the context know we are about to stop a video camera
+			KinectNative.NotifyCameraStop();
+			
+			// Stop camera
 			int result = KinectNative.freenect_stop_depth(this.parentDevice.devicePointer);
 			if(result != 0)
 			{
@@ -208,6 +215,19 @@ namespace freenect
 		/// </param>
 		protected void SetDepthMode(DepthFrameMode mode)
 		{
+			// Is this a different mode?
+			if(this.Mode == mode)
+			{
+				return;	
+			}
+			
+			// Stop camera first if running
+			bool running = this.IsRunning;
+			if(running)
+			{	
+				this.Stop();
+			}
+			
 			// Check to make sure mode is valid by finding it again
 			DepthFrameMode foundMode = DepthFrameMode.Find(mode.Format, mode.Resolution);
 			if(foundMode == null)
@@ -227,6 +247,12 @@ namespace freenect
 			
 			// Update depth map
 			this.UpdateNextFrameDepthMap();
+			
+			// If we were running before, start up again
+			if(running)
+			{
+				this.Start();	
+			}
 		}
 		
 		/// <summary>

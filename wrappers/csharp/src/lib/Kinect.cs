@@ -25,6 +25,7 @@
  */
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace freenect
 {
@@ -35,23 +36,7 @@ namespace freenect
 	///
 	/// 
 	public class Kinect
-	{
-		/// <summary>
-		/// Current logging level for the kinect session (for all devices)
-		/// </summary>
-		private static LoggingLevel logLevel;
-		
-		/// <summary>
-		/// Pointer to native device object
-		/// </summary>
-		internal IntPtr devicePointer = IntPtr.Zero;
-		
-		/// <summary>
-		/// Cached device state that can be used after a call to Kinect.UpdateStatus
-		/// This can be used to save some USB or P/Invoke calls.
-		/// </summary>
-		internal FreenectTiltState cachedDeviceState;
-		
+	{		
 		/// <summary>
 		/// Gets or sets the logging level for the Kinect library. This controls
 		/// how much debugging information is sent to the logging callback
@@ -152,6 +137,22 @@ namespace freenect
 		}
 		
 		/// <summary>
+		/// Current logging level for the kinect session (for all devices)
+		/// </summary>
+		private static LoggingLevel logLevel;
+		
+		/// <summary>
+		/// Pointer to native device object
+		/// </summary>
+		internal IntPtr devicePointer = IntPtr.Zero;
+		
+		/// <summary>
+		/// Cached device state that can be used after a call to Kinect.UpdateStatus
+		/// This can be used to save some USB or P/Invoke calls.
+		/// </summary>
+		internal FreenectTiltState cachedDeviceState;
+		
+		/// <summary>
 		/// Constructor
 		/// </summary>
 		/// <param name="id">
@@ -210,12 +211,6 @@ namespace freenect
 		/// </summary>
 		public void Close()
 		{
-			int result = KinectNative.freenect_close_device(this.devicePointer);
-			if(result != 0)
-			{
-				throw new Exception("Could not close connection to Kinect Device (ID=" + this.DeviceID + "). Error Code = " + result);
-			}
-			
 			// Stop Cameras
 			if(this.VideoCamera.IsRunning)
 			{
@@ -224,6 +219,13 @@ namespace freenect
 			if(this.DepthCamera.IsRunning)
 			{
 				this.DepthCamera.Stop();
+			}
+			
+			// Close device
+			int result = KinectNative.freenect_close_device(this.devicePointer);
+			if(result != 0)
+			{
+				throw new Exception("Could not close connection to Kinect Device (ID=" + this.DeviceID + "). Error Code = " + result);
 			}
 			
 			// Dispose of child instances
@@ -260,14 +262,6 @@ namespace freenect
 		public static void Shutdown()
 		{
 			KinectNative.ShutdownContext();
-		}
-		
-		/// <summary>
-		/// Process any pending messages on the USB streams. This should be called every so often.
-		/// </summary>
-		public static void ProcessEvents()
-		{
-			KinectNative.freenect_process_events(KinectNative.Context);
 		}
 		
 		/// <summary>

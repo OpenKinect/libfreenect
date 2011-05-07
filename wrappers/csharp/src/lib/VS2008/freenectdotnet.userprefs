@@ -1,15 +1,11 @@
 ﻿<Properties>
   <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" ctype="Workspace" />
-  <MonoDevelop.Ide.Workbench ActiveDocument="../DepthCamera.cs" ctype="Workbench">
+  <MonoDevelop.Ide.Workbench ActiveDocument="../KinectNative.cs" ctype="Workbench">
     <Files>
-      <File FileName="../VideoFrameMode.cs" Line="44" Column="16" />
-      <File FileName="../Enumerations.cs" Line="38" Column="2" />
-      <File FileName="../FrameMode.cs" Line="102" Column="4" />
-      <File FileName="../DepthFrameMode.cs" Line="1" Column="1" />
-      <File FileName="../LED.cs" Line="1" Column="1" />
-      <File FileName="../KinectNative.cs" Line="264" Column="12" />
-      <File FileName="../VideoCamera.cs" Line="249" Column="1" />
-      <File FileName="../DepthCamera.cs" Line="160" Column="5" />
+      <File FileName="../VideoCamera.cs" Line="172" Column="41" />
+      <File FileName="../Kinect.cs" Line="265" Column="4" />
+      <File FileName="../KinectNative.cs" Line="218" Column="5" />
+      <File FileName="../DepthCamera.cs" Line="163" Column="34" />
     </Files>
   </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.DebuggingService.Breakpoints>
