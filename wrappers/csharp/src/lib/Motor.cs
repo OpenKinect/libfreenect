@@ -121,12 +121,12 @@ namespace freenect
 		/// </returns>
 		private double GetMotorTilt()
 		{
-			double rawAngle = KinectNative.freenect_get_tilt_degs(this.parentDevice.devicePointer);
+			double rawAngle = this.parentDevice.cachedDeviceState.TiltAngle;
 			if(rawAngle == -128)
 			{
 				return -2.0f;
 			}
-			return (float)rawAngle / 61.0f;
+			return Math.Round(rawAngle / 61.0, 2);
 		}
 		
 		/// <summary>

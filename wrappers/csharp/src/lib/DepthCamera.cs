@@ -141,7 +141,7 @@ namespace freenect
 			this.Mode = this.Modes[0];
 			
 			// Setup callbacks
-			KinectNative.freenect_set_depth_callback(parent.devicePointer, DepthCallback);
+			KinectNative.freenect_set_depth_callback(parent.devicePointer, this.DepthCallback);
 		}
 		
 		/// <summary>
@@ -158,8 +158,6 @@ namespace freenect
 			{
 				throw new Exception("Could not start depth stream. Error Code: " + result);
 			}
-			
-			Console.WriteLine("Depth started");
 			
 			this.IsRunning = true;
 		}

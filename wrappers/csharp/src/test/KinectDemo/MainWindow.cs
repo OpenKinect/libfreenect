@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
+using System.Threading;
 using freenect;
 
 namespace KinectDemo
@@ -24,12 +25,36 @@ namespace KinectDemo
 		private PreviewWindow depthPreviewWindow = new PreviewWindow();
 		
 		/// <summary>
+		/// Update timer for tilt/motor status
+		/// </summary>
+		private System.Windows.Forms.Timer statusUpdateTimer = new System.Windows.Forms.Timer();
+		
+		/// <summary>
+		/// Background thread that keeps the context running
+		/// </summary>
+		private Thread processEventsThread = null;
+		
+		/// <summary>
+		/// Are there events to process? This should only be true if the depth or video feed is active.
+		/// </summary>
+		private bool shouldProcessEvents = false;
+		
+		/// <summary>
+		/// Is a device connected and running?
+		/// </summary>
+		private bool isRunning = false;
+		
+		/// <summary>
 		/// Constructor
 		/// </summary>
 		public MainWindow()
 		{
 			// Initialize UI stuff
 			this.InitializeComponents();
+			
+			// Initialize update timer
+			this.statusUpdateTimer.Interval = 500;
+			this.statusUpdateTimer.Tick += this.HandleStatusUpdateTimerTick;
 			
 			// Add some event handlers for the preview windows
 			this.videoPreviewWindow.FormClosing += HandleVideoPreviewWindowFormClosing;
@@ -63,14 +88,16 @@ namespace KinectDemo
 				this.selectDeviceCombo.SelectedIndex = 0;
 				
 				// Enable buttons
-				this.connectButton.Enabled = true;
-				this.disconnectButton.Enabled = false;
+				this.connectButton.Visible = this.connectButton.Enabled = true;
+				this.refreshButton.Visible = this.refreshButton.Enabled = true;
+				this.disconnectButton.Visible = false;
 			}
 			else
 			{
 				// Disable buttons
-				this.connectButton.Enabled = false;
-				this.disconnectButton.Enabled = false;
+				this.connectButton.Visible = false;
+				this.refreshButton.Visible = false;
+				this.disconnectButton.Visible = false;
 			}
 		}
 		
@@ -116,7 +143,7 @@ namespace KinectDemo
 		private void Connect(int deviceID)
 		{
 			// If a device is already connected, disconnect
-			if(this.kinect != null)
+			if(this.isRunning)
 			{
 				this.Disconnect();
 			}
@@ -126,6 +153,9 @@ namespace KinectDemo
 			
 			// Open kinect
 			this.kinect.Open();
+			
+			// Set tilt to 0 to start with
+			this.motorTiltUpDown.Value = 0;
 			
 			// Setup image handlers
 			this.kinect.VideoCamera.DataReceived += HandleKinectVideoCameraDataReceived;
@@ -137,9 +167,21 @@ namespace KinectDemo
 			// Enable video/depth mode chooser
 			this.selectVideoModeGroup.Enabled = true;
 			
+			// Start updating status
+			this.statusUpdateTimer.Enabled = true;
+			
 			// Disable connect button and enable the disconnect one
-			this.disconnectButton.Enabled = true;
-			this.connectButton.Enabled = false;
+			this.disconnectButton.Visible = true;
+			this.connectButton.Visible = false;
+			this.refreshButton.Visible = false;
+			this.selectDeviceCombo.Enabled = false;
+			
+			// Now running
+			this.isRunning = true;
+			
+			// Start process events thread
+			this.processEventsThread = new Thread(new ThreadStart(this.ProcessEventsThreadWork));
+			this.processEventsThread.Start();
 		}
 		
 		/// <summary>
@@ -147,6 +189,23 @@ namespace KinectDemo
 		/// </summary>
 		private void Disconnect()
 		{
+			// Are we running?
+			if(this.isRunning == false)
+			{
+				return;	
+			}
+			
+			// Stop updating status
+			this.statusUpdateTimer.Enabled = false;
+			
+			// No longer running
+			this.isRunning = false;
+			this.shouldProcessEvents = false;
+			
+			// Interrupt thread
+			this.processEventsThread.Abort();
+			this.processEventsThread = null;
+			
 			// Disconnect from the kinect
 			this.kinect.Close();
 			this.kinect = null;
@@ -158,9 +217,25 @@ namespace KinectDemo
 			// Disable video/depth mode chooser
 			this.selectVideoModeGroup.Enabled = false;
 			
-			// Disable connect button and enable the disconnect one
-			this.disconnectButton.Enabled = false;
-			this.connectButton.Enabled = true;
+			// Disable disconnect button and enable the connect/refresh ones
+			this.disconnectButton.Visible = false;
+			this.connectButton.Visible = true;
+			this.refreshButton.Visible = true;
+			this.selectDeviceCombo.Enabled = true;
+		}
+		
+		/// <summary>
+		/// Background thread function called by the processEventsThread
+		/// </summary>
+		private void ProcessEventsThreadWork()
+		{
+			while(this.isRunning)
+			{
+				if(this.shouldProcessEvents)
+				{
+					Kinect.ProcessEvents();
+				}
+			}
 		}
 		
 		/// <summary>
@@ -174,7 +249,7 @@ namespace KinectDemo
 		/// </param>
 		private void HandleKinectDepthCameraDataReceived (object sender, DepthCamera.DataReceivedEventArgs e)
 		{
-			Console.Write(".");
+			//Console.Write(".");
 		}
 
 		/// <summary>
@@ -188,7 +263,51 @@ namespace KinectDemo
 		/// </param>
 		private void HandleKinectVideoCameraDataReceived (object sender, VideoCamera.DataReceivedEventArgs e)
 		{
-			
+			Console.Write("$");
+		}
+		
+		/// <summary>
+		/// Update status panes
+		/// </summary>
+		/// <param name="sender">
+		/// A <see cref="System.Object"/>
+		/// </param>
+		/// <param name="e">
+		/// A <see cref="EventArgs"/>
+		/// </param>
+		private void HandleStatusUpdateTimerTick (object sender, EventArgs e)
+		{
+			this.kinect.UpdateStatus();
+			this.motorCurrentTiltLabel.Text = "Current Tilt: " + this.kinect.Motor.Tilt;
+			this.motorTiltStatusLabel.Text = "Tilt Status: " + this.kinect.Motor.TiltStatus.ToString();
+		}
+		
+		/// <summary>
+		/// Motor tilt changed
+		/// </summary>
+		/// <param name="sender">
+		/// A <see cref="System.Object"/>
+		/// </param>
+		/// <param name="e">
+		/// A <see cref="EventArgs"/>
+		/// </param>
+		private void HandleMotorTiltUpDownValueChanged (object sender, EventArgs e)
+		{
+			this.kinect.Motor.Tilt = (double)this.motorTiltUpDown.Value;
+		}
+		
+		/// <summary>
+		/// Handle form being closed. Here we make sure we are closed down
+		/// </summary>
+		/// <param name="sender">
+		/// A <see cref="System.Object"/>
+		/// </param>
+		/// <param name="e">
+		/// A <see cref="FormClosingEventArgs"/>
+		/// </param>
+		private void HandleFormClosing (object sender, FormClosingEventArgs e)
+		{
+			this.Disconnect();
 		}
 		
 		/// <summary>
@@ -252,6 +371,11 @@ namespace KinectDemo
 			{
 				// Disabled
 				this.depthPreviewWindow.Visible = false;
+				if(this.kinect.VideoCamera.IsRunning == false)
+				{
+					// Both cameras about to be stopped. No more event processing
+					this.shouldProcessEvents = false;
+				}
 				this.kinect.DepthCamera.Stop();
 			}
 			else if(index > 0)
@@ -263,7 +387,48 @@ namespace KinectDemo
 				this.kinect.DepthCamera.Stop();
 				this.kinect.DepthCamera.Mode = this.kinect.DepthCamera.Modes[index];
 				this.kinect.DepthCamera.Start();
+				this.shouldProcessEvents = true;
 				this.depthPreviewWindow.Visible = true;
+			}
+		}
+		
+		/// <summary>
+		/// Handle video mode being changed
+		/// </summary>
+		/// <param name="sender">
+		/// A <see cref="System.Object"/>
+		/// </param>
+		/// <param name="e">
+		/// A <see cref="EventArgs"/>
+		/// </param>
+		private void HandleSelectVideoModeComboSelectedIndexChanged (object sender, EventArgs e)
+		{
+			int index = this.selectVideoModeCombo.SelectedIndex;
+			
+			Console.WriteLine("Selected Video Moe: " + index);
+			
+			if(index == 0)
+			{
+				// Disabled
+				this.videoPreviewWindow.Visible = false;
+				if(this.kinect.DepthCamera.IsRunning == false)
+				{
+					// Both cameras about to be stopped. No more event processing
+					this.shouldProcessEvents = false;
+				}
+				this.kinect.VideoCamera.Stop();
+			}
+			else if(index > 0)
+			{
+				// Index is really 1 less (because "Disabled" we added is first)
+				index -= 1;
+				
+				// Set mode
+				this.kinect.VideoCamera.Stop();
+				this.kinect.VideoCamera.Mode = this.kinect.VideoCamera.Modes[index];
+				this.kinect.VideoCamera.Start();
+				this.shouldProcessEvents = true;
+				this.videoPreviewWindow.Visible = true;
 			}
 		}
 		

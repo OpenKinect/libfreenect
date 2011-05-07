@@ -89,7 +89,7 @@ namespace freenect
 			{
 				return this.videoMode;
 			}
-			private set
+			set
 			{
 				this.SetVideoMode(value);
 			}
@@ -168,6 +168,12 @@ namespace freenect
 		/// </summary>
 		public void Stop()
 		{
+			if(this.IsRunning == false)
+			{
+				// Not running, nothing to do
+				return;
+			}
+			
 			int result = KinectNative.freenect_stop_video(this.parentDevice.devicePointer);
 			if(result != 0)
 			{
