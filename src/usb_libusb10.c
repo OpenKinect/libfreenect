@@ -231,7 +231,11 @@ static void iso_callback(struct libusb_transfer *xfer)
 	} else {
 		freenect_context *ctx = strm->parent->parent->parent;
 		FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
+#if defined(__APPLE__)
+		libusb_submit_transfer(xfer);
+#else
 		strm->dead_xfers++;
+#endif
 	}
 }
 
