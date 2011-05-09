@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using freenect;
 
 namespace KinectDemo
 {
@@ -14,6 +15,103 @@ namespace KinectDemo
 		/// </summary>
 		private void InitializeComponents()
 		{
+			
+			///
+			/// accelerometerZValueLabel
+			///
+			this.accelerometerZValueLabel = new Label();
+			this.accelerometerZValueLabel.Text = "0";
+			this.accelerometerZValueLabel.Dock = DockStyle.Fill;
+			
+			///
+			/// accelerometerYValueLabel
+			///
+			this.accelerometerYValueLabel = new Label();
+			this.accelerometerYValueLabel.Text = "0";
+			this.accelerometerYValueLabel.Dock = DockStyle.Fill;
+			
+			///
+			/// accelerometerXValueLabel
+			///
+			this.accelerometerXValueLabel = new Label();
+			this.accelerometerXValueLabel.Text = "0";
+			this.accelerometerXValueLabel.Dock = DockStyle.Fill;
+			
+			///
+			/// accelerometerZHeaderLabel
+			///
+			this.accelerometerZHeaderLabel = new Label();
+			this.accelerometerZHeaderLabel.Text = "Z:";
+			this.accelerometerZHeaderLabel.Dock = DockStyle.Fill;
+			this.accelerometerZHeaderLabel.Font = new Font(this.Font.FontFamily, this.Font.Size, FontStyle.Bold);
+			
+			///
+			/// accelerometerYHeaderLabel
+			///
+			this.accelerometerYHeaderLabel = new Label();
+			this.accelerometerYHeaderLabel.Text = "Y:";
+			this.accelerometerYHeaderLabel.Dock = DockStyle.Fill;
+			this.accelerometerYHeaderLabel.Font = new Font(this.Font.FontFamily, this.Font.Size, FontStyle.Bold);
+			
+			///
+			/// accelerometerXHeaderLabel
+			///
+			this.accelerometerXHeaderLabel = new Label();
+			this.accelerometerXHeaderLabel.Text = "X:";
+			this.accelerometerXHeaderLabel.Dock = DockStyle.Fill;
+			this.accelerometerXHeaderLabel.Font = new Font(this.Font.FontFamily, this.Font.Size, FontStyle.Bold);
+			
+			///
+			/// accelerometerStatusTable
+			/// 
+			this.accelerometerStatusTable = new TableLayoutPanel();
+			this.accelerometerStatusTable.RowCount = 3;
+			this.accelerometerStatusTable.ColumnCount = 2;
+			this.accelerometerStatusTable.Dock = DockStyle.Fill;
+			this.accelerometerStatusTable.Controls.Add(this.accelerometerXHeaderLabel, 0, 0);
+			this.accelerometerStatusTable.Controls.Add(this.accelerometerXValueLabel, 1, 0);
+			this.accelerometerStatusTable.Controls.Add(this.accelerometerYHeaderLabel, 0, 1);
+			this.accelerometerStatusTable.Controls.Add(this.accelerometerYValueLabel, 1, 1);
+			this.accelerometerStatusTable.Controls.Add(this.accelerometerZHeaderLabel, 0, 2);
+			this.accelerometerStatusTable.Controls.Add(this.accelerometerZValueLabel, 1, 2);
+			
+			///
+			/// accelerometerStatusGroup
+			///
+			this.accelerometerStatusGroup = new GroupBox();
+			this.accelerometerStatusGroup.Dock = DockStyle.Fill;
+			this.accelerometerStatusGroup.Text = "Accelerometer";
+			this.accelerometerStatusGroup.Height = 100;
+			this.accelerometerStatusGroup.Padding = new Padding(10);
+			this.accelerometerStatusGroup.Controls.Add(this.accelerometerStatusTable);
+			
+			///
+			/// selectLEDColorCombo
+			///
+			this.selectLEDColorCombo = new ComboBox();
+			this.selectLEDColorCombo.Dock = DockStyle.Fill;
+			this.selectLEDColorCombo.DropDownStyle = ComboBoxStyle.DropDownList;
+			string[] colors = Enum.GetNames(typeof(LEDColor));
+			for(int i = 0; i < colors.Length; i++)
+			{
+				this.selectLEDColorCombo.Items.Add(colors[i]);
+			}
+			if(colors.Length > 0)
+			{
+				this.selectLEDColorCombo.SelectedIndex = 0;
+			}
+			this.selectLEDColorCombo.SelectedIndexChanged += HandleSelectLEDColorComboSelectedIndexChanged;
+			
+			///
+			/// ledControlGroup
+			///
+			this.ledControlGroup = new GroupBox();
+			this.ledControlGroup.Dock = DockStyle.Top;
+			this.ledControlGroup.Text = "LED";
+			this.ledControlGroup.Height = 60;
+			this.ledControlGroup.Padding = new Padding(10);
+			this.ledControlGroup.Controls.Add(this.selectLEDColorCombo);
+			
 			///
 			/// motorCurrentTiltLabel
 			///
@@ -51,9 +149,9 @@ namespace KinectDemo
 			/// motorControlGroup
 			///
 			this.motorControlGroup = new GroupBox();
-			this.motorControlGroup.Dock = DockStyle.Fill;
+			this.motorControlGroup.Dock = DockStyle.Top;
 			this.motorControlGroup.Text = "Motor";
-			this.motorControlGroup.Height = 130;
+			this.motorControlGroup.Height = 105;
 			this.motorControlGroup.Padding = new Padding(10);
 			this.motorControlGroup.Controls.Add(this.motorTiltStatusLabel);
 			this.motorControlGroup.Controls.Add(this.motorCurrentTiltLabel);
@@ -109,10 +207,12 @@ namespace KinectDemo
 			/// contentPanelLeft
 			///
 			this.contentPanelLeft = new Panel();
-			this.contentPanelLeft.Dock = DockStyle.Left;
+			this.contentPanelLeft.Dock = DockStyle.Fill;
 			this.contentPanelLeft.Padding = new Padding(7);
 			this.contentPanelLeft.Width = 250;
 			this.contentPanelLeft.Enabled = false;
+			this.contentPanelLeft.Controls.Add(this.accelerometerStatusGroup);
+			this.contentPanelLeft.Controls.Add(this.ledControlGroup);
 			this.contentPanelLeft.Controls.Add(this.motorControlGroup);
 			this.contentPanelLeft.Controls.Add(this.selectVideoModeGroup);
 			
@@ -176,12 +276,11 @@ namespace KinectDemo
 			///
 			/// MainWindow
 			///
-			this.Width = 500;
-			this.Height = 350;
+			this.Width = 350;
+			this.Height = 470;
 			this.Text = "Kinect.NET Demo";
 			this.Font = new Font(this.Font.FontFamily, 9.0f);
 			this.FormBorderStyle = FormBorderStyle.FixedSingle;
-			this.Controls.Add(this.contentPanelRight);
 			this.Controls.Add(this.contentPanelLeft);
 			this.Controls.Add(this.mainToolbar);
 			this.FormClosing += HandleFormClosing;
@@ -201,6 +300,15 @@ namespace KinectDemo
 		
 		private GroupBox accelerometerStatusGroup;
 		private TableLayoutPanel accelerometerStatusTable;
+		private Label accelerometerXHeaderLabel;
+		private Label accelerometerYHeaderLabel;
+		private Label accelerometerZHeaderLabel;
+		private Label accelerometerXValueLabel;
+		private Label accelerometerYValueLabel;
+		private Label accelerometerZValueLabel;
+		
+		private GroupBox ledControlGroup;
+		private ComboBox selectLEDColorCombo;
 		
 		private ToolStripComboBox selectDeviceCombo;
 		private ToolStripButton refreshButton;

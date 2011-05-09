@@ -173,10 +173,6 @@ namespace freenect
 			
 			// Set callbacks for logging
 			KinectNative.freenect_set_log_callback(KinectNative.freenectContext, LogCallback);
-			
-			// Setup thread for calling process_events on the context
-			KinectNative.processEventsThread = new Thread(new ThreadStart(ProcessEventsThreadWork));
-			KinectNative.processEventsThread.Start();
 		}
 		
 		/// <summary>
@@ -185,6 +181,11 @@ namespace freenect
 		internal static void NotifyCameraStart()
 		{
 			KinectNative.runningFeedCount++;
+			if(KinectNative.processEventsThread == null)
+			{
+				KinectNative.processEventsThread = new Thread(new ThreadStart(ProcessEventsThreadWork));
+				KinectNative.processEventsThread.Start();
+			}
 		}
 		
 		/// <summary>
@@ -206,6 +207,10 @@ namespace freenect
 				{
 						
 				}
+				
+				// Dispose thread
+				KinectNative.processEventsThread.Join();
+				KinectNative.processEventsThread = null;
 			}
 		}
 		
@@ -214,14 +219,11 @@ namespace freenect
 		/// </summary>
 		private static void ProcessEventsThreadWork()
 		{
-			while(true)
+			while(KinectNative.runningFeedCount > 0)
 			{
-				if(KinectNative.runningFeedCount > 0)
-				{
-					KinectNative.isProcessEventsThreadBusy = true;
-					KinectNative.freenect_process_events(KinectNative.Context);
-					KinectNative.isProcessEventsThreadBusy = false;
-				}
+				KinectNative.isProcessEventsThreadBusy = true;
+				KinectNative.freenect_process_events(KinectNative.Context);
+				KinectNative.isProcessEventsThreadBusy = false;
 			}
 		}
 

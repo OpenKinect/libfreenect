@@ -17,12 +17,12 @@ namespace KinectDemo
 		/// <summary>
 		/// Preview window for video
 		/// </summary>
-		private PreviewWindow videoPreviewWindow = new PreviewWindow();
+		private PreviewWindow videoPreviewWindow = new VideoPreviewWindow();
 		
 		/// <summary>
 		/// Preview window for depth
 		/// </summary>
-		private PreviewWindow depthPreviewWindow = new PreviewWindow();
+		private PreviewWindow depthPreviewWindow = new DepthPreviewWindow();
 		
 		/// <summary>
 		/// Update timer for tilt/motor status
@@ -50,8 +50,14 @@ namespace KinectDemo
 			this.videoPreviewWindow.FormClosing += HandleVideoPreviewWindowFormClosing;
 			this.depthPreviewWindow.FormClosing += HandleDepthPreviewWindowFormClosing;
 			
+			// Show preview windows for the first time so controls onboard can load up
+			this.videoPreviewWindow.Visible = this.depthPreviewWindow.Visible = true;
+			
 			// Update device list
 			this.UpdateDeviceList();
+			
+			// Hide preview windows again, controls are done loading by now
+			this.videoPreviewWindow.Visible = this.depthPreviewWindow.Visible = true;
 			
 		}
 		
@@ -151,6 +157,10 @@ namespace KinectDemo
 			this.kinect.VideoCamera.DataReceived += HandleKinectVideoCameraDataReceived;
 			this.kinect.DepthCamera.DataReceived += HandleKinectDepthCameraDataReceived;
 			
+			// LED is set to none to start
+			this.kinect.LED.Color = LEDColor.None;
+			this.selectLEDColorCombo.SelectedIndex = 0;
+			
 			// Update video/depth modes
 			this.UpdateModeList();
 			
@@ -222,7 +232,11 @@ namespace KinectDemo
 		/// </param>
 		private void HandleKinectDepthCameraDataReceived (object sender, DepthCamera.DataReceivedEventArgs e)
 		{
+			// Let the preview window handle new back buffer data
+			this.depthPreviewWindow.HandleBackBufferUpdate();
 			
+			// Set the depth camera's buffer to the new back buffer for the preview window
+			this.kinect.DepthCamera.DataBuffer = this.depthPreviewWindow.BackBuffer;
 		}
 
 		/// <summary>
@@ -236,7 +250,11 @@ namespace KinectDemo
 		/// </param>
 		private void HandleKinectVideoCameraDataReceived (object sender, VideoCamera.DataReceivedEventArgs e)
 		{
+			// Let the preview window handle new back buffer data
+			this.videoPreviewWindow.HandleBackBufferUpdate();
 			
+			// Set the video camera's buffer to the new back buffer for the preview window
+			this.kinect.VideoCamera.DataBuffer = this.videoPreviewWindow.BackBuffer;
 		}
 		
 		/// <summary>
@@ -253,6 +271,23 @@ namespace KinectDemo
 			this.kinect.UpdateStatus();
 			this.motorCurrentTiltLabel.Text = "Current Tilt: " + this.kinect.Motor.Tilt;
 			this.motorTiltStatusLabel.Text = "Tilt Status: " + this.kinect.Motor.TiltStatus.ToString();
+			this.accelerometerXValueLabel.Text = Math.Round(this.kinect.Accelerometer.X, 2).ToString();
+			this.accelerometerYValueLabel.Text = Math.Round(this.kinect.Accelerometer.Y, 2).ToString();
+			this.accelerometerZValueLabel.Text = Math.Round(this.kinect.Accelerometer.Z, 2).ToString();
+		}
+		
+		/// <summary>
+		/// Selected different LED color
+		/// </summary>
+		/// <param name="sender">
+		/// A <see cref="System.Object"/>
+		/// </param>
+		/// <param name="e">
+		/// A <see cref="EventArgs"/>
+		/// </param>
+		private void HandleSelectLEDColorComboSelectedIndexChanged (object sender, EventArgs e)
+		{
+			this.kinect.LED.Color = (LEDColor)Enum.Parse(typeof(LEDColor), this.selectLEDColorCombo.SelectedItem.ToString());
 		}
 		
 		/// <summary>
@@ -359,7 +394,20 @@ namespace KinectDemo
 				index -= 1;
 				
 				// Set mode
-				this.kinect.DepthCamera.Mode = this.kinect.DepthCamera.Modes[index];
+				DepthFrameMode mode = this.kinect.DepthCamera.Modes[index];
+				this.kinect.DepthCamera.Stop();
+				this.kinect.DepthCamera.Mode = mode;
+				
+				// Wait until preview window is not busy
+				while(this.depthPreviewWindow.IsBusy);
+				
+				// Resize preview window
+				this.depthPreviewWindow.Resize(mode);
+				
+				// Set new back buffer for depth camera
+				this.kinect.DepthCamera.DataBuffer = this.depthPreviewWindow.BackBuffer;
+				
+				// Start up camera again				
 				this.kinect.DepthCamera.Start();
 				this.depthPreviewWindow.Visible = true;
 			}
@@ -399,7 +447,20 @@ namespace KinectDemo
 				index -= 1;
 				
 				// Set mode
-				this.kinect.VideoCamera.Mode = this.kinect.VideoCamera.Modes[index];
+				VideoFrameMode mode = this.kinect.VideoCamera.Modes[index];
+				this.kinect.VideoCamera.Stop();
+				this.kinect.VideoCamera.Mode = mode;
+				
+				// Wait until preview window is not busy
+				while(this.videoPreviewWindow.IsBusy);
+				
+				// Resize preview window
+				this.videoPreviewWindow.Resize(mode);
+				
+				// Set new back buffer for video camera
+				this.kinect.VideoCamera.DataBuffer = this.videoPreviewWindow.BackBuffer;
+				
+				// Start up camera again
 				this.kinect.VideoCamera.Start();
 				this.videoPreviewWindow.Visible = true;
 			}

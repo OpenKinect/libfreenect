@@ -116,7 +116,7 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Gets the pointer to the buffer at the specified index. This is useful for passing 
+		/// Gets the handle to the buffer at the specified index. This is useful for passing 
 		/// to unmanaged code.
 		/// </summary>
 		/// <param name="index">
@@ -125,7 +125,7 @@ namespace freenect
 		/// <returns>
 		/// Pointer to buffer of data
 		/// </returns>
-		public IntPtr GetBufferPointerAt(int index)
+		public IntPtr GetHandle(int index)
 		{
 			return this.bufferHandles[this.bufferIndicesMap[index]].AddrOfPinnedObject();
 		}
