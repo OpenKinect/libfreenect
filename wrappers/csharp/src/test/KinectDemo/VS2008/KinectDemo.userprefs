@@ -1,6 +1,14 @@
 ﻿<Properties>
   <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug|x86" ctype="Workspace" />
-  <MonoDevelop.Ide.Workbench ctype="Workbench" />
+  <MonoDevelop.Ide.Workbench ActiveDocument="../../../lib/DepthPreviewWindow.cs" ctype="Workbench">
+    <Files>
+      <File FileName="../../../lib/VideoPreviewWindow.cs" Line="34" Column="34" />
+      <File FileName="../PreviewWindow.cs" Line="144" Column="35" />
+      <File FileName="../MainWindow.cs" Line="289" Column="4" />
+      <File FileName="../../../lib/DepthPreviewWindow.cs" Line="46" Column="34" />
+      <File FileName="../Program.cs" Line="10" Column="16" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.DebuggingService.Breakpoints>
     <BreakpointStore />
   </MonoDevelop.Ide.DebuggingService.Breakpoints>

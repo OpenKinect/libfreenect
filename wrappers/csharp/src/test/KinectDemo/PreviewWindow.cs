@@ -94,6 +94,9 @@ namespace KinectDemo
 		/// </param>
 		public new void Resize(FrameMode mode)
 		{
+			// Make this window's control current
+			this.renderPanel.MakeCurrent();
+			
 			// Resize scene
 			GL.Viewport(0, 0, mode.Width, mode.Height);
 			GL.MatrixMode(MatrixMode.Projection);
@@ -137,6 +140,9 @@ namespace KinectDemo
 		/// </param>
 		private void HandleRenderPanelPaint (object sender, PaintEventArgs e)
 		{
+			// Make this window's render panel current
+			this.renderPanel.MakeCurrent();
+			
 			// Init GL window for render
 			GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
 			GL.LoadIdentity();

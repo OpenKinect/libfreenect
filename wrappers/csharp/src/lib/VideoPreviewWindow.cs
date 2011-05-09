@@ -18,14 +18,21 @@ namespace KinectDemo
 		/// </summary>
 		public override void HandleBackBufferUpdate()
 		{
-			// Swap middle and back buffers
-			this.previewDataBuffers.Swap(1, 2);
-			
-			// Have new data
-			this.newDataPending = true;
-			
-			// Invalid render panel
-			this.renderPanel.Invalidate();
+			try
+			{
+				// Swap middle and back buffers
+				this.previewDataBuffers.Swap(1, 2);
+				
+				// Have new data
+				this.newDataPending = true;
+				
+				// Invalid render panel
+				this.renderPanel.Invalidate();
+			}
+			catch(Exception e)
+			{
+				Console.WriteLine(e.Message);
+			}
 		}
 		
 		/// <summary>

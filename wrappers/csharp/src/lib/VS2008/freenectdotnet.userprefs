@@ -1,11 +1,11 @@
 ﻿<Properties>
   <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" ctype="Workspace" />
-  <MonoDevelop.Ide.Workbench ActiveDocument="../KinectNative.cs" ctype="Workbench">
+  <MonoDevelop.Ide.Workbench ActiveDocument="../DepthCamera.cs" ctype="Workbench">
     <Files>
       <File FileName="../VideoCamera.cs" Line="172" Column="41" />
       <File FileName="../Kinect.cs" Line="265" Column="4" />
-      <File FileName="../KinectNative.cs" Line="218" Column="5" />
-      <File FileName="../DepthCamera.cs" Line="163" Column="34" />
+      <File FileName="../KinectNative.cs" Line="206" Column="30" />
+      <File FileName="../DepthCamera.cs" Line="316" Column="4" />
     </Files>
   </MonoDevelop.Ide.Workbench>
   <MonoDevelop.Ide.DebuggingService.Breakpoints>

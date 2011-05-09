@@ -47,37 +47,93 @@ namespace KinectDemo
 		/// </summary>
 		public override void HandleBackBufferUpdate()
 		{
-			switch(this.PreviewMode)
+			try
 			{
-				case DepthPreviewMode.ColorMap:
-					this.HandleBackBufferUpdateColorMap();
-					break;
+				switch(this.PreviewMode)
+				{
+					case DepthPreviewMode.ColorMap:
+						this.HandleBackBufferUpdateColorMap();
+						break;
+				}
+				
+				// Have new data
+				this.newDataPending = true;
+				
+				// Invalid render panel
+				this.renderPanel.Invalidate();
 			}
-			
-			// Have new data
-			this.newDataPending = true;
-			
-			// Invalid render panel
-			this.renderPanel.Invalidate();
+			catch(Exception e)
+			{
+				Console.WriteLine(e.Message);
+			}
 		}
 		
 		/// <summary>
 		/// Translates new back buffer data into the middle buffer as a color map
 		/// </summary>
-		public void HandleBackBufferUpdateColorMap()
+		private void HandleBackBufferUpdateColorMap()
 		{
+			DepthFrameMode mode = this.Mode as DepthFrameMode;
+			if(mode.Format == DepthFormat.Depth10Bit || mode.Format == DepthFormat.Depth11Bit)
+			{
+				this.HandleBackBufferUpdateColorMapUnpacked();
+			}
+		}
+		
+		/// <summary>
+		/// Translates back buffer data for unpacked 11bit or 10it data
+		/// </summary>
+		private void HandleBackBufferUpdateColorMapUnpacked()
+		{
+			// Swap mid and back
 			unsafe
 			{
 				byte *ptrMid 	= (byte *)this.previewDataBuffers.GetHandle(1);
 				Int16 *ptrBack 	= (Int16 *)this.previewDataBuffers.GetHandle(2);
 				int dim 		= this.Mode.Width * this.Mode.Height;
 				int i 			= 0;
-				
 				for (i = 0; i < dim; i++)
 				{
-					*ptrMid++ = 255;
-					*ptrMid++ = 0;
-					*ptrMid++ = 0;
+					Int16 pval 	= (Int16)this.gamma[ptrBack[i]];
+					Int16 lb 	= (Int16)(pval & 0xff);
+					switch (pval>>8)
+					{
+						case 0:
+							*ptrMid++ = 255;
+							*ptrMid++ = (byte)(255 - lb);
+							*ptrMid++ = (byte)(255 - lb);
+							break;
+						case 1:
+							*ptrMid++ = 255;
+							*ptrMid++ = (byte)lb;
+							*ptrMid++ = 0;
+							break;
+						case 2:
+							*ptrMid++ = (byte)(255 - lb);
+							*ptrMid++ = 255;
+							*ptrMid++ = 0;
+							break;
+						case 3:
+							*ptrMid++ = 0;
+							*ptrMid++ = 255;
+							*ptrMid++ = (byte)lb;
+							break;
+						case 4:
+							*ptrMid++ = 0;
+							*ptrMid++ = (byte)(255 - lb);
+							*ptrMid++ = 255;
+							break;
+						case 5:
+							*ptrMid++ = 0;
+							*ptrMid++ = 0;
+							*ptrMid++ = (byte)(255 - lb);
+							break;
+						default:
+							*ptrMid++ = 0;
+							*ptrMid++ = 0;
+							*ptrMid++ = 0;
+							break;
+					}
 				}
 			}
 		}
@@ -97,6 +153,7 @@ namespace KinectDemo
 					break;
 			}
 		}
+		
 		/// <summary>
 		/// Renders the preview data as a color map
 		/// </summary>
