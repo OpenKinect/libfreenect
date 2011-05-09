@@ -92,7 +92,7 @@ namespace KinectDemo
 		/// <param name="mode">
 		/// A <see cref="FrameMode"/>
 		/// </param>
-		public new void Resize(FrameMode mode)
+		public new virtual void Resize(FrameMode mode)
 		{
 			// Make this window's control current
 			this.renderPanel.MakeCurrent();
@@ -152,22 +152,10 @@ namespace KinectDemo
 			// Do we have new data?
 			if(this.newDataPending)
 			{
-				// Use preview texture for rendering
-				GL.BindTexture(TextureTarget.Texture2D, this.previewTexture);
-				
 				// Yes! Render
 				this.IsBusy = true;
 				this.RenderPreview();
 				this.IsBusy = false;
-				
-				// Draw texture
-				GL.Begin(BeginMode.TriangleFan);
-				GL.Color4(255.0f, 255.0f, 255.0f, 255.0f);
-				GL.TexCoord2(0, 0); GL.Vertex3(0, 0, 0);
-				GL.TexCoord2(1, 0); GL.Vertex3(this.Mode.Width, 0, 0);
-				GL.TexCoord2(1, 1); GL.Vertex3(this.Mode.Width, this.Mode.Height, 0);
-				GL.TexCoord2(0, 1); GL.Vertex3(0, this.Mode.Height, 0);
-				GL.End();
 				
 				// No more new data
 				this.newDataPending = false;

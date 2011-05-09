@@ -57,6 +57,9 @@
     <Compile Include="..\..\..\lib\VideoPreviewWindow.cs">
       <Link>VideoPreviewWindow.cs</Link>
     </Compile>
+    <Compile Include="..\PreviewControl.cs">
+      <Link>PreviewControl.cs</Link>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System.Drawing" />
@@ -71,7 +74,7 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\..\..\..\OpenTK\OpenTK.dll</HintPath>
     </Reference>
-    <Reference Include="freenect, Version=1.0.4145.1756, Culture=neutral, PublicKeyToken=null">
+    <Reference Include="freenect, Version=1.0.4145.23674, Culture=neutral, PublicKeyToken=null">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\bin\freenect.dll</HintPath>
     </Reference>
