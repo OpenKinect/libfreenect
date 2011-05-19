@@ -57,6 +57,12 @@
     <Compile Include="..\VideoPreviewWindow.cs">
       <Link>VideoPreviewWindow.cs</Link>
     </Compile>
+    <Compile Include="..\PreviewControl.cs">
+      <Link>PreviewControl.cs</Link>
+    </Compile>
+    <Compile Include="..\PreviewControl.UI.cs">
+      <Link>PreviewControl.UI.cs</Link>
+    </Compile>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System.Drawing" />

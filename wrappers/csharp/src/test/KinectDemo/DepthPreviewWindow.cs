@@ -72,7 +72,7 @@ namespace KinectDemo
 			};
 			this.contextMenu.Items.Add(colorMapModeItem);
 			this.contextMenu.Items.Add(pointCloudModeItem);
-			this.ContextMenuStrip = this.contextMenu;
+			//this.ContextMenuStrip = this.contextMenu;
 			
 			// Color map rendering by default
 			this.PreviewMode = DepthPreviewWindow.DepthPreviewMode.ColorMap;	

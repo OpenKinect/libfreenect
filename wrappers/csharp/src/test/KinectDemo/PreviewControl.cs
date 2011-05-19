@@ -1,0 +1,426 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Windows.Forms;
+using freenect;
+using OpenTK;
+using OpenTK.Graphics.OpenGL;
+using System.Drawing;
+using System.Threading;
+
+namespace KinectDemo
+{
+	/// <summary>
+	/// Displays video / depth data
+	/// </summary>
+	public partial class PreviewControl : UserControl
+	{
+		
+		/// <summary>
+		/// Gets or sets the current frame mode for the video feed
+		/// </summary>
+		public VideoFrameMode VideoMode
+		{
+			get
+			{
+				return this.videoMode;
+			}
+			set
+			{
+				// Make sure we are actually changing something
+				if(this.videoMode == value)
+				{
+					return;
+				}
+				
+				// Resize buffer
+				if(this.videoDataBuffers != null)
+				{
+					this.videoDataBuffers.Dispose();	
+				}
+				this.videoDataBuffers = new SwapBufferCollection<byte>(3, 3 * value.Width * value.Height);
+				
+				// Save mode
+				this.videoMode = value;
+			}
+		}
+		
+		/// <summary>
+		/// Gets or sets the current frame mode for the depth feed
+		/// </summary>
+		public DepthFrameMode DepthMode
+		{
+			get
+			{
+				return this.depthMode;
+			}
+			set
+			{
+				// Make sure we are actually changing something
+				if(this.depthMode == value)
+				{
+					return;
+				}
+				
+				// Resize buffer
+				if(this.depthDataBuffers != null)
+				{
+					this.depthDataBuffers.Dispose();	
+				}
+				this.depthDataBuffers = new SwapBufferCollection<byte>(3, 3 * value.Width * value.Height);
+				
+				// Save mode
+				this.depthMode = value;
+			}
+		}
+		
+		/// <summary>
+		/// Handle to back buffer for the video feed
+		/// </summary>
+		public IntPtr VideoBackBuffer
+		{	
+			get
+			{
+				return this.videoDataBuffers.GetHandle(2);
+			}
+		}
+		
+		/// <summary>
+		/// Handle to back buffer for the depth feed
+		/// </summary>
+		public IntPtr DepthBackBuffer
+		{	
+			get
+			{
+				return this.depthDataBuffers.GetHandle(2);
+			}
+		}
+		
+		/// <summary>
+		/// Video mode
+		/// </summary>
+		private VideoFrameMode videoMode = null;
+		
+		/// <summary>
+		/// Depth mode
+		/// </summary>
+		private DepthFrameMode depthMode = null;
+		
+		/// <summary>
+		/// Texture for depth data
+		/// </summary>
+		private uint depthTexture;
+		
+		/// <summary>
+		/// Texture for video data
+		/// </summary>
+		private uint videoTexture;
+		
+		/// <summary>
+		/// Swappable data buffers for depth data
+		/// </summary>
+		private SwapBufferCollection<byte> depthDataBuffers;
+		
+		/// <summary>
+		/// Swappable data buffers for video data
+		/// </summary>
+		private SwapBufferCollection<byte> videoDataBuffers;
+		
+		/// <summary>
+		/// Is new video data pending?
+		/// </summary>
+		private bool videoDataPending = false;
+		
+		/// <summary>
+		/// Is new depth data pending?
+		/// </summary>
+		private bool depthDataPending = false;
+		
+		/// <summary>
+		/// Update thread. This basically just makes the render panel update.
+		/// </summary>
+		private Thread updateThread;
+		
+		/// <summary>
+		/// Is the preview control running?
+		/// </summary>
+		private bool isRunning = false;
+		
+		// Gamma constants for color map generation
+		private UInt16[] gamma = new UInt16[2048];
+		
+		/// <summary>
+		/// Constructor
+		/// </summary>
+		public PreviewControl()
+		{
+			// Initialize UI components
+			this.InitializeComponents();
+			
+			// Caluclate gamma constants
+			for (int i = 0 ; i < 2048; i++) 
+			{
+				double v = i / 2048.0;
+				v = Math.Pow((double)v, 3.0) * 6.0;
+				gamma[i] = (UInt16)(v * 6.0 * 256.0);
+			}
+		}
+		
+		/// <summary>
+		/// Handle video data being updated
+		/// </summary>
+		public void HandleVideoBackBufferUpdate()
+		{
+			// Swap middle and back buffers
+			this.videoDataBuffers.Swap(1, 2);
+			
+			// New data!
+			this.videoDataPending = true;
+		}
+		
+		/// <summary>
+		/// Handle depth data being updated
+		/// </summary>
+		public void HandleDepthBackBufferUpdate()
+		{
+			// Swap mid and back
+			unsafe
+			{
+				byte *ptrMid 	= (byte *)this.depthDataBuffers.GetHandle(1);
+				Int16 *ptrBack 	= (Int16 *)this.depthDataBuffers.GetHandle(2);
+				int dim 		= this.DepthMode.Width * this.DepthMode.Height;
+				int i 			= 0;
+				for (i = 0; i < dim; i++)
+				{
+					Int16 pval 	= (Int16)this.gamma[ptrBack[i]];
+					Int16 lb 	= (Int16)(pval & 0xff);
+					switch (pval>>8)
+					{
+						case 0:
+							*ptrMid++ = 255;
+							*ptrMid++ = (byte)(255 - lb);
+							*ptrMid++ = (byte)(255 - lb);
+							break;
+						case 1:
+							*ptrMid++ = 255;
+							*ptrMid++ = (byte)lb;
+							*ptrMid++ = 0;
+							break;
+						case 2:
+							*ptrMid++ = (byte)(255 - lb);
+							*ptrMid++ = 255;
+							*ptrMid++ = 0;
+							break;
+						case 3:
+							*ptrMid++ = 0;
+							*ptrMid++ = 255;
+							*ptrMid++ = (byte)lb;
+							break;
+						case 4:
+							*ptrMid++ = 0;
+							*ptrMid++ = (byte)(255 - lb);
+							*ptrMid++ = 255;
+							break;
+						case 5:
+							*ptrMid++ = 0;
+							*ptrMid++ = 0;
+							*ptrMid++ = (byte)(255 - lb);
+							break;
+						default:
+							*ptrMid++ = 0;
+							*ptrMid++ = 0;
+							*ptrMid++ = 0;
+							break;
+					}
+				}
+			}
+			
+			// New data!
+			this.depthDataPending = true;
+		}
+		
+		/// <summary>
+		/// Start the preview control again
+		/// </summary>
+		public void Start()
+		{
+			// Start up update thread
+			this.updateThread = new Thread(delegate()
+			{
+				this.isRunning = true;
+				while(this.isRunning)
+				{
+					try
+					{
+						this.renderPanel.Invalidate();
+						Thread.Sleep(10);
+					}
+					catch(ThreadAbortException e)
+					{
+						return;
+					}
+					catch(Exception ex)
+					{
+					}
+				}
+			});
+			this.updateThread.Start();
+		}
+		
+		/// <summary>
+		/// Shutdown the preview control
+		/// </summary>
+		public void Stop()
+		{
+			// Shutdown update thread
+			this.isRunning = false;
+			this.updateThread.Interrupt();
+			this.updateThread.Join();
+			this.updateThread = null;
+		}
+		
+		/// <summary>
+		/// Handle render panel OnPaint
+		/// </summary>
+		/// <param name="sender">
+		/// A <see cref="System.Object"/>
+		/// </param>
+		/// <param name="e">
+		/// A <see cref="PaintEventArgs"/>
+		/// </param>
+		private void HandleRenderPanelPaint(object sender, PaintEventArgs e)
+		{
+			// Init GL window for render
+			GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+			GL.LoadIdentity();
+			GL.ClearColor(Color.Blue);
+			GL.Enable(EnableCap.Texture2D);
+			
+			/// Render video
+			this.HandleRenderPanelPaintVideo();
+			
+			// Render depth
+			this.HandleRenderPanelPaintDepth();
+			
+			// Present
+			this.renderPanel.SwapBuffers();
+		}
+
+		/// <summary>
+		/// Render video feed
+		/// </summary>
+		private void HandleRenderPanelPaintVideo()
+		{
+			if(this.VideoMode == null)
+			{
+				// Not rendering anything
+				return;
+			}
+			
+			if(this.videoDataPending)
+			{
+				// Swap middle and front buffers (we will be rendering off of front buffer)
+				this.videoDataBuffers.Swap(0, 1);
+			}
+			
+			// Use preview texture for rendering
+			GL.BindTexture(TextureTarget.Texture2D, this.videoTexture);
+			
+			// Setup texture
+			VideoFormat format = this.VideoMode.Format;
+			switch(format)
+			{
+				case VideoFormat.RGB:
+					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Three, this.VideoMode.Width, this.VideoMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Rgb, PixelType.UnsignedByte, this.videoDataBuffers[0]);
+					break;
+				case VideoFormat.Infrared8Bit:
+					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.One, this.VideoMode.Width, this.VideoMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Luminance, PixelType.UnsignedByte, this.videoDataBuffers[0]);
+					break;
+			}
+			
+			// Draw texture
+			GL.Begin(BeginMode.TriangleFan);
+			GL.Color4(255.0f, 255.0f, 255.0f, 255.0f);
+			GL.TexCoord2(0, 0); GL.Vertex3(0, 0, 0);
+			GL.TexCoord2(1, 0); GL.Vertex3(640, 0, 0);
+			GL.TexCoord2(1, 1); GL.Vertex3(640, 480, 0);
+			GL.TexCoord2(0, 1); GL.Vertex3(0, 480, 0);
+			GL.End();
+			
+			// Video data not pending anymore
+			this.videoDataPending = false;
+		}
+		
+		/// <summary>
+		/// Render depth feed
+		/// </summary>
+		private void HandleRenderPanelPaintDepth()
+		{
+			if(this.DepthMode == null)
+			{
+				// Not rendering anything
+				return;
+			}
+			
+			if(this.depthDataPending)
+			{
+				// Swap front and middle buffers
+				this.depthDataBuffers.Swap(0, 1);
+			}
+			
+			// Use preview texture for rendering
+			GL.BindTexture(TextureTarget.Texture2D, this.depthTexture);
+			
+			// Setup texture
+			GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Three, this.DepthMode.Width, this.DepthMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Rgb, PixelType.UnsignedByte, this.depthDataBuffers[0]);
+			
+			// Draw texture
+			GL.Begin(BeginMode.TriangleFan);
+			GL.Color4(255.0f, 255.0f, 255.0f, 255.0f);
+			GL.TexCoord2(0, 0); GL.Vertex3(640, 0, 0);
+			GL.TexCoord2(1, 0); GL.Vertex3(1280, 0, 0);
+			GL.TexCoord2(1, 1); GL.Vertex3(1280, 480, 0);
+			GL.TexCoord2(0, 1); GL.Vertex3(640, 480, 0);
+			GL.End();
+			
+			// Depth data handled
+			this.depthDataPending = false;
+		}
+
+		/// <summary>
+		/// Handle render panel on load
+		/// </summary>
+		/// <param name="sender">
+		/// A <see cref="System.Object"/>
+		/// </param>
+		/// <param name="e">
+		/// A <see cref="EventArgs"/>
+		/// </param>
+		private void HandleRenderPanelLoad(object sender, EventArgs e)
+		{
+			GL.ClearColor(Color.Blue);
+			GL.ClearDepth(1.0);
+			GL.DepthFunc(DepthFunction.Less);
+			GL.Disable(EnableCap.DepthTest);
+			GL.Enable(EnableCap.Blend);
+			GL.BlendFunc(BlendingFactorSrc.SrcAlpha, BlendingFactorDest.OneMinusSrcAlpha);
+			GL.ShadeModel(ShadingModel.Smooth);
+
+			GL.GenTextures(1, out this.videoTexture);
+			GL.BindTexture(TextureTarget.Texture2D, this.videoTexture);
+			GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+			GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+			
+			GL.GenTextures(1, out this.depthTexture);
+			GL.BindTexture(TextureTarget.Texture2D, this.depthTexture);
+			GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Linear);
+			GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Linear);
+			
+			GL.Viewport(0, 0, 1280, 480);
+			GL.MatrixMode(MatrixMode.Projection);
+			GL.LoadIdentity();
+			GL.Ortho(0, 1280, 480, 0, -1.0f, 1.0f);
+			GL.MatrixMode(MatrixMode.Modelview);
+		}
+	}
+}

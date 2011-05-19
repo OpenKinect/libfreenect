@@ -106,7 +106,7 @@ namespace KinectDemo
 			/// ledControlGroup
 			///
 			this.ledControlGroup = new GroupBox();
-			this.ledControlGroup.Dock = DockStyle.Top;
+			this.ledControlGroup.Dock = DockStyle.Left;
 			this.ledControlGroup.Text = "LED";
 			this.ledControlGroup.Height = 60;
 			this.ledControlGroup.Padding = new Padding(10);
@@ -149,7 +149,7 @@ namespace KinectDemo
 			/// motorControlGroup
 			///
 			this.motorControlGroup = new GroupBox();
-			this.motorControlGroup.Dock = DockStyle.Top;
+			this.motorControlGroup.Dock = DockStyle.Left;
 			this.motorControlGroup.Text = "Motor";
 			this.motorControlGroup.Height = 105;
 			this.motorControlGroup.Padding = new Padding(10);
@@ -193,7 +193,7 @@ namespace KinectDemo
 			/// selectVideoModeGroup
 			///
 			this.selectVideoModeGroup = new GroupBox();
-			this.selectVideoModeGroup.Dock = DockStyle.Top;
+			this.selectVideoModeGroup.Dock = DockStyle.Left;
 			this.selectVideoModeGroup.Height = 130;
 			this.selectVideoModeGroup.Text = "Select Modes";
 			this.selectVideoModeGroup.Padding = new Padding(10);
@@ -204,25 +204,30 @@ namespace KinectDemo
 			this.selectVideoModeGroup.Enabled = false;
 			
 			///
-			/// contentPanelLeft
+			/// controlsPanel
 			///
-			this.contentPanelLeft = new Panel();
-			this.contentPanelLeft.Dock = DockStyle.Fill;
-			this.contentPanelLeft.Padding = new Padding(7);
-			this.contentPanelLeft.Width = 250;
-			this.contentPanelLeft.Enabled = false;
-			this.contentPanelLeft.Controls.Add(this.accelerometerStatusGroup);
-			this.contentPanelLeft.Controls.Add(this.ledControlGroup);
-			this.contentPanelLeft.Controls.Add(this.motorControlGroup);
-			this.contentPanelLeft.Controls.Add(this.selectVideoModeGroup);
+			this.controlsPanel = new Panel();
+			this.controlsPanel.Dock = DockStyle.Bottom;
+			this.controlsPanel.Padding = new Padding(7);
+			this.controlsPanel.Height = 150;
+			this.controlsPanel.Controls.Add(this.accelerometerStatusGroup);
+			this.controlsPanel.Controls.Add(this.ledControlGroup);
+			this.controlsPanel.Controls.Add(this.motorControlGroup);
+			this.controlsPanel.Controls.Add(this.selectVideoModeGroup);
 			
 			///
-			/// contentPanelRight
+			/// previewControl
 			///
-			this.contentPanelRight = new Panel();
-			this.contentPanelRight.Dock = DockStyle.Fill;
-			this.contentPanelRight.Enabled = false;
-			this.contentPanelRight.Padding = new Padding(7);
+			this.previewControl = new PreviewControl();
+			this.previewControl.Dock = DockStyle.Fill;
+			
+			///
+			/// contentPanel
+			/// 
+			this.contentPanel = new Panel();
+			this.contentPanel.Dock = DockStyle.Fill;
+			this.contentPanel.Controls.Add(this.previewControl);
+			this.contentPanel.Controls.Add(this.controlsPanel);
 			
 			///
 			/// disconnectButton
@@ -276,12 +281,11 @@ namespace KinectDemo
 			///
 			/// MainWindow
 			///
-			this.Width = 350;
-			this.Height = 470;
+			this.Width = 1300;
+			this.Height = 650;
 			this.Text = "Kinect.NET Demo";
 			this.Font = new Font(this.Font.FontFamily, 9.0f);
-			this.FormBorderStyle = FormBorderStyle.FixedSingle;
-			this.Controls.Add(this.contentPanelLeft);
+			this.Controls.Add(this.contentPanel);
 			this.Controls.Add(this.mainToolbar);
 			this.FormClosing += HandleFormClosing;
 		}
@@ -290,8 +294,10 @@ namespace KinectDemo
 		/// UI Components
 		///
 		private ToolStrip mainToolbar;
-		private Panel contentPanelLeft;
-		private Panel contentPanelRight;
+		private Panel controlsPanel;
+		private Panel contentPanel;
+		
+		private PreviewControl previewControl;
 		
 		private GroupBox motorControlGroup;
 		private NumericUpDown motorTiltUpDown;
