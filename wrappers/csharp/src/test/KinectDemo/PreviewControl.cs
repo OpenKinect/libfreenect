@@ -97,6 +97,24 @@ namespace KinectDemo
 		}
 		
 		/// <summary>
+		/// Gets the FPS for the depth feed
+		/// </summary>
+		public int DepthFPS
+		{
+			get;
+			private set;
+		}
+		
+		/// <summary>
+		/// Gets the FPS for the video feed
+		/// </summary>
+		public int VideoFPS
+		{
+			get;
+			private set;
+		}
+		
+		/// <summary>
 		/// Video mode
 		/// </summary>
 		private VideoFrameMode videoMode = null;
@@ -150,6 +168,26 @@ namespace KinectDemo
 		private UInt16[] gamma = new UInt16[2048];
 		
 		/// <summary>
+		/// Last time FPS was updated for Depth
+		/// </summary>
+		private DateTime lastDepthFPSUpate = DateTime.Now;
+		
+		/// <summary>
+		/// Number of frames since last FPS update for depth
+		/// </summary>
+		private int depthFrameCount = 0;
+		
+		/// <summary>
+		/// Last time FPS was updated for video
+		/// </summary>
+		private DateTime lastVideoFPSUpdate = DateTime.Now;
+		
+		/// <summary>
+		/// Number of frames since last FPS update for video
+		/// </summary>
+		private int videoFrameCount = 0;
+		
+		/// <summary>
 		/// Constructor
 		/// </summary>
 		public PreviewControl()
@@ -173,6 +211,15 @@ namespace KinectDemo
 		{
 			// Swap middle and back buffers
 			this.videoDataBuffers.Swap(1, 2);
+			
+			// Calculate FPS
+			this.videoFrameCount++;
+			if((DateTime.Now - this.lastVideoFPSUpdate).Seconds >= 1)
+			{
+				this.VideoFPS = this.videoFrameCount;
+				this.videoFrameCount = 0;
+				this.lastVideoFPSUpdate = DateTime.Now;
+			}
 			
 			// New data!
 			this.videoDataPending = true;
@@ -233,6 +280,15 @@ namespace KinectDemo
 							break;
 					}
 				}
+			}
+			
+			// Calculate FPS
+			this.depthFrameCount++;
+			if((DateTime.Now - this.lastDepthFPSUpate).Seconds >= 1)
+			{
+				this.DepthFPS = this.depthFrameCount;
+				this.depthFrameCount = 0;
+				this.lastDepthFPSUpate = DateTime.Now;
 			}
 			
 			// New data!

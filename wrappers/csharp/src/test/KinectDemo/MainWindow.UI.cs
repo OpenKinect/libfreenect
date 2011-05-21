@@ -230,6 +230,15 @@ namespace KinectDemo
 			this.contentPanel.Controls.Add(this.controlsPanel);
 			
 			///
+			/// aboutButton
+			///
+			this.aboutButton = new ToolStripButton();
+			this.aboutButton.Text = "About";
+			this.aboutButton.Padding = new Padding(7, 0, 7, 0);
+			this.aboutButton.Margin = new Padding(10, 7, 0, 7);
+			this.aboutButton.Click += HandleAboutButtonClick;
+			
+			///
 			/// disconnectButton
 			/// 
 			this.disconnectButton = new ToolStripButton();
@@ -277,12 +286,13 @@ namespace KinectDemo
 			this.mainToolbar.Items.Add(this.refreshButton);
 			this.mainToolbar.Items.Add(this.connectButton);
 			this.mainToolbar.Items.Add(this.disconnectButton);
+			this.mainToolbar.Items.Add(this.aboutButton);
 			
 			///
 			/// MainWindow
 			///
-			this.Width = 1300;
-			this.Height = 650;
+			this.Width = 1280;
+			this.Height = 630;
 			this.Text = "Kinect.NET Demo";
 			this.Font = new Font(this.Font.FontFamily, 9.0f);
 			this.Controls.Add(this.contentPanel);
@@ -320,6 +330,7 @@ namespace KinectDemo
 		private ToolStripButton refreshButton;
 		private ToolStripButton connectButton;
 		private ToolStripButton disconnectButton;
+		private ToolStripButton aboutButton;
 		
 		private GroupBox selectVideoModeGroup;
 		private ComboBox selectVideoModeCombo;

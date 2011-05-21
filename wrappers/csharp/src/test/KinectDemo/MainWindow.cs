@@ -4,6 +4,8 @@ using System.Linq;
 using System.Windows.Forms;
 using System.Threading;
 using freenect;
+using System.Drawing;
+using System.Diagnostics;
 
 namespace KinectDemo
 {
@@ -65,14 +67,12 @@ namespace KinectDemo
 				
 				// Enable buttons
 				this.connectButton.Visible = this.connectButton.Enabled = true;
-				this.refreshButton.Visible = this.refreshButton.Enabled = true;
 				this.disconnectButton.Visible = false;
 			}
 			else
 			{
 				// Disable buttons
 				this.connectButton.Visible = false;
-				this.refreshButton.Visible = false;
 				this.disconnectButton.Visible = false;
 			}
 		}
@@ -87,11 +87,6 @@ namespace KinectDemo
 			this.selectVideoModeCombo.Items.Add("Disabled");
 			foreach(var mode in this.kinect.VideoCamera.Modes)
 			{
-				if(mode.Format == VideoFormat.InfraredPacked10Bit)
-				{
-					// Don't do packed for now
-					continue;
-				}
 				string videoMode = mode.Width + "x" + mode.Height + " : " + mode.Format;
 				this.selectVideoModeCombo.Items.Add(videoMode);
 			}
@@ -107,11 +102,6 @@ namespace KinectDemo
 			this.selectDepthModeCombo.Items.Add("Disabled");
 			foreach(var mode in this.kinect.DepthCamera.Modes)
 			{
-				if(mode.Format == DepthFormat.DepthPacked10Bit || mode.Format == DepthFormat.DepthPacked11Bit)
-				{
-					// Don't do packed for now
-					continue;
-				}
 				string depthMode = mode.Width + "x" + mode.Height + " : " + mode.Format;
 				this.selectDepthModeCombo.Items.Add(depthMode);
 			}
@@ -260,6 +250,8 @@ namespace KinectDemo
 			this.accelerometerXValueLabel.Text = Math.Round(this.kinect.Accelerometer.X, 2).ToString();
 			this.accelerometerYValueLabel.Text = Math.Round(this.kinect.Accelerometer.Y, 2).ToString();
 			this.accelerometerZValueLabel.Text = Math.Round(this.kinect.Accelerometer.Z, 2).ToString();
+			
+			this.Text = "Kinect.NET Demo - Video FPS: " + this.previewControl.VideoFPS + " | Depth FPS: " + this.previewControl.DepthFPS;
 		}
 		
 		/// <summary>
@@ -344,6 +336,20 @@ namespace KinectDemo
 		private void HandleDisconnectButtonClick (object sender, EventArgs e)
 		{
 			this.Disconnect();
+		}
+		
+		/// <summary>
+		/// Handle about button
+		/// </summary>
+		/// <param name="sender">
+		/// A <see cref="System.Object"/>
+		/// </param>
+		/// <param name="e">
+		/// A <see cref="EventArgs"/>
+		/// </param>
+		private void HandleAboutButtonClick (object sender, EventArgs e)
+		{
+			new AboutWindow().ShowDialog();
 		}
 		
 		/// <summary>
@@ -460,6 +466,77 @@ namespace KinectDemo
 		{
 			e.Cancel = true;
 			this.selectVideoModeCombo.SelectedIndex = 0;
+		}
+		
+		/// <summary>
+		/// About Window
+		/// </summary>
+		private class AboutWindow : Form
+		{
+			public AboutWindow()
+			{
+				
+				///
+				/// linkLabel
+				///
+				LinkLabel linkLabel = new LinkLabel();
+				linkLabel.Text = "openkinect.org";
+				linkLabel.Click += delegate(object sender, EventArgs e) 
+				{
+					Process.Start("http://openkinect.org/wiki/CSharp_Wrapper");
+				};
+				linkLabel.Dock = DockStyle.Top;
+				
+				///
+				/// authorLabel
+				///
+				Label authorLabel = new Label();
+				authorLabel.Text = "by Aditya Gaddam";
+				authorLabel.Dock = DockStyle.Top;
+				
+				///
+				/// titleLabel
+				///
+				Label titleLabel = new Label();
+				titleLabel.Text = "Kinect.NET Demo";
+				titleLabel.Font = new Font(this.Font.FontFamily, 14.0f);
+				titleLabel.Dock = DockStyle.Top;
+				
+				///
+				/// logoImageBox
+				///
+				PictureBox logoPictureBox = new PictureBox();
+				logoPictureBox.Image = Image.FromFile("openkinect_logo.png");
+				logoPictureBox.Dock = DockStyle.Left;
+				logoPictureBox.Width = 96;
+				
+				///
+				/// aboutContentPanel
+				/// 
+				Panel aboutContentPanel = new Panel();
+				aboutContentPanel.Dock = DockStyle.Fill;
+				aboutContentPanel.Controls.Add(linkLabel);
+				aboutContentPanel.Controls.Add(authorLabel);
+				aboutContentPanel.Controls.Add(titleLabel);
+				aboutContentPanel.Padding = new Padding(7, 0, 0, 0);
+				
+				///
+				/// AboutWindow
+				///
+				this.ShowInTaskbar = false;
+				//this.FormBorderStyle = FormBorderStyle.FixedSingle;
+				this.MinimizeBox = false;
+				this.MaximizeBox = false;
+				this.StartPosition = FormStartPosition.CenterScreen;
+				this.Text = "About";
+				this.Width = 350;
+				this.Height = 140;
+				this.Font = new System.Drawing.Font(this.Font.FontFamily, 9.0f);
+				this.BackColor = Color.White;
+				this.Controls.Add(aboutContentPanel);
+				this.Controls.Add(logoPictureBox);
+				this.Padding = new Padding(7);
+			}
 		}
 	}
 }

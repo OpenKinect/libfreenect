@@ -82,4 +82,10 @@
       <HintPath>..\..\..\..\bin\freenect.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <None Include="..\openkinect_logo.png">
+      <Link>openkinect_logo.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 </Project>
