@@ -31,13 +31,13 @@
 
 #include "freenect_internal.h"
 
-#define MAKE_RESERVED(res, fmt) (((uint8_t)(res) << 8) | (((uint8_t)(fmt))) )
-#define RESERVED_TO_RESOLUTION(reserved) ((uint8_t)(reserved >> 8))
-#define RESERVED_TO_FORMAT(reserved) ((uint8_t)(reserved))
+#define MAKE_RESERVED(res, fmt) (uint32_t)(((res & 0xff) << 8) | (((fmt & 0xff))))
+#define RESERVED_TO_RESOLUTION(reserved) (freenect_resolution)((reserved >> 8) & 0xff)
+#define RESERVED_TO_FORMAT(reserved) ((reserved) & 0xff)
 
 #define video_mode_count 12
 freenect_frame_mode supported_video_modes[video_mode_count] = {
-	// reserved, resolution, format, is_valid, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate
+	// reserved, resolution, format, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate, is_valid
 	{MAKE_RESERVED(FREENECT_RESOLUTION_HIGH,   FREENECT_VIDEO_RGB), FREENECT_RESOLUTION_HIGH, {FREENECT_VIDEO_RGB}, 1280*1024*3, 1280, 1024, 24, 0, 10, 1 },
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB), FREENECT_RESOLUTION_MEDIUM, {FREENECT_VIDEO_RGB}, 640*480*3, 640,  480, 24, 0, 30, 1 },
 
@@ -60,13 +60,13 @@ freenect_frame_mode supported_video_modes[video_mode_count] = {
 
 #define depth_mode_count 4
 freenect_frame_mode supported_depth_modes[depth_mode_count] = {
-	// reserved, resolution, format, is_valid, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate
+	// reserved, resolution, format, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate, is_valid
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT}, 640*480*2, 640, 480, 11, 5, 30, 1},
-	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT}, 640*480*2, 640, 480, 11, 5, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT}, 640*480*2, 640, 480, 10, 6, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT_PACKED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT_PACKED}, 640*480*11/8, 640, 480, 11, 0, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT_PACKED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT_PACKED}, 640*480*10/8, 640, 480, 10, 0, 30, 1},
 };
-static const freenect_frame_mode invalid_mode = {0, 0, {0}, 0, 0, 0, 0, 0, 0, 0};
+static const freenect_frame_mode invalid_mode = {0, (freenect_resolution)0, {(freenect_video_format)0}, 0, 0, 0, 0, 0, 0, 0};
 
 struct pkt_hdr {
 	uint8_t magic[2];
@@ -277,34 +277,52 @@ static int stream_setbuf(freenect_context *ctx, packet_stream *strm, void *pbuf)
 	}
 }
 
-// Unpack buffer of (vw bit) data into padded 16bit buffer.
-static inline void convert_packed_to_16bit(uint8_t *raw, uint16_t *frame, int vw, int len)
+/**
+ * Convert a packed array of n elements with vw useful bits into array of
+ * zero-padded 16bit elements.
+ *
+ * @param src The source packed array, of size (n * vw / 8) bytes
+ * @param dest The destination unpacked array, of size (n * 2) bytes
+ * @param vw The virtual width of elements, that is the number of useful bits for each of them
+ * @param n The number of elements (in particular, of the destination array), NOT a length in bytes
+ */
+static inline void convert_packed_to_16bit(uint8_t *src, uint16_t *dest, int vw, int n)
 {
-	int mask = (1 << vw) - 1;
+	unsigned int mask = (1 << vw) - 1;
 	uint32_t buffer = 0;
 	int bitsIn = 0;
-	while (len--) {
+	while (n--) {
 		while (bitsIn < vw) {
-			buffer = (buffer << 8) | *(raw++);
+			buffer = (buffer << 8) | *(src++);
 			bitsIn += 8;
 		}
 		bitsIn -= vw;
-		*(frame++) = (buffer >> bitsIn) & mask;
+		*(dest++) = (buffer >> bitsIn) & mask;
 	}
 }
 
-// Unpack buffer of (vw bit) data into 8bit buffer, dropping LSBs
-static inline void convert_packed_to_8bit(uint8_t *raw, uint8_t *frame, int vw, int len)
+/**
+ * Convert a packed array of n elements with vw useful bits into array of
+ * 8bit elements, dropping LSB.
+ *
+ * @param src The source packed array, of size (n * vw / 8) bytes
+ * @param dest The destination unpacked array, of size (n * 2) bytes
+ * @param vw The virtual width of elements, that is the number of useful bits for each of them
+ * @param n The number of elements (in particular, of the destination array), NOT a length in bytes
+ *
+ * @pre vw is expected to be >= 8.
+ */
+static inline void convert_packed_to_8bit(uint8_t *src, uint8_t *dest, int vw, int n)
 {
 	uint32_t buffer = 0;
 	int bitsIn = 0;
-	while (len--) {
+	while (n--) {
 		while (bitsIn < vw) {
-			buffer = (buffer << 8) | *(raw++);
+			buffer = (buffer << 8) | *(src++);
 			bitsIn += 8;
 		}
 		bitsIn -= vw;
-		*(frame++) = buffer >> (bitsIn+vw-8);
+		*(dest++) = buffer >> (bitsIn + vw - 8);
 	}
 }
 
@@ -629,7 +647,7 @@ typedef struct {
 	uint16_t tag;
 } cam_hdr;
 
-static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, unsigned int reply_len)
+static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, int reply_len)
 {
 	freenect_context *ctx = dev->parent;
 	int res, actual_len;
@@ -662,7 +680,7 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
 	} while (actual_len == 0);
 	FN_SPEW("Control reply: %d\n", res);
-	if (actual_len < sizeof(*rhdr)) {
+	if (actual_len < (int)sizeof(*rhdr)) {
 		FN_ERROR("send_cmd: Input control transfer failed (%d)\n", res);
 		return res;
 	}
@@ -715,6 +733,25 @@ static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
 		FN_WARNING("send_cmd returned %d [%04x %04x], 0000 expected\n", res, reply[0], reply[1]);
 	}
 	return 0;
+}
+
+static uint16_t read_register(freenect_device *dev, uint16_t reg)
+{
+	freenect_context *ctx = dev->parent;
+	uint16_t reply[2];
+	uint16_t cmd;
+	int res;
+
+	cmd = fn_le16(reg);
+
+	FN_DEBUG("Read Reg 0x%04x =>\n", reg);
+	res = send_cmd(dev, 0x02, &cmd, 2, reply, 4);
+	if (res < 0)
+		FN_ERROR("read_register: send_cmd() failed: %d\n", res);
+	if (res != 4)
+		FN_WARNING("send_cmd returned %d [%04x %04x], 0000 expected\n", res, reply[0], reply[1]);
+
+	return reply[1];
 }
 
 int freenect_start_depth(freenect_device *dev)
@@ -992,7 +1029,7 @@ const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 
 const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
 {
-	int unique_id = MAKE_RESERVED(res, fmt);
+	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
 	for(i = 0 ; i < video_mode_count; i++) {
 		if (supported_video_modes[i].reserved == unique_id)
@@ -1024,7 +1061,7 @@ int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode
 	}
 
 	freenect_resolution res = RESERVED_TO_RESOLUTION(mode.reserved);
-	freenect_video_format fmt = RESERVED_TO_FORMAT(mode.reserved);
+	freenect_video_format fmt = (freenect_video_format)RESERVED_TO_FORMAT(mode.reserved);
 	dev->video_format = fmt;
 	dev->video_resolution = res;
 	return 0;
@@ -1046,12 +1083,12 @@ const freenect_frame_mode freenect_get_depth_mode(int mode_num)
 
 const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
 {
-	return freenect_find_video_mode(dev->depth_resolution, dev->depth_format);
+	return freenect_find_depth_mode(dev->depth_resolution, dev->depth_format);
 }
 
 const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
 {
-	int unique_id = MAKE_RESERVED(res, fmt);
+	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
 	for(i = 0 ; i < depth_mode_count; i++) {
 		if (supported_depth_modes[i].reserved == unique_id)
@@ -1083,7 +1120,7 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
 		return -1;
 	}
 	freenect_resolution res = RESERVED_TO_RESOLUTION(mode.reserved);
-	freenect_depth_format fmt = RESERVED_TO_FORMAT(mode.reserved);
+	freenect_depth_format fmt = (freenect_depth_format)RESERVED_TO_FORMAT(mode.reserved);
 	dev->depth_format = fmt;
 	dev->depth_resolution = res;
 	return 0;

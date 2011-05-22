@@ -114,11 +114,6 @@ void DrawGLScene()
 
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glLoadIdentity();
-
-	glEnable(GL_TEXTURE_2D);
-
 	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
 	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, depth_front);
 
@@ -215,6 +210,7 @@ void ReSizeGLScene(int Width, int Height)
 	glLoadIdentity();
 	glOrtho (0, 1280, 480, 0, -1.0f, 1.0f);
 	glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
 }
 
 void InitGL(int Width, int Height)
@@ -222,18 +218,24 @@ void InitGL(int Width, int Height)
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
 	glClearDepth(1.0);
 	glDepthFunc(GL_LESS);
+    glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
-	glEnable(GL_BLEND);
+	glDisable(GL_BLEND);
+    glDisable(GL_ALPHA_TEST);
+    glEnable(GL_TEXTURE_2D);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	glShadeModel(GL_SMOOTH);
+	glShadeModel(GL_FLAT);
+
 	glGenTextures(1, &gl_depth_tex);
 	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
 	glGenTextures(1, &gl_rgb_tex);
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
 	ReSizeGLScene(Width, Height);
 }
 
