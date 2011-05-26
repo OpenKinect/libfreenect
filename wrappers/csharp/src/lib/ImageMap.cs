@@ -34,103 +34,31 @@ namespace freenect
 	/// <summary>
 	/// Represents a map of rgb values from the RGBCamera
 	/// </summary>
-	///
-	/// 
-	public class ImageMap
+	public class ImageMap : BaseDataMap
 	{	
 		/// <summary>
-		/// GC handle to the data in the image map
-		/// </summary>
-		private GCHandle dataHandle;
-	
-		/// <summary>
-		/// Gets the width of the image map
-		/// </summary>
-		public int Width
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the height of the image map
-		/// </summary>
-		public int Height
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the raw data in the ImageMap. This data is in a 1-dimensional 
-		/// array so it's easy to work with in unsafe code. 
-		/// </summary>
-		public byte[] Data
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the data pointer from the Kinect library
-		/// </summary>
-		public IntPtr DataPointer
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the mode in which this image was captured.
-		/// </summary>
-		public VideoFrameMode CaptureMode
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Constructor with only mode speicifed. Data is allocated inside.
+		/// Constructor #1
 		/// </summary>
 		/// <param name="mode">
-		/// A <see cref="VideoFrameMode"/>
+		/// A <see cref="FrameMode"/>
 		/// </param>
-		internal ImageMap(VideoFrameMode mode)
+		public ImageMap(FrameMode mode) : base(mode)
 		{
-			// Save format and resolution
-			this.Width = mode.Width;
-			this.Height = mode.Height;
-			this.CaptureMode = mode;
-			this.Data = new byte[mode.Size];
-			this.dataHandle = GCHandle.Alloc(this.Data, GCHandleType.Pinned);
-			this.DataPointer = this.dataHandle.AddrOfPinnedObject();
+			
 		}
 		
 		/// <summary>
-		/// Constructor with only mode and data pointer specified. No allocation is made.
+		/// Constructor #2
 		/// </summary>
 		/// <param name="mode">
-		/// A <see cref="VideoFrameMode"/>
+		/// A <see cref="FrameMode"/>
 		/// </param>
-		internal ImageMap(VideoFrameMode mode, IntPtr bufferPointer)
+		/// <param name="buffer">
+		/// A <see cref="IntPtr"/>
+		/// </param>
+		public ImageMap(FrameMode mode, IntPtr buffer) : base(mode, buffer)
 		{
-			this.Width = mode.Width;
-			this.Height = mode.Height;
-			this.CaptureMode = mode;
-			this.Data = null;
-			this.dataHandle = default(GCHandle);
-			this.DataPointer = bufferPointer;
-		}
-		
-		/// <summary>
-		/// Destructoooorrr
-		/// </summary>
-		~ImageMap()
-		{
-			if(this.dataHandle != default(GCHandle))
-			{
-				this.dataHandle.Free();
-			}
+			
 		}
 	}
 }

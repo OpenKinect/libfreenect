@@ -84,6 +84,12 @@
     <Compile Include="..\VideoFrameMode.cs">
       <Link>VideoFrameMode.cs</Link>
     </Compile>
+    <Compile Include="..\BaseCamera.cs">
+      <Link>BaseCamera.cs</Link>
+    </Compile>
+    <Compile Include="..\BaseDataMap.cs">
+      <Link>BaseDataMap.cs</Link>
+    </Compile>
   </ItemGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
 </Project>

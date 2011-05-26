@@ -27,6 +27,11 @@ namespace KinectDemo
 		private volatile bool isRunning = false;
 		
 		/// <summary>
+		/// Thread for updating status and letting kinect process events
+		/// </summary>
+		private Thread updateThread = null;
+		
+		/// <summary>
 		/// Constructor
 		/// </summary>
 		public MainWindow()
@@ -35,7 +40,7 @@ namespace KinectDemo
 			this.InitializeComponents();
 			
 			// Initialize update timer
-			this.statusUpdateTimer.Interval = 500;
+			this.statusUpdateTimer.Interval = 1000;
 			this.statusUpdateTimer.Tick += this.HandleStatusUpdateTimerTick;
 			
 			// Update device list
@@ -133,9 +138,6 @@ namespace KinectDemo
 			// Set tilt to 0 to start with
 			this.motorTiltUpDown.Value = 0;
 			
-			// Start up preview control
-			this.previewControl.Start();
-			
 			// Setup image handlers
 			this.kinect.VideoCamera.DataReceived += HandleKinectVideoCameraDataReceived;
 			this.kinect.DepthCamera.DataReceived += HandleKinectDepthCameraDataReceived;
@@ -149,6 +151,30 @@ namespace KinectDemo
 			
 			// Enable video/depth mode chooser
 			this.selectVideoModeGroup.Enabled = true;
+			
+			// Setup update thread
+			this.updateThread = new Thread(delegate()
+			{
+				while(this.isRunning)
+				{
+					try
+					{
+						// Update instance's status
+						this.kinect.UpdateStatus();
+						
+						// Let preview control render another frame
+						this.previewControl.Render();
+					}
+					catch(ThreadInterruptedException e)
+					{
+						return;
+					}
+					catch(Exception ex)
+					{
+						
+					}
+				}
+			});
 			
 			// Start updating status
 			this.statusUpdateTimer.Enabled = true;
@@ -164,6 +190,9 @@ namespace KinectDemo
 			
 			// Now running
 			this.isRunning = true;
+			
+			// Start update thread
+			this.updateThread.Start();
 		}
 		
 		/// <summary>
@@ -183,12 +212,14 @@ namespace KinectDemo
 			// No longer running
 			this.isRunning = false;
 			
+			// Wait till update thread closes down
+			this.updateThread.Interrupt();
+			this.updateThread.Join();
+			this.updateThread = null;
+			
 			// Disconnect from the kinect
 			this.kinect.Close();
 			this.kinect = null;
-			
-			// Stop preview control
-			this.previewControl.Stop();
 			
 			// Disable video/depth mode chooser
 			this.selectVideoModeGroup.Enabled = false;
@@ -244,7 +275,6 @@ namespace KinectDemo
 		/// </param>
 		private void HandleStatusUpdateTimerTick (object sender, EventArgs e)
 		{
-			this.kinect.UpdateStatus();
 			this.motorCurrentTiltLabel.Text = "Current Tilt: " + this.kinect.Motor.Tilt;
 			this.motorTiltStatusLabel.Text = "Tilt Status: " + this.kinect.Motor.TiltStatus.ToString();
 			this.accelerometerXValueLabel.Text = Math.Round(this.kinect.Accelerometer.X, 2).ToString();

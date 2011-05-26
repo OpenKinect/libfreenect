@@ -38,47 +38,8 @@ namespace freenect
 	/// </summary>
 	///
 	/// 
-	public class VideoCamera
-	{
-		/// <summary>
-		/// Parent Kinect instance
-		/// </summary>
-		private Kinect parentDevice;
-		
-		/// <summary>
-		/// Current video mode
-		/// </summary>
-		private VideoFrameMode videoMode;
-		
-		/// <summary>
-		/// Direct access data buffer for the video camera
-		/// </summary>
-		private IntPtr dataBuffer = IntPtr.Zero;
-		
-		/// <summary>
-		/// ImageMap waiting for data
-		/// </summary>
-		private ImageMap nextFrameImage = null;
-		
-		/// <summary>
-		/// Event raised when video data (an image) has been received.
-		/// </summary>
-		public event DataReceivedEventHandler DataReceived = delegate { };
-		
-		/// <summary>
-		/// Callback (delegate) for video data
-		/// </summary>
-		private FreenectVideoDataCallback VideoCallback = new FreenectVideoDataCallback(VideoCamera.HandleDataReceived);
-
-		/// <summary>
-		/// Gets whether the video camera is streaming data
-		/// </summary>
-		public bool IsRunning
-		{
-			get;
-			private set;
-		}
-		
+	public class VideoCamera : BaseCamera
+	{		
 		/// <summary>
 		/// Gets and sets the current video mode for the video camera. For best results, 
 		/// use one of the modes in the VideoCamera.Modes collection.
@@ -87,29 +48,11 @@ namespace freenect
 		{
 			get
 			{
-				return this.videoMode;
+				return (VideoFrameMode)this.captureMode;
 			}
 			set
 			{
 				this.SetVideoMode(value);
-			}
-		}
-		
-		/// <summary>
-		/// Gets or sets the direct data buffer the USB stream will use for 
-		/// the video camera. This should be a pinned location in memory. 
-		/// If set to IntPtr.Zero, the library will manage the data buffer 
-		/// for you.
-		/// </summary>
-		public IntPtr DataBuffer
-		{
-			get
-			{
-				return this.dataBuffer;
-			}
-			set
-			{
-				this.SetDataBuffer(value);
 			}
 		}
 		
@@ -128,14 +71,8 @@ namespace freenect
 		/// <param name="parent">
 		/// Parent <see cref="Kinect"/> device that this video camera is part of
 		/// </param>
-		internal VideoCamera(Kinect parent)
+		internal VideoCamera(Kinect parent) : base(parent)
 		{
-			// Save parent device
-			this.parentDevice = parent;
-			
-			// Not running by default
-			this.IsRunning = false;
-			
 			// Update modes available for this video camera
 			this.UpdateVideoModes();
 			
@@ -143,7 +80,7 @@ namespace freenect
 			this.Mode = this.Modes[0];
 			
 			// Setup callbacks
-			KinectNative.freenect_set_video_callback(parent.devicePointer, VideoCallback);
+			KinectNative.freenect_set_video_callback(parent.devicePointer, this.DataCallback);
 		}
 		
 		/// <summary>
@@ -161,9 +98,6 @@ namespace freenect
 				throw new Exception("Could not start video stream. Error Code: " + result);
 			}
 			
-			// Let the context know we have started a camera
-			KinectNative.NotifyCameraStart();
-			
 			// All done
 			this.IsRunning = true;
 		}
@@ -178,9 +112,6 @@ namespace freenect
 				// Not running, nothing to do
 				return;
 			}
-			
-			// Let the context know we are about to stop a video camera
-			KinectNative.NotifyCameraStop();
 			
 			// Stop camera
 			int result = KinectNative.freenect_stop_video(this.parentDevice.devicePointer);
@@ -197,7 +128,7 @@ namespace freenect
 		/// <param name="ptr">
 		/// Pointer to the direct access data buffer for the VideoCamera.
 		/// </param>
-		protected void SetDataBuffer(IntPtr ptr)
+		protected override void SetDataBuffer(IntPtr ptr)
 		{
 			// Save data buffer
 			this.dataBuffer = ptr;
@@ -238,7 +169,7 @@ namespace freenect
 			}
 			
 			// Save mode
-			this.videoMode = mode;
+			this.captureMode = mode;
 			
 			// All good, switch to new mode
 			int result = KinectNative.freenect_set_video_mode(this.parentDevice.devicePointer, foundMode.nativeMode);
@@ -265,16 +196,16 @@ namespace freenect
 			if(this.DataBuffer == IntPtr.Zero)
 			{
 				// have to set our own buffer as the video buffer
-				this.nextFrameImage = new ImageMap(this.Mode);
+				this.nextFrameData = new ImageMap(this.Mode);
 			}
 			else	
 			{
 				// already have a buffer from user
-				this.nextFrameImage = new ImageMap(this.Mode, this.DataBuffer);
+				this.nextFrameData = new ImageMap(this.Mode, this.DataBuffer);
 			}
 			
 			// Set video buffer
-			KinectNative.freenect_set_video_buffer(this.parentDevice.devicePointer, this.nextFrameImage.DataPointer);
+			KinectNative.freenect_set_video_buffer(this.parentDevice.devicePointer, this.nextFrameData.DataPointer);
 		}
 		
 		/// <summary>
@@ -299,65 +230,6 @@ namespace freenect
 			
 			// All done
 			this.Modes = modes.ToArray();
-		}
-		
-		/// <summary>
-		/// Handles image data from teh video camera
-		/// </summary>
-		/// <param name="device">
-		/// A <see cref="IntPtr"/>
-		/// </param>
-		/// <param name="imageData">
-		/// A <see cref="IntPtr"/>
-		/// </param>
-		/// <param name="timestamp">
-		/// A <see cref="UInt32"/>
-		/// </param>
-		private static void HandleDataReceived(IntPtr device, IntPtr imageData, UInt32 timestamp)
-		{
-			// Figure out which device actually got this frame
-			Kinect realDevice = KinectNative.GetDevice(device);
-			
-			// Calculate datetime from timestamp
-			DateTime dateTime = new System.DateTime(1970, 1, 1, 0, 0, 0, 0).AddSeconds(timestamp);
-			
-			// Send out event
-			realDevice.VideoCamera.DataReceived(realDevice, new DataReceivedEventArgs(dateTime, realDevice.VideoCamera.nextFrameImage));
-		}
-		
-		/// <summary>
-		/// Delegate for video camera data events
-		/// </summary>
-		public delegate void DataReceivedEventHandler(object sender, DataReceivedEventArgs e);
-		
-		/// <summary>
-		/// Video camera data
-		/// </summary>
-		public class DataReceivedEventArgs
-		{
-			/// <summary>
-			/// Gets the timestamp for this image
-			/// </summary>
-			public DateTime Timestamp
-			{
-				get;
-				private set;
-			}
-			
-			/// <summary>
-			/// Gets image data
-			/// </summary>
-			public ImageMap Image
-			{
-				get;
-				private set;
-			}
-			
-			public DataReceivedEventArgs(DateTime timestamp, ImageMap b)
-			{
-				this.Timestamp = timestamp;
-				this.Image = b;
-			}
 		}
 		
 	}

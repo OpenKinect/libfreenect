@@ -55,21 +55,6 @@ namespace freenect
 		private static FreenectLogCallback LogCallback = new FreenectLogCallback(Kinect.LogCallback);
 		
 		/// <summary>
-		/// Number of total running video or depth feeds across all kinects.
-		/// </summary>
-		private static volatile int runningFeedCount = 0;
-		
-		/// <summary>
-		/// Thread to take care of calling process events on the context
-		/// </summary>
-		private static Thread processEventsThread;
-		
-		/// <summary>
-		/// Is process events currently blocking?
-		/// </summary>
-		private static volatile bool isProcessEventsThreadBusy = false;
-		
-		/// <summary>
 		/// Gets a freenect context to work with.
 		/// </summary>
 		public static IntPtr Context
@@ -174,58 +159,6 @@ namespace freenect
 			// Set callbacks for logging
 			KinectNative.freenect_set_log_callback(KinectNative.freenectContext, LogCallback);
 		}
-		
-		/// <summary>
-		/// Called by the video or depth cameras when they are started
-		/// </summary>
-		internal static void NotifyCameraStart()
-		{
-			KinectNative.runningFeedCount++;
-			if(KinectNative.processEventsThread == null)
-			{
-				KinectNative.processEventsThread = new Thread(new ThreadStart(ProcessEventsThreadWork));
-				KinectNative.processEventsThread.Start();
-			}
-		}
-		
-		/// <summary>
-		/// Called by the video or depth cameras when they are stopped
-		/// </summary>
-		internal static void NotifyCameraStop()
-		{
-			KinectNative.runningFeedCount--;
-			if(KinectNative.runningFeedCount < 0)
-			{
-				throw new Exception("Called NotifyCameraStop too many times. What happened?");
-			}
-			
-			// Are any feeds runniung?
-			if(KinectNative.runningFeedCount == 0)
-			{
-				// Wait for process events thread to realize what's going on and stop working
-				while(KinectNative.isProcessEventsThreadBusy)
-				{
-						
-				}
-				
-				// Dispose thread
-				KinectNative.processEventsThread.Join();
-				KinectNative.processEventsThread = null;
-			}
-		}
-		
-		/// <summary>
-		/// Background thread function called by the processEventsThread
-		/// </summary>
-		private static void ProcessEventsThreadWork()
-		{
-			while(KinectNative.runningFeedCount > 0)
-			{
-				KinectNative.isProcessEventsThreadBusy = true;
-				KinectNative.freenect_process_events(KinectNative.Context);
-				KinectNative.isProcessEventsThreadBusy = false;
-			}
-		}
 
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_init(ref IntPtr context, IntPtr freenectUSBContext);
@@ -252,10 +185,10 @@ namespace freenect
 		public static extern int freenect_close_device(IntPtr device);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern void freenect_set_depth_callback(IntPtr device, FreenectDepthDataCallback callback);
+		public static extern void freenect_set_depth_callback(IntPtr device, FreenectCameraDataCallback callback);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
-		public static extern void freenect_set_video_callback(IntPtr device, FreenectVideoDataCallback callback);
+		public static extern void freenect_set_video_callback(IntPtr device, FreenectCameraDataCallback callback);
 		
 		[DllImport("freenect", CallingConvention=CallingConvention.Cdecl)]
 		public static extern int freenect_set_depth_buffer(IntPtr device, IntPtr buf);
@@ -371,17 +304,11 @@ namespace freenect
 	/// "Native" callback for freelect library logging
 	/// </summary>
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-	delegate void FreenectLogCallback(IntPtr device, LoggingLevel logLevel, string message);
+	public delegate void FreenectLogCallback(IntPtr device, LoggingLevel logLevel, string message);
 	
 	/// <summary>
-	/// "Native" callback for depth data
+	/// "Native" callback for camera data
 	/// </summary>
 	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-	delegate void FreenectDepthDataCallback(IntPtr device, IntPtr depthData, UInt32 timestamp);
-	
-	/// <summary>
-	/// "Native" callback for video image data
-	/// </summary>
-	[UnmanagedFunctionPointer(CallingConvention.Cdecl)]
-	delegate void FreenectVideoDataCallback(IntPtr device, IntPtr imageData, UInt32 timestamp);
+	public delegate void FreenectCameraDataCallback(IntPtr device, IntPtr data, UInt32 timestamp);
 }

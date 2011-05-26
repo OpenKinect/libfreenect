@@ -154,16 +154,6 @@ namespace KinectDemo
 		/// </summary>
 		private bool depthDataPending = false;
 		
-		/// <summary>
-		/// Update thread. This basically just makes the render panel update.
-		/// </summary>
-		private Thread updateThread;
-		
-		/// <summary>
-		/// Is the preview control running?
-		/// </summary>
-		private bool isRunning = false;
-		
 		// Gamma constants for color map generation
 		private UInt16[] gamma = new UInt16[2048];
 		
@@ -237,10 +227,12 @@ namespace KinectDemo
 				Int16 *ptrBack 	= (Int16 *)this.depthDataBuffers.GetHandle(2);
 				int dim 		= this.DepthMode.Width * this.DepthMode.Height;
 				int i 			= 0;
+				Int16 pval		= 0;
+				Int16 lb 		= 0;
 				for (i = 0; i < dim; i++)
 				{
-					Int16 pval 	= (Int16)this.gamma[ptrBack[i]];
-					Int16 lb 	= (Int16)(pval & 0xff);
+					pval 	= (Int16)this.gamma[ptrBack[i]];
+					lb 		= (Int16)(pval & 0xff);
 					switch (pval>>8)
 					{
 						case 0:
@@ -296,43 +288,11 @@ namespace KinectDemo
 		}
 		
 		/// <summary>
-		/// Start the preview control again
+		/// Make the preview control render a frame
 		/// </summary>
-		public void Start()
+		public void Render()
 		{
-			// Start up update thread
-			this.updateThread = new Thread(delegate()
-			{
-				this.isRunning = true;
-				while(this.isRunning)
-				{
-					try
-					{
-						this.renderPanel.Invalidate();
-						Thread.Sleep(10);
-					}
-					catch(ThreadAbortException e)
-					{
-						return;
-					}
-					catch(Exception ex)
-					{
-					}
-				}
-			});
-			this.updateThread.Start();
-		}
-		
-		/// <summary>
-		/// Shutdown the preview control
-		/// </summary>
-		public void Stop()
-		{
-			// Shutdown update thread
-			this.isRunning = false;
-			this.updateThread.Interrupt();
-			this.updateThread.Join();
-			this.updateThread = null;
+			this.renderPanel.Invalidate();
 		}
 		
 		/// <summary>
@@ -387,10 +347,10 @@ namespace KinectDemo
 			switch(format)
 			{
 				case VideoFormat.RGB:
-					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Three, this.VideoMode.Width, this.VideoMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Rgb, PixelType.UnsignedByte, this.videoDataBuffers[0]);
+					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Three, this.VideoMode.Width, this.VideoMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Rgb, PixelType.UnsignedByte, this.videoDataBuffers.GetHandle(0));
 					break;
 				case VideoFormat.Infrared8Bit:
-					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.One, this.VideoMode.Width, this.VideoMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Luminance, PixelType.UnsignedByte, this.videoDataBuffers[0]);
+					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.One, this.VideoMode.Width, this.VideoMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Luminance, PixelType.UnsignedByte, this.videoDataBuffers.GetHandle(0));
 					break;
 			}
 			
@@ -428,7 +388,7 @@ namespace KinectDemo
 			GL.BindTexture(TextureTarget.Texture2D, this.depthTexture);
 			
 			// Setup texture
-			GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Three, this.DepthMode.Width, this.DepthMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Rgb, PixelType.UnsignedByte, this.depthDataBuffers[0]);
+			GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Three, this.DepthMode.Width, this.DepthMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Rgb, PixelType.UnsignedByte, this.depthDataBuffers.GetHandle(0));
 			
 			// Draw texture
 			GL.Begin(BeginMode.TriangleFan);

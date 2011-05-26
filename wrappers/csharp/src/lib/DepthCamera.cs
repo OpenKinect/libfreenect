@@ -34,50 +34,8 @@ namespace freenect
 	/// <summary>
 	/// Provides access to the depth camera on the Kinect
 	/// </summary>
-	///
-	/// 
-	public class DepthCamera
+	public class DepthCamera : BaseCamera
 	{
-		
-		/// <summary>
-		/// Parent Kinect instance
-		/// </summary>
-		private Kinect parentDevice;
-		
-		/// <summary>
-		/// Current depth camera mode
-		/// </summary>
-		private DepthFrameMode depthMode;
-		
-		/// <summary>
-		/// Direct access data buffer for the depth camera
-		/// </summary>
-		private IntPtr dataBuffer = IntPtr.Zero;
-		
-		/// <summary>
-		/// DepthMap waiting for data
-		/// </summary>
-		private DepthMap nextFrameDepthMap = null;
-		
-		/// <summary>
-		/// Event raised when depth data has been received.
-		/// </summary>
-		public event DataReceivedEventHandler DataReceived = delegate { };
-
-		/// <summary>
-		/// Callback (delegate) for depth data
-		/// </summary>
-		private FreenectDepthDataCallback DepthCallback = new FreenectDepthDataCallback(DepthCamera.HandleDataReceived);
-
-		/// <summary>
-		/// Gets whether the depth camera is streaming data
-		/// </summary>
-		public bool IsRunning
-		{
-			get;
-			private set;
-		}
-		
 		/// <summary>
 		/// Gets or sets the depth camera's mode.
 		/// </summary>
@@ -85,31 +43,13 @@ namespace freenect
 		{
 			get
 			{
-				return this.depthMode;
+				return (DepthFrameMode)this.captureMode;
 			}
 			set
 			{
 				this.SetDepthMode(value);
 			}
 		}		
-		
-		/// <summary>
-		/// Gets or sets the direct data buffer the USB stream will use for 
-		/// the depth camera. This should be a pinned location in memory. 
-		/// If set to IntPtr.Zero, the library will manage the data buffer 
-		/// for you.
-		/// </summary>
-		public IntPtr DataBuffer
-		{
-			get
-			{
-				return this.dataBuffer;
-			}
-			set
-			{
-				this.SetDataBuffer(value);
-			}
-		}
 		
 		/// <summary>
 		/// List of available, valid modes for the depth camera
@@ -126,14 +66,8 @@ namespace freenect
 		/// <param name="parent">
 		/// Parent <see cref="Kinect"/> device that this depth camera is part of
 		/// </param>
-		internal DepthCamera(Kinect parent)
+		internal DepthCamera(Kinect parent) : base(parent)
 		{
-			// Save parent device
-			this.parentDevice = parent;
-			
-			// Not running by default
-			this.IsRunning = false;
-			
 			// Update lsit of available modes for this camera
 			this.UpdateDepthModes();
 			
@@ -141,7 +75,7 @@ namespace freenect
 			this.Mode = this.Modes[0];
 			
 			// Setup callbacks
-			KinectNative.freenect_set_depth_callback(parent.devicePointer, this.DepthCallback);
+			KinectNative.freenect_set_depth_callback(parent.devicePointer, this.DataCallback);
 		}
 		
 		/// <summary>
@@ -159,9 +93,6 @@ namespace freenect
 				throw new Exception("Could not start depth stream. Error Code: " + result);
 			}
 			
-			// Let the context know we have started a camera
-			KinectNative.NotifyCameraStart();
-			
 			// All done
 			this.IsRunning = true;
 		}
@@ -176,9 +107,6 @@ namespace freenect
 				// Not running, nothing to do
 				return;
 			}
-			
-			// Let the context know we are about to stop a video camera
-			KinectNative.NotifyCameraStop();
 			
 			// Stop camera
 			int result = KinectNative.freenect_stop_depth(this.parentDevice.devicePointer);
@@ -195,7 +123,7 @@ namespace freenect
 		/// <param name="ptr">
 		/// Pointer to the direct access data buffer for the DepthCamera.
 		/// </param>
-		protected void SetDataBuffer(IntPtr ptr)
+		protected override void SetDataBuffer(IntPtr ptr)
 		{
 			// Save data buffer
 			this.dataBuffer = ptr;
@@ -236,7 +164,7 @@ namespace freenect
 			}
 			
 			// Save mode
-			this.depthMode = mode;
+			this.captureMode = mode;
 			
 			// All good, switch to new mode
 			int result = KinectNative.freenect_set_depth_mode(this.parentDevice.devicePointer, foundMode.nativeMode);
@@ -287,85 +215,16 @@ namespace freenect
 			if(this.DataBuffer == IntPtr.Zero)
 			{
 				// have to set our own buffer as the depth buffer
-				this.nextFrameDepthMap = new DepthMap(this.Mode);
+				this.nextFrameData = new DepthMap(this.Mode);
 			}
 			else	
 			{
 				// already have a buffer from user
-				this.nextFrameDepthMap = new DepthMap(this.Mode, this.DataBuffer);
+				this.nextFrameData = new DepthMap(this.Mode, this.DataBuffer);
 			}
 			
 			// Set new buffer at library level;
-			KinectNative.freenect_set_depth_buffer(this.parentDevice.devicePointer, this.nextFrameDepthMap.DataPointer);
-		}
-		
-		/// <summary>
-		/// Static callback for C function. This finds out which device the callback was meant for 
-		/// and calls that specific DepthCamera's depth data handler.
-		/// </summary>
-		/// <param name="device">
-		/// A <see cref="IntPtr"/>
-		/// </param>
-		/// <param name="depthData">
-		/// A <see cref="IntPtr"/>
-		/// </param>
-		/// <param name="timestamp">
-		/// A <see cref="Int32"/>
-		/// </param>
-		private static void HandleDataReceived(IntPtr device, IntPtr depthData, UInt32 timestamp)
-		{
-			// Figure out which device actually got this frame
-			Kinect realDevice = KinectNative.GetDevice(device);
-			
-			// Calculate datetime from timestamp
-			DateTime dateTime = new System.DateTime(1970, 1, 1, 0, 0, 0, 0).AddSeconds(timestamp);
-			
-			// Send out event
-			realDevice.DepthCamera.DataReceived(realDevice, new DataReceivedEventArgs(dateTime, realDevice.DepthCamera.nextFrameDepthMap));
-		}
-		
-		/// <summary>
-		/// Delegate for depth camera data events
-		/// </summary>
-		public delegate void DataReceivedEventHandler(object sender, DataReceivedEventArgs e);
-		
-		/// <summary>
-		/// Depth camera data
-		/// </summary>
-		public class DataReceivedEventArgs
-		{
-			/// <summary>
-			/// Gets the timestamp for when this depth data was received
-			/// </summary>
-			public DateTime Timestamp
-			{
-				get;
-				private set;
-			}
-			
-			/// <summary>
-			/// Gets the depth data 
-			/// </summary>
-			public DepthMap DepthMap
-			{
-				get;
-				private set;
-			}
-			
-			/// <summary>
-			/// constructor
-			/// </summary>
-			/// <param name="timestamp">
-			/// A <see cref="DateTime"/>
-			/// </param>
-			/// <param name="depthMap">
-			/// A <see cref="DepthMap"/>
-			/// </param>
-			public DataReceivedEventArgs(DateTime timestamp, DepthMap depthMap)
-			{
-				this.Timestamp = timestamp;
-				this.DepthMap = depthMap;
-			}
+			KinectNative.freenect_set_depth_buffer(this.parentDevice.devicePointer, this.nextFrameData.DataPointer);
 		}
 	}
 }

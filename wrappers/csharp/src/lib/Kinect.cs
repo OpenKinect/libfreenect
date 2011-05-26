@@ -257,6 +257,15 @@ namespace freenect
 		}
 		
 		/// <summary>
+		/// Makes the base library handle any pending USB events. Either this, or UpdateStatus
+		/// should be called repeatedly.
+		/// </summary>
+		public static void ProcessEvents()
+		{
+			KinectNative.freenect_process_events(KinectNative.Context);
+		}
+		
+		/// <summary>
 		/// Shuts down the Kinect.NET library and closes any open devices.
 		/// </summary>
 		public static void Shutdown()
