@@ -128,10 +128,10 @@ namespace freenect
 		protected void HandleDataReceived(IntPtr device, IntPtr imageData, UInt32 timestamp)
 		{			
 			// Calculate datetime from timestamp
-			//DateTime dateTime = new System.DateTime(1970, 1, 1, 0, 0, 0, 0).AddSeconds(timestamp);
+			DateTime dateTime = new System.DateTime(1970, 1, 1, 0, 0, 0, 0).AddSeconds(timestamp);
 			
 			// Send out event
-			this.DataReceived(this, null);//new DataReceivedEventArgs(dateTime, this.nextFrameData));
+			this.DataReceived(this, new DataReceivedEventArgs(dateTime, this.nextFrameData));
 		}
 		
 		/// <summary>
