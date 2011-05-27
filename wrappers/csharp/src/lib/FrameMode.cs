@@ -163,6 +163,24 @@ namespace freenect
 		}
 		
 		/// <summary>
+		/// Gets a string representation of the FrameMode
+		/// </summary>
+		/// <returns>
+		/// A <see cref="String"/>
+		/// </returns>
+		public override String ToString()
+		{
+			if(this is VideoFrameMode)
+			{
+				return this.Width + "x" + this.Height + " : " + this.videoFormat.ToString();
+			}
+			else
+			{
+				return this.Width + "x" + this.Height + " : " + this.depthFormat.ToString();
+			}
+		}
+		
+		/// <summary>
 		/// Format mode type. This is only used interally. Don't touch!
 		/// </summary>
 		internal enum FrameModeType

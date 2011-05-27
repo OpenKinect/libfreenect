@@ -92,14 +92,16 @@ namespace KinectDemo
 			this.selectVideoModeCombo.Items.Add("Disabled");
 			foreach(var mode in this.kinect.VideoCamera.Modes)
 			{
-				string videoMode = mode.Width + "x" + mode.Height + " : " + mode.Format;
-				this.selectVideoModeCombo.Items.Add(videoMode);
+				if(mode.Format == VideoFormat.RGB || mode.Format == VideoFormat.Infrared8Bit || mode.Format == VideoFormat.Infrared10Bit)
+				{
+					this.selectVideoModeCombo.Items.Add(mode);
+				}
 			}
 			
 			// Autoselect first mode
 			if(this.kinect.VideoCamera.Modes.Length > 0)
 			{
-				this.selectVideoModeCombo.SelectedIndex = 0;
+				this.selectVideoModeCombo.SelectedIndex = 2;
 			}
 			
 			// Go through depth modes and add em
@@ -107,14 +109,16 @@ namespace KinectDemo
 			this.selectDepthModeCombo.Items.Add("Disabled");
 			foreach(var mode in this.kinect.DepthCamera.Modes)
 			{
-				string depthMode = mode.Width + "x" + mode.Height + " : " + mode.Format;
-				this.selectDepthModeCombo.Items.Add(depthMode);
+				if(mode.Format == DepthFormat.Depth10Bit || mode.Format == DepthFormat.Depth11Bit)
+				{
+					this.selectDepthModeCombo.Items.Add(mode);
+				}
 			}
 			
 			// Autoselect first mode
 			if(this.kinect.DepthCamera.Modes.Length > 0)
 			{
-				this.selectDepthModeCombo.SelectedIndex = 0;
+				this.selectDepthModeCombo.SelectedIndex = 1;
 			}
 		}
 		
@@ -128,6 +132,9 @@ namespace KinectDemo
 			{
 				this.Disconnect();
 			}
+			
+			// Now running
+			this.isRunning = true;
 			
 			// Create instance
 			this.kinect = new Kinect(deviceID);
@@ -187,9 +194,6 @@ namespace KinectDemo
 			
 			// Enable content areas
 			this.contentPanel.Enabled = true;
-			
-			// Now running
-			this.isRunning = true;
 			
 			// Start update thread
 			this.updateThread.Start();
@@ -411,11 +415,7 @@ namespace KinectDemo
 			}
 			else if(index > 0)
 			{
-				// Index is really 1 less (because "Disabled" we added is first)
-				index -= 1;
-				
-				// Set mode
-				DepthFrameMode mode = this.kinect.DepthCamera.Modes[index];
+				var mode = (DepthFrameMode)this.selectDepthModeCombo.SelectedItem;
 				this.kinect.DepthCamera.Stop();
 				this.kinect.DepthCamera.Mode = mode;
 				this.previewControl.DepthMode = mode;
@@ -454,11 +454,7 @@ namespace KinectDemo
 			}
 			else if(index > 0)
 			{
-				// Index is really 1 less (because "Disabled" we added is first)
-				index -= 1;
-				
-				// Set mode
-				VideoFrameMode mode = this.kinect.VideoCamera.Modes[index];
+				var mode = (VideoFrameMode)this.selectVideoModeCombo.SelectedItem;
 				this.kinect.VideoCamera.Stop();
 				this.kinect.VideoCamera.Mode = mode;
 				this.previewControl.VideoMode = mode;

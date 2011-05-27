@@ -45,18 +45,6 @@
     <Compile Include="..\MainWindow.UI.cs">
       <Link>MainWindow.UI.cs</Link>
     </Compile>
-    <Compile Include="..\PreviewWindow.cs">
-      <Link>PreviewWindow.cs</Link>
-    </Compile>
-    <Compile Include="..\PreviewWindow.UI.cs">
-      <Link>PreviewWindow.UI.cs</Link>
-    </Compile>
-    <Compile Include="..\DepthPreviewWindow.cs">
-      <Link>DepthPreviewWindow.cs</Link>
-    </Compile>
-    <Compile Include="..\VideoPreviewWindow.cs">
-      <Link>VideoPreviewWindow.cs</Link>
-    </Compile>
     <Compile Include="..\PreviewControl.cs">
       <Link>PreviewControl.cs</Link>
     </Compile>
@@ -77,7 +65,7 @@
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\..\..\..\OpenTK\OpenTK.dll</HintPath>
     </Reference>
-    <Reference Include="freenect, Version=1.0.4161.40820, Culture=neutral, PublicKeyToken=null">
+    <Reference Include="freenect, Version=1.0.4164.832, Culture=neutral, PublicKeyToken=null">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\bin\freenect.dll</HintPath>
     </Reference>

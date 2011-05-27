@@ -200,7 +200,27 @@ namespace KinectDemo
 		public void HandleVideoBackBufferUpdate()
 		{
 			// Swap middle and back buffers
-			this.videoDataBuffers.Swap(1, 2);
+			if(this.VideoMode.Format == VideoFormat.Infrared10Bit)
+			{
+				// Swap mid and back
+				unsafe
+				{
+					Int16 *ptrMid 	= (Int16 *)this.videoDataBuffers.GetHandle(1);
+					Int16 *ptrBack 	= (Int16 *)this.videoDataBuffers.GetHandle(2);
+					int dim 		= this.VideoMode.Width * this.VideoMode.Height;
+					int i 			= 0;
+					Int16 mult		= 50;
+					
+					for (i = 0; i < dim; i++)
+					{
+						*ptrMid++ = (Int16)(ptrBack[i] * mult);
+					}
+				}
+			}
+			else
+			{
+				this.videoDataBuffers.Swap(1, 2);
+			}
 			
 			// Calculate FPS
 			this.videoFrameCount++;
@@ -351,6 +371,9 @@ namespace KinectDemo
 					break;
 				case VideoFormat.Infrared8Bit:
 					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.One, this.VideoMode.Width, this.VideoMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Luminance, PixelType.UnsignedByte, this.videoDataBuffers.GetHandle(0));
+					break;
+				case VideoFormat.Infrared10Bit:
+					GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Luminance16, this.VideoMode.Width, this.VideoMode.Height, 0, OpenTK.Graphics.OpenGL.PixelFormat.Luminance, PixelType.UnsignedShort, this.videoDataBuffers.GetHandle(0));
 					break;
 			}
 			
