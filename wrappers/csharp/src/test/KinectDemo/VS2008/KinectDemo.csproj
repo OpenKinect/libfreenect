@@ -59,13 +59,13 @@
     <Reference Include="System" />
     <Reference Include="OpenTK.GLControl, Version=1.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\OpenTK\OpenTK.GLControl.dll</HintPath>
+      <HintPath>..\..\..\..\support\OpenTK.GLControl.dll</HintPath>
     </Reference>
     <Reference Include="OpenTK, Version=1.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\OpenTK\OpenTK.dll</HintPath>
+      <HintPath>..\..\..\..\support\OpenTK.dll</HintPath>
     </Reference>
-    <Reference Include="freenect, Version=1.0.4164.832, Culture=neutral, PublicKeyToken=null">
+    <Reference Include="freenect, Version=1.0.4164.1010, Culture=neutral, PublicKeyToken=null">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\..\..\..\bin\freenect.dll</HintPath>
     </Reference>
