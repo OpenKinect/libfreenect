@@ -196,6 +196,8 @@ namespace KinectDemo
 						
 						// Let preview control render another frame
 						this.previewControl.Render();
+
+						Kinect.ProcessEvents();
 					}
 					catch(ThreadInterruptedException e)
 					{
