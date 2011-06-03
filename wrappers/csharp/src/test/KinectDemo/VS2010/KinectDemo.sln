@@ -1,15 +1,17 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
-# Visual Studio 2010
+# Visual C# Express 2010
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KinectDemo", "KinectDemo.csproj", "{2EBB5F0B-9C65-4777-8B0C-76A83867C650}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
 		Debug|Mixed Platforms = Debug|Mixed Platforms
+		Debug|x64 = Debug|x64
 		Debug|x86 = Debug|x86
 		Release|Any CPU = Release|Any CPU
 		Release|Mixed Platforms = Release|Mixed Platforms
+		Release|x64 = Release|x64
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
@@ -17,19 +19,23 @@ Global
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Debug|Any CPU.Build.0 = Debug|x86
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Debug|Mixed Platforms.ActiveCfg = Debug|x86
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Debug|Mixed Platforms.Build.0 = Debug|x86
+		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Debug|x64.ActiveCfg = Debug|x64
+		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Debug|x64.Build.0 = Debug|x64
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Debug|x86.ActiveCfg = Debug|x86
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Debug|x86.Build.0 = Debug|x86
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Release|Any CPU.ActiveCfg = Release|x86
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Release|Any CPU.Build.0 = Release|x86
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Release|Mixed Platforms.ActiveCfg = Release|x86
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Release|Mixed Platforms.Build.0 = Release|x86
+		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Release|x64.ActiveCfg = Release|x64
+		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Release|x64.Build.0 = Release|x64
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Release|x86.ActiveCfg = Release|x86
 		{2EBB5F0B-9C65-4777-8B0C-76A83867C650}.Release|x86.Build.0 = Release|x86
 	EndGlobalSection
-	GlobalSection(MonoDevelopProperties) = preSolution
-		StartupItem = KinectDemo.csproj
-	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(MonoDevelopProperties) = preSolution
+		StartupItem = KinectDemo.csproj
 	EndGlobalSection
 EndGlobal
