@@ -63,6 +63,9 @@ uint8_t *rgb_back, *rgb_mid, *rgb_front;
 
 GLuint gl_depth_tex;
 GLuint gl_rgb_tex;
+GLfloat camera_angle = 0.0;
+int camera_rotate = 0;
+int tilt_changed = 0;
 
 freenect_context *f_ctx;
 freenect_device *f_dev;
@@ -113,17 +116,40 @@ void DrawGLScene()
 	}
 
 	pthread_mutex_unlock(&gl_backbuf_mutex);
-
 	glBindTexture(GL_TEXTURE_2D, gl_depth_tex);
 	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, depth_front);
 
+	if(camera_rotate){
+	  glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	  freenect_raw_tilt_state* state;
+	  freenect_update_tilt_state(f_dev);
+	  state = freenect_get_tilt_state(f_dev);
+	  GLfloat x_accel_raw, x_accel,y_accel_raw,y_accel;
+	  x_accel_raw = (GLfloat)state->accelerometer_x/819.0;
+	  y_accel_raw = (GLfloat)state->accelerometer_y/819.0;
+
+	  // sloppy acceleration vector cleanup
+	  GLfloat accel_length = sqrt(x_accel_raw * x_accel_raw + y_accel_raw * y_accel_raw);
+	  x_accel = x_accel_raw/accel_length;
+	  y_accel = y_accel_raw/accel_length;
+	  camera_angle = atan2(y_accel,x_accel)*180/M_PI -90.0;
+	}
+	else
+	  {camera_angle = 0;}
+
+	glLoadIdentity();
+	glPushMatrix();
+	glTranslatef((640.0/2.0),(480.0/2.0) ,0.0);
+	glRotatef(camera_angle, 0.0, 0.0, 1.0);
+	glTranslatef(-(640.0/2.0),-(480.0/2.0) ,0.0);
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-	glTexCoord2f(0, 0); glVertex3f(0,0,0);
-	glTexCoord2f(1, 0); glVertex3f(640,0,0);
-	glTexCoord2f(1, 1); glVertex3f(640,480,0);
-	glTexCoord2f(0, 1); glVertex3f(0,480,0);
+	glTexCoord2f(0, 1); glVertex3f(0,0,1.0);
+	glTexCoord2f(1, 1); glVertex3f(640,0,1.0);
+	glTexCoord2f(1, 0); glVertex3f(640,480,1.0);
+	glTexCoord2f(0, 0); glVertex3f(0,480,1.0);
 	glEnd();
+	glPopMatrix();
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
 	if (current_format == FREENECT_VIDEO_RGB || current_format == FREENECT_VIDEO_YUV_RGB)
@@ -131,14 +157,19 @@ void DrawGLScene()
 	else
 		glTexImage2D(GL_TEXTURE_2D, 0, 1, 640, 480, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front+640*4);
 
+	glPushMatrix();
+	glTranslatef(640+(640.0/2.0),(480.0/2.0) ,0.0);
+	glRotatef(camera_angle, 0.0, 0.0, 1.0);
+	glTranslatef(-(640+(640.0/2.0)),-(480.0/2.0) ,0.0);
+
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-	glTexCoord2f(0, 0); glVertex3f(640,0,0);
-	glTexCoord2f(1, 0); glVertex3f(1280,0,0);
-	glTexCoord2f(1, 1); glVertex3f(1280,480,0);
-	glTexCoord2f(0, 1); glVertex3f(640,480,0);
+	glTexCoord2f(0, 1); glVertex3f(640,0,0);
+	glTexCoord2f(1, 1); glVertex3f(1280,0,0);
+	glTexCoord2f(1, 0); glVertex3f(1280,480,0);
+	glTexCoord2f(0, 0); glVertex3f(640,480,0);
 	glEnd();
-
+	glPopMatrix();
 	glutSwapBuffers();
 }
 
@@ -160,9 +191,11 @@ void keyPressed(unsigned char key, int x, int y)
 		if (freenect_angle > 30) {
 			freenect_angle = 30;
 		}
+		tilt_changed++;
 	}
 	if (key == 's') {
 		freenect_angle = 0;
+		tilt_changed++;
 	}
 	if (key == 'f') {
 		if (requested_format == FREENECT_VIDEO_IR_8BIT)
@@ -177,6 +210,7 @@ void keyPressed(unsigned char key, int x, int y)
 		if (freenect_angle < -30) {
 			freenect_angle = -30;
 		}
+		tilt_changed++;
 	}
 	if (key == '1') {
 		freenect_set_led(f_dev,LED_GREEN);
@@ -200,7 +234,22 @@ void keyPressed(unsigned char key, int x, int y)
 	if (key == '0') {
 		freenect_set_led(f_dev,LED_OFF);
 	}
-	freenect_set_tilt_degs(f_dev,freenect_angle);
+	if (key == 'r') {
+	  if(camera_rotate)
+	    {
+	      camera_rotate = 0;
+	      glDisable(GL_DEPTH_TEST);
+	    }
+	  else
+	    {
+	      camera_rotate = 1;
+	      glEnable(GL_DEPTH_TEST);
+	    }
+	}
+	if(tilt_changed){
+	  freenect_set_tilt_degs(f_dev,freenect_angle);
+	  tilt_changed = 0;
+	}
 }
 
 void ReSizeGLScene(int Width, int Height)
@@ -208,21 +257,22 @@ void ReSizeGLScene(int Width, int Height)
 	glViewport(0,0,Width,Height);
 	glMatrixMode(GL_PROJECTION);
 	glLoadIdentity();
-	glOrtho (0, 1280, 480, 0, -1.0f, 1.0f);
+	glOrtho (0, 1280, 0, 480, -5.0f, 5.0f);
 	glMatrixMode(GL_MODELVIEW);
     glLoadIdentity();
+
 }
 
 void InitGL(int Width, int Height)
 {
 	glClearColor(0.0f, 0.0f, 0.0f, 0.0f);
-	glClearDepth(1.0);
-	glDepthFunc(GL_LESS);
-    glDepthMask(GL_FALSE);
+	//glClearDepth(0.0);
+	//glDepthFunc(GL_LESS);
+	//glDepthMask(GL_FALSE);
 	glDisable(GL_DEPTH_TEST);
 	glDisable(GL_BLEND);
-    glDisable(GL_ALPHA_TEST);
-    glEnable(GL_TEXTURE_2D);
+	glDisable(GL_ALPHA_TEST);
+	glEnable(GL_TEXTURE_2D);
 	glBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glShadeModel(GL_FLAT);
 
@@ -347,7 +397,7 @@ void *freenect_threadfunc(void *arg)
 	freenect_start_depth(f_dev);
 	freenect_start_video(f_dev);
 
-	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format\n");
+	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format, 'r'-rotate camera video\n");
 
 	while (!die && freenect_process_events(f_ctx) >= 0) {
 		//Throttle the text output
