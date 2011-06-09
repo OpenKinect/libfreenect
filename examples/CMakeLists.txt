@@ -21,7 +21,9 @@ add_executable(hiview hiview.c)
 
 if (BUILD_C_SYNC)
   add_executable(glpclview glpclview.c)
-	add_executable(tiltdemo tiltdemo.c)
+  add_dependencies(glpclview freenect_sync_static)
+  add_executable(tiltdemo tiltdemo.c)
+  add_dependencies(tiltdemo freenect_sync_static)
 endif()
 
 # We need to include libfreenect_sync.h for glpclview
