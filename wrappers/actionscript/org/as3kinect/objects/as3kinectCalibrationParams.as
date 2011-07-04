@@ -14,6 +14,7 @@ package org.as3kinect.objects {
         public var yScreenFactor : Number;
         public var sliceRectY : Number = 0;
         public var sliceRectHeight : Number = 20;
+        public var calibrationComplete : Boolean;
 		
 		public function toString() : String{
 			var str : String = "screenHeight: " + screenHeight + "\n";

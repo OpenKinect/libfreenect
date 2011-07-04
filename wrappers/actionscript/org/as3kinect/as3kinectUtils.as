@@ -62,7 +62,7 @@ package org.as3kinect {
 		public static function JPEGToBitmapData(bytes:ByteArray, _canvas:BitmapData):void{
 			var ldr:Loader = new Loader();
 			ldr.loadBytes(bytes);
-			ldr.contentLoaderInfo.addEventListener(Event.COMPLETE, function(event:Event){
+			ldr.contentLoaderInfo.addEventListener(Event.COMPLETE, function(event:Event):void{
 				_canvas.draw(ldr.content);
 		    });
 		}
@@ -158,7 +158,7 @@ package org.as3kinect {
 			var found:Boolean;
 			var local:Point;
 			//We look in the lastTouched arrar for this point id
-			for (var key in _lastTouched[id])
+			for (var key : * in _lastTouched[id])
 			{
 				//If TOUCH_OVER was already fired we look for it in the new targets object
 				if (_lastTouched[id][key].bool != false)
@@ -293,7 +293,7 @@ package org.as3kinect {
  
 
         public static function translatePosition(p : Point) : void {
-            if (_cParams) {
+            if (_cParams.calibrationComplete) {
                 var str : String = "p.x= " + p.x + "   p.y= " + p.y;
                 var yf : Number = int((1 - ((p.y - _cParams.yOffset) * 0.01)) * 100) * 0.01;
                 p.y = _cParams.screenHeight - ((p.y - _cParams.yOffset) * _cParams.yScreenFactor);

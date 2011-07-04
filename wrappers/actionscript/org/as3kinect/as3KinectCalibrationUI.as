@@ -154,7 +154,7 @@ package org.as3kinect {
             _sliceRect.y = _params.sliceRectY;
             addChild(_sliceRect);
 
-            _minDistanceSlider = createSlider(_bmpDepth.x + _bmpDepth.width + 40, _bmpDepth.y, 200, 10, 0, 2000, 90);
+            _minDistanceSlider = createSlider(_bmpDepth.x + _bmpDepth.width + 40, _bmpDepth.y, 200, 10, 0, 1000, 90);
             _minDistanceSlider.addEventListener(SliderEvent.CHANGE, minDinstanceSliderChangeListener);
             _minDistanceSlider.addEventListener(SliderEvent.THUMB_DRAG, minDinstanceSliderChangeListener);
             _minDistanceSlider.value = _as3w.depth.minDistance;
@@ -170,7 +170,7 @@ package org.as3kinect {
             _minDistanceValueLabel.addEventListener(KeyboardEvent.KEY_DOWN, minDistanceTfListener);
             addChild(_minDistanceValueLabel);
 
-            _maxDistanceSlider = createSlider(_bmpDepth.x + _bmpDepth.width + 40, _bmpDepth.y + 250, 200, 10, 0, 2000, 90);
+            _maxDistanceSlider = createSlider(_bmpDepth.x + _bmpDepth.width + 40, _bmpDepth.y + 250, 200, 10, 0, 1000, 90);
             _maxDistanceSlider.addEventListener(SliderEvent.CHANGE, maxDinstanceSliderChangeListener);
             _maxDistanceSlider.addEventListener(SliderEvent.THUMB_DRAG, maxDinstanceSliderChangeListener);
             _maxDistanceSlider.value = _as3w.depth.maxDistance;
@@ -308,6 +308,7 @@ package org.as3kinect {
         }
 
         private function setStepOne() : void {
+        	as3kinectUtils.calibrationParams = _params;
             _params.sliceRectY = _sliceRect.y;
             _params.sliceRectHeight = _sliceHeightSlider.value;
         }
@@ -331,8 +332,8 @@ package org.as3kinect {
 
             var xScreenFactorBottom : Number = xFactorBottom * _params.screenWidth / 100;
             _params.xScreenFactorDifference = xScreenFactorBottom - _params.xScreenFactorTop;
-
-            as3kinectUtils.calibrationParams = _params;
+			_params.calibrationComplete = true;
+            
         }
 
         private function calibrateBtnClickListener(event : MouseEvent) : void {
