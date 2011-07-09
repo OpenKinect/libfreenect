@@ -48,6 +48,8 @@ set (PROJECT_VER
 set (PROJECT_APIVER 
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
 
+OPTION(BUILD_AUDIO "Build audio support" OFF)
+OPTION(BUILD_REDIST_PACKAGE "Build libfreenect in a legally-redistributable manner (only affects audio)" OFF)
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
 OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
@@ -78,6 +80,10 @@ include (TestBigEndian)
 test_big_endian(BIG_ENDIAN)
 if(BIG_ENDIAN)
   add_definitions(-DFN_BIGENDIAN)
+endif()
+
+if(BUILD_AUDIO)
+  add_definitions(-DBUILD_AUDIO)
 endif()
 
 ######################################################################################
@@ -172,6 +178,9 @@ IF ( BUILD_CPACK )
   include(CPack)
 
   INSTALL(FILES "${CMAKE_BINARY_DIR}/lib/libfreenect.a" DESTINATION ${PROJECT_LIBRARY_INSTALL_DIR})
+  if (BUILD_AUDIO)
+    INSTALL(FILES "include/libfreenect-audio.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+  endif()
   INSTALL(FILES "include/libfreenect.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   INSTALL(FILES "APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
