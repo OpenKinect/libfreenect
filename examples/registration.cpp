@@ -118,42 +118,43 @@ void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registratio
 	}
 }
 
-// extracts a packed integer of length fieldWidth starting at fieldOffset from regValue
-int32_t GetFieldValueSigned(uint32_t regValue, int32_t fieldWidth, int32_t fieldOffset) {
-	int32_t val = (int) (regValue >> fieldOffset);
-	val = (val << (32 - fieldWidth)) >> (32 - fieldWidth);
-	return val;
-}
 
+void CreateDXDYTables (double* RegXTable, double* RegYTable, int32_t resX, int32_t resY, RegistrationInfo regdata ) {
 
-void CreateDXDYTables (double* RegXTable, double* RegYTable,
-											 int32_t resX, int32_t resY,
-											 int64_t AX6, int64_t BX6, int64_t CX2, int64_t DX2,
-											 int32_t deltaBetaX,
-											 int64_t AY6, int64_t BY6, int64_t CY2, int64_t DY2,
-											 int32_t deltaBetaY,
-											 int64_t dX0, int64_t dY0,
-											 int64_t dXdX0, int64_t dXdY0, int64_t dYdX0, int64_t dYdY0,
-											 int64_t dXdXdX0, int64_t dYdXdX0, int64_t dYdXdY0, int64_t dXdXdY0,
-											 int64_t dYdYdX0, int64_t dYdYdY0,
-											 int32_t betaX, int32_t betaY) {
-	dX0 <<= 9;
-	dY0 <<= 9;
-	dXdX0 <<= 8;
-	dXdY0 <<= 8;
-	dYdX0 <<= 8;
-	dYdY0 <<= 8;
-	dXdXdX0 <<= 8;
-	dYdXdX0 <<= 8;
-	dYdXdY0 <<= 8;
-	dXdXdY0 <<= 8;
-	dYdYdX0 <<= 8;
-	dYdYdY0 <<= 8;
-	betaX <<= 7;
-	betaY <<= 7;
-	
+	int64_t AX6 = regdata.nRGS_AX;
+	int64_t BX6 = regdata.nRGS_BX;
+	int64_t CX2 = regdata.nRGS_CX;
+	int64_t DX2 = regdata.nRGS_DX;
+
+	int64_t AY6 = regdata.nRGS_AY;
+	int64_t BY6 = regdata.nRGS_BY;
+	int64_t CY2 = regdata.nRGS_CY;
+	int64_t DY2 = regdata.nRGS_DY;
+
+	// don't merge the shift operations - necessary for proper 32-bit clamping of extracted values
+	int32_t deltaBetaX = (regdata.nRGS_DX_BETA_INC << 8) >> 8;
+	int32_t deltaBetaY = (regdata.nRGS_DY_BETA_INC << 8) >> 8;
+
+	int64_t dX0 = (regdata.nRGS_DX_START << 13) >> 4;
+	int64_t dY0 = (regdata.nRGS_DY_START << 13) >> 4;
+
+	int64_t dXdX0 = (regdata.nRGS_DXDX_START << 11) >> 3;
+	int64_t dXdY0 = (regdata.nRGS_DXDY_START << 11) >> 3;
+	int64_t dYdX0 = (regdata.nRGS_DYDX_START << 11) >> 3;
+	int64_t dYdY0 = (regdata.nRGS_DYDY_START << 11) >> 3;
+
+	int64_t dXdXdX0 = (regdata.nRGS_DXDXDX_START << 5) << 3;
+	int64_t dYdXdX0 = (regdata.nRGS_DYDXDX_START << 5) << 3;
+	int64_t dYdXdY0 = (regdata.nRGS_DYDXDY_START << 5) << 3;
+	int64_t dXdXdY0 = (regdata.nRGS_DXDXDY_START << 5) << 3;
+	int64_t dYdYdX0 = (regdata.nRGS_DYDYDX_START << 5) << 3;
+	int64_t dYdYdY0 = (regdata.nRGS_DYDYDY_START << 5) << 3;
+
+	int32_t betaX = (regdata.nRGS_DX_BETA_START << 15) >> 8;
+	int32_t betaY = (regdata.nRGS_DY_BETA_START << 15) >> 8;
+
 	int32_t tOffs = 0;
-	
+
 	for(int32_t row = 0 ; row<resY ; row++)
 	{
 		dXdXdX0 += CX2;
@@ -212,33 +213,7 @@ void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTa
 	double nNewY = 0;
 	
 	// Create the dx dy tables
-	CreateDXDYTables(RegXTable, RegYTable,
-									 nDepthXRes,	nDepthYRes,
-									 GetFieldValueSigned(RegData.nRGS_AX, 32, 0),
-									 GetFieldValueSigned(RegData.nRGS_BX, 32, 0),
-									 GetFieldValueSigned(RegData.nRGS_CX, 32, 0),
-									 GetFieldValueSigned(RegData.nRGS_DX, 32, 0),
-									 GetFieldValueSigned(RegData.nRGS_DX_BETA_INC, 24, 0),
-									 GetFieldValueSigned(RegData.nRGS_AY, 32, 0),
-									 GetFieldValueSigned(RegData.nRGS_BY, 32, 0),
-									 GetFieldValueSigned(RegData.nRGS_CY, 32, 0),
-									 GetFieldValueSigned(RegData.nRGS_DY, 32, 0),
-									 GetFieldValueSigned(RegData.nRGS_DY_BETA_INC, 24, 0),
-									 GetFieldValueSigned(RegData.nRGS_DX_START, 19, 0),
-									 GetFieldValueSigned(RegData.nRGS_DY_START, 19, 0),
-									 GetFieldValueSigned(RegData.nRGS_DXDX_START, 21, 0),
-									 GetFieldValueSigned(RegData.nRGS_DXDY_START, 21, 0),
-									 GetFieldValueSigned(RegData.nRGS_DYDX_START, 21, 0),
-									 GetFieldValueSigned(RegData.nRGS_DYDY_START, 21, 0),
-									 GetFieldValueSigned(RegData.nRGS_DXDXDX_START, 27, 0),
-									 GetFieldValueSigned(RegData.nRGS_DYDXDX_START, 27, 0),
-									 GetFieldValueSigned(RegData.nRGS_DYDXDY_START, 27, 0),
-									 GetFieldValueSigned(RegData.nRGS_DXDXDY_START, 27, 0),
-									 GetFieldValueSigned(RegData.nRGS_DYDYDX_START, 27, 0),
-									 GetFieldValueSigned(RegData.nRGS_DYDYDY_START, 27, 0),
-									 GetFieldValueSigned(RegData.nRGS_DX_BETA_START, 17, 0),
-									 GetFieldValueSigned(RegData.nRGS_DY_BETA_START, 17, 0)
-									 );
+	CreateDXDYTables(RegXTable, RegYTable, nDepthXRes,	nDepthYRes, RegData );
 	
 	// Pre-process the table, do sanity checks and convert it from double to ints (for better performance)
 	for (int32_t nY=0; nY<nDepthYRes; nY++) {
