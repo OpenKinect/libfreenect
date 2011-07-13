@@ -16,6 +16,7 @@ if (WIN32)
   include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
 endif()
 
+add_executable(registration registration.cpp)
 add_executable(glview glview.c)
 add_executable(hiview hiview.c)
 
