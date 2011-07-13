@@ -4,40 +4,7 @@
 #include <stdio.h>
 #include <math.h>
 
-/*struct RegistrationInfo {
-	// from home kinect
-	static const int32_t nRGS_DX_START = 3145;
-	static const int32_t nRGS_AX = 1681;
-	static const int32_t nRGS_BX = -5;
-	static const int32_t nRGS_CX = 1;
-	static const int32_t nRGS_DX = 468;
-
-	static const int32_t nRGS_DY_START = 6771;
-	static const int32_t nRGS_AY = -8;
-	static const int32_t nRGS_BY = 2647;
-	static const int32_t nRGS_CY = 599;
-	static const int32_t nRGS_DY = 11;
-
-	static const int32_t nRGS_DX_BETA_START = 10062;
-	static const int32_t nRGS_DY_BETA_START = 130801;
-
-	static const int32_t nRGS_DX_BETA_INC = 170;
-	static const int32_t nRGS_DY_BETA_INC = 136;
-	static const int32_t nRGS_DXDX_START = 2095911;
-	static const int32_t nRGS_DXDY_START = 682;
-	static const int32_t nRGS_DYDX_START = 651;
-	static const int32_t nRGS_DYDY_START = 2096067;
-
-	static const int32_t nRGS_DXDXDX_START = 134215532;
-	static const int32_t nRGS_DYDXDX_START = 134217276;
-	static const int32_t nRGS_DXDXDY_START = 134217118;
-	static const int32_t nRGS_DYDXDY_START = 134216919;
-	static const int32_t nRGS_DYDYDX_START = 134217176;
-	static const int32_t nRGS_DYDYDY_START = 134215010;
-}; */
-
 	std::vector<uint16_t> depth;
-	//ofImage color;
 	
 	std::vector<uint16_t> input, output;
 	
@@ -67,7 +34,7 @@ int32_t shiftScale = 10; // pConfig->nShiftScale
 #define XN_SENSOR_WIN_OFFET_Y 1
 #define RGB_REG_X_VAL_SCALE 16
 #define S2D_PEL_CONST 10
-#define XN_SENSOR_DEPTH_RGB_CMOS_DISTANCE 2.4 // seems to be different according to usb (says 2.3)
+#define XN_SENSOR_DEPTH_RGB_CMOS_DISTANCE 2.3 // seems to be different according to usb (says 2.3)
 #define S2D_CONST_OFFSET 0.375
 #define XN_DEVICE_MAX_DEPTH 10000
 #define XN_DEVICE_SENSOR_NO_DEPTH_VALUE 0
@@ -158,27 +125,6 @@ int32_t GetFieldValueSigned(uint32_t regValue, int32_t fieldWidth, int32_t field
 	return val;
 }
 
-static void incrementalFitting50(int64_t dPrev, int64_t ddPrev, int64_t dddPrev, int64_t coeff, int32_t betaPrev, int32_t dBeta, int64_t &dCurr, int64_t &ddCurr, int64_t &dddCurr, int32_t &betaCurr);
-
-static void incrementalFitting50(int64_t ddPrev, int64_t dddPrev, int64_t coeff, int64_t &ddCurr, int64_t &dddCurr) {
-	int64_t dummy1;
-	int32_t dummy2;
-	incrementalFitting50(0, ddPrev, dddPrev, coeff, 0, 0, dummy1, ddCurr, dddCurr, dummy2);
-}
-
-static void incrementalFitting50(int64_t dddPrev, int64_t coeff, int64_t &dddCurr) {
-	int64_t dummy1, dummy2;
-	int32_t dummy3;
-	incrementalFitting50(0, 0, dddPrev, coeff, 0, 0, dummy1, dummy2, dddCurr, dummy3);
-}
-
-void incrementalFitting50(int64_t dPrev, int64_t ddPrev, int64_t dddPrev, int64_t coeff, int32_t betaPrev, int32_t dBeta, int64_t &dCurr, int64_t &ddCurr, int64_t &dddCurr, int32_t &betaCurr)
-{
-	dCurr = dPrev+(ddPrev>>6);
-	ddCurr = ddPrev+(dddPrev>>8);
-	dddCurr = dddPrev+coeff;
-	betaCurr = betaPrev+dBeta;
-}
 
 void CreateDXDYTables (double* RegXTable, double* RegYTable,
 											 int32_t resX, int32_t resY,
@@ -210,29 +156,43 @@ void CreateDXDYTables (double* RegXTable, double* RegYTable,
 	
 	for(int32_t row = 0 ; row<resY ; row++)
 	{
-		incrementalFitting50(dXdXdX0, CX2, dXdXdX0);
-		incrementalFitting50(dXdX0, dYdXdX0, DX2, dXdX0, dYdXdX0);
+		dXdXdX0 += CX2;
+
+		dXdX0   += dYdXdX0 >> 8;
+		dYdXdX0 += DX2;
 		
-		incrementalFitting50(dX0, dYdX0, dYdYdX0, BX6, betaX, 0, dX0, dYdX0, dYdYdX0, betaX);
+		dX0     += dYdX0 >> 6;
+		dYdX0   += dYdYdX0 >> 8;
+		dYdYdX0 += BX6;
+		
+		dXdXdY0 += CY2;
+
+		dXdY0   += dYdXdY0 >> 8;
+		dYdXdY0 += DY2;
+		
+		betaY   += deltaBetaY;
+		dY0     += dYdY0 >> 6;
+		dYdY0   += dYdYdY0 >> 8;
+		dYdYdY0 += BY6;
+		
+		int64_t coldXdXdY0 = dXdXdY0, coldXdY0 = dXdY0, coldY0 = dY0;
 		
 		int64_t coldXdXdX0 = dXdXdX0, coldXdX0 = dXdX0, coldX0 = dX0;
 		int32_t colBetaX = betaX;
-		
-		incrementalFitting50(dXdXdY0, CY2, dXdXdY0);
-		incrementalFitting50(dXdY0, dYdXdY0, DY2, dXdY0, dYdXdY0);
-		
-		incrementalFitting50(dY0, dYdY0, dYdYdY0, BY6, betaY, deltaBetaY, dY0, dYdY0, dYdYdY0, betaY);
-		
-		int64_t coldXdXdY0 = dXdXdY0, coldXdY0 = dXdY0, coldY0 = dY0;
-		int32_t colBetaY = betaY;
-		
-		for(int32_t col = 0 ; col<resX ; col++, tOffs++)
+
+			for(int32_t col = 0 ; col<resX ; col++, tOffs++)
 		{
 			RegXTable[tOffs] = coldX0 * (1.0/(1<<17));
 			RegYTable[tOffs] = coldY0 * (1.0/(1<<17));
 			
-			incrementalFitting50(coldX0, coldXdX0, coldXdXdX0, AX6, colBetaX, deltaBetaX, coldX0, coldXdX0, coldXdXdX0, colBetaX);
-			incrementalFitting50(coldY0, coldXdY0, coldXdXdY0, AY6, colBetaY, 0, coldY0, coldXdY0, coldXdXdY0, colBetaY);
+			colBetaX   += deltaBetaX;
+			coldX0     += coldXdX0 >> 6;
+			coldXdX0   += coldXdXdX0 >> 8;
+			coldXdXdX0 += AX6;
+
+			coldY0     += coldXdY0 >> 6;
+			coldXdY0   += coldXdXdY0 >> 8;
+			coldXdXdY0 += AY6;
 		}
 	}
 }
@@ -346,13 +306,13 @@ int main() {
 	fclose(df);
 
 	for(int i = 0; i < n; i++) {
-		//input[i] = rawToMillimeters(depth.getPixels()[i]);
-		input[i] = RawToDepth(depth[i]);
+		input[i] = rawToMillimeters(depth[i]);
+		//input[i] = RawToDepth(depth[i]);
 	}
 	
-	for(int i = 0; i < 1024; i++) {
+	/*for(int i = 0; i < 1024; i++) {
 		printf("\t%d\t%f\n",RawToDepth(i),rawToMillimeters(i));
-	}
+	}*/
 
 	m_pDepthToShiftTable.resize(XN_DEVICE_MAX_DEPTH);
 	m_pRegistrationTable.resize(XN_DEPTH_XRES * XN_DEPTH_YRES * 2);
