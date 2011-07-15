@@ -1135,8 +1135,8 @@ int freenect_set_video_buffer(freenect_device *dev, void *buf)
 	return stream_setbuf(dev->parent, &dev->video, buf);
 }
 
-RegistrationInfo freenect_get_reg_info(freenect_device *dev) {
-	RegistrationInfo retval;
+freenect_reg_info freenect_get_reg_info(freenect_device *dev) {
+	freenect_reg_info retval;
 	freenect_context *ctx = dev->parent;
 	char reply[0x200];
 	uint16_t cmd[5];
@@ -1152,41 +1152,41 @@ RegistrationInfo freenect_get_reg_info(freenect_device *dev) {
 	if(res != 118) {
 		FN_ERROR("freenect_get_reg_info: send_cmd read %d bytes (expected 118)\n", res);
 	}
-	retval = *(RegistrationInfo*)(&reply[2]);
-	FN_DEBUG("nRGS_DX_CENTER:         %d\n", retval.nRGS_DX_CENTER);
-	FN_DEBUG("nRGS_AX:                %d\n", retval.nRGS_AX);
-	FN_DEBUG("nRGS_BX:                %d\n", retval.nRGS_BX);
-	FN_DEBUG("nRGS_CX:                %d\n", retval.nRGS_CX);
-	FN_DEBUG("nRGS_DX:                %d\n", retval.nRGS_DX);
-	FN_DEBUG("nRGS_DX_START:          %d\n", retval.nRGS_DX_START);
-	FN_DEBUG("nRGS_AY:                %d\n", retval.nRGS_AY);
-	FN_DEBUG("nRGS_BY:                %d\n", retval.nRGS_BY);
-	FN_DEBUG("nRGS_CY:                %d\n", retval.nRGS_CY);
-	FN_DEBUG("nRGS_DY:                %d\n", retval.nRGS_DY);
-	FN_DEBUG("nRGS_DY_START:          %d\n", retval.nRGS_DY_START);
-	FN_DEBUG("nRGS_DX_BETA_START:     %d\n", retval.nRGS_DX_BETA_START);
-	FN_DEBUG("nRGS_DY_BETA_START:     %d\n", retval.nRGS_DY_BETA_START);
+	retval = *(freenect_reg_info*)(&reply[2]);
+	FN_DEBUG("ax:                %d\n", retval.ax);
+	FN_DEBUG("bx:                %d\n", retval.bx);
+	FN_DEBUG("cx:                %d\n", retval.cx);
+	FN_DEBUG("dx:                %d\n", retval.dx);
+	FN_DEBUG("ay:                %d\n", retval.ay);
+	FN_DEBUG("by:                %d\n", retval.by);
+	FN_DEBUG("cy:                %d\n", retval.cy);
+	FN_DEBUG("dy:                %d\n", retval.dy);
+	FN_DEBUG("dx_start:          %d\n", retval.dx_start);
+	FN_DEBUG("dy_start:          %d\n", retval.dy_start);
+	FN_DEBUG("dx_beta_start:     %d\n", retval.dx_beta_start);
+	FN_DEBUG("dy_beta_start:     %d\n", retval.dy_beta_start);
+	FN_DEBUG("dx_beta_inc:       %d\n", retval.dx_beta_inc);
+	FN_DEBUG("dy_beta_inc:       %d\n", retval.dy_beta_inc);
+	FN_DEBUG("dxdx_start:        %d\n", retval.dxdx_start);
+	FN_DEBUG("dxdy_start:        %d\n", retval.dxdy_start);
+	FN_DEBUG("dydx_start:        %d\n", retval.dydx_start);
+	FN_DEBUG("dydy_start:        %d\n", retval.dydy_start);
+	FN_DEBUG("dxdxdx_start:      %d\n", retval.dxdxdx_start);
+	FN_DEBUG("dydxdx_start:      %d\n", retval.dydxdx_start);
+	FN_DEBUG("dxdxdy_start:      %d\n", retval.dxdxdy_start);
+	FN_DEBUG("dydxdy_start:      %d\n", retval.dydxdy_start);
+	FN_DEBUG("dydydx_start:      %d\n", retval.dydydx_start);
+	FN_DEBUG("dydydy_start:      %d\n", retval.dydydy_start);
+	/*FN_DEBUG("dx_CENTER:         %d\n", retval.dx_CENTER);
 	FN_DEBUG("nRGS_ROLLOUT_BLANK:     %d\n", retval.nRGS_ROLLOUT_BLANK);
 	FN_DEBUG("nRGS_ROLLOUT_SIZE:      %d\n", retval.nRGS_ROLLOUT_SIZE);
-	FN_DEBUG("nRGS_DX_BETA_INC:       %d\n", retval.nRGS_DX_BETA_INC);
-	FN_DEBUG("nRGS_DY_BETA_INC:       %d\n", retval.nRGS_DY_BETA_INC);
-	FN_DEBUG("nRGS_DXDX_START:        %d\n", retval.nRGS_DXDX_START);
-	FN_DEBUG("nRGS_DXDY_START:        %d\n", retval.nRGS_DXDY_START);
-	FN_DEBUG("nRGS_DYDX_START:        %d\n", retval.nRGS_DYDX_START);
-	FN_DEBUG("nRGS_DYDY_START:        %d\n", retval.nRGS_DYDY_START);
-	FN_DEBUG("nRGS_DXDXDX_START:      %d\n", retval.nRGS_DXDXDX_START);
-	FN_DEBUG("nRGS_DYDXDX_START:      %d\n", retval.nRGS_DYDXDX_START);
-	FN_DEBUG("nRGS_DXDXDY_START:      %d\n", retval.nRGS_DXDXDY_START);
-	FN_DEBUG("nRGS_DYDXDY_START:      %d\n", retval.nRGS_DYDXDY_START);
 	FN_DEBUG("nBACK_COMP1:            %d\n", retval.nBACK_COMP1);
-	FN_DEBUG("nRGS_DYDYDX_START:      %d\n", retval.nRGS_DYDYDX_START);
-	FN_DEBUG("nBACK_COMP2:            %d\n", retval.nBACK_COMP2);
-	FN_DEBUG("nRGS_DYDYDY_START:      %d\n", retval.nRGS_DYDYDY_START);
+	FN_DEBUG("nBACK_COMP2:            %d\n", retval.nBACK_COMP2);*/
 	return retval;
 }
 
-RegistrationPadInfo freenect_get_reg_pad_info(freenect_device *dev) {
-	RegistrationPadInfo retval;
+freenect_reg_pad_info freenect_get_reg_pad_info(freenect_device *dev) {
+	freenect_reg_pad_info retval;
 	freenect_context *ctx = dev->parent;
 	char reply[0x200];
 	uint16_t cmd[5];
@@ -1201,15 +1201,15 @@ RegistrationPadInfo freenect_get_reg_pad_info(freenect_device *dev) {
 	if(res != 8) {
 		FN_ERROR("freenect_get_reg_pad_info: send_cmd read %d bytes (expected 8)\n", res);
 	}
-	retval = *(RegistrationPadInfo*)(&reply[2]);
-	FN_DEBUG("nStartLines:    %u\n",retval.nStartLines);
-	FN_DEBUG("nEndLines:      %u\n",retval.nEndLines);
-	FN_DEBUG("nCroppingLines: %u\n",retval.nCroppingLines);
+	retval = *(freenect_reg_pad_info*)(&reply[2]);
+	FN_DEBUG("start_lines:    %u\n",retval.start_lines);
+	FN_DEBUG("end_lines:      %u\n",retval.end_lines);
+	FN_DEBUG("cropping_lines: %u\n",retval.cropping_lines);
 	return retval;
 }
 
-ZeroPlaneInfo freenect_get_zero_plane_info(freenect_device *dev) {
-	ZeroPlaneInfo retval;
+freenect_zero_plane_info freenect_get_zero_plane_info(freenect_device *dev) {
+	freenect_zero_plane_info retval;
 	freenect_context *ctx = dev->parent;
 
 	char reply[0x200];
@@ -1227,13 +1227,15 @@ ZeroPlaneInfo freenect_get_zero_plane_info(freenect_device *dev) {
 	}
 	FN_DEBUG("\n");
 	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
-	FN_DEBUG("fDCmosEmitterDistance: %f\n", *((float*)(reply+94)));
-	FN_DEBUG("fDCmosRCmosDistance:   %f\n", *((float*)(reply+98)));
-	FN_DEBUG("fReferenceDistance:    %f\n", *((float*)(reply+102)));
-	FN_DEBUG("fReferencePixelSize:   %f\n", *((float*)(reply+106)));
+	FN_DEBUG("dcmos_emitter_distance: %f\n", *((float*)(reply+94)));
+	FN_DEBUG("dcmos_rcmos_distance:   %f\n", *((float*)(reply+98)));
+	FN_DEBUG("reference_distance:     %f\n", *((float*)(reply+102)));
+	FN_DEBUG("reference_pixel_size:   %f\n", *((float*)(reply+106)));
 
-	retval.distance   = *((float*)(reply+102));
-	retval.pixel_size = *((float*)(reply+106));
+	retval.dcmos_emitter_dist   = *((float*)(reply+94));
+	retval.dcmos_rcmos_dist     = *((float*)(reply+98));
+	retval.reference_distance   = *((float*)(reply+102));
+	retval.reference_pixel_size = *((float*)(reply+106));
 
 	return retval;
 }

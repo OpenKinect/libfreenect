@@ -118,48 +118,77 @@ typedef struct {
 	freenect_tilt_status_code tilt_status;     /**< State of the tilt motor (stopped, moving, etc...) */
 } freenect_raw_tilt_state;
 
-typedef struct {
-	int32_t nRGS_DX_CENTER;
-	int32_t nRGS_AX;
-	int32_t nRGS_BX;
-	int32_t nRGS_CX;
-	int32_t nRGS_DX;
-	int32_t nRGS_DX_START;
-	int32_t nRGS_AY;
-	int32_t nRGS_BY;
-	int32_t nRGS_CY;
-	int32_t nRGS_DY;
-	int32_t nRGS_DY_START;
-	int32_t nRGS_DX_BETA_START;
-	int32_t nRGS_DY_BETA_START;
-	int32_t nRGS_ROLLOUT_BLANK;
-	int32_t nRGS_ROLLOUT_SIZE;
-	int32_t nRGS_DX_BETA_INC;
-	int32_t nRGS_DY_BETA_INC;
-	int32_t nRGS_DXDX_START;
-	int32_t nRGS_DXDY_START;
-	int32_t nRGS_DYDX_START;
-	int32_t nRGS_DYDY_START;
-	int32_t nRGS_DXDXDX_START;
-	int32_t nRGS_DYDXDX_START;
-	int32_t nRGS_DXDXDY_START;
-	int32_t nRGS_DYDXDY_START;
-	int32_t nBACK_COMP1;
-	int32_t nRGS_DYDYDX_START;
-	int32_t nBACK_COMP2;
-	int32_t nRGS_DYDYDY_START;
-} RegistrationInfo;
 
+/// internal Kinect registration parameters
 typedef struct {
-	uint16_t nStartLines;
-	uint16_t nEndLines;
-	uint16_t nCroppingLines;
-} RegistrationPadInfo;
 
+	int32_t ax;
+	int32_t bx;
+	int32_t cx;
+	int32_t dx;
+
+	int32_t ay;
+	int32_t by;
+	int32_t cy;
+	int32_t dy;
+
+	int32_t dx_beta_start;
+	int32_t dy_beta_start;
+
+	int32_t dx_beta_inc;
+	int32_t dy_beta_inc;
+
+	int32_t dx_start;
+	int32_t dy_start;
+
+	int32_t dxdx_start;
+	int32_t dxdy_start;
+	int32_t dydx_start;
+	int32_t dydy_start;
+
+	int32_t dxdxdx_start;
+	int32_t dydxdx_start;
+	int32_t dxdxdy_start;
+	int32_t dydxdy_start;
+	int32_t dydydx_start;
+	int32_t dydydy_start;
+
+	// parameters that are not used by mapping algorithm
+	//int32_t dx_center;
+	//int32_t rollout_blank;
+	//int32_t rollout_size;
+	//int32_t back_comp1;
+	//int32_t back_comp2;
+} freenect_reg_info;
+
+/// registration padding info (?) 
 typedef struct {
-	float distance;
-	float pixel_size;
-} ZeroPlaneInfo;
+	uint16_t start_lines;
+	uint16_t end_lines;
+	uint16_t cropping_lines;
+} freenect_reg_pad_info;
+
+/// internal Kinect zero plane data
+typedef struct {
+	float dcmos_emitter_dist;
+	float dcmos_rcmos_dist;
+	float reference_distance;
+	float reference_pixel_size;
+} freenect_zero_plane_info;
+
+/// all data needed for depth->RGB mapping
+typedef struct {
+
+	freenect_reg_info        reg_info;
+	freenect_reg_pad_info    reg_pad_info;
+	freenect_zero_plane_info zero_plane_info;
+
+	uint16_t* raw_to_mm_shift;
+	uint16_t* depth_to_rgb_shift;
+	uint16_t* registration_table;
+
+} freenect_registration;
+
 
 struct _freenect_context;
 typedef struct _freenect_context freenect_context; /**< Holds information about the usb context. */
@@ -561,9 +590,30 @@ FREENECTAPI const freenect_frame_mode freenect_find_depth_mode(freenect_resoluti
  */
 FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode);
 
-FREENECTAPI RegistrationInfo freenect_get_reg_info(freenect_device* dev);
-FREENECTAPI RegistrationPadInfo freenect_get_reg_pad_info(freenect_device* dev);
-FREENECTAPI ZeroPlaneInfo freenect_get_zero_plane_info(freenect_device* dev);
+/**
+ * Initialize a registration data structure: get data from device, allocate and initialize tables
+ *
+ * @param dev Device to use
+ * @param reg freenect_registration structure to fill
+ *
+ * @return 0 on success, < 0 on error
+ */
+FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_registration* reg);
+
+/**
+ * Apply registration data structure to a raw depth image
+ *
+ * @param reg       freenect_registration structure to use
+ * @param input_raw buffer of raw 16-bit disparity values
+ * @param output_mm result buffer with 16-bit values in mm
+ *
+ * @return 0 on success, < 0 on error
+ */
+FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm);
+
+FREENECTAPI freenect_reg_info freenect_get_reg_info(freenect_device* dev);
+FREENECTAPI freenect_reg_pad_info freenect_get_reg_pad_info(freenect_device* dev);
+FREENECTAPI freenect_zero_plane_info freenect_get_zero_plane_info(freenect_device* dev);
 
 #ifdef __cplusplus
 }

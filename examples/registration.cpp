@@ -11,8 +11,8 @@
 	std::vector<int16_t> m_pDepthToShiftTable;
 	std::vector<int16_t> m_pRegistrationTable;
 
-RegistrationInfo RegData = { 2048330528, 1964, 56, -26, 600, 6161, -13, 2825, 684, 5, 6434, 10062, 130801, 0, 0, 170, 136, 2095986, 890, 763, 2096378, 134215474, 134217093, 134216989, 134216925, 0, 134216984, 0, 134214659 };
-RegistrationPadInfo m_padInfo = { 0, 0, 0 };
+freenect_reg_info RegData = { 1964, 56, -26, 600, -13, 2825, 684, 5, 6161, 6434, 10062, 130801, 170, 136, 2095986, 890, 763, 2096378, 134215474, 134217093, 134216989, 134216925, 134216984, 134214659 };
+freenect_reg_pad_info m_padInfo = { 0, 0, 0 };
 
 bool bMirror = true;
 
@@ -59,9 +59,9 @@ void BuildDepthToRgbShiftTable(int16_t* depthToRgbShift) {
 }
 
 
-void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registrationTable, int16_t* depthToRgbShift, RegistrationPadInfo& padInfo) {
+void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registrationTable, int16_t* depthToRgbShift, freenect_reg_pad_info& padInfo) {
 	memset(depthOutput, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEPTH_XRES * XN_DEPTH_YRES * sizeof(uint16_t)); // clear the output image
-	uint32_t constOffset = XN_DEPTH_YRES * padInfo.nStartLines;
+	uint32_t constOffset = XN_DEPTH_YRES * padInfo.start_lines;
 	
 	uint32_t sourceIndex = 0;
 	for (uint32_t y = 0; y < XN_DEPTH_YRES; y++) {
@@ -119,39 +119,39 @@ void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registratio
 }
 
 
-void CreateDXDYTables (double* RegXTable, double* RegYTable, int32_t resX, int32_t resY, RegistrationInfo regdata ) {
+void CreateDXDYTables (double* RegXTable, double* RegYTable, int32_t resX, int32_t resY, freenect_reg_info regdata ) {
 
-	int64_t AX6 = regdata.nRGS_AX;
-	int64_t BX6 = regdata.nRGS_BX;
-	int64_t CX2 = regdata.nRGS_CX;
-	int64_t DX2 = regdata.nRGS_DX;
+	int64_t AX6 = regdata.ay;
+	int64_t BX6 = regdata.bx;
+	int64_t CX2 = regdata.cx;
+	int64_t DX2 = regdata.dx;
 
-	int64_t AY6 = regdata.nRGS_AY;
-	int64_t BY6 = regdata.nRGS_BY;
-	int64_t CY2 = regdata.nRGS_CY;
-	int64_t DY2 = regdata.nRGS_DY;
+	int64_t AY6 = regdata.ay;
+	int64_t BY6 = regdata.by;
+	int64_t CY2 = regdata.cy;
+	int64_t DY2 = regdata.dy;
 
 	// don't merge the shift operations - necessary for proper 32-bit clamping of extracted values
-	int32_t deltaBetaX = (regdata.nRGS_DX_BETA_INC << 8) >> 8;
-	int32_t deltaBetaY = (regdata.nRGS_DY_BETA_INC << 8) >> 8;
+	int32_t deltaBetaX = (regdata.dx_beta_inc << 8) >> 8;
+	int32_t deltaBetaY = (regdata.dy_beta_inc << 8) >> 8;
 
-	int64_t dX0 = (regdata.nRGS_DX_START << 13) >> 4;
-	int64_t dY0 = (regdata.nRGS_DY_START << 13) >> 4;
+	int64_t dX0 = (regdata.dx_start << 13) >> 4;
+	int64_t dY0 = (regdata.dy_start << 13) >> 4;
 
-	int64_t dXdX0 = (regdata.nRGS_DXDX_START << 11) >> 3;
-	int64_t dXdY0 = (regdata.nRGS_DXDY_START << 11) >> 3;
-	int64_t dYdX0 = (regdata.nRGS_DYDX_START << 11) >> 3;
-	int64_t dYdY0 = (regdata.nRGS_DYDY_START << 11) >> 3;
+	int64_t dXdX0 = (regdata.dxdx_start << 11) >> 3;
+	int64_t dXdY0 = (regdata.dxdy_start << 11) >> 3;
+	int64_t dYdX0 = (regdata.dydx_start << 11) >> 3;
+	int64_t dYdY0 = (regdata.dydy_start << 11) >> 3;
 
-	int64_t dXdXdX0 = (regdata.nRGS_DXDXDX_START << 5) << 3;
-	int64_t dYdXdX0 = (regdata.nRGS_DYDXDX_START << 5) << 3;
-	int64_t dYdXdY0 = (regdata.nRGS_DYDXDY_START << 5) << 3;
-	int64_t dXdXdY0 = (regdata.nRGS_DXDXDY_START << 5) << 3;
-	int64_t dYdYdX0 = (regdata.nRGS_DYDYDX_START << 5) << 3;
-	int64_t dYdYdY0 = (regdata.nRGS_DYDYDY_START << 5) << 3;
+	int64_t dXdXdX0 = (regdata.dxdxdx_start << 5) << 3;
+	int64_t dYdXdX0 = (regdata.dydxdx_start << 5) << 3;
+	int64_t dYdXdY0 = (regdata.dydxdy_start << 5) << 3;
+	int64_t dXdXdY0 = (regdata.dxdxdy_start << 5) << 3;
+	int64_t dYdYdX0 = (regdata.dydydx_start << 5) << 3;
+	int64_t dYdYdY0 = (regdata.dydydy_start << 5) << 3;
 
-	int32_t betaX = (regdata.nRGS_DX_BETA_START << 15) >> 8;
-	int32_t betaY = (regdata.nRGS_DY_BETA_START << 15) >> 8;
+	int32_t betaX = (regdata.dx_beta_start << 15) >> 8;
+	int32_t betaY = (regdata.dy_beta_start << 15) >> 8;
 
 	int32_t tOffs = 0;
 
@@ -198,7 +198,7 @@ void CreateDXDYTables (double* RegXTable, double* RegYTable, int32_t resX, int32
 	}
 }
 
-void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTable, RegistrationInfo& RegData, RegistrationPadInfo& m_padInfo) {	
+void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTable, freenect_reg_info& RegData, freenect_reg_pad_info& m_padInfo) {	
 	double* RegXTable = new double[RGB_REG_X_RES*RGB_REG_Y_RES];
 	double* RegYTable = new double[RGB_REG_X_RES*RGB_REG_Y_RES];
 	
