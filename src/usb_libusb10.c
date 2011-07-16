@@ -124,7 +124,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 			continue;
 
 		// Search for the camera
-		if (!dev->usb_cam.dev && desc.idProduct == PID_NUI_CAMERA) {
+		if ((ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA) && !dev->usb_cam.dev && desc.idProduct == PID_NUI_CAMERA) {
 			// If the index given by the user matches our camera index
 			if (nr_cam == index) {
 				res = libusb_open (devs[i], &dev->usb_cam.dev);
@@ -159,7 +159,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 		}
 
 		// Search for the motor
-		if (!dev->usb_motor.dev && desc.idProduct == PID_NUI_MOTOR) {
+		if ((ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR) && !dev->usb_motor.dev && desc.idProduct == PID_NUI_MOTOR) {
 			// If the index given by the user matches our camera index
 			if (nr_mot == index) {
 				res = libusb_open (devs[i], &dev->usb_motor.dev);
@@ -183,7 +183,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 #ifdef BUILD_AUDIO
 		// TODO: check that the firmware has already been loaded; if not, upload firmware.
 		// Search for the audio
-		if (!dev->usb_audio.dev && desc.idProduct == PID_NUI_AUDIO) {
+		if ((ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO) && !dev->usb_audio.dev && desc.idProduct == PID_NUI_AUDIO) {
 			// If the index given by the user matches our audio index
 			if (nr_audio == index) {
 				res = libusb_open (devs[i], &dev->usb_audio.dev);
@@ -209,11 +209,13 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
+	// Check that each subdevice is either opened or not enabled.
+	if ( (dev->usb_cam.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA))
+		&& (dev->usb_motor.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
 #ifdef BUILD_AUDIO
-	if (dev->usb_cam.dev && dev->usb_motor.dev && dev->usb_audio.dev) {
-#else
-	if (dev->usb_cam.dev && dev->usb_motor.dev) {
+		&& (dev->usb_audio.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO))
 #endif
+		) {
 		return 0;
 	} else {
 		if (dev->usb_cam.dev) {

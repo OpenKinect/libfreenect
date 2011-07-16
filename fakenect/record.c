@@ -216,6 +216,9 @@ void init()
 		return;
 	}
 
+	// fakenect doesn't support audio yet, so don't bother claiming the device
+	freenect_select_subdevices(ctx, (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA));
+
 	if (freenect_open_device(ctx, &dev, 0)) {
 		printf("Error: Cannot get device\n");
 		return;

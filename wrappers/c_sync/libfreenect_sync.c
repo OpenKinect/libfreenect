@@ -208,6 +208,10 @@ static void init_thread(void)
 {
 	thread_running = 1;
 	freenect_init(&ctx, 0);
+	// We claim both the motor and the camera, because we can't know in advance
+	// which devices the caller will want, and the c_sync interface doesn't
+	// support audio, so there's no reason to claim the device needlessly.
+	freenect_select_subdevices(ctx, (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA));
 	pthread_create(&thread, NULL, init, NULL);
 }
 

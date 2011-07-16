@@ -43,6 +43,7 @@ struct _freenect_context {
 	freenect_loglevel log_level;
 	freenect_log_cb log_cb;
 	fnusb_ctx usb;
+	freenect_device_flags enabled_subdevices;
 	freenect_device *first;
 };
 
