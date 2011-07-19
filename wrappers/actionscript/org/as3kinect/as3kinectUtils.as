@@ -32,13 +32,16 @@ package org.as3kinect
 	import flash.display.BitmapData;
 	import flash.display.Stage;
 	import flash.display.DisplayObject;
+	import flash.display.Loader;
 	
 	import flash.geom.Rectangle;
 	import flash.geom.Point;
 	
 	import flash.filters.ColorMatrixFilter;
 	import flash.events.TouchEvent;
+	import flash.events.Event;
 	import flash.utils.ByteArray;
+	import flash.utils.Endian;
 	
 	public class as3kinectUtils
 	{
@@ -52,6 +55,17 @@ package org.as3kinect
 			_canvas.unlock();
 		}
 		
+		/*
+		 * Draw JPEG from ByteArray to BitmapData object
+		 */
+		public static function JPEGToBitmapData(bytes:ByteArray, _canvas:BitmapData):void{
+			var ldr:Loader = new Loader();
+			ldr.loadBytes(bytes);
+			ldr.contentLoaderInfo.addEventListener(Event.COMPLETE, function(event:Event){
+				_canvas.draw(ldr.content);
+		    });
+		}
+
 		/*
 		 * Process blobs from BitmapData, if _w and _h set they will be returned in that resoluton
 		 */		

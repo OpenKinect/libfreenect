@@ -38,12 +38,14 @@ package org.as3kinect {
 		private var _data:ByteArray;
 		private var _motor_busy:Boolean;
 		private var _motor_data:motorData;
+		private var _motor_position:Number;
 
 		public function as3kinectMotor(){
 			_socket = as3kinectSocket.instance;
 			_data = new ByteArray;
 			_motor_busy = false;
 			_motor_data = new motorData;
+			_motor_position = 0;
 		}
 
 
@@ -104,9 +106,16 @@ package org.as3kinect {
 			_data.writeInt(position);
 			if(_socket.sendCommand(_data) != as3kinect.SUCCESS){
 				throw new Error('Data was not complete');
+			} else {
+				_motor_position = position;
 			}
 		}
-		
+
+		public function get position():Number
+		{
+			return _motor_position;
+		}
+
 		// 0 = Turn Off
 		// 1 = Green
 		// 2 = Red
