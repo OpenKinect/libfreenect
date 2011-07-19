@@ -49,14 +49,14 @@
 		public var motor:as3kinectMotor;
 		public var depth:as3kinectDepth;
 		public var video:as3kinectVideo;
-		public var ui:as3kinectUI;
+		//public var ui:as3kinectUI;
 
 		public function as3kinectWrapper() {
 			/* Init motor, depth, video and UI objects */
 			motor = new as3kinectMotor;
 			depth = new as3kinectDepth;
 			video = new as3kinectVideo;
-			ui = new as3kinectUI(this);
+			//ui = new as3kinectUI(this);
 			
 			/* Init socket objects */
 			_socket = as3kinectSocket.instance;

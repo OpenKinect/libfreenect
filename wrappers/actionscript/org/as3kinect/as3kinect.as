@@ -71,5 +71,9 @@
 		public static const BLOB_MAX_WIDTH:uint = 30;
 		public static const BLOB_MIN_HEIGHT:uint = 15;
 		public static const BLOB_MAX_HEIGHT:uint = 80;
+		
+		public static const HORIZONTAL_BLOBS_SEARCH_STEP_WIDTH : int = 3;
+        public static const HORIZONTAL_BLOBS_SEARCH_SENSIVITY : int = 15;
+        public static const HORIZONTAL_BLOBS_HOLD_TOLERANCE : int=100;
 	}
 }
