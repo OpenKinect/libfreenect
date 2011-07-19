@@ -25,23 +25,27 @@
  * 
  */
 
-package org.as3kinect
-{
-	import org.as3kinect.as3kinect;
-	
+package org.as3kinect {
+	import flash.display.Bitmap;
 	import flash.display.BitmapData;
-	import flash.display.Stage;
 	import flash.display.DisplayObject;
-	
-	import flash.geom.Rectangle;
-	import flash.geom.Point;
-	
-	import flash.filters.ColorMatrixFilter;
+	import flash.display.Loader;
+	import flash.display.Stage;
+	import flash.events.Event;
 	import flash.events.TouchEvent;
+	import flash.filters.ColorMatrixFilter;
+	import flash.geom.Point;
+	import flash.geom.Rectangle;
 	import flash.utils.ByteArray;
+	import org.as3kinect.objects.PointWithID;
+	import org.as3kinect.objects.as3kinectCalibrationParams;
+
 	
 	public class as3kinectUtils
 	{
+		 private static var _registeredBlobs : Array = [];
+        private static var _registerId : Number = 1;
+        private static var _cParams : as3kinectCalibrationParams;
 		
 		/*
 		 * Draw ARGB from ByteArray to BitmapData object
@@ -52,6 +56,17 @@ package org.as3kinect
 			_canvas.unlock();
 		}
 		
+		/*
+		 * Draw JPEG from ByteArray to BitmapData object
+		 */
+		public static function JPEGToBitmapData(bytes:ByteArray, _canvas:BitmapData):void{
+			var ldr:Loader = new Loader();
+			ldr.loadBytes(bytes);
+			ldr.contentLoaderInfo.addEventListener(Event.COMPLETE, function(event:Event):void{
+				_canvas.draw(ldr.content);
+		    });
+		}
+
 		/*
 		 * Process blobs from BitmapData, if _w and _h set they will be returned in that resoluton
 		 */		
@@ -143,7 +158,7 @@ package org.as3kinect
 			var found:Boolean;
 			var local:Point;
 			//We look in the lastTouched arrar for this point id
-			for (var key in _lastTouched[id])
+			for (var key : * in _lastTouched[id])
 			{
 				//If TOUCH_OVER was already fired we look for it in the new targets object
 				if (_lastTouched[id][key].bool != false)
@@ -179,5 +194,131 @@ package org.as3kinect
 				}
 			}
 		}
+		public static function getHorizontalBlobs(r : BitmapData) : Array {
+            if (_registerId >= 10000)
+                _registerId = 1;
+
+            var blobs : Array = [];
+            var step : int = as3kinect.HORIZONTAL_BLOBS_SEARCH_STEP_WIDTH;
+            var rect : Rectangle;
+            var sourceBitmap : Bitmap = new Bitmap(r);
+            var processingBmp : BitmapData = new BitmapData(sourceBitmap.width, sourceBitmap.height);
+            var colorRect : Rectangle;
+            var blobBeginnPos : int;
+            var foundBlob : Boolean = false;
+            var pt : Point = new Point(0, 0);
+
+            var sensitivity : int = as3kinect.HORIZONTAL_BLOBS_SEARCH_SENSIVITY;
+
+            for (var i : int = 0; i < r.width; i += step) {
+                rect = new Rectangle(i, 0, step, sourceBitmap.height);
+                processingBmp = new BitmapData(step, r.height);
+                processingBmp.copyPixels(r, rect, pt);
+                colorRect = processingBmp.getColorBoundsRect(0xFFFFFF, 0x000000, false);
+
+                if (colorRect.height >= sensitivity) {
+                    if (!foundBlob)
+                        blobBeginnPos = i;
+                    foundBlob = true;
+                }
+                if (colorRect.height < sensitivity && foundBlob) {
+                    if (i - blobBeginnPos >= 3 * step) {
+                        blobs.push({x1:blobBeginnPos, x2:i});
+                    }
+                    foundBlob = false;
+                }
+            }
+            var xx : Number;
+            var yy : Number;
+            for (var j : int = 0; j < blobs.length; j++) {
+                xx = int(blobs[j].x1 + (blobs[j].x2 - blobs[j].x1) / 2);
+                yy = HEXtoRGB(r.getPixel(xx, 0))[1];
+                blobs[j] = new PointWithID(xx, yy);
+                translatePosition(blobs[j]);
+            }
+
+            if (blobs.length > 0)
+                checkBlobsIfRegistered(blobs);
+            else
+                _registeredBlobs = [];
+            return _registeredBlobs;
+        }
+
+        private static function checkBlobsIfRegistered(blobs : Array) : void {
+            var tolerance : int = as3kinect.HORIZONTAL_BLOBS_HOLD_TOLERANCE;
+            var xIsInTolerance : Boolean = false;
+            var yIsInTolerance : Boolean = false;
+            var tempRegisteredBlobs : Array = [];
+
+            for (var i : int = 0; i < blobs.length; i++) {
+                xIsInTolerance = false;
+                yIsInTolerance = false;
+
+                if (_registeredBlobs.length == 0) {
+                    blobs[i].id = _registerId;
+                    tempRegisteredBlobs.push(blobs[i]);
+                    _registerId++;
+                } else {
+                    for (var j : int = 0; j < _registeredBlobs.length; j++) {
+                        xIsInTolerance = blobs[i].x - _registeredBlobs[j].x <= tolerance && _registeredBlobs[j].x - blobs[i].x <= tolerance;
+                        yIsInTolerance = blobs[i].y - _registeredBlobs[j].y <= tolerance && _registeredBlobs[j].y - blobs[i].y <= tolerance;
+                        if (xIsInTolerance && yIsInTolerance) {
+                            blobs[i].id = _registeredBlobs[j].id;
+                            blobs[i].inUse = _registeredBlobs[j].inUse;
+                            tempRegisteredBlobs.push(blobs[i]);
+                            break;
+                        } else {
+                            if (j == _registeredBlobs.length - 1) {
+                                blobs[i].id = _registerId;
+                                tempRegisteredBlobs.push(blobs[i]);
+                                _registerId++;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            _registeredBlobs = tempRegisteredBlobs;
+        }
+
+        private static function HEXtoRGB(hex : int) : Array {
+            var alpha : int = hex >> 24 & 0xFF;
+            var red : int = hex >> 16 & 0xFF;
+            var green : int = hex >> 8 & 0xFF;
+            var blue : int = hex & 0xFF;
+            var rgb : Array = [alpha, red, green, blue];
+            return rgb;
+        }
+
+ 
+
+        public static function translatePosition(p : Point) : void {
+            if (_cParams.calibrationComplete) {
+                var str : String = "p.x= " + p.x + "   p.y= " + p.y;
+                var yf : Number = int((1 - ((p.y - _cParams.yOffset) * 0.01)) * 100) * 0.01;
+                p.y = _cParams.screenHeight - ((p.y - _cParams.yOffset) * _cParams.yScreenFactor);
+
+                var xOff : Number = int((_cParams.xOffsetTop + _cParams.xOffsetDifference * yf) * 100) * 0.01;
+
+                var xFact : Number = int((_cParams.xScreenFactorTop + _cParams.xScreenFactorDifference * yf) * 100) * 0.01;
+
+                p.x = (p.x - xOff) * xFact;
+                str += "      new p.x= " + p.x + "   p.y= " + p.y;
+            } else {
+                p.y = p.y * -1;
+            }
+        }
+
+        static public function set calibrationParams(calibrationParams : as3kinectCalibrationParams) : void {
+            as3kinectUtils._cParams = calibrationParams;
+        }
+        
+         static public function get calibrationParams() : as3kinectCalibrationParams {
+            return _cParams;
+        }
+
+        static public function get registeredBlobs() : Array {
+            return _registeredBlobs;
+        }
 	}
 }
