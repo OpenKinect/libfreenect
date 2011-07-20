@@ -6,15 +6,6 @@
 
 int bMirror = 1;
 
-//double dPlanePixelSize = 0.1042; // fReferencePixelSize
-//uint64_t nPlaneDsr = 120; // fReferenceDistance
-//double planeDcl = 7.5; // pConfig->fEmitterDCmosDistancea
-//#define XN_SENSOR_DEPTH_RGB_CMOS_DISTANCE 2.4 // seems to be different according to usb (says 2.3)
-//double fDCmosRCmosDistance = 2.3;
-int32_t paramCoeff = 4; // pConfig->nParamCoeff
-int32_t constShift = 200; // pConfig->nConstShift
-int32_t shiftScale = 10; // pConfig->nShiftScale
-
 
 #define RGB_REG_X_RES 640
 #define RGB_REG_Y_RES 512
@@ -33,26 +24,26 @@ int32_t shiftScale = 10; // pConfig->nShiftScale
 
 #define DENSE_REGISTRATION
 
-void BuildDepthToRgbShiftTable(int16_t* depthToRgbShift, freenect_zero_plane_info* zpi) {
+
+/// fill the table of horizontal shift values for metric depth -> RGB conversion
+void freenect_init_depth_to_rgb(int16_t* depth_to_rgb, freenect_zero_plane_info* zpi) {
+
 	uint32_t i,xScale = XN_CMOS_VGAOUTPUT_XRES / XN_DEPTH_XRES;
 	
 	double pelSize = 1.0 / (zpi->reference_pixel_size * xScale * S2D_PEL_CONST);
 	double pelDCC = zpi->dcmos_rcmos_dist * pelSize * S2D_PEL_CONST;
 	double pelDSR = zpi->reference_distance * pelSize * S2D_PEL_CONST;
 	
-	memset(depthToRgbShift, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEVICE_MAX_DEPTH * sizeof(int16_t));
+	memset(depth_to_rgb, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEVICE_MAX_DEPTH * sizeof(int16_t));
 	
 	for (i = 0; i < XN_DEVICE_MAX_DEPTH; i++) {
 		double curDepth = i * pelSize;
-		depthToRgbShift[i] = ((pelDCC * (curDepth - pelDSR) / curDepth) + (S2D_CONST_OFFSET)) * RGB_REG_X_VAL_SCALE;
+		depth_to_rgb[i] = ((pelDCC * (curDepth - pelDSR) / curDepth) + (S2D_CONST_OFFSET)) * RGB_REG_X_VAL_SCALE;
 	}
 }
 
 
 int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
-
-	//Apply1080( input_raw, output_mm, reg->registration_table, reg->depth_to_rgb_shift, &(reg->reg_pad_info) );
-	//void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registrationTable, int16_t* depthToRgbShift, freenect_reg_pad_info* padInfo) {
 
 	memset(output_mm, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEPTH_XRES * XN_DEPTH_YRES * sizeof(uint16_t)); // clear the output image
 	uint32_t constOffset = XN_DEPTH_YRES * reg->reg_pad_info.start_lines;
@@ -245,14 +236,18 @@ FinishLoop:
 	free( RegYTable );
 }
 
-// conversion routines
 
-uint16_t RawToDepth(uint16_t raw, freenect_zero_plane_info* zpi) {
-	double fixedRefX = ((raw - (paramCoeff * constShift)) / paramCoeff) - 0.375; // is this equal to S2D_CONST_OFFSET?
+// TODO: can these be extracted from the Kinect?
+int32_t paramCoeff = 4;
+int32_t constShift = 200;
+int32_t shiftScale = 10;
+
+/// convert raw shift value to metric depth (in mm)
+uint16_t freenect_raw_to_mm(uint16_t raw, freenect_zero_plane_info* zpi) {
+	double fixedRefX = ((raw - (paramCoeff * constShift)) / paramCoeff) - S2D_CONST_OFFSET;
 	double metric = fixedRefX * zpi->reference_pixel_size;
 	return shiftScale * ((metric * zpi->reference_distance / (zpi->dcmos_emitter_dist - metric)) + zpi->reference_distance);
 }
-
 
 
 int freenect_init_registration(freenect_device* dev, freenect_registration* reg) {
@@ -273,9 +268,9 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 
 	reg->raw_to_mm_shift[0] = 0; // 0 == no depth value
 	for (i = 1; i < DEVICE_MAX_SHIFT_VALUE; i++)
-		reg->raw_to_mm_shift[i] = RawToDepth( i, &(reg->zero_plane_info) );
+		reg->raw_to_mm_shift[i] = freenect_raw_to_mm( i, &(reg->zero_plane_info) );
 	
-	BuildDepthToRgbShiftTable( reg->depth_to_rgb_shift, &(reg->zero_plane_info) );
+	freenect_init_depth_to_rgb( reg->depth_to_rgb_shift, &(reg->zero_plane_info) );
 	
 	BuildRegTable1080( reg->depth_to_rgb_shift, reg->registration_table, &(reg->reg_info), &(reg->reg_pad_info) );
 
