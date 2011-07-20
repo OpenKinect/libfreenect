@@ -122,24 +122,30 @@ typedef struct {
 /// internal Kinect registration parameters
 typedef struct {
 
+	int32_t dx_center; // not used by mapping algorithm
+
 	int32_t ax;
 	int32_t bx;
 	int32_t cx;
 	int32_t dx;
+
+	int32_t dx_start;
 
 	int32_t ay;
 	int32_t by;
 	int32_t cy;
 	int32_t dy;
 
+	int32_t dy_start;
+
 	int32_t dx_beta_start;
 	int32_t dy_beta_start;
 
+	int32_t rollout_blank; // not used by mapping algorithm
+	int32_t rollout_size;  // not used by mapping algorithm
+
 	int32_t dx_beta_inc;
 	int32_t dy_beta_inc;
-
-	int32_t dx_start;
-	int32_t dy_start;
 
 	int32_t dxdx_start;
 	int32_t dxdy_start;
@@ -150,15 +156,15 @@ typedef struct {
 	int32_t dydxdx_start;
 	int32_t dxdxdy_start;
 	int32_t dydxdy_start;
+
+	int32_t back_comp1; // not used by mapping algorithm
+
 	int32_t dydydx_start;
+
+	int32_t back_comp2; // not used by mapping algorithm
+
 	int32_t dydydy_start;
 
-	// parameters that are not used by mapping algorithm
-	//int32_t dx_center;
-	//int32_t rollout_blank;
-	//int32_t rollout_size;
-	//int32_t back_comp1;
-	//int32_t back_comp2;
 } freenect_reg_info;
 
 /// registration padding info (?) 
