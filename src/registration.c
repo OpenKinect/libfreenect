@@ -49,7 +49,7 @@ void BuildDepthToRgbShiftTable(int16_t* depthToRgbShift, freenect_zero_plane_inf
 }
 
 
-FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
+int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
 
 	//Apply1080( input_raw, output_mm, reg->registration_table, reg->depth_to_rgb_shift, &(reg->reg_pad_info) );
 	//void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registrationTable, int16_t* depthToRgbShift, freenect_reg_pad_info* padInfo) {
@@ -116,7 +116,7 @@ FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint16_t
 
 void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t resX, int32_t resY, freenect_reg_info* regdata ) {
 
-	int64_t AX6 = regdata->ay;
+	int64_t AX6 = regdata->ax;
 	int64_t BX6 = regdata->bx;
 	int64_t CX2 = regdata->cx;
 	int64_t DX2 = regdata->dx;
@@ -248,15 +248,14 @@ FinishLoop:
 // conversion routines
 
 uint16_t RawToDepth(uint16_t raw, freenect_zero_plane_info* zpi) {
-	double fixedRefX = ((raw - (paramCoeff * constShift)) / paramCoeff) - 0.375;
+	double fixedRefX = ((raw - (paramCoeff * constShift)) / paramCoeff) - 0.375; // is this equal to S2D_CONST_OFFSET?
 	double metric = fixedRefX * zpi->reference_pixel_size;
 	return shiftScale * ((metric * zpi->reference_distance / (zpi->dcmos_emitter_dist - metric)) + zpi->reference_distance);
 }
 
 
-#define MAX_RAW_SHIFT_VALUE 2048
 
-FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_registration* reg) {
+int freenect_init_registration(freenect_device* dev, freenect_registration* reg) {
 
 	uint16_t i;
 
@@ -264,11 +263,16 @@ FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_regist
 	reg->reg_pad_info    = freenect_get_reg_pad_info( dev );
 	reg->zero_plane_info = freenect_get_zero_plane_info( dev );
 
-	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * MAX_RAW_SHIFT_VALUE );
+	/*freenect_reg_info ritmp = { 2048330528, 1964, 56, -26, 600, 6161, -13, 2825, 684, 5, 6434, 10062, 130801, 0, 0, 170, 136, 2095986, 890, 763, 2096378, 134215474, 134217093, 134216989, 134216925, 0, 134216984, 0, 134214659 }; reg->reg_info = ritmp;
+	freenect_reg_pad_info rptmp = { 0, 0, 0 }; reg->reg_pad_info = rptmp;
+	freenect_zero_plane_info zptmp = { 7.5, 2.3, 120, 0.1042 }; reg->zero_plane_info = zptmp;*/
+
+	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * DEVICE_MAX_SHIFT_VALUE );
 	reg->depth_to_rgb_shift = malloc( sizeof( int16_t) * XN_DEVICE_MAX_DEPTH );
 	reg->registration_table = malloc( sizeof( int16_t) * XN_DEPTH_XRES * XN_DEPTH_YRES * 2 );
 
-	for (i = 0; i < MAX_RAW_SHIFT_VALUE; i++)
+	reg->raw_to_mm_shift[0] = 0; // 0 == no depth value
+	for (i = 1; i < DEVICE_MAX_SHIFT_VALUE; i++)
 		reg->raw_to_mm_shift[i] = RawToDepth( i, &(reg->zero_plane_info) );
 	
 	BuildDepthToRgbShiftTable( reg->depth_to_rgb_shift, &(reg->zero_plane_info) );
@@ -277,6 +281,4 @@ FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_regist
 
 	return 0;
 }
-
-
 
