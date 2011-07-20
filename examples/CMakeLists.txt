@@ -16,7 +16,7 @@ if (WIN32)
   include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
 endif()
 
-#add_executable(registration registration.cpp)
+add_executable(regtest regtest.c)
 add_executable(glview glview.c)
 add_executable(hiview hiview.c)
 
@@ -54,6 +54,7 @@ else()
 
   target_link_libraries(glview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   target_link_libraries(hiview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+  target_link_libraries(regtest freenect)
   if (BUILD_C_SYNC)
     target_link_libraries(glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY}
  ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
