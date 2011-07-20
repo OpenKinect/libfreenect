@@ -9,18 +9,18 @@ int bMirror = 1;
 
 #define RGB_REG_X_RES 640
 #define RGB_REG_Y_RES 512
-#define XN_DEPTH_XRES 640
-#define XN_DEPTH_YRES 480
 #define XN_CMOS_VGAOUTPUT_XRES 1280
 #define XN_SENSOR_WIN_OFFET_X 1
 #define XN_SENSOR_WIN_OFFET_Y 1
 #define RGB_REG_X_VAL_SCALE 16
 #define S2D_PEL_CONST 10
 #define S2D_CONST_OFFSET 0.375
-#define XN_DEVICE_MAX_DEPTH 10000
-#define XN_DEVICE_SENSOR_NO_DEPTH_VALUE 0
 
-#define DEVICE_MAX_SHIFT_VALUE 2048
+#define DEPTH_MAX_METRIC_VALUE 10000
+#define DEPTH_MAX_RAW_VALUE 2048
+#define DEPTH_NO_VALUE 0
+#define DEPTH_X_RES 640
+#define DEPTH_Y_RES 480
 
 #define DENSE_REGISTRATION
 
@@ -28,15 +28,15 @@ int bMirror = 1;
 /// fill the table of horizontal shift values for metric depth -> RGB conversion
 void freenect_init_depth_to_rgb(int16_t* depth_to_rgb, freenect_zero_plane_info* zpi) {
 
-	uint32_t i,xScale = XN_CMOS_VGAOUTPUT_XRES / XN_DEPTH_XRES;
+	uint32_t i,xScale = XN_CMOS_VGAOUTPUT_XRES / DEPTH_X_RES;
 	
 	double pelSize = 1.0 / (zpi->reference_pixel_size * xScale * S2D_PEL_CONST);
 	double pelDCC = zpi->dcmos_rcmos_dist * pelSize * S2D_PEL_CONST;
 	double pelDSR = zpi->reference_distance * pelSize * S2D_PEL_CONST;
 	
-	memset(depth_to_rgb, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEVICE_MAX_DEPTH * sizeof(int16_t));
+	memset(depth_to_rgb, DEPTH_NO_VALUE, DEPTH_MAX_METRIC_VALUE * sizeof(int16_t));
 	
-	for (i = 0; i < XN_DEVICE_MAX_DEPTH; i++) {
+	for (i = 0; i < DEPTH_MAX_METRIC_VALUE; i++) {
 		double curDepth = i * pelSize;
 		depth_to_rgb[i] = ((pelDCC * (curDepth - pelDSR) / curDepth) + (S2D_CONST_OFFSET)) * RGB_REG_X_VAL_SCALE;
 	}
@@ -45,21 +45,21 @@ void freenect_init_depth_to_rgb(int16_t* depth_to_rgb, freenect_zero_plane_info*
 
 int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
 
-	memset(output_mm, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEPTH_XRES * XN_DEPTH_YRES * sizeof(uint16_t)); // clear the output image
-	uint32_t constOffset = XN_DEPTH_YRES * reg->reg_pad_info.start_lines;
+	memset(output_mm, DEPTH_NO_VALUE, DEPTH_X_RES * DEPTH_Y_RES * sizeof(uint16_t)); // clear the output image
+	uint32_t constOffset = DEPTH_Y_RES * reg->reg_pad_info.start_lines;
 	
 	uint32_t x,y,sourceIndex = 0;
-	for (y = 0; y < XN_DEPTH_YRES; y++) {
-		uint32_t registrationOffset = bMirror ? (y + 1) * (XN_DEPTH_XRES * 2) - 2 : y * XN_DEPTH_XRES * 2;
+	for (y = 0; y < DEPTH_Y_RES; y++) {
+		uint32_t registrationOffset = bMirror ? (y + 1) * (DEPTH_X_RES * 2) - 2 : y * DEPTH_X_RES * 2;
 		int16_t* curRegistrationTable = reg->registration_table+registrationOffset;
 		
-		for (x = 0; x < XN_DEPTH_XRES; x++) {
+		for (x = 0; x < DEPTH_X_RES; x++) {
 		
 			// get the value at the current depth pixel, convert to millimeters
 			uint16_t newDepthValue = reg->raw_to_mm_shift[ input_raw[sourceIndex] ];
 			
 			// so long as the current pixel has a depth value
-			if (newDepthValue != XN_DEVICE_SENSOR_NO_DEPTH_VALUE) {
+			if (newDepthValue != DEPTH_NO_VALUE) {
 			
 				// calculate the new x and y location for that pixel
 				// using curRegistrationTable for the basic rectification
@@ -68,26 +68,26 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 				uint32_t ny = curRegistrationTable[1];
 				
 				// ignore anything outside the image bounds
-				if (nx < XN_DEPTH_XRES) {
+				if (nx < DEPTH_X_RES) {
 					// convert nx, ny to an index in the depth image array
-					uint32_t targetIndex = bMirror ? (ny + 1) * XN_DEPTH_XRES - nx - 2 : (ny * XN_DEPTH_XRES) + nx;
+					uint32_t targetIndex = bMirror ? (ny + 1) * DEPTH_X_RES - nx - 2 : (ny * DEPTH_X_RES) + nx;
 					targetIndex -= constOffset;
 					
 					// get the current value at the new location
 					uint16_t curDepthValue = output_mm[targetIndex];
 					// make sure the new location is empty, or the new value is closer
-					if ((curDepthValue == XN_DEVICE_SENSOR_NO_DEPTH_VALUE) || (curDepthValue > newDepthValue)) {
+					if ((curDepthValue == DEPTH_NO_VALUE) || (curDepthValue > newDepthValue)) {
 						output_mm[targetIndex] = newDepthValue; // always save depth at current location
 #ifdef DENSE_REGISTRATION
 						// if we're not on the first row, or the first column
 						if ( nx > 0 && ny > 0 ) {
-							output_mm[targetIndex - XN_DEPTH_XRES] = newDepthValue; // save depth north
-							output_mm[targetIndex - XN_DEPTH_XRES - 1] = newDepthValue; // save depth northwest
+							output_mm[targetIndex - DEPTH_X_RES] = newDepthValue; // save depth north
+							output_mm[targetIndex - DEPTH_X_RES - 1] = newDepthValue; // save depth northwest
 							output_mm[targetIndex - 1] = newDepthValue; // save depth west
 						}
 						// if we're on the first column
 						else if( ny > 0 ) {
-							output_mm[targetIndex - XN_DEPTH_XRES] = newDepthValue; // save depth north
+							output_mm[targetIndex - DEPTH_X_RES] = newDepthValue; // save depth north
 						}
 						// if we're on the first row
 						else if( nx > 0 ) {
@@ -189,9 +189,9 @@ void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTa
 	double* RegYTable = malloc(sizeof(double)*RGB_REG_X_RES*RGB_REG_Y_RES);
 	
 	// int16_t* pRGBRegDepthToShiftTable = (int16_t*)m_pDepthToShiftTable;  // unused
-	uint16_t nDepthXRes = XN_DEPTH_XRES;
-	uint16_t nDepthYRes = XN_DEPTH_YRES;
-	// uint32_t nXScale = XN_CMOS_VGAOUTPUT_XRES / XN_DEPTH_XRES; // unused
+	uint16_t nDepthXRes = DEPTH_X_RES;
+	uint16_t nDepthYRes = DEPTH_Y_RES;
+	// uint32_t nXScale = XN_CMOS_VGAOUTPUT_XRES / DEPTH_X_RES; // unused
 	double* pRegXTable = (double*)RegXTable;
 	double* pRegYTable = (double*)RegYTable;
 	int16_t* pRegTable = (int16_t*)m_pRegistrationTable;
@@ -262,12 +262,12 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 	freenect_reg_pad_info rptmp = { 0, 0, 0 }; reg->reg_pad_info = rptmp;
 	freenect_zero_plane_info zptmp = { 7.5, 2.3, 120, 0.1042 }; reg->zero_plane_info = zptmp;*/
 
-	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * DEVICE_MAX_SHIFT_VALUE );
-	reg->depth_to_rgb_shift = malloc( sizeof( int16_t) * XN_DEVICE_MAX_DEPTH );
-	reg->registration_table = malloc( sizeof( int16_t) * XN_DEPTH_XRES * XN_DEPTH_YRES * 2 );
+	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * DEPTH_MAX_RAW_VALUE );
+	reg->depth_to_rgb_shift = malloc( sizeof( int16_t) * DEPTH_MAX_METRIC_VALUE );
+	reg->registration_table = malloc( sizeof( int16_t) * DEPTH_X_RES * DEPTH_Y_RES * 2 );
 
-	reg->raw_to_mm_shift[0] = 0; // 0 == no depth value
-	for (i = 1; i < DEVICE_MAX_SHIFT_VALUE; i++)
+	reg->raw_to_mm_shift[DEPTH_NO_VALUE] = DEPTH_NO_VALUE;
+	for (i = 1; i < DEPTH_MAX_RAW_VALUE; i++)
 		reg->raw_to_mm_shift[i] = freenect_raw_to_mm( i, &(reg->zero_plane_info) );
 	
 	freenect_init_depth_to_rgb( reg->depth_to_rgb_shift, &(reg->zero_plane_info) );
