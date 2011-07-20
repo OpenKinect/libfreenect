@@ -49,19 +49,23 @@ void BuildDepthToRgbShiftTable(int16_t* depthToRgbShift) {
 }
 
 
-void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registrationTable, int16_t* depthToRgbShift, freenect_reg_pad_info* padInfo) {
-	memset(depthOutput, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEPTH_XRES * XN_DEPTH_YRES * sizeof(uint16_t)); // clear the output image
-	uint32_t constOffset = XN_DEPTH_YRES * padInfo->start_lines;
+FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
+
+	//Apply1080( input_raw, output_mm, reg->registration_table, reg->depth_to_rgb_shift, &(reg->reg_pad_info) );
+	//void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registrationTable, int16_t* depthToRgbShift, freenect_reg_pad_info* padInfo) {
+
+	memset(output_mm, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEPTH_XRES * XN_DEPTH_YRES * sizeof(uint16_t)); // clear the output image
+	uint32_t constOffset = XN_DEPTH_YRES * reg->reg_pad_info.start_lines;
 	
 	uint32_t x,y,sourceIndex = 0;
 	for (y = 0; y < XN_DEPTH_YRES; y++) {
 		uint32_t registrationOffset = bMirror ? (y + 1) * (XN_DEPTH_XRES * 2) - 2 : y * XN_DEPTH_XRES * 2;
-		int16_t* curRegistrationTable = (int16_t*) &registrationTable[registrationOffset];
+		int16_t* curRegistrationTable = reg->registration_table+registrationOffset;
 		
 		for (x = 0; x < XN_DEPTH_XRES; x++) {
 		
 			// get the value at the current depth pixel
-			uint16_t newDepthValue = depthInput[sourceIndex];
+			uint16_t newDepthValue = input_raw[sourceIndex];
 			
 			// so long as the current pixel has a depth value
 			if (newDepthValue != XN_DEVICE_SENSOR_NO_DEPTH_VALUE) {
@@ -69,7 +73,7 @@ void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registratio
 				// calculate the new x and y location for that pixel
 				// using curRegistrationTable for the basic rectification
 				// and depthToRgbShift for determining the x shift
-				uint32_t nx = (uint32_t) (curRegistrationTable[0] + depthToRgbShift[newDepthValue]) / RGB_REG_X_VAL_SCALE;
+				uint32_t nx = (uint32_t) (curRegistrationTable[0] + reg->depth_to_rgb_shift[newDepthValue]) / RGB_REG_X_VAL_SCALE;
 				uint32_t ny = curRegistrationTable[1];
 				
 				// ignore anything outside the image bounds
@@ -79,24 +83,24 @@ void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registratio
 					targetIndex -= constOffset;
 					
 					// get the current value at the new location
-					uint16_t curDepthValue = depthOutput[targetIndex];
+					uint16_t curDepthValue = output_mm[targetIndex];
 					// make sure the new location is empty, or the new value is closer
 					if ((curDepthValue == XN_DEVICE_SENSOR_NO_DEPTH_VALUE) || (curDepthValue > newDepthValue)) {
-						depthOutput[targetIndex] = newDepthValue; // always save depth at current location
+						output_mm[targetIndex] = newDepthValue; // always save depth at current location
 #ifdef DENSE_REGISTRATION
 						// if we're not on the first row, or the first column
 						if ( nx > 0 && ny > 0 ) {
-							depthOutput[targetIndex - XN_DEPTH_XRES] = newDepthValue; // save depth north
-							depthOutput[targetIndex - XN_DEPTH_XRES - 1] = newDepthValue; // save depth northwest
-							depthOutput[targetIndex - 1] = newDepthValue; // save depth west
+							output_mm[targetIndex - XN_DEPTH_XRES] = newDepthValue; // save depth north
+							output_mm[targetIndex - XN_DEPTH_XRES - 1] = newDepthValue; // save depth northwest
+							output_mm[targetIndex - 1] = newDepthValue; // save depth west
 						}
 						// if we're on the first column
 						else if( ny > 0 ) {
-							depthOutput[targetIndex - XN_DEPTH_XRES] = newDepthValue; // save depth north
+							output_mm[targetIndex - XN_DEPTH_XRES] = newDepthValue; // save depth north
 						}
 						// if we're on the first row
 						else if( nx > 0 ) {
-							depthOutput[targetIndex - 1] = newDepthValue; // save depth west
+							output_mm[targetIndex - 1] = newDepthValue; // save depth west
 						}
 #endif
 					}
@@ -106,6 +110,7 @@ void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registratio
 			sourceIndex++;
 		}
 	}
+	return 0;
 }
 
 
@@ -275,9 +280,4 @@ FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_regist
 }
 
 
-FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
 
-	Apply1080( input_raw, output_mm, reg->registration_table, reg->depth_to_rgb_shift, &(reg->reg_pad_info) );
-
-	return 0;
-}
