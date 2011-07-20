@@ -6,10 +6,11 @@
 
 int bMirror = 1;
 
-double dPlanePixelSize = 0.1042; // fReferencePixelSize
-uint64_t nPlaneDsr = 120; // fReferenceDistance
-double planeDcl = 7.5; // pConfig->fEmitterDCmosDistancea
-// double fDCmosRCmosDistance = 2.3;
+//double dPlanePixelSize = 0.1042; // fReferencePixelSize
+//uint64_t nPlaneDsr = 120; // fReferenceDistance
+//double planeDcl = 7.5; // pConfig->fEmitterDCmosDistancea
+//#define XN_SENSOR_DEPTH_RGB_CMOS_DISTANCE 2.4 // seems to be different according to usb (says 2.3)
+//double fDCmosRCmosDistance = 2.3;
 int32_t paramCoeff = 4; // pConfig->nParamCoeff
 int32_t constShift = 200; // pConfig->nConstShift
 int32_t shiftScale = 10; // pConfig->nShiftScale
@@ -24,7 +25,6 @@ int32_t shiftScale = 10; // pConfig->nShiftScale
 #define XN_SENSOR_WIN_OFFET_Y 1
 #define RGB_REG_X_VAL_SCALE 16
 #define S2D_PEL_CONST 10
-#define XN_SENSOR_DEPTH_RGB_CMOS_DISTANCE 2.3 // seems to be different according to usb (says 2.3)
 #define S2D_CONST_OFFSET 0.375
 #define XN_DEVICE_MAX_DEPTH 10000
 #define XN_DEVICE_SENSOR_NO_DEPTH_VALUE 0
@@ -33,12 +33,12 @@ int32_t shiftScale = 10; // pConfig->nShiftScale
 
 #define DENSE_REGISTRATION
 
-void BuildDepthToRgbShiftTable(int16_t* depthToRgbShift) {
+void BuildDepthToRgbShiftTable(int16_t* depthToRgbShift, freenect_zero_plane_info* zpi) {
 	uint32_t i,xScale = XN_CMOS_VGAOUTPUT_XRES / XN_DEPTH_XRES;
 	
-	double pelSize = 1.0 / (dPlanePixelSize * xScale * S2D_PEL_CONST);
-	double pelDCC = XN_SENSOR_DEPTH_RGB_CMOS_DISTANCE * pelSize * S2D_PEL_CONST;
-	double pelDSR = nPlaneDsr * pelSize * S2D_PEL_CONST;
+	double pelSize = 1.0 / (zpi->reference_pixel_size * xScale * S2D_PEL_CONST);
+	double pelDCC = zpi->dcmos_rcmos_dist * pelSize * S2D_PEL_CONST;
+	double pelDSR = zpi->reference_distance * pelSize * S2D_PEL_CONST;
 	
 	memset(depthToRgbShift, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEVICE_MAX_DEPTH * sizeof(int16_t));
 	
@@ -64,8 +64,8 @@ FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint16_t
 		
 		for (x = 0; x < XN_DEPTH_XRES; x++) {
 		
-			// get the value at the current depth pixel
-			uint16_t newDepthValue = input_raw[sourceIndex];
+			// get the value at the current depth pixel, convert to millimeters
+			uint16_t newDepthValue = reg->raw_to_mm_shift[ input_raw[sourceIndex] ];
 			
 			// so long as the current pixel has a depth value
 			if (newDepthValue != XN_DEVICE_SENSOR_NO_DEPTH_VALUE) {
@@ -247,10 +247,10 @@ FinishLoop:
 
 // conversion routines
 
-uint16_t RawToDepth(uint16_t raw) {
+uint16_t RawToDepth(uint16_t raw, freenect_zero_plane_info* zpi) {
 	double fixedRefX = ((raw - (paramCoeff * constShift)) / paramCoeff) - 0.375;
-	double metric = fixedRefX * dPlanePixelSize;
-	return shiftScale * ((metric * nPlaneDsr / (planeDcl - metric)) + nPlaneDsr);
+	double metric = fixedRefX * zpi->reference_pixel_size;
+	return shiftScale * ((metric * zpi->reference_distance / (zpi->dcmos_emitter_dist - metric)) + zpi->reference_distance);
 }
 
 
@@ -268,11 +268,10 @@ FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_regist
 	reg->depth_to_rgb_shift = malloc( sizeof( int16_t) * XN_DEVICE_MAX_DEPTH );
 	reg->registration_table = malloc( sizeof( int16_t) * XN_DEPTH_XRES * XN_DEPTH_YRES * 2 );
 
-	for (i = 0; i < MAX_RAW_SHIFT_VALUE; i++) {
-		reg->raw_to_mm_shift[i] = RawToDepth( i );
-	}
+	for (i = 0; i < MAX_RAW_SHIFT_VALUE; i++)
+		reg->raw_to_mm_shift[i] = RawToDepth( i, &(reg->zero_plane_info) );
 	
-	BuildDepthToRgbShiftTable( reg->depth_to_rgb_shift );
+	BuildDepthToRgbShiftTable( reg->depth_to_rgb_shift, &(reg->zero_plane_info) );
 	
 	BuildRegTable1080( reg->depth_to_rgb_shift, reg->registration_table, &(reg->reg_info), &(reg->reg_pad_info) );
 
