@@ -141,6 +141,9 @@ struct _freenect_device {
 	packet_stream depth;
 	packet_stream video;
 
+	// Registration
+	freenect_registration registration;
+
 	// Audio
 	// Motor
 	fnusb_dev usb_motor;

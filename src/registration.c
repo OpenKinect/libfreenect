@@ -1,20 +1,10 @@
 #include <libfreenect.h>
-#include <vector>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
 
-	std::vector<uint16_t> depth;
-	
-	std::vector<uint16_t> input, output;
-	
-	std::vector<int16_t> m_pDepthToShiftTable;
-	std::vector<int16_t> m_pRegistrationTable;
-
-freenect_reg_info RegData = { 1964, 56, -26, 600, -13, 2825, 684, 5, 6161, 6434, 10062, 130801, 170, 136, 2095986, 890, 763, 2096378, 134215474, 134217093, 134216989, 134216925, 134216984, 134214659 };
-freenect_reg_pad_info m_padInfo = { 0, 0, 0 };
-
-bool bMirror = true;
+int bMirror = 1;
 
 double dPlanePixelSize = 0.1042; // fReferencePixelSize
 uint64_t nPlaneDsr = 120; // fReferenceDistance
@@ -44,7 +34,7 @@ int32_t shiftScale = 10; // pConfig->nShiftScale
 #define DENSE_REGISTRATION
 
 void BuildDepthToRgbShiftTable(int16_t* depthToRgbShift) {
-	uint32_t xScale = XN_CMOS_VGAOUTPUT_XRES / XN_DEPTH_XRES;
+	uint32_t i,xScale = XN_CMOS_VGAOUTPUT_XRES / XN_DEPTH_XRES;
 	
 	double pelSize = 1.0 / (dPlanePixelSize * xScale * S2D_PEL_CONST);
 	double pelDCC = XN_SENSOR_DEPTH_RGB_CMOS_DISTANCE * pelSize * S2D_PEL_CONST;
@@ -52,23 +42,23 @@ void BuildDepthToRgbShiftTable(int16_t* depthToRgbShift) {
 	
 	memset(depthToRgbShift, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEVICE_MAX_DEPTH * sizeof(int16_t));
 	
-	for (uint32_t i = 0; i < XN_DEVICE_MAX_DEPTH; i++) {
+	for (i = 0; i < XN_DEVICE_MAX_DEPTH; i++) {
 		double curDepth = i * pelSize;
 		depthToRgbShift[i] = ((pelDCC * (curDepth - pelDSR) / curDepth) + (S2D_CONST_OFFSET)) * RGB_REG_X_VAL_SCALE;
 	}
 }
 
 
-void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registrationTable, int16_t* depthToRgbShift, freenect_reg_pad_info& padInfo) {
+void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registrationTable, int16_t* depthToRgbShift, freenect_reg_pad_info* padInfo) {
 	memset(depthOutput, XN_DEVICE_SENSOR_NO_DEPTH_VALUE, XN_DEPTH_XRES * XN_DEPTH_YRES * sizeof(uint16_t)); // clear the output image
-	uint32_t constOffset = XN_DEPTH_YRES * padInfo.start_lines;
+	uint32_t constOffset = XN_DEPTH_YRES * padInfo->start_lines;
 	
-	uint32_t sourceIndex = 0;
-	for (uint32_t y = 0; y < XN_DEPTH_YRES; y++) {
+	uint32_t x,y,sourceIndex = 0;
+	for (y = 0; y < XN_DEPTH_YRES; y++) {
 		uint32_t registrationOffset = bMirror ? (y + 1) * (XN_DEPTH_XRES * 2) - 2 : y * XN_DEPTH_XRES * 2;
 		int16_t* curRegistrationTable = (int16_t*) &registrationTable[registrationOffset];
 		
-		for (uint32_t x = 0; x < XN_DEPTH_XRES; x++) {
+		for (x = 0; x < XN_DEPTH_XRES; x++) {
 		
 			// get the value at the current depth pixel
 			uint16_t newDepthValue = depthInput[sourceIndex];
@@ -119,44 +109,44 @@ void Apply1080(uint16_t* depthInput, uint16_t* depthOutput, int16_t* registratio
 }
 
 
-void CreateDXDYTables (double* RegXTable, double* RegYTable, int32_t resX, int32_t resY, freenect_reg_info regdata ) {
+void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t resX, int32_t resY, freenect_reg_info* regdata ) {
 
-	int64_t AX6 = regdata.ay;
-	int64_t BX6 = regdata.bx;
-	int64_t CX2 = regdata.cx;
-	int64_t DX2 = regdata.dx;
+	int64_t AX6 = regdata->ay;
+	int64_t BX6 = regdata->bx;
+	int64_t CX2 = regdata->cx;
+	int64_t DX2 = regdata->dx;
 
-	int64_t AY6 = regdata.ay;
-	int64_t BY6 = regdata.by;
-	int64_t CY2 = regdata.cy;
-	int64_t DY2 = regdata.dy;
+	int64_t AY6 = regdata->ay;
+	int64_t BY6 = regdata->by;
+	int64_t CY2 = regdata->cy;
+	int64_t DY2 = regdata->dy;
 
 	// don't merge the shift operations - necessary for proper 32-bit clamping of extracted values
-	int32_t deltaBetaX = (regdata.dx_beta_inc << 8) >> 8;
-	int32_t deltaBetaY = (regdata.dy_beta_inc << 8) >> 8;
+	int32_t deltaBetaX = (regdata->dx_beta_inc << 8) >> 8;
+	int32_t deltaBetaY = (regdata->dy_beta_inc << 8) >> 8;
 
-	int64_t dX0 = (regdata.dx_start << 13) >> 4;
-	int64_t dY0 = (regdata.dy_start << 13) >> 4;
+	int64_t dX0 = (regdata->dx_start << 13) >> 4;
+	int64_t dY0 = (regdata->dy_start << 13) >> 4;
 
-	int64_t dXdX0 = (regdata.dxdx_start << 11) >> 3;
-	int64_t dXdY0 = (regdata.dxdy_start << 11) >> 3;
-	int64_t dYdX0 = (regdata.dydx_start << 11) >> 3;
-	int64_t dYdY0 = (regdata.dydy_start << 11) >> 3;
+	int64_t dXdX0 = (regdata->dxdx_start << 11) >> 3;
+	int64_t dXdY0 = (regdata->dxdy_start << 11) >> 3;
+	int64_t dYdX0 = (regdata->dydx_start << 11) >> 3;
+	int64_t dYdY0 = (regdata->dydy_start << 11) >> 3;
 
-	int64_t dXdXdX0 = (regdata.dxdxdx_start << 5) << 3;
-	int64_t dYdXdX0 = (regdata.dydxdx_start << 5) << 3;
-	int64_t dYdXdY0 = (regdata.dydxdy_start << 5) << 3;
-	int64_t dXdXdY0 = (regdata.dxdxdy_start << 5) << 3;
-	int64_t dYdYdX0 = (regdata.dydydx_start << 5) << 3;
-	int64_t dYdYdY0 = (regdata.dydydy_start << 5) << 3;
+	int64_t dXdXdX0 = (regdata->dxdxdx_start << 5) << 3;
+	int64_t dYdXdX0 = (regdata->dydxdx_start << 5) << 3;
+	int64_t dYdXdY0 = (regdata->dydxdy_start << 5) << 3;
+	int64_t dXdXdY0 = (regdata->dxdxdy_start << 5) << 3;
+	int64_t dYdYdX0 = (regdata->dydydx_start << 5) << 3;
+	int64_t dYdYdY0 = (regdata->dydydy_start << 5) << 3;
 
-	int32_t betaX = (regdata.dx_beta_start << 15) >> 8;
-	int32_t betaY = (regdata.dy_beta_start << 15) >> 8;
+	int32_t betaX = (regdata->dx_beta_start << 15) >> 8;
+	int32_t betaY = (regdata->dy_beta_start << 15) >> 8;
 
-	int32_t tOffs = 0;
+	int32_t row,col,tOffs = 0;
 
-	for(int32_t row = 0 ; row<resY ; row++)
-	{
+	for (row = 0 ; row < resY ; row++) {
+
 		dXdXdX0 += CX2;
 
 		dXdX0   += dYdXdX0 >> 8;
@@ -181,8 +171,8 @@ void CreateDXDYTables (double* RegXTable, double* RegYTable, int32_t resX, int32
 		int64_t coldXdXdX0 = dXdXdX0, coldXdX0 = dXdX0, coldX0 = dX0;
 		int32_t colBetaX = betaX;
 
-			for(int32_t col = 0 ; col<resX ; col++, tOffs++)
-		{
+		for (col = 0 ; col < resX ; col++, tOffs++) {
+
 			RegXTable[tOffs] = coldX0 * (1.0/(1<<17));
 			RegYTable[tOffs] = coldY0 * (1.0/(1<<17));
 			
@@ -198,9 +188,9 @@ void CreateDXDYTables (double* RegXTable, double* RegYTable, int32_t resX, int32
 	}
 }
 
-void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTable, freenect_reg_info& RegData, freenect_reg_pad_info& m_padInfo) {	
-	double* RegXTable = new double[RGB_REG_X_RES*RGB_REG_Y_RES];
-	double* RegYTable = new double[RGB_REG_X_RES*RGB_REG_Y_RES];
+void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTable, freenect_reg_info* RegData, freenect_reg_pad_info* m_padInfo) {	
+	double* RegXTable = malloc(sizeof(double)*RGB_REG_X_RES*RGB_REG_Y_RES);
+	double* RegYTable = malloc(sizeof(double)*RGB_REG_X_RES*RGB_REG_Y_RES);
 	
 	// int16_t* pRGBRegDepthToShiftTable = (int16_t*)m_pDepthToShiftTable;  // unused
 	uint16_t nDepthXRes = XN_DEPTH_XRES;
@@ -213,11 +203,12 @@ void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTa
 	double nNewY = 0;
 	
 	// Create the dx dy tables
-	CreateDXDYTables(RegXTable, RegYTable, nDepthXRes,	nDepthYRes, RegData );
+	freenect_create_dxdy_tables(RegXTable, RegYTable, nDepthXRes,	nDepthYRes, RegData );
 	
 	// Pre-process the table, do sanity checks and convert it from double to ints (for better performance)
-	for (int32_t nY=0; nY<nDepthYRes; nY++) {
-		for (int32_t nX=0; nX<nDepthXRes; nX++) {
+	int32_t nY,nX;
+	for (nY=0; nY<nDepthYRes; nY++) {
+		for (nX=0; nX<nDepthXRes; nX++) {
 			nNewX = (nX + *pRegXTable + XN_SENSOR_WIN_OFFET_X) * RGB_REG_X_VAL_SCALE;
 			nNewY = (nY + *pRegYTable + XN_SENSOR_WIN_OFFET_Y);
 			
@@ -245,8 +236,8 @@ void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTa
 	}
 	
 FinishLoop:
-	delete [] RegXTable;
-	delete [] RegYTable;
+	free( RegXTable );
+	free( RegYTable );
 }
 
 // conversion routines
@@ -257,53 +248,36 @@ uint16_t RawToDepth(uint16_t raw) {
 	return shiftScale * ((metric * nPlaneDsr / (planeDcl - metric)) + nPlaneDsr);
 }
 
-const float
-k1 = 127.50,
-k2 = 2842.5,
-k3 = 1.1863;
 
-inline float rawToMillimeters(float raw) {
-	return k1 * tan((raw / k2) + k3);
-}
+#define MAX_RAW_SHIFT_VALUE 2048
 
-// main routine
+FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_registration* reg) {
 
-int main() {
+	uint16_t i;
 
-	int n = XN_DEPTH_XRES * XN_DEPTH_YRES;
+	reg->reg_info        = freenect_get_reg_info( dev );
+	reg->reg_pad_info    = freenect_get_reg_pad_info( dev );
+	reg->zero_plane_info = freenect_get_zero_plane_info( dev );
 
-	depth.resize(n);
-	input.resize(n);
-	output.resize(n);
+	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * MAX_RAW_SHIFT_VALUE );
+	reg->depth_to_rgb_shift = malloc( sizeof( int16_t) * XN_DEVICE_MAX_DEPTH );
+	reg->registration_table = malloc( sizeof( int16_t) * XN_DEPTH_XRES * XN_DEPTH_YRES * 2 );
 
-	FILE* df = fopen("depth.raw","r");
-	fread(&(depth[0]),640*480*2,1,df);
-	fclose(df);
-
-	for(int i = 0; i < n; i++) {
-		input[i] = rawToMillimeters(depth[i]);
-		//input[i] = RawToDepth(depth[i]);
+	for (i = 0; i < MAX_RAW_SHIFT_VALUE; i++) {
+		reg->raw_to_mm_shift[i] = RawToDepth( i );
 	}
 	
-	/*for(int i = 0; i < 1024; i++) {
-		printf("\t%d\t%f\n",RawToDepth(i),rawToMillimeters(i));
-	}*/
+	BuildDepthToRgbShiftTable( reg->depth_to_rgb_shift );
+	
+	BuildRegTable1080( reg->depth_to_rgb_shift, reg->registration_table, &(reg->reg_info), &(reg->reg_pad_info) );
 
-	m_pDepthToShiftTable.resize(XN_DEVICE_MAX_DEPTH);
-	m_pRegistrationTable.resize(XN_DEPTH_XRES * XN_DEPTH_YRES * 2);
-	
-	BuildDepthToRgbShiftTable(&m_pDepthToShiftTable[0]);
-	
-	BuildRegTable1080(&m_pDepthToShiftTable[0], 
-										&m_pRegistrationTable[0], 
-										RegData, 
-										m_padInfo);
-										
-	Apply1080(&input[0], &output[0], &m_pRegistrationTable[0], &m_pDepthToShiftTable[0], m_padInfo);
-	
-	FILE* cf = fopen("calib.pgm","w+");
-	fprintf(cf,"P5 640 480 65535 ");
-	fwrite(&(output[0]),640*480*2,1,cf);
-	fclose(cf);
+	return 0;
 }
 
+
+FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
+
+	Apply1080( input_raw, output_mm, reg->registration_table, reg->depth_to_rgb_shift, &(reg->reg_pad_info) );
+
+	return 0;
+}
