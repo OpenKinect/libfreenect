@@ -134,13 +134,6 @@ void sendDepth(){
 			buf_depth[4 * i + 1] = l;
 			buf_depth[4 * i + 2] = l;
 			buf_depth[4 * i + 3] = 0xFF;
-			if(depth[i] < _max_depth && depth[i] > _min_depth){
-				unsigned char l =  0xFF - ((depth[i] - _min_depth) & 0xFF);
-				buf_depth[4 * i + 0] = l;
-				buf_depth[4 * i + 1] = l;
-				buf_depth[4 * i + 2] = l;
-				buf_depth[4 * i + 3] = 0xFF;
-			}
 		}
 	}
 	if(_depth_compression != 0) {
