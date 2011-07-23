@@ -9,82 +9,31 @@ describe Freenect do
       lambda { ctx.close }.should_not raise_error
     end
 
-    it "should lookup video format values" do
-      Freenect.lookup_video_format(:rgb).should == Freenect::VIDEO_RGB
-      Freenect.lookup_video_format(0).should == Freenect::VIDEO_RGB
-
-
-      Freenect.lookup_video_format(:bayer).should == Freenect::VIDEO_BAYER
-      Freenect.lookup_video_format(1).should == Freenect::VIDEO_BAYER
-
-      Freenect.lookup_video_format(:ir_8bit).should == Freenect::VIDEO_IR_8BIT
-      Freenect.lookup_video_format(2).should == Freenect::VIDEO_IR_8BIT
-
-      Freenect.lookup_video_format(:ir_10bit).should == Freenect::VIDEO_IR_10BIT
-      Freenect.lookup_video_format(3).should == Freenect::VIDEO_IR_10BIT
-
-      Freenect.lookup_video_format(:ir_10bit_packed).should == Freenect::VIDEO_IR_10BIT_PACKED
-      Freenect.lookup_video_format(4).should == Freenect::VIDEO_IR_10BIT_PACKED
-
-      Freenect.lookup_video_format(:yuv_rgb).should == Freenect::VIDEO_YUV_RGB
-      Freenect.lookup_video_format(5).should == Freenect::VIDEO_YUV_RGB
-
-      Freenect.lookup_video_format(:yuv_raw).should == Freenect::VIDEO_YUV_RAW
-      Freenect.lookup_video_format(6).should == Freenect::VIDEO_YUV_RAW
+    it "should enumerate the video modes supported by the driver" do
+      modes = Freenect.video_modes
+      modes.should be_kind_of(Array)
+      modes.length.should be > 0
+      modes.each {|x| x.should be_kind_of(Freenect::FrameMode)}
+      modes.each {|x| x.frame_mode_type.should == :video}
+    end
+    it "should be able to find basic video modes" do
+      mode = Freenect.video_mode(:medium, :rgb)
+      mode.resolution.should == :medium
+      mode.format.should == :rgb
     end
 
-    it "should lookup video format size values" do
-      Freenect.lookup_video_size(:rgb).should == Freenect::RGB_SIZE
-      Freenect.lookup_video_size(0).should == Freenect::RGB_SIZE
-
-      Freenect.lookup_video_size(:bayer).should == Freenect::BAYER_SIZE
-      Freenect.lookup_video_size(1).should == Freenect::BAYER_SIZE
-
-      Freenect.lookup_video_size(:ir_8bit).should == Freenect::IR_8BIT_SIZE
-      Freenect.lookup_video_size(2).should == Freenect::IR_8BIT_SIZE
-
-      Freenect.lookup_video_size(:ir_10bit).should == Freenect::IR_10BIT_SIZE
-      Freenect.lookup_video_size(3).should == Freenect::IR_10BIT_SIZE
-
-      Freenect.lookup_video_size(:ir_10bit_packed).should == Freenect::IR_10BIT_PACKED_SIZE
-      Freenect.lookup_video_size(4).should == Freenect::IR_10BIT_PACKED_SIZE
-
-      Freenect.lookup_video_size(:yuv_rgb).should == Freenect::YUV_RGB_SIZE
-      Freenect.lookup_video_size(5).should == Freenect::YUV_RGB_SIZE
-
-      Freenect.lookup_video_size(:yuv_raw).should == Freenect::YUV_RAW_SIZE
-      Freenect.lookup_video_size(6).should == Freenect::YUV_RAW_SIZE
-
+    it "should enumerate the depth modes supported by the driver" do
+      modes = Freenect.depth_modes
+      modes.should be_kind_of(Array)
+      modes.length.should be > 0
+      modes.each {|x| x.should be_kind_of(Freenect::FrameMode)}
+      modes.each {|x| x.frame_mode_type.should == :depth}
     end
-
-    it "should lookup depth format values" do
-      Freenect.lookup_depth_format(:depth_11bit).should == Freenect::DEPTH_11BIT
-      Freenect.lookup_depth_format(0).should == Freenect::DEPTH_11BIT
-
-      Freenect.lookup_depth_format(:depth_10bit).should == Freenect::DEPTH_10BIT
-      Freenect.lookup_depth_format(1).should == Freenect::DEPTH_10BIT
-
-      Freenect.lookup_depth_format(:depth_11bit_packed).should == Freenect::DEPTH_11BIT_PACKED
-      Freenect.lookup_depth_format(2).should == Freenect::DEPTH_11BIT_PACKED
-
-      Freenect.lookup_depth_format(:depth_10bit_packed).should == Freenect::DEPTH_10BIT_PACKED
-      Freenect.lookup_depth_format(3).should == Freenect::DEPTH_10BIT_PACKED
-    end
-
-    it "should lookup depth format size values" do
-      Freenect.lookup_depth_size(:depth_11bit).should == Freenect::DEPTH_11BIT_SIZE
-      Freenect.lookup_depth_size(0).should == Freenect::DEPTH_11BIT_SIZE
-
-      Freenect.lookup_depth_size(:depth_10bit).should == Freenect::DEPTH_10BIT_SIZE
-      Freenect.lookup_depth_size(1).should == Freenect::DEPTH_10BIT_SIZE
-
-      Freenect.lookup_depth_size(:depth_11bit_packed).should == Freenect::DEPTH_11BIT_PACKED_SIZE
-      Freenect.lookup_depth_size(2).should == Freenect::DEPTH_11BIT_PACKED_SIZE
-
-      Freenect.lookup_depth_size(:depth_10bit_packed).should == Freenect::DEPTH_10BIT_PACKED_SIZE
-      Freenect.lookup_depth_size(3).should == Freenect::DEPTH_10BIT_PACKED_SIZE
+    it "should be able to find basic depth modes" do
+      mode = Freenect.depth_mode(:medium, :depth_11bit)
+      mode.resolution.should == :medium
+      mode.format.should == :depth_11bit
     end
   end
-
 end
 
