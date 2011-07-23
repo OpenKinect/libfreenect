@@ -80,7 +80,7 @@ module FFI::Freenect
   
   RESOLUTIONS = enum( :low, RESOLUTION_LOW,
                       :medium, RESOLUTION_MEDIUM,
-                      :high, RESOLUTION_HIGH )
+                      :high, RESOLUTION_HIGH)
  
 	DEPTH_11BIT = 0
 	DEPTH_10BIT = 1
@@ -143,14 +143,40 @@ module FFI::Freenect
   class FrameMode < FFI::Struct
     layout :reserved,               :uint32,
            :resolution,             RESOLUTIONS,
-           :union,                  FrameModeFormat,
+           :format,                 FrameModeFormat,
            :bytes,                  :int32,
            :width,                  :int16,
            :height,                 :int16,
            :data_bits_per_pixel,    :int8,
            :padding_bits_per_pixel, :int8,
            :framerate,              :int8,
-           :is_valid,               :int8,
+           :is_valid,               :int8
+    def is_valid?
+     self[:is_valid] != 0
+    end
+    def framerate; self[:framerate]; end
+    def padding_bits_per_pixel; self[:padding_bits_per_pixel]; end
+    def data_bits_per_pixel; self[:data_bits_per_pixel]; end
+    def height; self[:height]; end
+    def width; self[:width]; end
+    def bytes; self[:bytes]; end
+    def resolution; self[:resolution]; end
+    def video_format; self[:format][:video_format]; end
+    def depth_format; self[:format][:depth_format]; end
+    attr_accessor :frame_mode_type
+    def format
+      case self.frame_mode_type
+      when :video
+        self.video_format
+      when :depth
+        self.depth_format
+      else
+        nil
+      end
+    end
+    def to_s
+      "#<Freenect::FrameMode #{format} #{resolution} res (#{width}x#{height}) @ #{framerate} Hz>"
+    end
   end
  
   class RawTiltState < FFI::Struct
@@ -192,15 +218,15 @@ module FFI::Freenect
   attach_function :freenect_get_mks_accel, [RawTiltState, :pointer, :pointer, :pointer], :void
 
   attach_function :freenect_get_video_mode_count, [], :int
-  attach_function :freenect_get_video_mode, [:int], FrameMode
-  attach_function :freenect_get_current_video_mode, [:freenect_device], FrameMode
-  attach_function :freenect_find_video_mode, [RESOLUTIONS, VIDEO_FORMATS], FrameMode
+  attach_function :freenect_get_video_mode, [:int], FrameMode.by_value
+  attach_function :freenect_get_current_video_mode, [:freenect_device], FrameMode.by_value
+  attach_function :freenect_find_video_mode, [RESOLUTIONS, VIDEO_FORMATS], FrameMode.by_value
   attach_function :freenect_set_video_mode, [:freenect_device, FrameMode], :int
 
   attach_function :freenect_get_depth_mode_count, [], :int
-  attach_function :freenect_get_depth_mode, [:int], FrameMode
-  attach_function :freenect_get_current_depth_mode, [:freenect_device], FrameMode
-  attach_function :freenect_find_depth_mode, [RESOLUTIONS, DEPTH_FORMATS], FrameMode
+  attach_function :freenect_get_depth_mode, [:int], FrameMode.by_value
+  attach_function :freenect_get_current_depth_mode, [:freenect_device], FrameMode.by_value
+  attach_function :freenect_find_depth_mode, [RESOLUTIONS, DEPTH_FORMATS], FrameMode.by_value
   attach_function :freenect_set_depth_mode, [:freenect_device, FrameMode], :int
 
   attach_function :freenect_sync_get_video, [:pointer, :pointer, :int, VIDEO_FORMATS], :int
