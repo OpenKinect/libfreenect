@@ -9,6 +9,7 @@ int bMirror = 1;
 
 #define RGB_REG_X_RES 640
 #define RGB_REG_Y_RES 512
+
 #define XN_CMOS_VGAOUTPUT_XRES 1280
 #define XN_SENSOR_WIN_OFFET_X 1
 #define XN_SENSOR_WIN_OFFET_Y 1
@@ -184,14 +185,14 @@ void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t r
 	}
 }
 
-void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTable, freenect_reg_info* RegData, freenect_reg_pad_info* m_padInfo) {	
-	double* RegXTable = malloc(sizeof(double)*RGB_REG_X_RES*RGB_REG_Y_RES);
-	double* RegYTable = malloc(sizeof(double)*RGB_REG_X_RES*RGB_REG_Y_RES);
+void freenect_init_registration_table(int16_t* m_pRegistrationTable, freenect_reg_info* RegData, freenect_reg_pad_info* m_padInfo) {
+
+	double RegXTable[RGB_REG_X_RES*RGB_REG_Y_RES];
+	double RegYTable[RGB_REG_X_RES*RGB_REG_Y_RES];
 	
-	// int16_t* pRGBRegDepthToShiftTable = (int16_t*)m_pDepthToShiftTable;  // unused
 	uint16_t nDepthXRes = DEPTH_X_RES;
 	uint16_t nDepthYRes = DEPTH_Y_RES;
-	// uint32_t nXScale = XN_CMOS_VGAOUTPUT_XRES / DEPTH_X_RES; // unused
+
 	double* pRegXTable = (double*)RegXTable;
 	double* pRegYTable = (double*)RegYTable;
 	int16_t* pRegTable = (int16_t*)m_pRegistrationTable;
@@ -216,24 +217,20 @@ void BuildRegTable1080(int16_t* m_pDepthToShiftTable, int16_t* m_pRegistrationTa
 			if (nNewX < 1) {
 				nNewX = ((nDepthXRes*4) * RGB_REG_X_VAL_SCALE); // set illegal value on purpose
 			}
-			
-			if (nNewY > nDepthYRes) {
+
+			if (nNewY > nDepthYRes) { // our work here is done
 				nNewY = nDepthYRes;
-				goto FinishLoop;
+				return;
 			}
-			
+
 			*pRegTable = nNewX;
 			*(pRegTable+1) = nNewY;
-			
+
 			pRegXTable++;
 			pRegYTable++;
 			pRegTable+=2;
 		}
 	}
-	
-FinishLoop:
-	free( RegXTable );
-	free( RegYTable );
 }
 
 
@@ -254,13 +251,17 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 
 	uint16_t i;
 
-	reg->reg_info        = freenect_get_reg_info( dev );
-	reg->reg_pad_info    = freenect_get_reg_pad_info( dev );
-	reg->zero_plane_info = freenect_get_zero_plane_info( dev );
-
-	/*freenect_reg_info ritmp = { 2048330528, 1964, 56, -26, 600, 6161, -13, 2825, 684, 5, 6434, 10062, 130801, 0, 0, 170, 136, 2095986, 890, 763, 2096378, 134215474, 134217093, 134216989, 134216925, 0, 134216984, 0, 134214659 }; reg->reg_info = ritmp;
+	// default values ripped from my Kinect
+	freenect_reg_info ritmp = { 2048330528, 1964, 56, -26, 600, 6161, -13, 2825, 684, 5, 6434, 10062, 130801, 0, 0, 170, 136, 2095986, 890, 763, 2096378, 134215474, 134217093, 134216989, 134216925, 0, 134216984, 0, 134214659 }; reg->reg_info = ritmp;
 	freenect_reg_pad_info rptmp = { 0, 0, 0 }; reg->reg_pad_info = rptmp;
-	freenect_zero_plane_info zptmp = { 7.5, 2.3, 120, 0.1042 }; reg->zero_plane_info = zptmp;*/
+	freenect_zero_plane_info zptmp = { 7.5, 2.3, 120, 0.1042 }; reg->zero_plane_info = zptmp;
+
+	// if device is connected, retrieve data
+	if (dev) {
+		reg->reg_info        = freenect_get_reg_info( dev );
+		reg->reg_pad_info    = freenect_get_reg_pad_info( dev );
+		reg->zero_plane_info = freenect_get_zero_plane_info( dev );
+	}
 
 	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * DEPTH_MAX_RAW_VALUE );
 	reg->depth_to_rgb_shift = malloc( sizeof( int16_t) * DEPTH_MAX_METRIC_VALUE );
@@ -272,8 +273,14 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 	
 	freenect_init_depth_to_rgb( reg->depth_to_rgb_shift, &(reg->zero_plane_info) );
 	
-	BuildRegTable1080( reg->depth_to_rgb_shift, reg->registration_table, &(reg->reg_info), &(reg->reg_pad_info) );
+	freenect_init_registration_table( reg->registration_table, &(reg->reg_info), &(reg->reg_pad_info) );
 
 	return 0;
+}
+
+void freenect_cleanup_registration(freenect_registration* reg) {
+	free( &(reg->reg_info) );
+	free( &(reg->reg_pad_info) );
+	free( &(reg->zero_plane_info) );
 }
 
