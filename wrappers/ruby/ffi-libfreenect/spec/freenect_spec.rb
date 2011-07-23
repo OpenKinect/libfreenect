@@ -17,9 +17,28 @@ describe Freenect do
       modes.each {|x| x.frame_mode_type.should == :video}
     end
     it "should be able to find basic video modes" do
-      mode = Freenect.video_mode(:medium, :rgb)
-      mode.resolution.should == :medium
-      mode.format.should == :rgb
+      [
+        [:high,:rgb], [:medium,:rgb],
+        [:high,:bayer], [:medium,:bayer],
+        [:high,:ir_8bit], [:medium,:ir_8bit],
+        [:high,:ir_10bit], [:medium,:ir_10bit],
+        [:high,:ir_10bit_packed], [:medium,:ir_10bit_packed],
+      ].each do |res,mode|
+        x = Freenect.video_mode(res, mode)
+        x.resolution.should == res
+        x.format.should == mode
+      end      
+    end
+    it "should find the right sizes for video" do
+      high = Freenect.video_mode(:high, :rgb)
+      high.width.should == 1280
+      high.height.should == 1024
+      medium = Freenect.video_mode(:medium, :rgb)
+      medium.width.should == 640
+      medium.height.should == 480
+      ir_8bit = Freenect.video_mode(:medium, :ir_8bit)
+      ir_8bit.width.should == 640
+      ir_8bit.height.should == 488
     end
 
     it "should enumerate the depth modes supported by the driver" do
@@ -30,10 +49,23 @@ describe Freenect do
       modes.each {|x| x.frame_mode_type.should == :depth}
     end
     it "should be able to find basic depth modes" do
-      mode = Freenect.depth_mode(:medium, :depth_11bit)
-      mode.resolution.should == :medium
-      mode.format.should == :depth_11bit
+      [
+        [:medium,:depth_11bit],
+        [:medium,:depth_10bit],
+        [:medium,:depth_11bit_packed],
+        [:medium,:depth_10bit_packed],
+      ].each do |res,mode|
+        x = Freenect.depth_mode(res, mode)
+        x.resolution.should == res
+        x.format.should == mode
+      end      
     end
   end
+  it "should find the right sizes for depth" do
+    depth = Freenect.depth_mode(:medium, :depth_11bit)
+    depth.width.should == 640
+    depth.height.should == 480
+  end
+  
 end
 
