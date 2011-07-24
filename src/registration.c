@@ -186,26 +186,26 @@ void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t r
 	}
 }
 
-void freenect_init_registration_table(int32_t* m_pRegistrationTable, freenect_reg_info* RegData, freenect_reg_pad_info* m_padInfo) {
+void freenect_init_registration_table(int32_t* registration_table, freenect_reg_info* reg_info) {
 
-	double RegXTable[RGB_REG_X_RES*RGB_REG_Y_RES];
-	double RegYTable[RGB_REG_X_RES*RGB_REG_Y_RES];
-	
-	double* pRegXTable = (double*)RegXTable;
-	double* pRegYTable = (double*)RegYTable;
-	int32_t* pRegTable = (int32_t*)m_pRegistrationTable;
+	double regtable_dx[RGB_REG_X_RES*RGB_REG_Y_RES];
+	double regtable_dy[RGB_REG_X_RES*RGB_REG_Y_RES];
+
+	// create temporary dx/dy tables
+	freenect_create_dxdy_tables( regtable_dx, regtable_dy, DEPTH_X_RES, DEPTH_Y_RES, reg_info );
+
+	int inindex  = 0;
+	int outindex = 0;
+
 	double nNewX = 0;
 	double nNewY = 0;
-	
-	// Create the dx dy tables
-	freenect_create_dxdy_tables(RegXTable, RegYTable, DEPTH_X_RES,	DEPTH_Y_RES, RegData );
 	
 	// Pre-process the table, do sanity checks and convert it from double to ints (for better performance)
 	int32_t nY,nX;
 	for (nY=0; nY<DEPTH_Y_RES; nY++) {
 		for (nX=0; nX<DEPTH_X_RES; nX++) {
-			nNewX = (nX + *pRegXTable + XN_SENSOR_WIN_OFFET_X) * RGB_REG_X_VAL_SCALE;
-			nNewY = (nY + *pRegYTable + XN_SENSOR_WIN_OFFET_Y);
+			nNewX = (nX + regtable_dx[inindex] + XN_SENSOR_WIN_OFFET_X) * RGB_REG_X_VAL_SCALE;
+			nNewY = (nY + regtable_dy[inindex] + XN_SENSOR_WIN_OFFET_Y);
 			
 			if (nNewY < 1) {
 				nNewY = 1;
@@ -221,12 +221,11 @@ void freenect_init_registration_table(int32_t* m_pRegistrationTable, freenect_re
 				return;
 			}
 
-			*pRegTable = nNewX;
-			*(pRegTable+1) = nNewY;
+			registration_table[outindex] = nNewX;
+			registration_table[outindex+1] = nNewY;
 
-			pRegXTable++;
-			pRegYTable++;
-			pRegTable+=2;
+			inindex++;
+			outindex+=2;
 		}
 	}
 }
@@ -271,7 +270,7 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 	
 	freenect_init_depth_to_rgb( reg->depth_to_rgb_shift, &(reg->zero_plane_info) );
 	
-	freenect_init_registration_table( reg->registration_table, &(reg->reg_info), &(reg->reg_pad_info) );
+	freenect_init_registration_table( reg->registration_table, &(reg->reg_info) );
 
 	return 0;
 }
