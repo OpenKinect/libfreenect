@@ -153,7 +153,8 @@ void keyPressed(unsigned char key, int x, int y)
 		free(rgb_back);
 		free(rgb_mid);
 		free(rgb_front);
-		pthread_exit(NULL);
+		// Not pthread_exit because OSX leaves a thread lying around and doesn't exit
+		exit(0);
 	}
 	if (key == 'w') {
 		freenect_angle++;
