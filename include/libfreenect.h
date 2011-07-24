@@ -191,8 +191,8 @@ typedef struct {
 	freenect_zero_plane_info zero_plane_info;
 
 	uint16_t* raw_to_mm_shift;
-	int16_t*  depth_to_rgb_shift;
-	int16_t*  registration_table;
+	int32_t*  depth_to_rgb_shift;
+	int32_t*  registration_table;
 
 } freenect_registration;
 

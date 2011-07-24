@@ -28,7 +28,7 @@ int bMirror = 1;
 
 
 /// fill the table of horizontal shift values for metric depth -> RGB conversion
-void freenect_init_depth_to_rgb(int16_t* depth_to_rgb, freenect_zero_plane_info* zpi) {
+void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info* zpi) {
 
 	uint32_t i,xScale = XN_CMOS_VGAOUTPUT_XRES / DEPTH_X_RES;
 	
@@ -36,7 +36,7 @@ void freenect_init_depth_to_rgb(int16_t* depth_to_rgb, freenect_zero_plane_info*
 	double pelDCC = zpi->dcmos_rcmos_dist * pelSize * S2D_PEL_CONST;
 	double pelDSR = zpi->reference_distance * pelSize * S2D_PEL_CONST;
 	
-	memset(depth_to_rgb, DEPTH_NO_MM_VALUE, DEPTH_MAX_METRIC_VALUE * sizeof(int16_t));
+	memset(depth_to_rgb, DEPTH_NO_MM_VALUE, DEPTH_MAX_METRIC_VALUE * sizeof(int32_t));
 	
 	for (i = 0; i < DEPTH_MAX_METRIC_VALUE; i++) {
 		double curDepth = i * pelSize;
@@ -53,7 +53,7 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 	uint32_t x,y,sourceIndex = 0;
 	for (y = 0; y < DEPTH_Y_RES; y++) {
 		uint32_t registrationOffset = bMirror ? (y + 1) * (DEPTH_X_RES * 2) - 2 : y * DEPTH_X_RES * 2;
-		int16_t* curRegistrationTable = reg->registration_table+registrationOffset;
+		int32_t* curRegistrationTable = reg->registration_table+registrationOffset;
 		
 		for (x = 0; x < DEPTH_X_RES; x++) {
 		
@@ -186,14 +186,14 @@ void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t r
 	}
 }
 
-void freenect_init_registration_table(int16_t* m_pRegistrationTable, freenect_reg_info* RegData, freenect_reg_pad_info* m_padInfo) {
+void freenect_init_registration_table(int32_t* m_pRegistrationTable, freenect_reg_info* RegData, freenect_reg_pad_info* m_padInfo) {
 
 	double RegXTable[RGB_REG_X_RES*RGB_REG_Y_RES];
 	double RegYTable[RGB_REG_X_RES*RGB_REG_Y_RES];
 	
 	double* pRegXTable = (double*)RegXTable;
 	double* pRegYTable = (double*)RegYTable;
-	int16_t* pRegTable = (int16_t*)m_pRegistrationTable;
+	int32_t* pRegTable = (int32_t*)m_pRegistrationTable;
 	double nNewX = 0;
 	double nNewY = 0;
 	
@@ -262,8 +262,8 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 	}
 
 	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * DEPTH_MAX_RAW_VALUE );
-	reg->depth_to_rgb_shift = malloc( sizeof( int16_t) * DEPTH_MAX_METRIC_VALUE );
-	reg->registration_table = malloc( sizeof( int16_t) * DEPTH_X_RES * DEPTH_Y_RES * 2 );
+	reg->depth_to_rgb_shift = malloc( sizeof( int32_t) * DEPTH_MAX_METRIC_VALUE );
+	reg->registration_table = malloc( sizeof( int32_t) * DEPTH_X_RES * DEPTH_Y_RES * 2 );
 
 	for (i = 0; i < DEPTH_MAX_RAW_VALUE; i++)
 		reg->raw_to_mm_shift[i] = freenect_raw_to_mm( i, &(reg->zero_plane_info) );
