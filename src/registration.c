@@ -190,42 +190,23 @@ void freenect_init_registration_table(int32_t* registration_table, freenect_reg_
 
 	double regtable_dx[RGB_REG_X_RES*RGB_REG_Y_RES];
 	double regtable_dy[RGB_REG_X_RES*RGB_REG_Y_RES];
+	int32_t x,y,index = 0;
 
 	// create temporary dx/dy tables
 	freenect_create_dxdy_tables( regtable_dx, regtable_dy, DEPTH_X_RES, DEPTH_Y_RES, reg_info );
 
-	int inindex  = 0;
-	int outindex = 0;
+	// pre-process the table, do sanity checks and convert it from double to ints (for better performance)
+	for (y = 0; y < DEPTH_Y_RES; y++) {
+		for (x = 0; x < DEPTH_X_RES; x++, index++) {
 
-	double nNewX = 0;
-	double nNewY = 0;
-	
-	// Pre-process the table, do sanity checks and convert it from double to ints (for better performance)
-	int32_t nY,nX;
-	for (nY=0; nY<DEPTH_Y_RES; nY++) {
-		for (nX=0; nX<DEPTH_X_RES; nX++) {
-			nNewX = (nX + regtable_dx[inindex] + XN_SENSOR_WIN_OFFET_X) * RGB_REG_X_VAL_SCALE;
-			nNewY = (nY + regtable_dy[inindex] + XN_SENSOR_WIN_OFFET_Y);
+			double new_x = x + regtable_dx[index] + XN_SENSOR_WIN_OFFET_X;
+			double new_y = y + regtable_dy[index] + XN_SENSOR_WIN_OFFET_Y;
 			
-			if (nNewY < 1) {
-				nNewY = 1;
-				nNewX = ((DEPTH_X_RES*4) * RGB_REG_X_VAL_SCALE); // set illegal value on purpose
-			}
-			
-			if (nNewX < 1) {
-				nNewX = ((DEPTH_X_RES*4) * RGB_REG_X_VAL_SCALE); // set illegal value on purpose
-			}
+			if ((new_x < 0) || (new_y < 0) || (new_x >= DEPTH_X_RES) || (new_y >= DEPTH_Y_RES))
+				new_x = 2 * DEPTH_X_RES; // set illegal value on purpose
 
-			if (nNewY > DEPTH_Y_RES) { // our work here is done
-				nNewY = DEPTH_Y_RES;
-				return;
-			}
-
-			registration_table[outindex] = nNewX;
-			registration_table[outindex+1] = nNewY;
-
-			inindex++;
-			outindex+=2;
+			registration_table[2*index  ] = new_x * RGB_REG_X_VAL_SCALE;
+			registration_table[2*index+1] = new_y;
 		}
 	}
 }
