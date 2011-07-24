@@ -52,7 +52,6 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 	uint32_t x,y,sourceIndex = 0;
 	for (y = 0; y < DEPTH_Y_RES; y++) {
 		uint32_t registrationOffset = DEPTH_MIRROR_X ? (y + 1) * (DEPTH_X_RES * 2) - 2 : y * DEPTH_X_RES * 2;
-		int32_t* curRegistrationTable = reg->registration_table+registrationOffset;
 		
 		for (x = 0; x < DEPTH_X_RES; x++) {
 		
@@ -65,8 +64,8 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 				// calculate the new x and y location for that pixel
 				// using curRegistrationTable for the basic rectification
 				// and depthToRgbShift for determining the x shift
-				uint32_t nx = (uint32_t) (curRegistrationTable[0] + reg->depth_to_rgb_shift[newDepthValue]) / RGB_REG_X_VAL_SCALE;
-				uint32_t ny = curRegistrationTable[1];
+				uint32_t nx = (reg->registration_table[registrationOffset] + reg->depth_to_rgb_shift[newDepthValue]) / RGB_REG_X_VAL_SCALE;
+				uint32_t ny = reg->registration_table[registrationOffset+1];
 				
 				// ignore anything outside the image bounds
 				if (nx < DEPTH_X_RES) {
@@ -98,7 +97,7 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 					}
 				}
 			}
-			curRegistrationTable += DEPTH_MIRROR_X ? -2 : +2;
+			registrationOffset += DEPTH_MIRROR_X ? -2 : +2;
 			sourceIndex++;
 		}
 	}
