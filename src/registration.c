@@ -191,9 +191,6 @@ void freenect_init_registration_table(int16_t* m_pRegistrationTable, freenect_re
 	double RegXTable[RGB_REG_X_RES*RGB_REG_Y_RES];
 	double RegYTable[RGB_REG_X_RES*RGB_REG_Y_RES];
 	
-	uint16_t nDepthXRes = DEPTH_X_RES;
-	uint16_t nDepthYRes = DEPTH_Y_RES;
-
 	double* pRegXTable = (double*)RegXTable;
 	double* pRegYTable = (double*)RegYTable;
 	int16_t* pRegTable = (int16_t*)m_pRegistrationTable;
@@ -201,26 +198,26 @@ void freenect_init_registration_table(int16_t* m_pRegistrationTable, freenect_re
 	double nNewY = 0;
 	
 	// Create the dx dy tables
-	freenect_create_dxdy_tables(RegXTable, RegYTable, nDepthXRes,	nDepthYRes, RegData );
+	freenect_create_dxdy_tables(RegXTable, RegYTable, DEPTH_X_RES,	DEPTH_Y_RES, RegData );
 	
 	// Pre-process the table, do sanity checks and convert it from double to ints (for better performance)
 	int32_t nY,nX;
-	for (nY=0; nY<nDepthYRes; nY++) {
-		for (nX=0; nX<nDepthXRes; nX++) {
+	for (nY=0; nY<DEPTH_Y_RES; nY++) {
+		for (nX=0; nX<DEPTH_X_RES; nX++) {
 			nNewX = (nX + *pRegXTable + XN_SENSOR_WIN_OFFET_X) * RGB_REG_X_VAL_SCALE;
 			nNewY = (nY + *pRegYTable + XN_SENSOR_WIN_OFFET_Y);
 			
 			if (nNewY < 1) {
 				nNewY = 1;
-				nNewX = ((nDepthXRes*4) * RGB_REG_X_VAL_SCALE); // set illegal value on purpose
+				nNewX = ((DEPTH_X_RES*4) * RGB_REG_X_VAL_SCALE); // set illegal value on purpose
 			}
 			
 			if (nNewX < 1) {
-				nNewX = ((nDepthXRes*4) * RGB_REG_X_VAL_SCALE); // set illegal value on purpose
+				nNewX = ((DEPTH_X_RES*4) * RGB_REG_X_VAL_SCALE); // set illegal value on purpose
 			}
 
-			if (nNewY > nDepthYRes) { // our work here is done
-				nNewY = nDepthYRes;
+			if (nNewY > DEPTH_Y_RES) { // our work here is done
+				nNewY = DEPTH_Y_RES;
 				return;
 			}
 
