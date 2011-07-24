@@ -47,58 +47,52 @@ void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info*
 int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
 
 	memset(output_mm, DEPTH_NO_MM_VALUE, DEPTH_X_RES * DEPTH_Y_RES * sizeof(uint16_t)); // clear the output image
-	uint32_t constOffset = DEPTH_Y_RES * reg->reg_pad_info.start_lines;
-	
-	uint32_t x,y,sourceIndex = 0;
+
+	uint32_t target_offset = DEPTH_Y_RES * reg->reg_pad_info.start_lines;
+	uint32_t x,y,source_index = 0;
+
 	for (y = 0; y < DEPTH_Y_RES; y++) {
-		uint32_t registrationOffset = DEPTH_MIRROR_X ? (y + 1) * DEPTH_X_RES - 1 : y * DEPTH_X_RES;
-		
 		for (x = 0; x < DEPTH_X_RES; x++) {
 		
 			// get the value at the current depth pixel, convert to millimeters
-			uint16_t newDepthValue = reg->raw_to_mm_shift[ input_raw[sourceIndex] ];
+			uint16_t metric_depth = reg->raw_to_mm_shift[ input_raw[source_index++] ];
 			
 			// so long as the current pixel has a depth value
-			if (newDepthValue != DEPTH_NO_MM_VALUE) {
+			if (metric_depth == DEPTH_NO_MM_VALUE) continue;
 			
-				// calculate the new x and y location for that pixel
-				// using curRegistrationTable for the basic rectification
-				// and depthToRgbShift for determining the x shift
-				uint32_t nx = (reg->registration_table[2*registrationOffset] + reg->depth_to_rgb_shift[newDepthValue]) / RGB_REG_X_VAL_SCALE;
-				uint32_t ny = reg->registration_table[2*registrationOffset+1];
-				
-				// ignore anything outside the image bounds
-				if (nx < DEPTH_X_RES) {
-					// convert nx, ny to an index in the depth image array
-					uint32_t targetIndex = DEPTH_MIRROR_X ? (ny + 1) * DEPTH_X_RES - nx - 1 : (ny * DEPTH_X_RES) + nx;
-					targetIndex -= constOffset;
-					
-					// get the current value at the new location
-					uint16_t curDepthValue = output_mm[targetIndex];
-					// make sure the new location is empty, or the new value is closer
-					if ((curDepthValue == DEPTH_NO_MM_VALUE) || (curDepthValue > newDepthValue)) {
-						output_mm[targetIndex] = newDepthValue; // always save depth at current location
-#ifdef DENSE_REGISTRATION
-						// if we're not on the first row, or the first column
-						if ( nx > 0 && ny > 0 ) {
-							output_mm[targetIndex - DEPTH_X_RES] = newDepthValue; // save depth north
-							output_mm[targetIndex - DEPTH_X_RES - 1] = newDepthValue; // save depth northwest
-							output_mm[targetIndex - 1] = newDepthValue; // save depth west
-						}
-						// if we're on the first column
-						else if( ny > 0 ) {
-							output_mm[targetIndex - DEPTH_X_RES] = newDepthValue; // save depth north
-						}
-						// if we're on the first row
-						else if( nx > 0 ) {
-							output_mm[targetIndex - 1] = newDepthValue; // save depth west
-						}
-#endif
+			// calculate the new x and y location for that pixel
+			// using curRegistrationTable for the basic rectification
+			// and depthToRgbShift for determining the x shift
+			uint32_t reg_index = DEPTH_MIRROR_X ? ((y + 1) * DEPTH_X_RES - x - 1) : (y * DEPTH_X_RES + x);
+			uint32_t nx = (reg->registration_table[2*reg_index  ] + reg->depth_to_rgb_shift[metric_depth]) / RGB_REG_X_VAL_SCALE;
+			uint32_t ny =  reg->registration_table[2*reg_index+1];
+
+			// ignore anything outside the image bounds
+			if (nx >= DEPTH_X_RES) continue;
+
+			// convert nx, ny to an index in the depth image array
+			uint32_t target_index = (DEPTH_MIRROR_X ? ((ny + 1) * DEPTH_X_RES - nx - 1) : (ny * DEPTH_X_RES + nx)) - target_offset;
+
+			// get the current value at the new location
+			uint16_t current_depth = output_mm[target_index];
+
+			// make sure the new location is empty, or the new value is closer
+			if ((current_depth == DEPTH_NO_MM_VALUE) || (current_depth > metric_depth)) {
+				output_mm[target_index] = metric_depth; // always save depth at current location
+
+				#ifdef DENSE_REGISTRATION
+					// if we're not on the first row, or the first column
+					if ((nx > 0) && (ny > 0)) {
+						output_mm[target_index - DEPTH_X_RES    ] = metric_depth; // save depth at (x,y-1)
+						output_mm[target_index - DEPTH_X_RES - 1] = metric_depth; // save depth at (x-1,y-1)
+						output_mm[target_index               - 1] = metric_depth; // save depth at (x-1,y)
+					} else if (ny > 0) {
+						output_mm[target_index - DEPTH_X_RES] = metric_depth; // save depth at (x,y-1)
+					} else if (nx > 0) {
+						output_mm[target_index - 1] = metric_depth; // save depth at (x-1,y)
 					}
-				}
+				#endif
 			}
-			registrationOffset += DEPTH_MIRROR_X ? -1 : +1;
-			sourceIndex++;
 		}
 	}
 	return 0;
