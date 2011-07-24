@@ -4,8 +4,6 @@
 #include <stdio.h>
 #include <math.h>
 
-int bMirror = 1;
-
 
 #define RGB_REG_X_VAL_SCALE 16 // "fixed-point" precision for double -> int32_t conversion
 
@@ -13,6 +11,7 @@ int bMirror = 1;
 #define S2D_CONST_OFFSET 0.375
 
 #define DEPTH_SENSOR_X_RES 1280
+#define DEPTH_MIRROR_X 1
 
 #define DEPTH_MAX_METRIC_VALUE 10000
 #define DEPTH_MAX_RAW_VALUE 2048
@@ -40,7 +39,7 @@ void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info*
 	
 	for (i = 0; i < DEPTH_MAX_METRIC_VALUE; i++) {
 		double curDepth = i * pelSize;
-		depth_to_rgb[i] = ((pelDCC * (curDepth - pelDSR) / curDepth) + (S2D_CONST_OFFSET)) * RGB_REG_X_VAL_SCALE;
+		depth_to_rgb[i] = ((pelDCC * (curDepth - pelDSR) / curDepth) + S2D_CONST_OFFSET) * RGB_REG_X_VAL_SCALE;
 	}
 }
 
@@ -52,7 +51,7 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 	
 	uint32_t x,y,sourceIndex = 0;
 	for (y = 0; y < DEPTH_Y_RES; y++) {
-		uint32_t registrationOffset = bMirror ? (y + 1) * (DEPTH_X_RES * 2) - 2 : y * DEPTH_X_RES * 2;
+		uint32_t registrationOffset = DEPTH_MIRROR_X ? (y + 1) * (DEPTH_X_RES * 2) - 2 : y * DEPTH_X_RES * 2;
 		int32_t* curRegistrationTable = reg->registration_table+registrationOffset;
 		
 		for (x = 0; x < DEPTH_X_RES; x++) {
@@ -72,7 +71,7 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 				// ignore anything outside the image bounds
 				if (nx < DEPTH_X_RES) {
 					// convert nx, ny to an index in the depth image array
-					uint32_t targetIndex = bMirror ? (ny + 1) * DEPTH_X_RES - nx - 2 : (ny * DEPTH_X_RES) + nx;
+					uint32_t targetIndex = DEPTH_MIRROR_X ? (ny + 1) * DEPTH_X_RES - nx - 2 : (ny * DEPTH_X_RES) + nx;
 					targetIndex -= constOffset;
 					
 					// get the current value at the new location
@@ -99,7 +98,7 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 					}
 				}
 			}
-			curRegistrationTable += bMirror ? -2 : +2;
+			curRegistrationTable += DEPTH_MIRROR_X ? -2 : +2;
 			sourceIndex++;
 		}
 	}
