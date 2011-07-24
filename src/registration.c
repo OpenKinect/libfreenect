@@ -11,8 +11,6 @@ int bMirror = 1;
 #define RGB_REG_Y_RES 512
 
 #define XN_CMOS_VGAOUTPUT_XRES 1280
-#define XN_SENSOR_WIN_OFFET_X 1
-#define XN_SENSOR_WIN_OFFET_Y 1
 #define RGB_REG_X_VAL_SCALE 16 // "fixed-point" precision for double -> int16_t conversion
 #define S2D_PEL_CONST 10
 #define S2D_CONST_OFFSET 0.375
@@ -21,6 +19,8 @@ int bMirror = 1;
 #define DEPTH_MAX_RAW_VALUE 2048
 #define DEPTH_NO_RAW_VALUE 2047
 #define DEPTH_NO_MM_VALUE 0
+#define DEPTH_X_OFFSET 1
+#define DEPTH_Y_OFFSET 1
 #define DEPTH_X_RES 640
 #define DEPTH_Y_RES 480
 
@@ -199,8 +199,8 @@ void freenect_init_registration_table(int32_t* registration_table, freenect_reg_
 	for (y = 0; y < DEPTH_Y_RES; y++) {
 		for (x = 0; x < DEPTH_X_RES; x++, index++) {
 
-			double new_x = x + regtable_dx[index] + XN_SENSOR_WIN_OFFET_X;
-			double new_y = y + regtable_dy[index] + XN_SENSOR_WIN_OFFET_Y;
+			double new_x = x + regtable_dx[index] + DEPTH_X_OFFSET;
+			double new_y = y + regtable_dy[index] + DEPTH_Y_OFFSET;
 			
 			if ((new_x < 0) || (new_y < 0) || (new_x >= DEPTH_X_RES) || (new_y >= DEPTH_Y_RES))
 				new_x = 2 * DEPTH_X_RES; // set illegal value on purpose
