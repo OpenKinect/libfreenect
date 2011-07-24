@@ -7,18 +7,18 @@
 int bMirror = 1;
 
 
-#define RGB_REG_X_RES 640
-#define RGB_REG_Y_RES 512
+#define RGB_REG_X_VAL_SCALE 16 // "fixed-point" precision for double -> int32_t conversion
 
-#define XN_CMOS_VGAOUTPUT_XRES 1280
-#define RGB_REG_X_VAL_SCALE 16 // "fixed-point" precision for double -> int16_t conversion
 #define S2D_PEL_CONST 10
 #define S2D_CONST_OFFSET 0.375
+
+#define DEPTH_SENSOR_X_RES 1280
 
 #define DEPTH_MAX_METRIC_VALUE 10000
 #define DEPTH_MAX_RAW_VALUE 2048
 #define DEPTH_NO_RAW_VALUE 2047
 #define DEPTH_NO_MM_VALUE 0
+
 #define DEPTH_X_OFFSET 1
 #define DEPTH_Y_OFFSET 1
 #define DEPTH_X_RES 640
@@ -30,7 +30,7 @@ int bMirror = 1;
 /// fill the table of horizontal shift values for metric depth -> RGB conversion
 void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info* zpi) {
 
-	uint32_t i,xScale = XN_CMOS_VGAOUTPUT_XRES / DEPTH_X_RES;
+	uint32_t i,xScale = DEPTH_SENSOR_X_RES / DEPTH_X_RES;
 	
 	double pelSize = 1.0 / (zpi->reference_pixel_size * xScale * S2D_PEL_CONST);
 	double pelDCC = zpi->dcmos_rcmos_dist * pelSize * S2D_PEL_CONST;
@@ -188,8 +188,8 @@ void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t r
 
 void freenect_init_registration_table(int32_t* registration_table, freenect_reg_info* reg_info) {
 
-	double regtable_dx[RGB_REG_X_RES*RGB_REG_Y_RES];
-	double regtable_dy[RGB_REG_X_RES*RGB_REG_Y_RES];
+	double regtable_dx[DEPTH_X_RES*DEPTH_Y_RES];
+	double regtable_dy[DEPTH_X_RES*DEPTH_Y_RES];
 	int32_t x,y,index = 0;
 
 	// create temporary dx/dy tables
