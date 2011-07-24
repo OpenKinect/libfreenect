@@ -273,17 +273,46 @@ static void iso_callback(struct libusb_transfer *xfer)
 		return;
 	}
 
-	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		uint8_t *buf = (uint8_t*)xfer->buffer;
-		for (i=0; i<strm->pkts; i++) {
-			strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
-			buf += strm->len;
+	switch(xfer->status) {
+		case LIBUSB_TRANSFER_COMPLETED: // Normal operation.
+		{
+			uint8_t *buf = (uint8_t*)xfer->buffer;
+			for (i=0; i<strm->pkts; i++) {
+				strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
+				buf += strm->len;
+			}
+			libusb_submit_transfer(xfer);
+			break;
 		}
-		libusb_submit_transfer(xfer);
-	} else {
-		freenect_context *ctx = strm->parent->parent->parent;
-		FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
-		strm->dead_xfers++;
+		case LIBUSB_TRANSFER_NO_DEVICE:
+		{
+			// We lost the device we were talking to.  This is a large problem,
+			// and one that we should eventually come up with a way to
+			// properly propagate up to the caller.
+			freenect_context *ctx = strm->parent->parent->parent;
+			FN_ERROR("USB device disappeared, cancelling stream :(\n");
+			strm->dead_xfers++;
+			fnusb_stop_iso(strm->parent, strm);
+			break;
+		}
+		case LIBUSB_TRANSFER_CANCELLED:
+		{
+			freenect_context *ctx = strm->parent->parent->parent;
+			FN_SPEW("EP %02x transfer cancelled\n", xfer->endpoint);
+			strm->dead_xfers++;
+			break;
+		}
+		default:
+		{
+			// On other errors, resubmit the transfer - in particular, libusb
+			// on OSX tends to hit random errors a lot.  If we don't resubmit
+			// the transfers, eventually all of them die and then we don't get
+			// any more data from the Kinect.
+			freenect_context *ctx = strm->parent->parent->parent;
+			FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
+			libusb_submit_transfer(xfer);
+			break;
+		}
 	}
 }
 
@@ -313,8 +342,10 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 		libusb_set_iso_packet_lengths(strm->xfers[i], len);
 
 		ret = libusb_submit_transfer(strm->xfers[i]);
-		if (ret < 0)
+		if (ret < 0) {
 			FN_WARNING("Failed to submit isochronous transfer %d: %d\n", i, ret);
+			strm->dead_xfers++;
+		}
 
 		bufp += pkts*len;
 	}
