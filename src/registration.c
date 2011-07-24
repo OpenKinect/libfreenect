@@ -70,7 +70,7 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 				// ignore anything outside the image bounds
 				if (nx < DEPTH_X_RES) {
 					// convert nx, ny to an index in the depth image array
-					uint32_t targetIndex = DEPTH_MIRROR_X ? (ny + 1) * DEPTH_X_RES - nx - 2 : (ny * DEPTH_X_RES) + nx;
+					uint32_t targetIndex = DEPTH_MIRROR_X ? (ny + 1) * DEPTH_X_RES - nx - 1 : (ny * DEPTH_X_RES) + nx;
 					targetIndex -= constOffset;
 					
 					// get the current value at the new location
