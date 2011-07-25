@@ -64,8 +64,8 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 			// using curRegistrationTable for the basic rectification
 			// and depthToRgbShift for determining the x shift
 			uint32_t reg_index = DEPTH_MIRROR_X ? ((y + 1) * DEPTH_X_RES - x - 1) : (y * DEPTH_X_RES + x);
-			uint32_t nx = (reg->registration_table[2*reg_index  ] + reg->depth_to_rgb_shift[metric_depth]) / RGB_REG_X_VAL_SCALE;
-			uint32_t ny =  reg->registration_table[2*reg_index+1];
+			uint32_t nx = (reg->registration_table[reg_index][0] + reg->depth_to_rgb_shift[metric_depth]) / RGB_REG_X_VAL_SCALE;
+			uint32_t ny =  reg->registration_table[reg_index][1];
 
 			// ignore anything outside the image bounds
 			if (nx >= DEPTH_X_RES) continue;
@@ -178,7 +178,7 @@ void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t r
 	}
 }
 
-void freenect_init_registration_table(int32_t* registration_table, freenect_reg_info* reg_info) {
+void freenect_init_registration_table(int32_t (*registration_table)[2], freenect_reg_info* reg_info) {
 
 	double regtable_dx[DEPTH_X_RES*DEPTH_Y_RES];
 	double regtable_dy[DEPTH_X_RES*DEPTH_Y_RES];
@@ -197,8 +197,8 @@ void freenect_init_registration_table(int32_t* registration_table, freenect_reg_
 			if ((new_x < 0) || (new_y < 0) || (new_x >= DEPTH_X_RES) || (new_y >= DEPTH_Y_RES))
 				new_x = 2 * DEPTH_X_RES; // set illegal value on purpose
 
-			registration_table[2*index  ] = new_x * RGB_REG_X_VAL_SCALE;
-			registration_table[2*index+1] = new_y;
+			registration_table[index][0] = new_x * RGB_REG_X_VAL_SCALE;
+			registration_table[index][1] = new_y;
 		}
 	}
 }

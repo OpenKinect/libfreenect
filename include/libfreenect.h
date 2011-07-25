@@ -192,7 +192,7 @@ typedef struct {
 
 	uint16_t* raw_to_mm_shift;
 	int32_t*  depth_to_rgb_shift;
-	int32_t*  registration_table;
+	int32_t (*registration_table)[2];
 
 } freenect_registration;
 
