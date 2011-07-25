@@ -185,6 +185,14 @@ module FFI::Freenect
            :accelerometer_z,  :int16, 
            :tilt_angle,       :int8, 
            :tilt_status,      TILT_STATUS_CODES
+    def accelerometer
+      [self[:accelerometer_x], self[:accelerometer_y], self[:accelerometer_z]]
+    end
+    def angle; self[:tilt_angle]; end
+    def status; self[:tilt_status]; end
+    def to_s
+      "#<Freenect::RawTiltState #{status} @ #{angle} deg, accel: (#{accelerometer.join(',')})>"
+    end
   end
 
   callback :freenect_log_cb, [:freenect_context, LOGLEVELS, :string], :void
@@ -221,13 +229,13 @@ module FFI::Freenect
   attach_function :freenect_get_video_mode, [:int], FrameMode.by_value
   attach_function :freenect_get_current_video_mode, [:freenect_device], FrameMode.by_value
   attach_function :freenect_find_video_mode, [RESOLUTIONS, VIDEO_FORMATS], FrameMode.by_value
-  attach_function :freenect_set_video_mode, [:freenect_device, FrameMode], :int
+  attach_function :freenect_set_video_mode, [:freenect_device, FrameMode.by_value], :int
 
   attach_function :freenect_get_depth_mode_count, [], :int
   attach_function :freenect_get_depth_mode, [:int], FrameMode.by_value
   attach_function :freenect_get_current_depth_mode, [:freenect_device], FrameMode.by_value
   attach_function :freenect_find_depth_mode, [RESOLUTIONS, DEPTH_FORMATS], FrameMode.by_value
-  attach_function :freenect_set_depth_mode, [:freenect_device, FrameMode], :int
+  attach_function :freenect_set_depth_mode, [:freenect_device, FrameMode.by_value], :int
 
   attach_function :freenect_sync_get_video, [:pointer, :pointer, :int, VIDEO_FORMATS], :int
   attach_function :freenect_sync_get_depth, [:pointer, :pointer, :int, DEPTH_FORMATS], :int

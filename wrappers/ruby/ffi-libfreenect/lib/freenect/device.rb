@@ -136,13 +136,14 @@ module Freenect
       mode = Freenect.depth_mode(:medium, mode) unless mode.is_a?(Freenect::FrameMode)
       raise ArgumentError, "Unkown depth mode #{mode}" if mode.nil?    
       ret = ::FFI::Freenect.freenect_set_depth_mode(self.device, mode)
-      raise DeviceError, "Error calling freenect_set_depth_mode(self, #{mode})" unless ret == 0
+      raise DeviceError, "Error calling freenect_set_depth_mode(self, #{mode}) returned #{ret}" unless ret == 0
     end
     alias depth_mode= set_depth_mode
     
     # returns the symbolic constant for the current depth format
     def depth_mode
       x = ::FFI::Freenect.freenect_get_current_depth_mode(self.device)
+      x = nil if x.height*x.width == 0 or x.framerate == 0
       x.frame_mode_type = :depth unless x.nil?
       x
     end
@@ -153,12 +154,13 @@ module Freenect
       mode = Freenect.video_mode(:medium, mode) unless mode.is_a?(Freenect::FrameMode)
       raise ArgumentError, "Unkown video mode #{mode}" if mode.nil?    
       ret = ::FFI::Freenect.freenect_set_video_mode(self.device, mode)
-      raise DeviceError, "Error calling freenect_set_video_mode(self, #{mode})" unless ret == 0
+      raise DeviceError, "Error calling freenect_set_video_mode(self, #{mode}) returned #{ret}" unless ret == 0
     end
     alias video_mode= set_video_mode
 
     def video_mode
       x = ::FFI::Freenect.freenect_get_current_video_mode(self.device)
+      x = nil if x.height*x.width == 0 or x.framerate == 0
       x.frame_mode_type = :video unless x.nil?
       x
     end
