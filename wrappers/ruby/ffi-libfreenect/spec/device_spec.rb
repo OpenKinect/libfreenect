@@ -72,18 +72,19 @@ describe Freenect::Device do
     @dev.video_mode.should be_nil # at first
     @dev.video_mode = Freenect.video_mode(:medium, :bayer)
     @dev.video_mode.format.should == :bayer
-    @dev.video_mode = Freenect.video_mode(:medium, :rgb)
+    @dev.video_mode = :rgb
     @dev.video_mode.format.should == :rgb
-    @dev.video_mode.frame_mode_type.shoud == :video
+    @dev.video_mode.frame_mode_type.should == :video
   end
 
 
   it "should allow the depth_format to be set and retrieved" do
     @dev.depth_mode.should be_nil # at first
-    @dev.depth_mode = :depth_10bit
-    @dev.depth_mode.should == :depth_10bit
-    @dev.depth_mode = Freenect::DEPTH_11BIT
+    @dev.depth_mode = Freenect.depth_mode(:medium, :depth_10bit)
+    @dev.depth_mode.format.should == :depth_10bit
     @dev.depth_mode = :depth_11bit
+    @dev.depth_mode.format.should == :depth_11bit
+    @dev.depth_mode.frame_mode_type.should == :depth
   end
 
   it "should allow itself to be looked up by it's object reference ID" do

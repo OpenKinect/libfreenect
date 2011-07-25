@@ -22,11 +22,15 @@ end
 STDERR.puts "Selecting device 0"
 dev = ctx.open_device(0)
 
-dev.set_led(:green)   # play with the led
+dev.led = :green   # play with the led
 
-dev.set_video_format(Freenect::VIDEO_RGB)
-dev.start_depth()
+dev.video_mode = Freenect.video_mode(:medium, :rgb)
 dev.start_video()
+
+# Or to grab depth:
+# dev.depth_mode = Freenect.depth_mode(:medium, :depth_11bit)
+# dev.start_depth()
+
 
 $snapshot_finished = nil
 
@@ -36,8 +40,8 @@ dev.set_video_callback do |device, video, timestamp|
     fname = "%i.ppm" % timestamp
     STDERR.puts "Writing #{fname}"
     File.open(fname, "w") do |f|
-      f.puts("P6 %d %d 255\n" % [ Freenect::FRAME_W, Freenect::FRAME_H ] )
-      f.write(video.read_string_length(Freenect::RGB_SIZE))
+      f.puts("P6 %d %d 255\n" % [ dev.video_mode.width, dev.video_mode.height ] )
+      f.write(video.read_string_length(dev.video_mode.bytes))
     end
     $snapshot_finished = true
   end
@@ -52,9 +56,11 @@ if ret < 0
   STDERR.puts "Error: unable to take snapshot. process_events code=#{ret}"
 end
 
-dev.set_led(:off)
-dev.stop_depth
+dev.led = :off
 dev.stop_video
+# Or
+# dev.stop_depth
+
 dev.close
 ctx.close
 
