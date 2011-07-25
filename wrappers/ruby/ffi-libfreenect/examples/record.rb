@@ -43,22 +43,22 @@ end
 ctx = Freenect.init()
 dev = ctx.open_device(0)
 
-dev.set_depth_format(Freenect::DEPTH_11BIT)
-dev.set_video_format(Freenect::VIDEO_RGB)
+dev.depth_mode = Freenect.depth_mode(:medium, :depth_11bit)
+dev.video_mode = Freenect.video_mode(:medium, :rgb)
 dev.start_depth()
 dev.start_video()
 
 dev.set_depth_callback do |device, depth, timestamp|
   open_dump('d', timestamp, "pgm") do |f|
-    f.puts("P5 %d %d 65535\n" % [ Freenect::FRAME_W, Freenect::FRAME_H ] )
-    f.write(depth.read_string_length(Freenect::DEPTH_11BIT_SIZE))
+    f.puts("P5 %d %d 65535\n" % [ dev.depth_mode.width, dev.depth_mode.height ] )
+    f.write(depth.read_string_length(dev.depth_mode.bytes))
   end
 end
 
 dev.set_video_callback do |device, video, timestamp|
   open_dump('r', timestamp, 'ppm') do |f|
-    f.puts("P6 %d %d 255\n" % [ Freenect::FRAME_W, Freenect::FRAME_H ] )
-    f.write(video.read_string_length(Freenect::RGB_SIZE))
+    f.puts("P6 %d %d 255\n" % [ dev.video_mode.width, dev.video_mode.height ] )
+    f.write(video.read_string_length(dev.video_mode.bytes))
   end
 end
 
