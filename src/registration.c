@@ -5,7 +5,7 @@
 #include <math.h>
 
 
-#define RGB_REG_X_VAL_SCALE 16 // "fixed-point" precision for double -> int32_t conversion
+#define REG_X_VAL_SCALE 16 // "fixed-point" precision for double -> int32_t conversion
 
 #define S2D_PEL_CONST 10
 #define S2D_CONST_OFFSET 0.375
@@ -39,7 +39,7 @@ void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info*
 	
 	for (i = 0; i < DEPTH_MAX_METRIC_VALUE; i++) {
 		double curDepth = i * pelSize;
-		depth_to_rgb[i] = ((pelDCC * (curDepth - pelDSR) / curDepth) + S2D_CONST_OFFSET) * RGB_REG_X_VAL_SCALE;
+		depth_to_rgb[i] = ((pelDCC * (curDepth - pelDSR) / curDepth) + S2D_CONST_OFFSET) * REG_X_VAL_SCALE;
 	}
 }
 
@@ -64,7 +64,7 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 			// using curRegistrationTable for the basic rectification
 			// and depthToRgbShift for determining the x shift
 			uint32_t reg_index = DEPTH_MIRROR_X ? ((y + 1) * DEPTH_X_RES - x - 1) : (y * DEPTH_X_RES + x);
-			uint32_t nx = (reg->registration_table[reg_index][0] + reg->depth_to_rgb_shift[metric_depth]) / RGB_REG_X_VAL_SCALE;
+			uint32_t nx = (reg->registration_table[reg_index][0] + reg->depth_to_rgb_shift[metric_depth]) / REG_X_VAL_SCALE;
 			uint32_t ny =  reg->registration_table[reg_index][1];
 
 			// ignore anything outside the image bounds
@@ -197,7 +197,7 @@ void freenect_init_registration_table(int32_t (*registration_table)[2], freenect
 			if ((new_x < 0) || (new_y < 0) || (new_x >= DEPTH_X_RES) || (new_y >= DEPTH_Y_RES))
 				new_x = 2 * DEPTH_X_RES; // set illegal value on purpose
 
-			registration_table[index][0] = new_x * RGB_REG_X_VAL_SCALE;
+			registration_table[index][0] = new_x * REG_X_VAL_SCALE;
 			registration_table[index][1] = new_y;
 		}
 	}
