@@ -46,6 +46,9 @@ LED_BLINK_RED_YELLOW = 6
 RESOLUTION_LOW = 0
 RESOLUTION_MEDIUM = 1
 RESOLUTION_HIGH = 2
+DEVICE_MOTOR = 1
+DEVICE_CAMERA = 2
+DEVICE_AUDIO = 4
 
 
 cdef struct freenect_raw_tilt_state:
@@ -91,6 +94,7 @@ cdef extern from "libfreenect.h":
     int freenect_shutdown(void *ctx)
     int freenect_process_events(void *ctx)
     int freenect_num_devices(void *ctx)
+    int freenect_select_subdevices(void *ctx, int subdevs)
     int freenect_open_device(void *ctx, void **dev, int index)
     int freenect_close_device(void *dev)
     void freenect_set_depth_callback(void *dev, freenect_depth_cb cb)
@@ -230,6 +234,11 @@ cdef init():
     cdef void* ctx
     if freenect_init(cython.address(ctx), 0) < 0:
         return
+    # We take both the motor and camera devices here, since we provide access
+    # to both but haven't wrapped the python API for selecting subdevices yet.
+    # Also, we don't support audio in the python wrapper yet, so no sense claiming
+    # the device.
+    freenect_select_subdevices(ctx, DEVICE_MOTOR | DEVICE_CAMERA)
     cdef CtxPtr ctx_out
     ctx_out = CtxPtr()
     ctx_out._ptr = ctx

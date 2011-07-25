@@ -30,6 +30,7 @@
 	import org.as3kinect.as3kinect;
 	import org.as3kinect.as3kinectSocket;
 	import org.as3kinect.as3kinectMotor;
+	import org.as3kinect.as3kinectUI;
 	import org.as3kinect.events.as3kinectSocketEvent;
 	import org.as3kinect.events.as3kinectWrapperEvent;
 	
@@ -48,12 +49,14 @@
 		public var motor:as3kinectMotor;
 		public var depth:as3kinectDepth;
 		public var video:as3kinectVideo;
+		//public var ui:as3kinectUI;
 
 		public function as3kinectWrapper() {
-			/* Init motor, depth and video objects */
+			/* Init motor, depth, video and UI objects */
 			motor = new as3kinectMotor;
 			depth = new as3kinectDepth;
 			video = new as3kinectVideo;
+			//ui = new as3kinectUI(this);
 			
 			/* Init socket objects */
 			_socket = as3kinectSocket.instance;
@@ -89,7 +92,11 @@
 							dispatchEvent(new as3kinectWrapperEvent(as3kinectWrapperEvent.ON_DEPTH, event.data.buffer));
 							depth.busy = false;
 						break;
-						case 1: //Video received
+						case 1: //Raw Depth received
+							dispatchEvent(new as3kinectWrapperEvent(as3kinectWrapperEvent.ON_RAW_DEPTH, event.data.buffer));
+							depth.busy = false;
+						break;
+						case 2: //Video received
 							dispatchEvent(new as3kinectWrapperEvent(as3kinectWrapperEvent.ON_VIDEO, event.data.buffer));
 							video.busy = false;
 						break;

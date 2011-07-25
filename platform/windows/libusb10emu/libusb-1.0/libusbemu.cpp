@@ -594,7 +594,14 @@ int ReapThreadProc(void* params)
     if (!listTransfers.Empty())
     {
 		  transfer_wrapper* wrapper = listTransfers.Head();
-  	  ReapTransfer(wrapper, 10000, &listReadyLocal);
+  	  int read = ReapTransfer(wrapper, 10000, &listReadyLocal);
+      if (-5 == read)
+      {
+        while (!listTransfers.Empty())
+          listTransfers.Remove(listTransfers.Head());
+        while (!listReadyLocal.Empty())
+          listReadyLocal.Remove(listReadyLocal.Head());
+      }
     }
     // if there are no pending transfers, wait the ready ones to be delivered
     else
@@ -602,8 +609,8 @@ int ReapThreadProc(void* params)
       LIBUSB_DEBUG_CMD(fprintf(stdout, "ReapThreadProc(): no pending transfers, sleeping until delivery...\n"));
       if (!boDeliverRequested)
       {
-        wannaDeliver.Signal();
         doneDelivering.Reset();
+        wannaDeliver.Signal();
         boDeliverRequested = true;
       }
       allowDeliver.Wait();
@@ -624,17 +631,19 @@ int ReapThreadProc(void* params)
     }
 	}
 
+  QuickThread::Myself().LowerPriority();
+
   LIBUSB_DEBUG_CMD
   (
     if (boAbort)
       fprintf(stderr, "Thread loop aborted.\n");
   );
 
-  wannaDeliver.Signal();
-  allowDeliver.Wait();
-  doneDelivering.Signal();
-
-  ctx->mutDeliveryPool.Enter();
+  while(!ctx->mutDeliveryPool.TryEnter())
+    {
+      wannaDeliver.Signal();
+      doneDelivering.Signal();
+    }
     ctx->hWantToDeliverPool.DetachEvent(&wannaDeliver);
     ctx->hAllowDeliveryPool.DetachEvent(&allowDeliver);
     ctx->hDoneDeliveringPool.DetachEvent(&doneDelivering);
@@ -715,14 +724,16 @@ int ReapTransfer(transfer_wrapper* wrapper, unsigned int timeout, libusb_device:
         LIBUSBEMU_ERROR_LIBUSBWIN32();
         break;
       case EIO :
+        // Error code -5 seems to be triggered when the device is lost...
         LIBUSBEMU_ERROR_LIBUSBWIN32();
         libusb_device::TListTransfers::RemoveNode(wrapper);
         transfer->status = LIBUSB_TRANSFER_NO_DEVICE;
         transfer->callback(transfer);
         libusb_cancel_transfer(transfer);
+        transfer->status = LIBUSB_TRANSFER_NO_DEVICE;
         break;
       default :
-        // I have not stumbled into any other negative value coming from the
+        // I have not stumbled into any other negative values coming from the
         // usb_reap_async_nocancel()... Anyway, cancel seems to be a simple yet
         // plausible preemptive approach... MORE INVESTIGATION NEEDED!
         LIBUSBEMU_ERROR_LIBUSBWIN32();

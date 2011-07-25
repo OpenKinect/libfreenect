@@ -63,7 +63,7 @@ namespace freenect
 		/// <summary>
 		/// Gets the logging level the library it set to
 		/// </summary>
-		public Kinect.LogLevelOptions LogLevel
+		public LoggingLevel LogLevel
 		{
 			get;
 			private set;
@@ -78,7 +78,7 @@ namespace freenect
 			private set;
 		}
 		
-		public LogEventArgs(Kinect device, Kinect.LogLevelOptions logLevel, string message)
+		public LogEventArgs(Kinect device, LoggingLevel logLevel, string message)
 		{
 			this.Device = device;
 			this.LogLevel = logLevel;

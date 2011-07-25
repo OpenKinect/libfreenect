@@ -29,6 +29,7 @@ using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace freenect
 {
@@ -37,106 +38,31 @@ namespace freenect
 	/// </summary>
 	///
 	/// 
-	public class VideoCamera
-	{
-		
+	public class VideoCamera : BaseCamera
+	{		
 		/// <summary>
-		/// Parent Kinect instance
+		/// Gets and sets the current video mode for the video camera. For best results, 
+		/// use one of the modes in the VideoCamera.Modes collection.
 		/// </summary>
-		private Kinect parentDevice;
-		
-		/// <summary>
-		/// Current data format
-		/// </summary>
-		private DataFormatOption dataFormat;
-		
-		/// <summary>
-		/// Direct access data buffer for the video camera
-		/// </summary>
-		private IntPtr dataBuffer = IntPtr.Zero;
-		
-		/// <summary>
-		/// ImageMap waiting for data
-		/// </summary>
-		private ImageMap nextFrameImage = null;
-		
-		/// <summary>
-		/// Event raised when video data (an image) has been received.
-		/// </summary>
-		public event DataReceivedEventHandler DataReceived = delegate { };
-		
-		private FreenectVideoDataCallback VideoCallback = new FreenectVideoDataCallback(VideoCamera.HandleDataReceived);
-
-		/// <summary>
-		/// Gets whether the video camera is streaming data
-		/// </summary>
-		public bool IsRunning
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets or sets the data format this camera will send images in.
-		/// </summary>
-		/// <value>
-		/// Gets or sets the 'dataFormat' member
-		/// </value>
-		public DataFormatOption DataFormat
+		public VideoFrameMode Mode
 		{
 			get
 			{
-				return this.dataFormat;
+				return (VideoFrameMode)this.captureMode;
 			}
 			set
 			{
-				this.SetDataFormat(value);
+				this.SetVideoMode(value);
 			}
 		}
 		
 		/// <summary>
-		/// Gets sizes in bytes for a frame in each of the formats supported by the video camera.
+		/// Gets a list of available, valid video modes
 		/// </summary>
-		public static DataFormatSizeCollection DataFormatSizes
+		public VideoFrameMode[] Modes
 		{
 			get;
 			private set;
-		}
-		
-		/// <summary>
-		/// Gets dimensions for a frame for each of the formats supported by the video camera.
-		/// </summary>
-		public static DataFormatDimensionCollection DataFormatDimensions
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets or sets the direct data buffer the USB stream will use for 
-		/// the video camera. This should be a pinned location in memory. 
-		/// If set to IntPtr.Zero, the library will manage the data buffer 
-		/// for you.
-		/// </summary>
-		public IntPtr DataBuffer
-		{
-			get
-			{
-				return this.dataBuffer;
-			}
-			set
-			{
-				this.SetDataBuffer(value);
-			}
-		}
-		
-		/// <summary>
-		/// Static constructor
-		/// </summary>
-		static VideoCamera()
-		{
-			VideoCamera.DataFormatSizes = new VideoCamera.DataFormatSizeCollection();
-			VideoCamera.DataFormatDimensions = new VideoCamera.DataFormatDimensionCollection();
 		}
 		
 		/// <summary>
@@ -145,19 +71,16 @@ namespace freenect
 		/// <param name="parent">
 		/// Parent <see cref="Kinect"/> device that this video camera is part of
 		/// </param>
-		internal VideoCamera(Kinect parent)
+		internal VideoCamera(Kinect parent) : base(parent)
 		{
-			// Save parent device
-			this.parentDevice = parent;
+			// Update modes available for this video camera
+			this.UpdateVideoModes();
 			
-			// Not running by default
-			this.IsRunning = false;
-			
-			// Set format to RGB by default
-			this.DataFormat = DataFormatOption.RGB;
+			// Use the first mode by default
+			this.Mode = this.Modes[0];
 			
 			// Setup callbacks
-			KinectNative.freenect_set_video_callback(parent.devicePointer, VideoCallback);
+			KinectNative.freenect_set_video_callback(parent.devicePointer, this.DataCallback);
 		}
 		
 		/// <summary>
@@ -174,6 +97,8 @@ namespace freenect
 			{
 				throw new Exception("Could not start video stream. Error Code: " + result);
 			}
+			
+			// All done
 			this.IsRunning = true;
 		}
 		
@@ -181,7 +106,14 @@ namespace freenect
 		/// Stops streaming video data from this camera
 		/// </summary>
 		public void Stop()
-		{
+		{	
+			if(this.IsRunning == false)
+			{
+				// Not running, nothing to do
+				return;
+			}
+			
+			// Stop camera
 			int result = KinectNative.freenect_stop_video(this.parentDevice.devicePointer);
 			if(result != 0)
 			{
@@ -196,7 +128,7 @@ namespace freenect
 		/// <param name="ptr">
 		/// Pointer to the direct access data buffer for the VideoCamera.
 		/// </param>
-		protected void SetDataBuffer(IntPtr ptr)
+		protected override void SetDataBuffer(IntPtr ptr)
 		{
 			// Save data buffer
 			this.dataBuffer = ptr;
@@ -209,23 +141,51 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Sets the VideoCamera's data format. Support function for VideoCamera.DataFormat property.
+		/// Sets the current video mode
 		/// </summary>
-		/// <param name="format">
-		/// Format to change the video camera to
+		/// <param name="mode">
+		/// Video mode to switch to.
 		/// </param>
-		protected void SetDataFormat(VideoCamera.DataFormatOption format)
+		protected void SetVideoMode(VideoFrameMode mode)
 		{
-			// change imagemap that's waiting cause format has changed
-			this.UpdateNextFrameImageMap();
+			// Is this a different mode?
+			if(this.Mode == mode)
+			{
+				return;	
+			}
 			
-			// change format
-			int result = KinectNative.freenect_set_video_format(this.parentDevice.devicePointer, format);
+			// Stop camera first if running
+			bool running = this.IsRunning;
+			if(running)
+			{	
+				this.Stop();
+			}
+			
+			// Check to make sure mode is valid by finding it again
+			VideoFrameMode foundMode = VideoFrameMode.Find(mode.Format, mode.Resolution);
+			if(foundMode == null)
+			{
+				throw new Exception("Invalid Video Mode: [" + mode.Format + ", " + mode.Resolution + "]");
+			}
+			
+			// Save mode
+			this.captureMode = mode;
+			
+			// All good, switch to new mode
+			int result = KinectNative.freenect_set_video_mode(this.parentDevice.devicePointer, foundMode.nativeMode);
 			if(result != 0)
 			{
-				throw new Exception("Could not switch to video format " + format + ". Error Code: " + result);
+				throw new Exception("Mode switch failed. Error Code: " + result);
 			}
-			this.dataFormat = format;
+			
+			// Update image map
+			this.UpdateNextFrameImageMap();
+			
+			// If we were running before, start up again
+			if(running)
+			{
+				this.Start();	
+			}
 		}
 		
 		/// <summary>
@@ -236,161 +196,40 @@ namespace freenect
 			if(this.DataBuffer == IntPtr.Zero)
 			{
 				// have to set our own buffer as the video buffer
-				this.nextFrameImage = new ImageMap(this.DataFormat);
-				KinectNative.freenect_set_video_buffer(this.parentDevice.devicePointer, this.nextFrameImage.DataPointer);
+				this.nextFrameData = new ImageMap(this.Mode);
 			}
 			else	
 			{
 				// already have a buffer from user
-				this.nextFrameImage = new ImageMap(this.DataFormat, this.DataBuffer);
+				this.nextFrameData = new ImageMap(this.Mode, this.DataBuffer);
 			}
+			
+			// Set video buffer
+			KinectNative.freenect_set_video_buffer(this.parentDevice.devicePointer, this.nextFrameData.DataPointer);
 		}
 		
 		/// <summary>
-		/// Handles image data from teh video camera
+		/// Updates list of video modes that this camera has.
 		/// </summary>
-		/// <param name="device">
-		/// A <see cref="IntPtr"/>
-		/// </param>
-		/// <param name="imageData">
-		/// A <see cref="IntPtr"/>
-		/// </param>
-		/// <param name="timestamp">
-		/// A <see cref="UInt32"/>
-		/// </param>
-		private static void HandleDataReceived(IntPtr device, IntPtr imageData, UInt32 timestamp)
+		private void UpdateVideoModes()
 		{
-			// Figure out which device actually got this frame
-			Kinect realDevice = KinectNative.GetDevice(device);
+			List<VideoFrameMode> modes = new List<VideoFrameMode>();
 			
-			// Calculate datetime from timestamp
-			DateTime dateTime = new System.DateTime(1970, 1, 1, 0, 0, 0, 0).AddSeconds(timestamp);
+			// Get number of modes
+			int numModes = KinectNative.freenect_get_video_mode_count(this.parentDevice.devicePointer);
 			
-			// Send out event
-			realDevice.VideoCamera.DataReceived(realDevice, new DataReceivedEventArgs(dateTime, realDevice.VideoCamera.nextFrameImage));
-		}
-		
-		/// <summary>
-		/// Format for VideoCamera data coming in
-		/// </summary>
-		public enum DataFormatOption
-		{
-			RGB 			= 0,
-			Bayer 			= 1,
-			IR8Bit 			= 2,
-			IR10Bit 		= 3,
-			IR10BitPacked 	= 4
-		}
-		
-		/// <summary>
-		/// Format dimensions
-		/// </summary>
-		public class DataFormatDimensionCollection
-		{
-			/// <summary>
-			/// Map of sizes
-			/// </summary>
-			private Dictionary<DataFormatOption, Point> dimensions;
-			
-			/// <summary>
-			/// Gets the dimensions of the specified format
-			/// </summary>
-			/// <param name="format">
-			/// Format to get the size for
-			/// </param>
-			public Point this[DataFormatOption format]
+			// Go through modes
+			for(int i = 0; i < numModes; i++)
 			{
-				get
+				VideoFrameMode mode = (VideoFrameMode)FrameMode.FromInterop(KinectNative.freenect_get_video_mode(i), FrameMode.FrameModeType.VideoFormat);
+				if(mode != null)
 				{
-					return this.dimensions[format];
+					modes.Add(mode);
 				}
 			}
 			
-			/// <summary>
-			/// constructor
-			/// </summary>
-			public DataFormatDimensionCollection()
-			{
-				this.dimensions = new Dictionary<DataFormatOption, Point>();
-				this.dimensions.Add(DataFormatOption.RGB, new Point(640, 480));
-				this.dimensions.Add(DataFormatOption.Bayer, new Point(640, 480));
-				this.dimensions.Add(DataFormatOption.IR8Bit, new Point(640, 488));
-				this.dimensions.Add(DataFormatOption.IR10Bit, new Point(640, 488));
-				this.dimensions.Add(DataFormatOption.IR10BitPacked, new Point(640, 488));
-			}
-		}
-		
-		/// <summary>
-		/// Format sizes
-		/// </summary>
-		public class DataFormatSizeCollection
-		{
-			/// <summary>
-			/// Map of sizes
-			/// </summary>
-			private Dictionary<DataFormatOption, int> sizes;
-			
-			/// <summary>
-			/// Gets the size of the specified format
-			/// </summary>
-			/// <param name="format">
-			/// Format to get the size for
-			/// </param>
-			public int this[DataFormatOption format]
-			{
-				get
-				{
-					return this.sizes[format];
-				}
-			}
-			
-			/// <summary>
-			/// constructor
-			/// </summary>
-			public DataFormatSizeCollection()
-			{
-				this.sizes = new Dictionary<DataFormatOption, int>();
-				this.sizes.Add(DataFormatOption.RGB, 921600);
-				this.sizes.Add(DataFormatOption.Bayer, 307200);
-				this.sizes.Add(DataFormatOption.IR8Bit, 312320);
-				this.sizes.Add(DataFormatOption.IR10Bit, 614400);
-				this.sizes.Add(DataFormatOption.IR10BitPacked, 390400);
-			}
-		}
-		
-		/// <summary>
-		/// Delegate for video camera data events
-		/// </summary>
-		public delegate void DataReceivedEventHandler(object sender, DataReceivedEventArgs e);
-		
-		/// <summary>
-		/// Video camera data
-		/// </summary>
-		public class DataReceivedEventArgs
-		{
-			/// <summary>
-			/// Gets the timestamp for this image
-			/// </summary>
-			public DateTime Timestamp
-			{
-				get;
-				private set;
-			}
-			
-			/// <summary>
-			/// Gets image data
-			/// </summary>
-			public ImageMap Image
-			{
-				get;
-				private set;
-			}
-			
-			public DataReceivedEventArgs(DateTime timestamp, ImageMap b)
-			{
-				this.Timestamp = timestamp;
-				this.Image = b;
-			}
+			// All done
+			this.Modes = modes.ToArray();
 		}
 		
 	}

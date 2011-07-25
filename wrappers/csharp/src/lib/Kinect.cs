@@ -25,6 +25,7 @@
  */
 using System;
 using System.Runtime.InteropServices;
+using System.Threading;
 
 namespace freenect
 {
@@ -35,28 +36,12 @@ namespace freenect
 	///
 	/// 
 	public class Kinect
-	{
-		/// <summary>
-		/// Current logging level for the kinect session (for all devices)
-		/// </summary>
-		private static LogLevelOptions logLevel;
-		
-		/// <summary>
-		/// Pointer to native device object
-		/// </summary>
-		internal IntPtr devicePointer = IntPtr.Zero;
-		
-		/// <summary>
-		/// Cached device state that can be used after a call to Kinect.UpdateStatus
-		/// This can be used to save some USB or P/Invoke calls.
-		/// </summary>
-		internal FreenectTiltState cachedDeviceState;
-		
+	{		
 		/// <summary>
 		/// Gets or sets the logging level for the Kinect library. This controls
 		/// how much debugging information is sent to the logging callback
 		/// </summary>
-		public static LogLevelOptions LogLevel
+		public static LoggingLevel LogLevel
 		{
 			get
 			{
@@ -152,6 +137,22 @@ namespace freenect
 		}
 		
 		/// <summary>
+		/// Current logging level for the kinect session (for all devices)
+		/// </summary>
+		private static LoggingLevel logLevel;
+		
+		/// <summary>
+		/// Pointer to native device object
+		/// </summary>
+		internal IntPtr devicePointer = IntPtr.Zero;
+		
+		/// <summary>
+		/// Cached device state that can be used after a call to Kinect.UpdateStatus
+		/// This can be used to save some USB or P/Invoke calls.
+		/// </summary>
+		internal FreenectTiltState cachedDeviceState;
+		
+		/// <summary>
 		/// Constructor
 		/// </summary>
 		/// <param name="id">
@@ -210,12 +211,6 @@ namespace freenect
 		/// </summary>
 		public void Close()
 		{
-			int result = KinectNative.freenect_close_device(this.devicePointer);
-			if(result != 0)
-			{
-				throw new Exception("Could not close connection to Kinect Device (ID=" + this.DeviceID + "). Error Code = " + result);
-			}
-			
 			// Stop Cameras
 			if(this.VideoCamera.IsRunning)
 			{
@@ -224,6 +219,13 @@ namespace freenect
 			if(this.DepthCamera.IsRunning)
 			{
 				this.DepthCamera.Stop();
+			}
+			
+			// Close device
+			int result = KinectNative.freenect_close_device(this.devicePointer);
+			if(result != 0)
+			{
+				throw new Exception("Could not close connection to Kinect Device (ID=" + this.DeviceID + "). Error Code = " + result);
 			}
 			
 			// Dispose of child instances
@@ -255,19 +257,20 @@ namespace freenect
 		}
 		
 		/// <summary>
+		/// Makes the base library handle any pending USB events. Either this, or UpdateStatus
+		/// should be called repeatedly.
+		/// </summary>
+		public static void ProcessEvents()
+		{
+			KinectNative.freenect_process_events(KinectNative.Context);
+		}
+		
+		/// <summary>
 		/// Shuts down the Kinect.NET library and closes any open devices.
 		/// </summary>
 		public static void Shutdown()
 		{
 			KinectNative.ShutdownContext();
-		}
-		
-		/// <summary>
-		/// Process any pending messages on the USB streams. This should be called every so often.
-		/// </summary>
-		public static void ProcessEvents()
-		{
-			KinectNative.freenect_process_events(KinectNative.Context);
 		}
 		
 		/// <summary>
@@ -291,7 +294,7 @@ namespace freenect
 		/// <param name="level">
 		/// A <see cref="LogLevel"/>
 		/// </param>
-		private static void SetLogLevel(LogLevelOptions level)
+		private static void SetLogLevel(LoggingLevel level)
 		{
 			KinectNative.freenect_set_log_level(KinectNative.Context, level);
 			Kinect.logLevel = level;
@@ -309,27 +312,11 @@ namespace freenect
 		/// <param name="message">
 		/// A <see cref="System.String"/>
 		/// </param>
-		internal static void LogCallback(IntPtr device, Kinect.LogLevelOptions logLevel, string message)
+		internal static void LogCallback(IntPtr device, LoggingLevel logLevel, string message)
 		{
 			Kinect realDevice = KinectNative.GetDevice(device);
 			Kinect.Log(null, new LogEventArgs(realDevice, logLevel, message));
-		}
-		
-		/// <summary>
-		/// Logging levels from the C library
-		/// </summary>
-		public enum LogLevelOptions
-		{
-			Fatal = 0,
-			Error,
-			Warning,
-			Notice,
-			Info,
-			Debug,
-			Spew,
-			Flood,
-		}
-		
+		}		
 	}
 }
 

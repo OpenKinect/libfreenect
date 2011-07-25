@@ -39,21 +39,11 @@ namespace freenect
 	/// 
 	public class SwapBufferCollection<T> : IDisposable
 	{
-		/// <summary>
-		/// This small array takes care of mapping 
-		/// where the data is and where their swapped indices are
-		/// </summary>
-		private int[] bufferIndicesMap;
-		
+	
 		/// <summary>
 		/// GC handles for each of the buffers in this collection
 		/// </summary>
 		private GCHandle[] bufferHandles;
-		
-		/// <summary>
-		/// Buffers for data
-		/// </summary>
-		private T[][] buffers;
 		
 		/// <summary>
 		/// Gets the buffer at the specified index
@@ -65,7 +55,7 @@ namespace freenect
 		{
 			get
 			{
-				return this.buffers[this.bufferIndicesMap[index]];
+				return (T[])this.bufferHandles[index].Target;
 			}
 		}
 		
@@ -104,19 +94,16 @@ namespace freenect
 			this.Count = numBuffers;
 			
 			// Allocate buffers and save pinned handles to them
-			this.bufferIndicesMap 	= new int[numBuffers];
 			this.bufferHandles 		= new GCHandle[numBuffers];
-			this.buffers 			= new T[numBuffers][];
 			for(int i = 0; i < numBuffers; i++)
 			{
-				this.bufferIndicesMap[i] = i;
-				this.buffers[i] = new T[bufferSize];
-				this.bufferHandles[i] = GCHandle.Alloc(this.buffers[i], GCHandleType.Pinned);
+				var buffer = new T[bufferSize];
+				this.bufferHandles[i] = GCHandle.Alloc(buffer, GCHandleType.Pinned);
 			}
 		}
 		
 		/// <summary>
-		/// Gets the pointer to the buffer at the specified index. This is useful for passing 
+		/// Gets the handle to the buffer at the specified index. This is useful for passing 
 		/// to unmanaged code.
 		/// </summary>
 		/// <param name="index">
@@ -125,9 +112,9 @@ namespace freenect
 		/// <returns>
 		/// Pointer to buffer of data
 		/// </returns>
-		public IntPtr GetBufferPointerAt(int index)
+		public IntPtr GetHandle(int index)
 		{
-			return this.bufferHandles[this.bufferIndicesMap[index]].AddrOfPinnedObject();
+			return this.bufferHandles[index].AddrOfPinnedObject();
 		}
 		
 		/// <summary>
@@ -154,9 +141,9 @@ namespace freenect
 			}
 			
 			// Swap
-			int tmp = this.bufferIndicesMap[index1];
-			this.bufferIndicesMap[index1] = this.bufferIndicesMap[index2];
-			this.bufferIndicesMap[index2] = tmp;
+			var tmp = this.bufferHandles[index1];
+			this.bufferHandles[index1] = this.bufferHandles[index2];
+			this.bufferHandles[index2] = tmp;
 		}
 		
 		/// <summary>

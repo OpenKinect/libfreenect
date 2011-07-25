@@ -11,6 +11,7 @@ class LibusbFreenect <Formula
   end
 
   def install
+    ENV.universal_binary
     system "./autogen.sh"
     system "./configure", "--prefix=#{prefix}", "--disable-dependency-tracking", "LDFLAGS=-framework IOKit -framework CoreFoundation"
     system "make install"

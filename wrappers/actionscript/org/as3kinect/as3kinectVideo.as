@@ -38,6 +38,7 @@ package org.as3kinect {
 		private var _data:ByteArray;
 		private var _video_busy:Boolean;
 		private var _is_mirrored:Boolean;
+		private var _compression:int;
 		public var bitmap:BitmapData;
 
 		public function as3kinectVideo(){
@@ -45,6 +46,7 @@ package org.as3kinect {
 			_data = new ByteArray;
 			_video_busy = false;
 			_is_mirrored = false;
+			_compression = 80;
 			bitmap = new BitmapData(as3kinect.IMG_WIDTH, as3kinect.IMG_HEIGHT, false, 0xFF000000);
 		}
 
@@ -93,5 +95,22 @@ package org.as3kinect {
 			return _is_mirrored;
 		}
 		
+		public function set compression(quality:int):void 
+		{
+			_data.clear();
+			_data.writeByte(as3kinect.CAMERA_ID);
+			_data.writeByte(as3kinect.VIDEO_COMPRESSION);
+			_data.writeInt(int(quality));
+			if(_socket.sendCommand(_data) != as3kinect.SUCCESS){
+				throw new Error('Depth: Cannot change depth compression');
+			} else {
+				_compression = quality;
+			}
+		}
+		
+		public function get compression():int 
+		{
+			return _compression;
+		}
 	}
 }

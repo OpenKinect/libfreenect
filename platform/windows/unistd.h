@@ -28,6 +28,13 @@
 #define _WINDOWS_UNISTD_EMULATED_H_
 
 #include <stdint.h>
-typedef int ssize_t;
+
+// MinGW defines _SSIZE_T_ in sys/types.h when it defines ssize_t to be a long.
+// Redefining it causes an error.
+// MSVC does not define this.
+#ifndef _SSIZE_T_
+#define _SSIZE_T_
+typedef long ssize_t;
+#endif // _SSIZE_T_
 
 #endif//_WINDOWS_UNISTD_EMULATED_H_

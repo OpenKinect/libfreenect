@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
@@ -9,7 +9,7 @@
     <OutputType>Exe</OutputType>
     <RootNamespace>KinectDemo</RootNamespace>
     <AssemblyName>KinectDemo</AssemblyName>
-    <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
+    <TargetFrameworkVersion>v3.5</TargetFrameworkVersion>
     <FileUpgradeFlags>
     </FileUpgradeFlags>
     <OldToolsVersion>3.5</OldToolsVersion>
@@ -57,12 +57,20 @@
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
-    <Compile Include="..\MainForm.cs">
-      <Link>MainForm.cs</Link>
-      <SubType>Form</SubType>
-    </Compile>
     <Compile Include="..\Program.cs">
       <Link>Program.cs</Link>
+    </Compile>
+    <Compile Include="..\MainWindow.cs">
+      <Link>MainWindow.cs</Link>
+    </Compile>
+    <Compile Include="..\MainWindow.UI.cs">
+      <Link>MainWindow.UI.cs</Link>
+    </Compile>
+    <Compile Include="..\PreviewControl.cs">
+      <Link>PreviewControl.cs</Link>
+    </Compile>
+    <Compile Include="..\PreviewControl.UI.cs">
+      <Link>PreviewControl.UI.cs</Link>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -72,11 +80,15 @@
     <Reference Include="System" />
     <Reference Include="OpenTK.GLControl, Version=1.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Desktop\opentk\Binaries\OpenTK\Release\OpenTK.GLControl.dll</HintPath>
+      <HintPath>..\..\..\..\support\OpenTK.GLControl.dll</HintPath>
     </Reference>
     <Reference Include="OpenTK, Version=1.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Desktop\opentk\Binaries\OpenTK\Release\OpenTK.dll</HintPath>
+      <HintPath>..\..\..\..\support\OpenTK.dll</HintPath>
+    </Reference>
+    <Reference Include="freenect, Version=1.0.4164.1010, Culture=neutral, PublicKeyToken=null">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\..\bin\freenect.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
@@ -97,12 +109,8 @@
     </BootstrapperPackage>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\lib\VS2010\freenectdotnet.csproj">
-      <Project>{360413F9-4D9B-46BE-BEC7-9B666850ED8C}</Project>
-      <Name>freenectdotnet</Name>
-    </ProjectReference>
-  </ItemGroup>
-  <ItemGroup>
-    <None Include="app.config" />
+    <None Include="..\openkinect_logo.png">
+      <Link>openkinect_logo.png</Link>
+    </None>
   </ItemGroup>
 </Project>

@@ -164,6 +164,9 @@ namespace Freenect {
 	  public:
 		Freenect() : m_stop(false) {
 			if(freenect_init(&m_ctx, NULL) < 0) throw std::runtime_error("Cannot initialize freenect library");
+			// We claim both the motor and camera devices, since this class exposes both.
+			// It does not support audio, so we do not claim it.
+			freenect_select_subdevices(m_ctx, static_cast<freenect_device_flags>(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA));
 			if(pthread_create(&m_thread, NULL, pthread_callback, (void*)this) != 0) throw std::runtime_error("Cannot initialize freenect thread");
 		}
 		~Freenect() {

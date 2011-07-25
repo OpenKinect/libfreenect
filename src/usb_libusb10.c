@@ -98,6 +98,10 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 	dev->usb_cam.dev = NULL;
 	dev->usb_motor.parent = dev;
 	dev->usb_motor.dev = NULL;
+#ifdef BUILD_AUDIO
+	dev->usb_audio.parent = dev;
+	dev->usb_audio.dev = NULL;
+#endif
 
 	libusb_device **devs; //pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
@@ -105,6 +109,9 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 		return -1;
 
 	int i = 0, nr_cam = 0, nr_mot = 0;
+#ifdef BUILD_AUDIO
+	int nr_audio = 0;
+#endif
 	int res;
 	struct libusb_device_descriptor desc;
 
@@ -117,7 +124,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 			continue;
 
 		// Search for the camera
-		if (!dev->usb_cam.dev && desc.idProduct == PID_NUI_CAMERA) {
+		if ((ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA) && !dev->usb_cam.dev && desc.idProduct == PID_NUI_CAMERA) {
 			// If the index given by the user matches our camera index
 			if (nr_cam == index) {
 				res = libusb_open (devs[i], &dev->usb_cam.dev);
@@ -152,7 +159,7 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 		}
 
 		// Search for the motor
-		if (!dev->usb_motor.dev && desc.idProduct == PID_NUI_MOTOR) {
+		if ((ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR) && !dev->usb_motor.dev && desc.idProduct == PID_NUI_MOTOR) {
 			// If the index given by the user matches our camera index
 			if (nr_mot == index) {
 				res = libusb_open (devs[i], &dev->usb_motor.dev);
@@ -172,11 +179,43 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 				nr_mot++;
 			}
 		}
+
+#ifdef BUILD_AUDIO
+		// TODO: check that the firmware has already been loaded; if not, upload firmware.
+		// Search for the audio
+		if ((ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO) && !dev->usb_audio.dev && desc.idProduct == PID_NUI_AUDIO) {
+			// If the index given by the user matches our audio index
+			if (nr_audio == index) {
+				res = libusb_open (devs[i], &dev->usb_audio.dev);
+				if (res < 0 || !dev->usb_audio.dev) {
+					FN_ERROR("Could not open audio: %d\n", res);
+					dev->usb_audio.dev = NULL;
+					break;
+				}
+				res = libusb_claim_interface (dev->usb_audio.dev, 0);
+				if (res < 0) {
+					FN_ERROR("Could not claim interface on audio: %d\n", res);
+					libusb_close(dev->usb_audio.dev);
+					dev->usb_audio.dev = NULL;
+					break;
+				}
+			} else {
+				nr_audio++;
+			}
+		}
+#endif
+
 	}
 
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
-	if (dev->usb_cam.dev && dev->usb_motor.dev) {
+	// Check that each subdevice is either opened or not enabled.
+	if ( (dev->usb_cam.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA))
+		&& (dev->usb_motor.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
+#ifdef BUILD_AUDIO
+		&& (dev->usb_audio.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO))
+#endif
+		) {
 		return 0;
 	} else {
 		if (dev->usb_cam.dev) {
@@ -187,6 +226,12 @@ int fnusb_open_subdevices(freenect_device *dev, int index)
 			libusb_release_interface(dev->usb_motor.dev, 0);
 			libusb_close(dev->usb_motor.dev);
 		}
+#ifdef BUILD_AUDIO
+		if (dev->usb_audio.dev) {
+			libusb_release_interface(dev->usb_audio.dev, 0);
+			libusb_close(dev->usb_audio.dev);
+		}
+#endif
 		return -1;
 	}
 }
@@ -206,6 +251,13 @@ int fnusb_close_subdevices(freenect_device *dev)
 		libusb_close(dev->usb_motor.dev);
 		dev->usb_motor.dev = NULL;
 	}
+#ifdef BUILD_AUDIO
+	if (dev->usb_audio.dev) {
+		libusb_release_interface(dev->usb_audio.dev, 0);
+		libusb_close(dev->usb_audio.dev);
+		dev->usb_audio.dev = NULL;
+	}
+#endif
 	return 0;
 }
 
@@ -221,17 +273,46 @@ static void iso_callback(struct libusb_transfer *xfer)
 		return;
 	}
 
-	if(xfer->status == LIBUSB_TRANSFER_COMPLETED) {
-		uint8_t *buf = (uint8_t*)xfer->buffer;
-		for (i=0; i<strm->pkts; i++) {
-			strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
-			buf += strm->len;
+	switch(xfer->status) {
+		case LIBUSB_TRANSFER_COMPLETED: // Normal operation.
+		{
+			uint8_t *buf = (uint8_t*)xfer->buffer;
+			for (i=0; i<strm->pkts; i++) {
+				strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
+				buf += strm->len;
+			}
+			libusb_submit_transfer(xfer);
+			break;
 		}
-		libusb_submit_transfer(xfer);
-	} else {
-		freenect_context *ctx = strm->parent->parent->parent;
-		FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
-		strm->dead_xfers++;
+		case LIBUSB_TRANSFER_NO_DEVICE:
+		{
+			// We lost the device we were talking to.  This is a large problem,
+			// and one that we should eventually come up with a way to
+			// properly propagate up to the caller.
+			freenect_context *ctx = strm->parent->parent->parent;
+			FN_ERROR("USB device disappeared, cancelling stream :(\n");
+			strm->dead_xfers++;
+			fnusb_stop_iso(strm->parent, strm);
+			break;
+		}
+		case LIBUSB_TRANSFER_CANCELLED:
+		{
+			freenect_context *ctx = strm->parent->parent->parent;
+			FN_SPEW("EP %02x transfer cancelled\n", xfer->endpoint);
+			strm->dead_xfers++;
+			break;
+		}
+		default:
+		{
+			// On other errors, resubmit the transfer - in particular, libusb
+			// on OSX tends to hit random errors a lot.  If we don't resubmit
+			// the transfers, eventually all of them die and then we don't get
+			// any more data from the Kinect.
+			freenect_context *ctx = strm->parent->parent->parent;
+			FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
+			libusb_submit_transfer(xfer);
+			break;
+		}
 	}
 }
 
@@ -261,8 +342,10 @@ int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, in
 		libusb_set_iso_packet_lengths(strm->xfers[i], len);
 
 		ret = libusb_submit_transfer(strm->xfers[i]);
-		if (ret < 0)
+		if (ret < 0) {
 			FN_WARNING("Failed to submit isochronous transfer %d: %d\n", i, ret);
+			strm->dead_xfers++;
+		}
 
 		bufp += pkts*len;
 	}
@@ -299,3 +382,22 @@ int fnusb_control(fnusb_dev *dev, uint8_t bmRequestType, uint8_t bRequest, uint1
 {
 	return libusb_control_transfer(dev->dev, bmRequestType, bRequest, wValue, wIndex, data, wLength, 0);
 }
+
+#ifdef BUILD_AUDIO
+int fnusb_bulk(fnusb_dev *dev, uint8_t endpoint, uint8_t *data, int len, int *transferred) {
+	return libusb_bulk_transfer(dev->dev, endpoint, data, len, transferred, 0);
+}
+
+int fnusb_num_interfaces(fnusb_dev *dev) {
+	int retval = 0;
+	int res;
+	libusb_device* d = libusb_get_device(dev->dev);
+	struct libusb_config_descriptor* config;
+	res = libusb_get_active_config_descriptor(d, &config);
+	if (res < 0) // Something went wrong
+		return res;
+	retval = config->bNumInterfaces;
+	libusb_free_config_descriptor(config);
+	return retval;
+}
+#endif

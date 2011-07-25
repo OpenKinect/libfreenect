@@ -43,14 +43,14 @@ namespace freenect
 		/// <summary>
 		/// Current 
 		/// </summary>
-		private float commandedTilt;
+		private double commandedTilt;
 		
 		/// <summary>
 		/// Gets the commanded tilt value [-1.0, 1.0] for the motor. This is just the tilt
 		/// value that the motor was last asked to go to through Motor.Tilt. This doesn't 
 		/// correspond to the actual angle at the physical motor. For that value, see Motor.Tilt.
 		/// </summary>
-		public float CommandedTilt
+		public double CommandedTilt
 		{
 			get
 			{
@@ -59,7 +59,7 @@ namespace freenect
 		}
 		
 		/// <summary>
-		/// Gets the actual raw tilt value of the motor on the kinect.
+		/// Gets the actual raw tilt value of the motor on the kinect [-128, 128]
 		/// </summary>
 		public int RawTilt
 		{
@@ -71,11 +71,12 @@ namespace freenect
 		
 		/// <summary>
 		/// Gets or sets the tilt angle of the motor on the Kinect device.
-		/// Accepted values are [-1.0, 1.0]. When queried, this returns the ACTUAL
-		/// tilt value/status of the motor. To get the commanded tilt value after 
-		/// setting this value, you can use the Motor.CommandedTilt property.
+		/// Accepted values are [-1.0, 1.0]. When queried, this returns the current
+		/// tilt value/status of the motor as it's moving into position. 
+		/// To get the commanded tilt value after setting this value, you can 
+		/// use the Motor.CommandedTilt property.
 		/// </summary>
-		public float Tilt
+		public double Tilt
 		{
 			get
 			{
@@ -90,7 +91,7 @@ namespace freenect
 		/// <summary>
 		/// Gets the status of the tilt motor.
 		/// </summary>
-		public TiltStatusOption TiltStatus
+		public MotorTiltStatus TiltStatus
 		{
 			get
 			{
@@ -118,13 +119,14 @@ namespace freenect
 		/// <returns>
 		/// Actual tilt angle of the motor as it's moving
 		/// </returns>
-		private float GetMotorTilt()
+		private double GetMotorTilt()
 		{
-			if(this.parentDevice.cachedDeviceState.TiltAngle == -128)
+			double rawAngle = this.parentDevice.cachedDeviceState.TiltAngle;
+			if(rawAngle == -128)
 			{
 				return -2.0f;
 			}
-			return (float)this.parentDevice.cachedDeviceState.TiltAngle / 61.0f;
+			return Math.Round(rawAngle / 61.0, 2);
 		}
 		
 		/// <summary>
@@ -133,7 +135,7 @@ namespace freenect
 		/// <param name="angle">
 		/// Value between [-1.0, 1.0]
 		/// </param>
-		private void SetMotorTilt(float angle)
+		private void SetMotorTilt(double angle)
 		{
 			// Check if value is in valid ranges
 			if(angle < -1.0 || angle > 1.0)
@@ -154,16 +156,7 @@ namespace freenect
 			// Save commanded tilt
 			this.commandedTilt = angle;
 		}
-		
-		/// <summary>
-		/// Different states the tilt motor can be in operation
-		/// </summary>
-		public enum TiltStatusOption
-		{
-			Stopped 	= 0x00,
-		 	AtLimit 	= 0x01,
-			Moving 		= 0x04
-		}
+
 	}
 }
 

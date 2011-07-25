@@ -43,13 +43,13 @@ namespace freenect
 		/// <summary>
 		/// Current color set on the LED
 		/// </summary>
-		private ColorOption color;
+		private LEDColor color;
 		
 		/// <summary>
 		/// Gets or sets the LED color on the Kinect device
 		/// </summary>
 		/// <value>Gets or sets 'color' field</value>
-		public ColorOption Color
+		public LEDColor Color
 		{
 			get
 			{
@@ -76,30 +76,16 @@ namespace freenect
 		/// Sets the color for the LED on the Kinect.
 		/// </summary>
 		/// <param name="color">
-		/// Color value in KinectLED.ColorOption. 
+		/// Color value 
 		/// </param>
-		private void SetLEDColor(ColorOption color)
+		private void SetLEDColor(LEDColor color)
 		{
 			int result = KinectNative.freenect_set_led(this.parentDevice.devicePointer, color);
 			if(result != 0)
 			{
 				throw new Exception("Could not set color to " + color + ". Error Code:" + result);
 			}
-			this.color = color;	
-		}
-		
-		/// <summary>
-		/// LED colors. None means LED is off.
-		/// </summary>
-		public enum ColorOption
-		{
-			None    		= 0,
-			Green  			= 1,
-			Red    			= 2,
-			Yellow 			= 3,
-			BlinkYellow 	= 4,
-			BlinkGreen 		= 5,
-			BlinkRedYellow	= 6
+			this.color = color;
 		}
 	}
 }

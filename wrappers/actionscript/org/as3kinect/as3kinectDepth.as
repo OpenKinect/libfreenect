@@ -40,6 +40,7 @@ package org.as3kinect {
 		private var _is_mirrored:Boolean;
 		private var _min_distance:int;
 		private var _max_distance:int;
+		private var _compression:int;
 		public var bitmap:BitmapData;
 
 		public function as3kinectDepth(){
@@ -49,6 +50,7 @@ package org.as3kinect {
 			_is_mirrored = false;
 			_min_distance = 600;
 			_max_distance = 800;
+			_compression = 20;
 			bitmap = new BitmapData(as3kinect.IMG_WIDTH, as3kinect.IMG_HEIGHT, false, 0xFF000000);
 		}
 
@@ -62,6 +64,23 @@ package org.as3kinect {
 				_data.clear();
 				_data.writeByte(as3kinect.CAMERA_ID);
 				_data.writeByte(as3kinect.GET_DEPTH);
+				_data.writeInt(0);
+				if(_socket.sendCommand(_data) != as3kinect.SUCCESS){
+					throw new Error('Data was not complete');
+				}
+			}
+		}
+		
+		/*
+		 * Tell server to send the latest depth raw frame
+		 * Note: We should lock the command while we are waiting for the data to avoid lag
+		 */
+		public function getRawBuffer():void {
+			if(!_depth_busy){
+				_depth_busy = true;
+				_data.clear();
+				_data.writeByte(as3kinect.CAMERA_ID);
+				_data.writeByte(as3kinect.GET_RAW_DEPTH);
 				_data.writeInt(0);
 				if(_socket.sendCommand(_data) != as3kinect.SUCCESS){
 					throw new Error('Data was not complete');
@@ -131,6 +150,24 @@ package org.as3kinect {
 		public function get maxDistance():int 
 		{
 			return _max_distance;
+		}
+		
+		public function set compression(quality:int):void 
+		{
+			_data.clear();
+			_data.writeByte(as3kinect.CAMERA_ID);
+			_data.writeByte(as3kinect.DEPTH_COMPRESSION);
+			_data.writeInt(int(quality));
+			if(_socket.sendCommand(_data) != as3kinect.SUCCESS){
+				throw new Error('Depth: Cannot change depth compression');
+			} else {
+				_compression = quality;
+			}
+		}
+		
+		public function get compression():int 
+		{
+			return _compression;
 		}
 	}
 }

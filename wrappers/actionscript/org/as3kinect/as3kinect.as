@@ -42,11 +42,14 @@
 		public static const MIC_ID:int = 2;
 		
 		public static const GET_DEPTH:int = 0;
-		public static const GET_VIDEO:int = 1;
-		public static const MIRROR_DEPTH:int = 2;
-		public static const MIRROR_VIDEO:int = 3;
-		public static const MIN_DEPTH:int = 4;
-		public static const MAX_DEPTH:int = 5;
+		public static const GET_RAW_DEPTH:int = 1;
+		public static const GET_VIDEO:int = 2;
+		public static const MIRROR_DEPTH:int = 3;
+		public static const MIRROR_VIDEO:int = 4;
+		public static const MIN_DEPTH:int = 5;
+		public static const MAX_DEPTH:int = 6;
+		public static const DEPTH_COMPRESSION:int = 7;
+		public static const VIDEO_COMPRESSION:int = 8;
 		
 		public static const MOVE_MOTOR:int = 0;
 		public static const LED_COLOR:int = 1;
@@ -68,5 +71,9 @@
 		public static const BLOB_MAX_WIDTH:uint = 30;
 		public static const BLOB_MIN_HEIGHT:uint = 15;
 		public static const BLOB_MAX_HEIGHT:uint = 80;
+		
+		public static const HORIZONTAL_BLOBS_SEARCH_STEP_WIDTH : int = 3;
+        public static const HORIZONTAL_BLOBS_SEARCH_SENSIVITY : int = 15;
+        public static const HORIZONTAL_BLOBS_HOLD_TOLERANCE : int=100;
 	}
 }

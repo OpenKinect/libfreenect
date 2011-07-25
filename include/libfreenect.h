@@ -35,6 +35,17 @@ extern "C" {
 
 #define FREENECT_COUNTS_PER_G 819 /**< Ticks per G for accelerometer as set per http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf */
 
+/// Flags representing devices to open when freenect_open_device() is called.
+/// In particular, this allows libfreenect to grab only a subset of the devices
+/// in the Kinect, so you could (for instance) use libfreenect to handle audio
+/// and motor support while letting OpenNI have access to the cameras.
+/// If a device is not supported on a particular platform, its flag will be ignored.
+typedef enum {
+	FREENECT_DEVICE_MOTOR  = 0x01,
+	FREENECT_DEVICE_CAMERA = 0x02,
+	FREENECT_DEVICE_AUDIO  = 0x04,
+} freenect_device_flags;
+
 /// Enumeration of available resolutions.
 /// Not all available resolutions are actually supported for all video formats.
 /// Frame modes may not perfectly match resolutions.  For instance,
@@ -297,6 +308,18 @@ FREENECTAPI int freenect_process_events(freenect_context *ctx);
  * @return Number of devices connected, < 0 on error
  */
 FREENECTAPI int freenect_num_devices(freenect_context *ctx);
+
+/**
+ * Set which subdevices any subsequent calls to freenect_open_device()
+ * should open.  This will not affect devices which have already been
+ * opened.  The default behavior, should you choose not to call this
+ * function at all, is to open all supported subdevices - motor, cameras,
+ * and audio, if supported on the platform.
+ *
+ * @param ctx Context to set future subdevice selection for
+ * @param subdevs Flags representing the subdevices to select
+ */
+FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs);
 
 /**
  * Opens a kinect device via a context. Index specifies the index of

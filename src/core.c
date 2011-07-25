@@ -32,6 +32,9 @@
 #include <unistd.h>
 
 #include "freenect_internal.h"
+#ifdef BUILD_AUDIO
+#include "loader.h"
+#endif
 
 FREENECTAPI int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 {
@@ -42,6 +45,7 @@ FREENECTAPI int freenect_init(freenect_context **ctx, freenect_usb_context *usb_
 	memset(*ctx, 0, sizeof(freenect_context));
 
 	(*ctx)->log_level = LL_WARNING;
+	(*ctx)->enabled_subdevices = (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA | FREENECT_DEVICE_AUDIO);
 	return fnusb_init(&(*ctx)->usb, usb_ctx);
 }
 
@@ -67,6 +71,14 @@ FREENECTAPI int freenect_num_devices(freenect_context *ctx)
 	return fnusb_num_devices(&ctx->usb);
 }
 
+FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs) {
+	ctx->enabled_subdevices = (freenect_device_flags)(subdevs & (FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA
+#ifdef BUILD_AUDIO
+			| FREENECT_DEVICE_AUDIO
+#endif
+			));
+}
+
 FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
 {
 	int res;
@@ -79,11 +91,37 @@ FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **de
 	pdev->parent = ctx;
 
 	res = fnusb_open_subdevices(pdev, index);
-
 	if (res < 0) {
 		free(pdev);
 		return res;
 	}
+#ifdef BUILD_AUDIO
+	if (pdev->usb_audio.dev) {
+		res = fnusb_num_interfaces(&pdev->usb_audio);
+		if (res == 1) {
+			// Upload audio firmware, release devices, and reopen them
+			res = upload_firmware(&pdev->usb_audio);
+			if (res < 0) {
+				FN_ERROR("upload_firmware failed: %d\n", res);
+				free(pdev);
+				return res;
+			}
+
+			res = fnusb_close_subdevices(pdev);
+			if (res < 0) {
+				FN_ERROR("fnusb_close_subdevices failed: %d\n", res);
+				free(pdev);
+				return res;
+			}
+			sleep(1); // Give time for the device to reenumerate before trying to open it
+			res = fnusb_open_subdevices(pdev, index);
+			if (res < 0) {
+				free(pdev);
+				return res;
+			}
+		}
+	}
+#endif
 
 	if (!ctx->first) {
 		ctx->first = pdev;

@@ -34,108 +34,31 @@ namespace freenect
 	/// <summary>
 	/// Represents a map of rgb values from the RGBCamera
 	/// </summary>
-	///
-	/// 
-	public class ImageMap
+	public class ImageMap : BaseDataMap
 	{	
 		/// <summary>
-		/// GC handle to the data in the image map
+		/// Constructor #1
 		/// </summary>
-		private GCHandle dataHandle;
-	
-		/// <summary>
-		/// Gets the width of the image map
-		/// </summary>
-		public int Width
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the height of the image map
-		/// </summary>
-		public int Height
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the raw data in the ImageMap. This data is in a 1-dimensional 
-		/// array so it's easy to work with in unsafe code. 
-		/// </summary>
-		public byte[] Data
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the data pointer from the Kinect library
-		/// </summary>
-		public IntPtr DataPointer
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the format this image is in
-		/// </summary>
-		public VideoCamera.DataFormatOption DataFormat
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Constructor that allocates a pinned buffer
-		/// </summary>
-		/// <param name="dataFormat">
-		/// A <see cref="VideoCamera.DataFormatOption"/>
+		/// <param name="mode">
+		/// A <see cref="FrameMode"/>
 		/// </param>
-		/// <param name="allocateBuffer">
-		/// 
-		/// </param>
-		internal ImageMap(VideoCamera.DataFormatOption dataFormat)
+		public ImageMap(FrameMode mode) : base(mode)
 		{
-			this.Width = VideoCamera.DataFormatDimensions[dataFormat].X;
-			this.Height = VideoCamera.DataFormatDimensions[dataFormat].Y;
-			this.DataFormat = dataFormat;
-			this.Data = new byte[VideoCamera.DataFormatSizes[dataFormat]];
-			this.dataHandle = GCHandle.Alloc(this.Data, GCHandleType.Pinned);
-			this.DataPointer = this.dataHandle.AddrOfPinnedObject();
+			
 		}
 		
 		/// <summary>
-		/// Constructor where a buffer allocation isn't needed
+		/// Constructor #2
 		/// </summary>
-		/// <param name="dataFormat">
-		/// A <see cref="VideoCamera.DataFormatOption"/>
+		/// <param name="mode">
+		/// A <see cref="FrameMode"/>
 		/// </param>
-		/// <param name="bufferPointer">
+		/// <param name="buffer">
 		/// A <see cref="IntPtr"/>
 		/// </param>
-		internal ImageMap(VideoCamera.DataFormatOption dataFormat, IntPtr bufferPointer)
+		public ImageMap(FrameMode mode, IntPtr buffer) : base(mode, buffer)
 		{
-			this.Width = VideoCamera.DataFormatDimensions[dataFormat].X;
-			this.Height = VideoCamera.DataFormatDimensions[dataFormat].Y;
-			this.DataFormat = dataFormat;
-			this.Data = null;
-			this.dataHandle = default(GCHandle);
-			this.DataPointer = bufferPointer;
-		}
-		
-		/// <summary>
-		/// Destructoooorrr
-		/// </summary>
-		~ImageMap()
-		{
-			if(this.dataHandle != default(GCHandle))
-			{
-				this.dataHandle.Free();
-			}
+			
 		}
 	}
 }

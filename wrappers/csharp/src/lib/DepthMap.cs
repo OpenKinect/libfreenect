@@ -32,108 +32,31 @@ namespace freenect
 	/// <summary>
 	/// Represents a map of depth values from the DepthCamera
 	/// </summary>
-	///
-	/// 
-	public class DepthMap
-	{		
+	public class DepthMap : BaseDataMap
+	{	
 		/// <summary>
-		/// GC handle to the data in the depth map
+		/// Constructor #1
 		/// </summary>
-		private GCHandle dataHandle;
-	
-		/// <summary>
-		/// Gets the width of the depth map
-		/// </summary>
-		public int Width
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the height of the depth map
-		/// </summary>
-		public int Height
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the raw data in the DepthMap. This data is in a 1-dimensional 
-		/// array so it's easy to work with in unsafe code. 
-		/// </summary>
-		public byte[] Data
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the data pointer from the Kinect library
-		/// </summary>
-		public IntPtr DataPointer
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Gets the format this depth map is in
-		/// </summary>
-		public DepthCamera.DataFormatOption DataFormat
-		{
-			get;
-			private set;
-		}
-		
-		/// <summary>
-		/// Constructor that allocates a pinned buffer
-		/// </summary>
-		/// <param name="dataFormat">
-		/// A <see cref="DepthCamera.DataFormatOption"/>
+		/// <param name="mode">
+		/// A <see cref="FrameMode"/>
 		/// </param>
-		/// <param name="allocateBuffer">
-		/// 
-		/// </param>
-		internal DepthMap(DepthCamera.DataFormatOption dataFormat)
+		public DepthMap(FrameMode mode) : base(mode)
 		{
-			this.Width = DepthCamera.DataFormatDimensions[dataFormat].X;
-			this.Height = DepthCamera.DataFormatDimensions[dataFormat].Y;
-			this.DataFormat = dataFormat;
-			this.Data = new byte[DepthCamera.DataFormatSizes[dataFormat]];
-			this.dataHandle = GCHandle.Alloc(this.Data, GCHandleType.Pinned);
-			this.DataPointer = this.dataHandle.AddrOfPinnedObject();
+			
 		}
 		
 		/// <summary>
-		/// Constructor where a buffer allocation isn't needed
+		/// Constructor #2
 		/// </summary>
-		/// <param name="dataFormat">
-		/// A <see cref="DepthCamera.DataFormatOption"/>
+		/// <param name="mode">
+		/// A <see cref="FrameMode"/>
 		/// </param>
-		/// <param name="bufferPointer">
+		/// <param name="buffer">
 		/// A <see cref="IntPtr"/>
 		/// </param>
-		internal DepthMap(DepthCamera.DataFormatOption dataFormat, IntPtr bufferPointer)
+		public DepthMap(FrameMode mode, IntPtr buffer) : base(mode, buffer)
 		{
-			this.Width = DepthCamera.DataFormatDimensions[dataFormat].X;
-			this.Height = DepthCamera.DataFormatDimensions[dataFormat].Y;
-			this.DataFormat = dataFormat;
-			this.Data = null;
-			this.dataHandle = default(GCHandle);
-			this.DataPointer = bufferPointer;
-		}
-		
-		/// <summary>
-		/// Destructoooorrr
-		/// </summary>
-		~DepthMap()
-		{
-			if(this.dataHandle != default(GCHandle))
-			{
-				this.dataHandle.Free();
-			}
+			
 		}
 	}
 }

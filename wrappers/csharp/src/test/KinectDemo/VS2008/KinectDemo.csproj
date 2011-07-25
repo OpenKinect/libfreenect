@@ -22,6 +22,7 @@
     <PlatformTarget>x86</PlatformTarget>
     <ConsolePause>false</ConsolePause>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <additionalargs>/d:TRACE</additionalargs>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
     <DebugType>none</DebugType>
@@ -35,11 +36,20 @@
   </PropertyGroup>
   <Import Project="$(MSBuildBinPath)\Microsoft.CSharp.targets" />
   <ItemGroup>
-    <Compile Include="..\MainForm.cs">
-      <Link>MainForm.cs</Link>
-    </Compile>
     <Compile Include="..\Program.cs">
       <Link>Program.cs</Link>
+    </Compile>
+    <Compile Include="..\MainWindow.cs">
+      <Link>MainWindow.cs</Link>
+    </Compile>
+    <Compile Include="..\MainWindow.UI.cs">
+      <Link>MainWindow.UI.cs</Link>
+    </Compile>
+    <Compile Include="..\PreviewControl.cs">
+      <Link>PreviewControl.cs</Link>
+    </Compile>
+    <Compile Include="..\PreviewControl.UI.cs">
+      <Link>PreviewControl.UI.cs</Link>
     </Compile>
   </ItemGroup>
   <ItemGroup>
@@ -49,17 +59,21 @@
     <Reference Include="System" />
     <Reference Include="OpenTK.GLControl, Version=1.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Desktop\opentk\Binaries\OpenTK\Release\OpenTK.GLControl.dll</HintPath>
+      <HintPath>..\..\..\..\support\OpenTK.GLControl.dll</HintPath>
     </Reference>
     <Reference Include="OpenTK, Version=1.0.0.0, Culture=neutral, PublicKeyToken=bad199fe84eb3df4">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\..\..\..\..\..\Desktop\opentk\Binaries\OpenTK\Release\OpenTK.dll</HintPath>
+      <HintPath>..\..\..\..\support\OpenTK.dll</HintPath>
+    </Reference>
+    <Reference Include="freenect, Version=1.0.4164.1010, Culture=neutral, PublicKeyToken=null">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\..\..\bin\freenect.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\..\lib\MonoDevelop\freenectdotnet.csproj">
-      <Project>{360413F9-4D9B-46BE-BEC7-9B666850ED8C}</Project>
-      <Name>freenectdotnet</Name>
-    </ProjectReference>
+    <None Include="..\openkinect_logo.png">
+      <Link>openkinect_logo.png</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 </Project>

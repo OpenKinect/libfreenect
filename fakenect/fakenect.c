@@ -301,6 +301,11 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 	return 0;
 }
 
+void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs) {
+	// Ideally, we'd actually check for MOTOR and CAMERA and AUDIO, but for now
+	// we just ignore them and provide all captured data.
+}
+
 int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 {
 	depth_buffer = buf;

@@ -178,7 +178,8 @@ void keyPressed(unsigned char key, int x, int y)
 		free(rgb_back);
 		free(rgb_mid);
 		free(rgb_front);
-		pthread_exit(NULL);
+		// Not pthread_exit because OSX leaves a thread lying around and doesn't exit
+		exit(0);
 	}
 	if (key == 'f') {
 		// Cycle through:
@@ -435,6 +436,7 @@ int main(int argc, char **argv)
 	}
 
 	freenect_set_log_level(f_ctx, FREENECT_LOG_DEBUG);
+	freenect_select_subdevices(f_ctx, (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA));
 
 	int nr_devices = freenect_num_devices (f_ctx);
 	printf ("Number of devices found: %d\n", nr_devices);
