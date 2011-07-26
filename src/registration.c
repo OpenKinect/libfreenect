@@ -25,6 +25,7 @@
  */
 
 #include <libfreenect.h>
+#include <freenect_internal.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -247,6 +248,8 @@ uint16_t freenect_raw_to_mm(uint16_t raw, freenect_zero_plane_info* zpi) {
 int freenect_init_registration(freenect_device* dev, freenect_registration* reg) {
 
 	uint16_t i;
+
+	if (reg == NULL) reg = &(dev->registration);
 
 	// default values ripped from my Kinect
 	freenect_reg_info ritmp = { 2048330528, 1964, 56, -26, 600, 6161, -13, 2825, 684, 5, 6434, 10062, 130801, 0, 0, 170, 136, 2095986, 890, 763, 2096378, 134215474, 134217093, 134216989, 134216925, 0, 134216984, 0, 134214659 }; reg->reg_info = ritmp;
