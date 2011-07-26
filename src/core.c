@@ -133,6 +133,9 @@ FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **de
 	}
 
 	*dev = pdev;
+
+	freenect_init_registration( *dev, &((*dev)->registration) );
+
 	return 0;
 }
 

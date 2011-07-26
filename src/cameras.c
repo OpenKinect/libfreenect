@@ -362,6 +362,7 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 
 static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 {
+	uint16_t regbuf[640*480];
 	freenect_context *ctx = dev->parent;
 
 	if (len == 0)
@@ -381,6 +382,10 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
 			convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
+			break;
+		case FREENECT_DEPTH_REGISTERED:
+			convert_packed11_to_16bit(dev->depth.raw_buf, regbuf, 640*480);
+			freenect_apply_registration( &(dev->registration), regbuf, (uint16_t*)dev->depth.proc_buf );
 			break;
 		case FREENECT_DEPTH_10BIT:
 			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 10, 640*480);
