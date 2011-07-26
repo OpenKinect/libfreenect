@@ -264,6 +264,10 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 		reg->zero_plane_info = freenect_get_zero_plane_info( dev );
 	}
 
+	// for very unclear reasons, setting this value to -0.5
+	// results in a much more accurate depth -> RGB X shift
+	reg->zero_plane_info.dcmos_rcmos_dist = -0.5;
+
 	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * DEPTH_MAX_RAW_VALUE );
 	reg->depth_to_rgb_shift = malloc( sizeof( int32_t) * DEPTH_MAX_METRIC_VALUE );
 	reg->registration_table = malloc( sizeof( int32_t) * DEPTH_X_RES * DEPTH_Y_RES * 2 );
