@@ -233,14 +233,15 @@ void freenect_init_registration_table(int32_t (*registration_table)[2], freenect
 
 
 // TODO: can these be extracted from the Kinect?
-int32_t paramCoeff = 4;
-int32_t constShift = 200;
-int32_t shiftScale = 10;
+double paramCoeff = 4;
+double constShift = 200;
+double shiftScale = 10;
+double pixelSizeFactor = 1;
 
 /// convert raw shift value to metric depth (in mm)
 uint16_t freenect_raw_to_mm(uint16_t raw, freenect_zero_plane_info* zpi) {
-	double fixedRefX = ((raw - (paramCoeff * constShift)) / paramCoeff) - S2D_CONST_OFFSET;
-	double metric = fixedRefX * zpi->reference_pixel_size;
+	double fixedRefX = ((raw - (paramCoeff * constShift / pixelSizeFactor)) / paramCoeff) - S2D_CONST_OFFSET;
+	double metric = fixedRefX * zpi->reference_pixel_size * pixelSizeFactor;
 	return shiftScale * ((metric * zpi->reference_distance / (zpi->dcmos_emitter_dist - metric)) + zpi->reference_distance);
 }
 
