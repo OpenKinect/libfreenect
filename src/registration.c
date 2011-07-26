@@ -85,6 +85,7 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 			
 			// so long as the current pixel has a depth value
 			if (metric_depth == DEPTH_NO_MM_VALUE) continue;
+			if (metric_depth >= DEPTH_MAX_METRIC_VALUE) continue;
 			
 			// calculate the new x and y location for that pixel
 			// using curRegistrationTable for the basic rectification
