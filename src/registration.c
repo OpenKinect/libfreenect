@@ -50,7 +50,7 @@
 #define DEPTH_X_RES 640
 #define DEPTH_Y_RES 480
 
-#define DENSE_REGISTRATION
+// #define DENSE_REGISTRATION
 
 
 /// fill the table of horizontal shift values for metric depth -> RGB conversion
