@@ -32,7 +32,7 @@
 #include <math.h>
 
 
-#define REG_X_VAL_SCALE 16 // "fixed-point" precision for double -> int32_t conversion
+#define REG_X_VAL_SCALE 256 // "fixed-point" precision for double -> int32_t conversion
 
 #define S2D_PEL_CONST 10
 #define S2D_CONST_OFFSET 0.375
