@@ -89,8 +89,8 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
 			if (metric_depth >= DEPTH_MAX_METRIC_VALUE) continue;
 			
 			// calculate the new x and y location for that pixel
-			// using curRegistrationTable for the basic rectification
-			// and depthToRgbShift for determining the x shift
+			// using registration_table for the basic rectification
+			// and depth_to_rgb_shift for determining the x shift
 			uint32_t reg_index = DEPTH_MIRROR_X ? ((y + 1) * DEPTH_X_RES - x - 1) : (y * DEPTH_X_RES + x);
 			uint32_t nx = (reg->registration_table[reg_index][0] + reg->depth_to_rgb_shift[metric_depth]) / REG_X_VAL_SCALE;
 			uint32_t ny =  reg->registration_table[reg_index][1];
@@ -264,9 +264,10 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 		reg->zero_plane_info = freenect_get_zero_plane_info( dev );
 	}
 
+	// TODO: determine why this ugly hack had a positive effect for low distances
 	// for very unclear reasons, setting this value to -0.5
 	// results in a much more accurate depth -> RGB X shift
-	reg->zero_plane_info.dcmos_rcmos_dist = -0.5;
+	// reg->zero_plane_info.dcmos_rcmos_dist = -0.5;
 
 	reg->raw_to_mm_shift    = malloc( sizeof(uint16_t) * DEPTH_MAX_RAW_VALUE );
 	reg->depth_to_rgb_shift = malloc( sizeof( int32_t) * DEPTH_MAX_METRIC_VALUE );
