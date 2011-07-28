@@ -70,19 +70,54 @@ void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info*
 	}
 }
 
+inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
+{
+	uint16_t baseMask = 0x7FF;
 
-int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
+	uint8_t r0  = *(raw+0);
+	uint8_t r1  = *(raw+1);
+	uint8_t r2  = *(raw+2);
+	uint8_t r3  = *(raw+3);
+	uint8_t r4  = *(raw+4);
+	uint8_t r5  = *(raw+5);
+	uint8_t r6  = *(raw+6);
+	uint8_t r7  = *(raw+7);
+	uint8_t r8  = *(raw+8);
+	uint8_t r9  = *(raw+9);
+	uint8_t r10 = *(raw+10);
 
-	memset(output_mm, DEPTH_NO_MM_VALUE, DEPTH_X_RES * DEPTH_Y_RES * sizeof(uint16_t)); // clear the output image
+	frame[0] =  (r0<<3)  | (r1>>5);
+	frame[1] = ((r1<<6)  | (r2>>2) )           & baseMask;
+	frame[2] = ((r2<<9)  | (r3<<1) | (r4>>7) ) & baseMask;
+	frame[3] = ((r4<<4)  | (r5>>4) )           & baseMask;
+	frame[4] = ((r5<<7)  | (r6>>1) )           & baseMask;
+	frame[5] = ((r6<<10) | (r7<<2) | (r8>>6) ) & baseMask;
+	frame[6] = ((r8<<5)  | (r9>>3) )           & baseMask;
+	frame[7] = ((r9<<8)  | (r10)   )           & baseMask;
+}
+
+
+int freenect_apply_registration(freenect_registration* reg, uint8_t* input_packed, uint16_t* output_mm) {
+
+	size_t i, *wipe = (size_t*)output_mm;
+	for (i = 0; i < DEPTH_X_RES * DEPTH_Y_RES * sizeof(uint16_t) / sizeof(size_t); i++) wipe[i] = DEPTH_NO_MM_VALUE;
+
+	uint16_t unpack[8];
 
 	uint32_t target_offset = DEPTH_Y_RES * reg->reg_pad_info.start_lines;
-	uint32_t x,y,source_index = 0;
+	uint32_t x,y,source_index = 8;
 
 	for (y = 0; y < DEPTH_Y_RES; y++) {
 		for (x = 0; x < DEPTH_X_RES; x++) {
-		
+			
+			if (source_index == 8) {
+				unpack_8_pixels( input_packed, unpack );
+				source_index = 0;
+				input_packed += 11;
+			}
+
 			// get the value at the current depth pixel, convert to millimeters
-			uint16_t metric_depth = reg->raw_to_mm_shift[ input_raw[source_index++] ];
+			uint16_t metric_depth = reg->raw_to_mm_shift[ unpack[source_index++] ];
 			
 			// so long as the current pixel has a depth value
 			if (metric_depth == DEPTH_NO_MM_VALUE) continue;

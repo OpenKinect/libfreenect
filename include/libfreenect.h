@@ -639,7 +639,7 @@ FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_regist
  *
  * @return 0 on success, < 0 on error
  */
-FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm);
+FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint8_t* input_packed, uint16_t* output_mm);
 
 FREENECTAPI freenect_reg_info freenect_get_reg_info(freenect_device* dev);
 FREENECTAPI freenect_reg_pad_info freenect_get_reg_pad_info(freenect_device* dev);
