@@ -50,12 +50,14 @@
 #define DEPTH_X_RES 640
 #define DEPTH_Y_RES 480
 
+// try to fill single empty pixels AKA "salt-and-pepper noise"
+// disabled by default, noise removal better handled in later stages 
 // #define DENSE_REGISTRATION
 
 
 /// fill the table of horizontal shift values for metric depth -> RGB conversion
-void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info* zpi) {
-
+void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info* zpi)
+{
 	uint32_t i,xScale = DEPTH_SENSOR_X_RES / DEPTH_X_RES;
 	
 	double pelSize = 1.0 / (zpi->reference_pixel_size * xScale * S2D_PEL_CONST);
@@ -70,6 +72,8 @@ void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plane_info*
 	}
 }
 
+
+// unrolled inner loop of the 11-bit unpacker
 inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
 {
 	uint16_t baseMask = 0x7FF;
@@ -96,9 +100,10 @@ inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
 	frame[7] = ((r9<<8)  | (r10)   )           & baseMask;
 }
 
-
-int freenect_apply_registration(freenect_registration* reg, uint8_t* input_packed, uint16_t* output_mm) {
-
+// apply registration data to a single packed frame
+int freenect_apply_registration(freenect_registration* reg, uint8_t* input_packed, uint16_t* output_mm)
+{
+	// set output buffer to zero using pointer-sized memory access (~ 30-40% faster than memset)
 	size_t i, *wipe = (size_t*)output_mm;
 	for (i = 0; i < DEPTH_X_RES * DEPTH_Y_RES * sizeof(uint16_t) / sizeof(size_t); i++) wipe[i] = DEPTH_NO_MM_VALUE;
 
@@ -110,6 +115,7 @@ int freenect_apply_registration(freenect_registration* reg, uint8_t* input_packe
 	for (y = 0; y < DEPTH_Y_RES; y++) {
 		for (x = 0; x < DEPTH_X_RES; x++) {
 			
+			// get 8 pixels from the packed frame
 			if (source_index == 8) {
 				unpack_8_pixels( input_packed, unpack );
 				source_index = 0;
@@ -161,8 +167,9 @@ int freenect_apply_registration(freenect_registration* reg, uint8_t* input_packe
 	return 0;
 }
 
-
-void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t resX, int32_t resY, freenect_reg_info* regdata ) {
+// create temporary x/y shift tables
+void freenect_create_dxdy_tables(double* RegXTable, double* RegYTable, int32_t resX, int32_t resY, freenect_reg_info* regdata )
+{
 
 	int64_t AX6 = regdata->ax;
 	int64_t BX6 = regdata->bx;
@@ -258,7 +265,7 @@ void freenect_init_registration_table(int32_t (*registration_table)[2], freenect
 			double new_y = y + regtable_dy[index] + DEPTH_Y_OFFSET;
 			
 			if ((new_x < 0) || (new_y < 0) || (new_x >= DEPTH_X_RES) || (new_y >= DEPTH_Y_RES))
-				new_x = 2 * DEPTH_X_RES; // set illegal value on purpose
+				new_x = 2 * DEPTH_X_RES; // intentionally set value outside image bounds
 
 			registration_table[index][0] = new_x * REG_X_VAL_SCALE;
 			registration_table[index][1] = new_y;
@@ -274,15 +281,16 @@ double shiftScale = 10;
 double pixelSizeFactor = 1;
 
 /// convert raw shift value to metric depth (in mm)
-uint16_t freenect_raw_to_mm(uint16_t raw, freenect_zero_plane_info* zpi) {
+uint16_t freenect_raw_to_mm(uint16_t raw, freenect_zero_plane_info* zpi)
+{
 	double fixedRefX = ((raw - (paramCoeff * constShift / pixelSizeFactor)) / paramCoeff) - S2D_CONST_OFFSET;
 	double metric = fixedRefX * zpi->reference_pixel_size * pixelSizeFactor;
 	return shiftScale * ((metric * zpi->reference_distance / (zpi->dcmos_emitter_dist - metric)) + zpi->reference_distance);
 }
 
-
-int freenect_init_registration(freenect_device* dev, freenect_registration* reg) {
-
+/// allocate and fill registration tables
+int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
+{
 	uint16_t i;
 
 	if (reg == NULL) reg = &(dev->registration);
@@ -319,7 +327,9 @@ int freenect_init_registration(freenect_device* dev, freenect_registration* reg)
 	return 0;
 }
 
-void freenect_cleanup_registration(freenect_registration* reg) {
+/// free previously allocated buffers
+void freenect_cleanup_registration(freenect_registration* reg)
+{
 	free( &(reg->reg_info) );
 	free( &(reg->reg_pad_info) );
 	free( &(reg->zero_plane_info) );
