@@ -87,7 +87,10 @@ int fnusb_shutdown(fnusb_ctx *ctx)
 
 int fnusb_process_events(fnusb_ctx *ctx)
 {
-	return libusb_handle_events(ctx->ctx);
+	struct timeval t;
+	timerclear(&t);
+	t.tv_usec = 25600; // 0.0256 sec
+	return libusb_handle_events_timeout(ctx->ctx, &t);
 }
 
 int fnusb_open_subdevices(freenect_device *dev, int index)
