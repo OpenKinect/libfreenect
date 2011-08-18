@@ -16,3 +16,10 @@ add_executable(record record.c)
 target_link_libraries(record freenect m)
 install (TARGETS record
   DESTINATION bin)
+
+CONFIGURE_FILE("fakenect.sh.in"
+  "fakenect.sh"
+  IMMEDIATE @ONLY)
+install (PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/fakenect.sh
+  DESTINATION bin
+  RENAME fakenect)
