@@ -1,0 +1,19 @@
+Source: libfreenect
+Section: devel
+Priority: optional
+DM-Upload-Allowed: yes
+Maintainer: OpenKinect <openkinect@googlegroups.com>
+Build-Depends: debhelper, cdbs, cmake, libusb-1.0-0-dev, freeglut3-dev (>= 2.6.0), libxi-dev, libxmu-dev
+Standards-Version: 3.9.1
+Homepage: http://www.openkinect.org/
+
+Package: libfreenect
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}, libusb-1.0-0, freeglut3 (>= 2.6.0) 
+Description:  libfreenect library for using Kinect - library files + demo binaries
+
+Package: libfreenect-dev
+Architecture: any
+Section: libdevel
+Depends: libfreenect (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Description:  libfreenect library for using Kinect - development headers

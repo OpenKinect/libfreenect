@@ -1,0 +1,29 @@
+libfreenect (0.1.1-0ubuntu5~natty) natty; urgency=low
+
+  * moved include files to /usr/include
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 18 Sep 2011 18:39:55 +0200
+
+libfreenect (0.1.1-0ubuntu4~natty) natty; urgency=low
+
+  * lib/lib64 fix 
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 18 Sep 2011 17:48:35 +0200
+
+libfreenect (0.1.1-0ubuntu3~natty) natty; urgency=low
+
+  * more missing builddeps
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 18 Sep 2011 17:37:54 +0200
+
+libfreenect (0.1.1-0ubuntu2~natty) natty; urgency=low
+
+  * fix builddeps, use debhelper cmake macros
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 18 Sep 2011 15:29:34 +0200
+
+libfreenect (0.1.1-0ubuntu1~natty) natty; urgency=medium
+
+  * Package built with CMake
+
+ -- OpenKinect <openkinect@googlegroups.com>  Sun, 18 Sep 2011 13:28:33 +0200

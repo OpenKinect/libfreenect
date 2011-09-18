@@ -1,0 +1,5 @@
+#!/usr/bin/make -f
+export DH_VERBOSE=1
+include /usr/share/cdbs/1/rules/debhelper.mk
+include /usr/share/cdbs/1/class/cmake.mk #Cmake stuff
+
