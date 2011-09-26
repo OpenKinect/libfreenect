@@ -32,6 +32,8 @@
 #include <unistd.h>
 
 #include "freenect_internal.h"
+#include "registration.h"
+#include "cameras.h"
 #ifdef BUILD_AUDIO
 #include "loader.h"
 #endif
@@ -45,7 +47,11 @@ FREENECTAPI int freenect_init(freenect_context **ctx, freenect_usb_context *usb_
 	memset(*ctx, 0, sizeof(freenect_context));
 
 	(*ctx)->log_level = LL_WARNING;
-	(*ctx)->enabled_subdevices = (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA | FREENECT_DEVICE_AUDIO);
+	(*ctx)->enabled_subdevices = (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA
+#ifdef BUILD_AUDIO
+			| FREENECT_DEVICE_AUDIO
+#endif
+			);
 	return fnusb_init(&(*ctx)->usb, usb_ctx);
 }
 
@@ -133,6 +139,14 @@ FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **de
 	}
 
 	*dev = pdev;
+
+	// Do device-specific initialization
+	if (pdev->usb_cam.dev) {
+		if (freenect_camera_init(pdev) < 0) {
+			return -1;
+		}
+	}
+
 	return 0;
 }
 
@@ -141,9 +155,9 @@ FREENECTAPI int freenect_close_device(freenect_device *dev)
 	freenect_context *ctx = dev->parent;
 	int res;
 
-	// stop streams, if active
-	freenect_stop_depth(dev);
-	freenect_stop_video(dev);
+	if (dev->usb_cam.dev) {
+		freenect_camera_teardown(dev);
+	}
 
 	res = fnusb_close_subdevices(dev);
 	if (res < 0) {

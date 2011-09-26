@@ -77,6 +77,8 @@ typedef enum {
 	FREENECT_DEPTH_10BIT        = 1, /**< 10 bit depth information in one uint16_t/pixel */
 	FREENECT_DEPTH_11BIT_PACKED = 2, /**< 11 bit packed depth information */
 	FREENECT_DEPTH_10BIT_PACKED = 3, /**< 10 bit packed depth information */
+	FREENECT_DEPTH_REGISTERED   = 4, /**< processed depth data in mm, aligned to 640x480 RGB */
+	FREENECT_DEPTH_MM           = 5, /**< depth to each pixel in mm, but left unaligned to RGB image */
 	FREENECT_DEPTH_DUMMY        = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_depth_format;
 

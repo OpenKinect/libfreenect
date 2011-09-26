@@ -6,6 +6,7 @@ set(CMAKE_C_FLAGS "-Wall")
 
 if (WIN32)
   set_source_files_properties(glview.c PROPERTIES LANGUAGE CXX)
+  set_source_files_properties(regview.c PROPERTIES LANGUAGE CXX)
   set_source_files_properties(glpclview.c PROPERTIES LANGUAGE CXX)
   set_source_files_properties(hiview.c PROPERTIES LANGUAGE CXX)
   set_source_files_properties(tiltdemo.c PROPERTIES LANGUAGE CXX)
@@ -17,6 +18,7 @@ if (WIN32)
 endif()
 
 add_executable(glview glview.c)
+add_executable(regview regview.c)
 add_executable(hiview hiview.c)
 if(BUILD_AUDIO)
   add_executable(wavrecord wavrecord.c)
@@ -35,6 +37,7 @@ include_directories (../wrappers/c_sync/)
 if(APPLE)
   set(CMAKE_EXE_LINKER_FLAGS "-framework OpenGL -framework GLUT")
   target_link_libraries(glview freenect)
+  target_link_libraries(regview freenect)
   target_link_libraries(hiview freenect)
   if (BUILD_AUDIO)
     target_link_libraries(wavrecord freenect)
@@ -60,6 +63,7 @@ else()
   endif()
 
   target_link_libraries(glview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+  target_link_libraries(regview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   target_link_libraries(hiview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   if (BUILD_AUDIO)
     target_link_libraries(wavrecord freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
@@ -73,7 +77,7 @@ else()
 endif()
 
 
-install (TARGETS glview hiview
+install (TARGETS glview regview hiview
   DESTINATION bin)
 
 if (BUILD_C_SYNC)
