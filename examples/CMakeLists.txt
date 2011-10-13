@@ -28,6 +28,7 @@ endif()
 if (BUILD_C_SYNC)
   add_executable(glpclview glpclview.c)
   add_executable(tiltdemo tiltdemo.c)
+  add_executable(regtest regtest.c)
 endif()
 
 # We need to include libfreenect_sync.h for glpclview
@@ -46,6 +47,7 @@ if(APPLE)
   if (BUILD_C_SYNC)
     target_link_libraries(glpclview freenect_sync)
     target_link_libraries(tiltdemo freenect_sync)
+    target_link_libraries(regtest freenect_sync)
   endif()
 # Linux, not so much
 else()
@@ -73,6 +75,7 @@ else()
     target_link_libraries(glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY}
  ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
     target_link_libraries(tiltdemo freenect_sync ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+    target_link_libraries(regtest freenect_sync ${CMAKE_THREAD_LIBS_INIT})
   endif()
 endif()
 
