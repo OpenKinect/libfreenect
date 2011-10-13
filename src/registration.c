@@ -172,9 +172,6 @@ int freenect_apply_registration(freenect_device* dev, uint8_t* input_packed, uin
 int freenect_apply_depth_to_mm(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
 {
 	freenect_registration* reg = &(dev->registration);
-	// set output buffer to zero using pointer-sized memory access (~ 30-40% faster than memset)
-	size_t i, *wipe = (size_t*)output_mm;
-	for (i = 0; i < DEPTH_X_RES * DEPTH_Y_RES * sizeof(uint16_t) / sizeof(size_t); i++) wipe[i] = DEPTH_NO_MM_VALUE;
 	uint16_t unpack[8];
 	uint32_t x,y,source_index = 8;
 	for (y = 0; y < DEPTH_Y_RES; y++) {
