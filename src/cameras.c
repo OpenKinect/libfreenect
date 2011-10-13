@@ -833,11 +833,14 @@ static int freenect_fetch_reg_info(freenect_device *dev)
 	FN_SPEW("dydxdy_start:      %d\n", dev_reg_info->dydxdy_start);
 	FN_SPEW("dydydx_start:      %d\n", dev_reg_info->dydydx_start);
 	FN_SPEW("dydydy_start:      %d\n", dev_reg_info->dydydy_start);
-	/*FN_SPEW("dx_CENTER:         %d\n", dev_reg_info->dx_CENTER);
-	FN_SPEW("nRGS_ROLLOUT_BLANK:     %d\n", dev_reg_info->nRGS_ROLLOUT_BLANK);
-	FN_SPEW("nRGS_ROLLOUT_SIZE:      %d\n", dev_reg_info->nRGS_ROLLOUT_SIZE);
-	FN_SPEW("nBACK_COMP1:            %d\n", dev_reg_info->nBACK_COMP1);
-	FN_SPEW("nBACK_COMP2:            %d\n", dev_reg_info->nBACK_COMP2);*/
+	/*
+	// NOTE: Not assigned above
+	FN_SPEW("dx_center:         %d\n", dev_reg_info->dx_center);
+	FN_SPEW("rollout_blank:     %d\n", dev_reg_info->rollout_blank);
+	FN_SPEW("rollout_size:      %d\n", dev_reg_info->rollout_size);
+	FN_SPEW("back_comp1:            %d\n", dev_reg_info->back_comp1);
+	FN_SPEW("back_comp2:            %d\n", dev_reg_info->back_comp2);
+	*/
 	return 0;
 }
 
