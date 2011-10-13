@@ -1,0 +1,5 @@
+usr/include/*.hpp usr/include/
+usr/include/libfreenect/*.h usr/include/
+usr/lib*/libfreenect.so usr/lib/
+usr/lib*/libfreenect_sync.so usr/lib/
+usr/lib*/pkgconfig/* usr/lib/pkgconfig/
