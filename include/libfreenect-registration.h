@@ -117,6 +117,10 @@ typedef struct {
 FREENECTAPI freenect_registration freenect_copy_registration(freenect_device* dev);
 FREENECTAPI int freenect_destroy_registration(freenect_registration* reg);
 
+// convenience function to convert a single x-y coordinate pair from camera
+// to world coordinates
+FREENECTAPI void freenect_camera_to_world(freenect_device* dev,
+	int cx, int cy, int wz, double* wx, double* wy);
 
 #ifdef __cplusplus
 }

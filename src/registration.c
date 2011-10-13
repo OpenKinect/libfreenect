@@ -314,6 +314,16 @@ static void complete_tables(freenect_registration* reg) {
 	freenect_init_registration_table( reg->registration_table, &(reg->reg_info) );
 }
 
+/// camera -> world coordinate helper function
+void freenect_camera_to_world(freenect_device* dev, int cx, int cy, int wz, double* wx, double* wy)
+{
+	double ref_pix_size = dev->registration.zero_plane_info.reference_pixel_size;
+	double ref_distance = dev->registration.zero_plane_info.reference_distance;
+	double factor = ref_pix_size * wz / ref_distance;
+	*wx = (double)(cx - DEPTH_X_RES/2) * factor;
+	*wy = (double)(cy - DEPTH_Y_RES/2) * factor;
+}
+
 /// Allocate and fill registration tables
 /// This function should be called every time a new video (not depth!) mode is
 /// activated.
