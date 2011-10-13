@@ -900,7 +900,8 @@ static int freenect_fetch_zero_plane_info(freenect_device *dev)
 
 	int res;
 	res = send_cmd(dev, 0x04, cmd, 10, reply, 322); //OPCODE_GET_FIXED_PARAMS = 4,
-	if (res < 0) {
+	if (res != 322) {
+		FN_ERROR("freenect_fetch_zero_plane_info: send_cmd read %d bytes (expected 322)\n", res);
 		return -1;
 	}
 	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
