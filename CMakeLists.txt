@@ -98,6 +98,10 @@ SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 if(CMAKE_C_FLAGS STREQUAL "")
   set(CMAKE_C_FLAGS "-O2")
 endif()
+SET(CMAKE_C_FLAGS_DEBUG "-g -DDEBUG=1")
+SET(CMAKE_C_FLAGS_RELEASE "-O2")
+SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
+
 add_definitions(-Wall)
 
 # Pretty much everyone is going to need the main includes
