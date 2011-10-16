@@ -92,7 +92,7 @@ cdef extern from "libfreenect.h":
     ctypedef void (*freenect_video_cb)(void *dev, char *video, int timestamp) # was u_int32
     int freenect_init(void **ctx, int usb_ctx) # changed from void * as usb_ctx is always NULL
     int freenect_shutdown(void *ctx)
-    int freenect_process_events(void *ctx)
+    int freenect_process_events(void *ctx) nogil
     int freenect_num_devices(void *ctx)
     int freenect_select_subdevices(void *ctx, int subdevs)
     int freenect_open_device(void *ctx, void **dev, int index)
@@ -251,11 +251,12 @@ cdef open_device(CtxPtr ctx, int index):
     cdef DevPtr dev_out
     dev_out = DevPtr()
     dev_out._ptr = dev
+    dev_out.ctx = ctx
     return dev_out
 
 _depth_cb, _video_cb = None, None
 
-cdef void depth_cb(void *dev, char *data, int timestamp):
+cdef void depth_cb(void *dev, char *data, int timestamp) with gil:
     nbytes = 614400  # 480 * 640 * 2
     cdef DevPtr dev_out
     dev_out = DevPtr()
@@ -263,7 +264,7 @@ cdef void depth_cb(void *dev, char *data, int timestamp):
     if _depth_cb:
         _depth_cb(*_depth_cb_np(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp))
 
-cdef void video_cb(void *dev, char *data, int timestamp):
+cdef void video_cb(void *dev, char *data, int timestamp) with gil:
     nbytes = 921600  # 480 * 640 * 3
     cdef DevPtr dev_out
     dev_out = DevPtr()
@@ -316,7 +317,10 @@ def runloop(depth=None, video=None, body=None):
     freenect_set_depth_callback(devp, depth_cb)
     freenect_set_video_callback(devp, video_cb)
     try:
-        while freenect_process_events(ctxp) >= 0:
+        while True:
+            with nogil:
+                if freenect_process_events(ctxp) < 0:
+                    break
             if body:
                 body(dev, ctx)
     except Kill:
