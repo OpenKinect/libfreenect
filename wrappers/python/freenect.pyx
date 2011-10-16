@@ -123,15 +123,16 @@ cdef extern from "libfreenect.h":
     void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z)
     double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
 
-cdef class DevPtr:
-    cdef void* _ptr 
-    def __repr__(self): 
-        return "<Dev Pointer>"
-
 cdef class CtxPtr:
     cdef void* _ptr 
     def __repr__(self): 
         return "<Ctx Pointer>"
+
+cdef class DevPtr:
+    cdef void* _ptr
+    cdef CtxPtr ctx
+    def __repr__(self):
+        return "<Dev Pointer>"
 
 cdef class StatePtr:
     cdef freenect_raw_tilt_state* _ptr 
@@ -230,7 +231,7 @@ def get_tilt_degs(StatePtr state):
 def error_open_device():
     print("Error: Can't open device. 1.) is it plugged in? 2.) Read the README")
 
-cdef init():
+cpdef init():
     cdef void* ctx
     if freenect_init(cython.address(ctx), 0) < 0:
         return
@@ -244,7 +245,7 @@ cdef init():
     ctx_out._ptr = ctx
     return ctx_out
 
-cdef open_device(CtxPtr ctx, int index):
+cpdef open_device(CtxPtr ctx, int index):
     cdef void* dev
     if freenect_open_device(ctx._ptr, cython.address(dev), index) < 0:
         return
@@ -277,7 +278,7 @@ class Kill(Exception):
     """This kills the runloop, raise from the body only"""
 
 
-def runloop(depth=None, video=None, body=None):
+def runloop(depth=None, video=None, body=None, dev=None):
     """Sets up the kinect and maintains a runloop
 
     This is where most of the action happens.  You can get the dev pointer from the callback
@@ -290,45 +291,53 @@ def runloop(depth=None, video=None, body=None):
         video: A function that takes (dev, video, timestamp), corresponding to C function.
             If None (default), then you won't get a callback for video.
         body: A function that takes (dev, ctx) and is called in the body of process_events
+        dev: Optional freenect device context. If supplied, this function will use it instead
+            of creating and destroying its own..
     """
     global _depth_cb, _video_cb
     if depth:
        _depth_cb = depth
     if video:
        _video_cb = video
-    cdef DevPtr dev
+    cdef DevPtr mdev
     cdef CtxPtr ctx
     cdef void* devp
     cdef void* ctxp
-    ctx = init()
-    if not ctx:
-        error_open_device()
-        return
-    dev = open_device(ctx, 0)
-    if not dev:
-        error_open_device()
-        return
-    devp = dev._ptr
-    ctxp = ctx._ptr
-    freenect_set_depth_mode(devp, freenect_find_depth_mode(RESOLUTION_MEDIUM, 0))
-    freenect_start_depth(devp)
-    freenect_set_video_mode(devp, freenect_find_video_mode(RESOLUTION_MEDIUM, VIDEO_RGB))
-    freenect_start_video(devp)
-    freenect_set_depth_callback(devp, depth_cb)
-    freenect_set_video_callback(devp, video_cb)
+    if dev is None:
+        ctx = init()
+        if not ctx:
+            error_open_device()
+            return
+        mdev = open_device(ctx, 0)
+        if not mdev:
+            error_open_device()
+            return
+    else:
+        mdev = dev
+    devp = mdev._ptr
+    ctxp = mdev.ctx._ptr
+    if depth is not None:
+        freenect_set_depth_mode(devp, freenect_find_depth_mode(RESOLUTION_MEDIUM, 0))
+        freenect_start_depth(devp)
+        freenect_set_depth_callback(devp, depth_cb)
+    if video is not None:
+        freenect_set_video_mode(devp, freenect_find_video_mode(RESOLUTION_MEDIUM, VIDEO_RGB))
+        freenect_start_video(devp)
+        freenect_set_video_callback(devp, video_cb)
     try:
         while True:
             with nogil:
                 if freenect_process_events(ctxp) < 0:
                     break
             if body:
-                body(dev, ctx)
+                body(mdev, mdev.ctx)
     except Kill:
         pass
     freenect_stop_depth(devp)
     freenect_stop_video(devp)
-    freenect_close_device(devp)
-    freenect_shutdown(ctxp)
+    if dev is None:
+        freenect_close_device(devp)
+        freenect_shutdown(ctxp)
 
 def _depth_cb_np(dev, string, timestamp):
     """Converts the raw depth data into a numpy array for your function
