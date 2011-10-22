@@ -261,6 +261,12 @@ void libusb_close(libusb_device_handle*	dev_handle)
   libusbemu_unregister_device(device);
 }
 
+int libusb_set_configuration(libusb_device_handle *dev, int configuration)
+{
+#warning "libusb_set_configuration is just a stub"
+	return 0;
+}
+
 int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
 {
   RAIIMutex lock (dev->dev->ctx->mutex);
