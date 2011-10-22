@@ -36,6 +36,13 @@
 
 #include <unistd.h>
 
+#if defined(_MSC_VER)
+  typedef unsigned __int8   uint8_t;
+  typedef unsigned __int16  uint16_t;
+#else
+#include <stdint.h>
+#endif
+
 #define LIBUSBEMU 1
 
 // guard to enable mix of compiler semantics (C/C++ calling C++);
