@@ -695,6 +695,9 @@ int ReapTransfer(transfer_wrapper* wrapper, unsigned int timeout, libusb_device:
     // (a) the timeout passed to usb_reap_async_nocancel() expired;
     // (b) the transfer was cancelled via usb_cancel_async();
     // (c) some fatal error triggered.
+#undef EIO
+#undef EINVAL
+#undef ETIMEOUT
     enum EReapResult { EIO = -5, EINVAL = -22, ETIMEOUT = -116 };
     switch(read)
     {
