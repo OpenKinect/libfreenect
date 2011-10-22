@@ -83,6 +83,8 @@ using namespace libusbemu;
   #define LIBUSB_DEBUG_CMD(cmd)
 #endif//LIBUSBEMU_DEBUG_BUILD
 
+static libusb_context *default_context = NULL;
+
 int libusb_init(libusb_context** context)
 {
 	usb_init();
@@ -97,6 +99,9 @@ int libusb_init(libusb_context** context)
 	// however, it is wise to emulate such context structure to localize and
   // keep track of any resource and/or internal data structures, as well as
   // to be able to clean-up itself at libusb_exit()
+  if (context == NULL)
+    context = &default_context;
+
 	*context = new libusb_context;
 	// 0 on success; LIBUSB_ERROR on failure
 	return(0);
@@ -104,6 +109,9 @@ int libusb_init(libusb_context** context)
 
 void libusb_exit(libusb_context* ctx)
 {
+  if (ctx == NULL)
+    ctx = default_context;
+
   ctx->mutex.Enter();
   // before deleting the context, delete all devices/transfers still in there:
   while (!ctx->devices.empty())
@@ -132,6 +140,9 @@ void libusb_exit(libusb_context* ctx)
 
 ssize_t libusb_get_device_list(libusb_context* ctx, libusb_device*** list)
 {
+  if (ctx == NULL)
+    ctx = default_context;
+
 	// libusb_device*** list demystified:
 	// libusb_device*** is the C equivalent to libusb_device**& in C++; such declaration
 	// allows the scope of this function libusb_get_device_list() to write on a variable
@@ -471,6 +482,9 @@ int libusb_cancel_transfer(struct libusb_transfer* transfer)
 
 int libusbemu_handle_isochronous(libusb_context* ctx, const unsigned int milliseconds)
 {
+  if (ctx == NULL)
+    ctx = default_context;
+
   //QuickThread::Myself().RaisePriority();
   RAIIMutex lock (ctx->mutDeliveryPool);
   int index = ctx->hWantToDeliverPool.WaitAnyUntilTimeout(milliseconds);
@@ -491,6 +505,9 @@ int libusbemu_handle_isochronous(libusb_context* ctx, const unsigned int millise
 
 int libusb_handle_events(libusb_context* ctx)
 {
+  if (ctx == NULL)
+    ctx = default_context;
+
   if (failguard::Abort())
     return(LIBUSB_ERROR_INTERRUPTED);
 
