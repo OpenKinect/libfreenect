@@ -363,6 +363,31 @@ int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestT
 	return(bytes_transferred);
 }
 
+int libusb_bulk_transfer(libusb_device_handle* dev_handle, uint8_t endpoint, uint8_t *data, int length, int *transferred, unsigned int timeout)
+{
+       // in libusb-1.0 a timeout of zero it means 'wait indefinitely'; in libusb-0.1, a timeout of zero means 'return immediately'!
+       timeout = (0 == timeout) ? 60000 : timeout;   // wait 60000ms (60s = 1min) if the transfer is supposed to wait indefinitely...
+       int bytes_transferred;
+       if (endpoint & LIBUSB_ENDPOINT_IN) { // Device to Host
+               bytes_transferred = usb_bulk_read(dev_handle->handle, endpoint, (char*)data, length, timeout);
+       } else { // Host to Device
+               bytes_transferred = usb_bulk_write(dev_handle->handle, endpoint, (char*)data, length, timeout);
+       }
+       if (bytes_transferred < 0) {
+               // 0 on success (and populates transferred)
+               // LIBUSB_ERROR_TIMEOUT if the transfer timed out (and populates transferred)
+               // LIBUSB_ERROR_PIPE if the endpoint halted
+               // LIBUSB_ERROR_OVERFLOW if the device offered more data, see Packets and overflows
+               // LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
+               // another LIBUSB_ERROR code on other failures
+               *transferred = 0;
+               LIBUSBEMU_ERROR_LIBUSBWIN32();
+               return(LIBUSB_ERROR_OTHER);
+       }
+       *transferred = bytes_transferred;
+       return 0;
+}
+
 // FROM HERE ON CODE BECOMES QUITE MESSY: ASYNCHRONOUS TRANSFERS MANAGEMENT
 
 struct libusb_transfer* libusb_alloc_transfer(int iso_packets)

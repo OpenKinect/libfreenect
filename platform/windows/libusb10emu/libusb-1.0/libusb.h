@@ -79,6 +79,8 @@ libusb_device_handle *libusb_open_device_with_vid_pid(libusb_context *ctx,
 	uint16_t vendor_id, uint16_t product_id);
 
 int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned char* data, uint16_t wLength, unsigned int timeout);
+int libusb_bulk_transfer(libusb_device_handle *dev_handle, unsigned char endpoint, unsigned char *data, int length, int *actual_length, unsigned int timeout);
+
 
 struct libusb_transfer* libusb_alloc_transfer(int iso_packets);
 void libusb_free_transfer(struct libusb_transfer* transfer);
@@ -112,6 +114,11 @@ struct libusb_device_descriptor
 	uint8_t  iProduct;
 	uint8_t  iSerialNumber;
 	uint8_t  bNumConfigurations;
+};
+
+enum libusb_endpoint_direction {
+	LIBUSB_ENDPOINT_IN = 0x80,
+	LIBUSB_ENDPOINT_OUT = 0x00
 };
 
 enum libusb_transfer_status
