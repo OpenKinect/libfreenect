@@ -57,6 +57,7 @@ struct libusb_context_t;
 typedef struct libusb_context_t libusb_context;
 int libusb_init(libusb_context** context);
 void libusb_exit(libusb_context* ctx);
+void libusb_set_debug(libusb_context *ctx, int level);
 
 struct libusb_device_t;
 typedef struct libusb_device_t libusb_device;

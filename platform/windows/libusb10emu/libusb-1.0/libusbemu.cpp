@@ -138,6 +138,13 @@ void libusb_exit(libusb_context* ctx)
 	delete(ctx);
 }
 
+
+void libusb_set_debug(libusb_context *ctx, int level)
+{
+#warning "libusb_set_debug is just a stub"
+	return;
+}
+
 ssize_t libusb_get_device_list(libusb_context* ctx, libusb_device*** list)
 {
   if (ctx == NULL)
