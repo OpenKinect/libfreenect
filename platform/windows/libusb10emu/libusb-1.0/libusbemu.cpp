@@ -313,6 +313,38 @@ int libusb_release_interface(libusb_device_handle* dev, int interface_number)
 	return(0);
 }
 
+libusb_device_handle *libusb_open_device_with_vid_pid(libusb_context *ctx, uint16_t vendor_id, uint16_t product_id)
+{
+	int num_devices;
+	libusb_device** list;
+	libusb_device_handle *dev_handle = NULL;
+
+	if (ctx == NULL)
+		ctx = default_context;
+
+	num_devices = libusb_get_device_list(ctx, &list);
+	if (num_devices < 0)
+		return NULL;
+
+	unsigned int i = 0;
+	while (list[i] != NULL) {
+		struct libusb_device_descriptor desc;
+		int ret = libusb_get_device_descriptor(list[i], &desc);
+		if (ret < 0)
+			break;
+
+		if (desc.idVendor == vendor_id && desc.idProduct == product_id) {
+			ret = libusb_open(list[i], &dev_handle);
+			if (ret)
+				break;
+		}
+		i++;
+	}
+
+	libusb_free_device_list(list, 1);
+	return dev_handle;
+}
+
 int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned char* data, uint16_t wLength, unsigned int timeout)
 {
 	// in libusb-1.0 a timeout of zero it means 'wait indefinitely'; in libusb-0.1, a timeout of zero means 'return immediatelly'!
