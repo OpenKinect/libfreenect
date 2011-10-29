@@ -320,8 +320,10 @@ void freenect_camera_to_world(freenect_device* dev, int cx, int cy, int wz, doub
 	double ref_pix_size = dev->registration.zero_plane_info.reference_pixel_size;
 	double ref_distance = dev->registration.zero_plane_info.reference_distance;
 	double factor = ref_pix_size * wz / ref_distance;
-	*wx = (double)(cx - DEPTH_X_RES/2) * factor;
-	*wy = (double)(cy - DEPTH_Y_RES/2) * factor;
+	// We multiply cx and cy by these factors because they come from a 640x480 image,
+	// but the zero plane pixel size is for a 1280x1024 image.
+	*wx = (double)(cx - DEPTH_X_RES/2) * factor * (1280./640.);
+	*wy = (double)(cy - DEPTH_Y_RES/2) * factor * (1024./480.);
 }
 
 /// Allocate and fill registration tables
