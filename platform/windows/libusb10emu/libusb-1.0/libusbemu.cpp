@@ -141,7 +141,10 @@ void libusb_exit(libusb_context* ctx)
 
 void libusb_set_debug(libusb_context *ctx, int level)
 {
-#warning "libusb_set_debug is just a stub"
+	// Note: libusb-win32 doesn't support context-specific loglevels, so this
+	// sets the loglevel globally.  If this is actually an issue for you, I
+	// will be surprised.
+	usb_set_debug(level);
 	return;
 }
 
@@ -263,8 +266,21 @@ void libusb_close(libusb_device_handle*	dev_handle)
 
 int libusb_set_configuration(libusb_device_handle *dev, int configuration)
 {
-#warning "libusb_set_configuration is just a stub"
-	return 0;
+  RAIIMutex lock (dev->dev->ctx->mutex);
+  int ret = usb_set_configuration(dev->handle, configuration);
+  if (0 != ret)
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+    return ret;
+  }
+  // returns:
+  // 0 on success
+  // LIBUSB_ERROR_NOT_FOUND if the requested configuration does not exist
+  // LIBUSB_ERROR_BUSY if interfaces are currently claimed
+  // LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
+  // another LIBUSB_ERROR code on other failure
+  //
+  return 0;
 }
 
 int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
