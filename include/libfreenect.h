@@ -457,7 +457,7 @@ FREENECTAPI int freenect_get_video_mode_count();
  *
  * @return A freenect_frame_mode describing the nth video mode
  */
-FREENECTAPI const freenect_frame_mode freenect_get_video_mode(int mode_num);
+FREENECTAPI freenect_frame_mode freenect_get_video_mode(int mode_num);
 
 /**
  * Get the frame descriptor of the current video mode for the specified
@@ -467,7 +467,7 @@ FREENECTAPI const freenect_frame_mode freenect_get_video_mode(int mode_num);
  *
  * @return A freenect_frame_mode describing the current video mode of the specified device
  */
-FREENECTAPI const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev);
+FREENECTAPI freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev);
 
 /**
  * Convenience function to return a mode descriptor matching the
@@ -478,7 +478,7 @@ FREENECTAPI const freenect_frame_mode freenect_get_current_video_mode(freenect_d
  *
  * @return A freenect_frame_mode that matches the arguments specified, if such a valid mode exists; otherwise, an invalid freenect_frame_mode.
  */
-FREENECTAPI const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt);
+FREENECTAPI freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt);
 
 /**
  * Sets the current video mode for the specified device.  If the
@@ -492,7 +492,7 @@ FREENECTAPI const freenect_frame_mode freenect_find_video_mode(freenect_resoluti
  *
  * @return 0 on success, < 0 if error
  */
-FREENECTAPI int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode);
+FREENECTAPI int freenect_set_video_mode(freenect_device* dev, freenect_frame_mode mode);
 
 /**
  * Get the number of depth camera modes supported by the driver.  This includes both RGB and IR modes.
@@ -509,7 +509,7 @@ FREENECTAPI int freenect_get_depth_mode_count();
  *
  * @return A freenect_frame_mode describing the nth depth mode
  */
-FREENECTAPI const freenect_frame_mode freenect_get_depth_mode(int mode_num);
+FREENECTAPI freenect_frame_mode freenect_get_depth_mode(int mode_num);
 
 /**
  * Get the frame descriptor of the current depth mode for the specified
@@ -519,7 +519,7 @@ FREENECTAPI const freenect_frame_mode freenect_get_depth_mode(int mode_num);
  *
  * @return A freenect_frame_mode describing the current depth mode of the specified device
  */
-FREENECTAPI const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev);
+FREENECTAPI freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev);
 
 /**
  * Convenience function to return a mode descriptor matching the
@@ -530,7 +530,7 @@ FREENECTAPI const freenect_frame_mode freenect_get_current_depth_mode(freenect_d
  *
  * @return A freenect_frame_mode that matches the arguments specified, if such a valid mode exists; otherwise, an invalid freenect_frame_mode.
  */
-FREENECTAPI const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt);
+FREENECTAPI freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt);
 
 /**
  * Sets the current depth mode for the specified device.  The mode

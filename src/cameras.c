@@ -1190,7 +1190,7 @@ int freenect_get_video_mode_count()
 	return video_mode_count;
 }
 
-const freenect_frame_mode freenect_get_video_mode(int mode_num)
+freenect_frame_mode freenect_get_video_mode(int mode_num)
 {
 	if (mode_num >= 0 && mode_num < video_mode_count)
 		return supported_video_modes[mode_num];
@@ -1199,12 +1199,12 @@ const freenect_frame_mode freenect_get_video_mode(int mode_num)
 	return retval;
 }
 
-const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
+freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 {
 	return freenect_find_video_mode(dev->video_resolution, dev->video_format);
 }
 
-const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
+freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
 {
 	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
@@ -1253,7 +1253,7 @@ int freenect_get_depth_mode_count()
 	return depth_mode_count;
 }
 
-const freenect_frame_mode freenect_get_depth_mode(int mode_num)
+freenect_frame_mode freenect_get_depth_mode(int mode_num)
 {
 	if (mode_num >= 0 && mode_num < depth_mode_count)
 		return supported_depth_modes[mode_num];
@@ -1262,12 +1262,12 @@ const freenect_frame_mode freenect_get_depth_mode(int mode_num)
 	return retval;
 }
 
-const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
+freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
 {
 	return freenect_find_depth_mode(dev->depth_resolution, dev->depth_format);
 }
 
-const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
+freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
 {
 	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
