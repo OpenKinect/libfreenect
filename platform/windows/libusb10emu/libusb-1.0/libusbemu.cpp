@@ -264,6 +264,25 @@ void libusb_close(libusb_device_handle*	dev_handle)
   libusbemu_unregister_device(device);
 }
 
+int libusb_get_string_descriptor(libusb_device_handle *dev_handle, uint8_t desc_index, uint16_t langid, unsigned char *data, int length)
+{
+  RAIIMutex lock (dev_handle->dev->ctx->mutex);
+  int bytes = usb_get_string(dev_handle->handle, (int)desc_index, (int)langid, (char*)data, (size_t)length);
+  if (bytes < 0) {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+  }
+  return bytes;
+}
+int libusb_get_string_descriptor_ascii(libusb_device_handle *dev_handle, uint8_t desc_index, unsigned char *data, int length)
+{
+  RAIIMutex lock (dev_handle->dev->ctx->mutex);
+  int bytes = usb_get_string_simple(dev_handle->handle, (int)desc_index, (char*)data, (size_t)length);
+  if (bytes < 0) {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+  }
+  return bytes;
+}
+
 int libusb_set_configuration(libusb_device_handle *dev, int configuration)
 {
   RAIIMutex lock (dev->dev->ctx->mutex);

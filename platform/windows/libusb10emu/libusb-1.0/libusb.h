@@ -71,6 +71,9 @@ typedef struct libusb_device_handle_t libusb_device_handle;
 int libusb_open(libusb_device* dev, libusb_device_handle** handle);
 void libusb_close(libusb_device_handle*	dev_handle);
 
+int libusb_get_string_descriptor(libusb_device_handle *dev_handle, uint8_t desc_index, uint16_t langid, unsigned char *data, int length);
+int libusb_get_string_descriptor_ascii(libusb_device_handle *dev_handle, uint8_t desc_index, unsigned char *data, int length);
+
 int libusb_set_configuration(libusb_device_handle *dev, int configuration);
 int libusb_claim_interface(libusb_device_handle* dev, int interface_number);
 int libusb_release_interface(libusb_device_handle* dev, int interface_number);
