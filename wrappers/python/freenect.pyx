@@ -123,6 +123,16 @@ cdef extern from "libfreenect.h":
     void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z)
     double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
 
+cdef extern from "libfreenect-audio.h":
+    ctypedef void (*freenect_audio_in_cb)(void *dev, int num_samples, int *mic1, int *mic2, int *mic3, int *mic4, short *cancelled, void *unknown)
+    void freenect_set_audio_in_callback(void *dev, freenect_audio_in_cb callback)
+    int freenect_start_audio(void* dev)
+    int freenect_stop_audio(void* dev)
+
+cdef extern from "tools.h":
+    char *convertShortToChar(short *)
+    char *convertIntToChar(int *)
+
 cdef class DevPtr:
     cdef void* _ptr 
     def __repr__(self): 
@@ -238,7 +248,7 @@ cdef init():
     # to both but haven't wrapped the python API for selecting subdevices yet.
     # Also, we don't support audio in the python wrapper yet, so no sense claiming
     # the device.
-    freenect_select_subdevices(ctx, DEVICE_MOTOR | DEVICE_CAMERA)
+    freenect_select_subdevices(ctx, DEVICE_MOTOR | DEVICE_CAMERA | DEVICE_AUDIO)
     cdef CtxPtr ctx_out
     ctx_out = CtxPtr()
     ctx_out._ptr = ctx
@@ -253,7 +263,7 @@ cdef open_device(CtxPtr ctx, int index):
     dev_out._ptr = dev
     return dev_out
 
-_depth_cb, _video_cb = None, None
+_depth_cb, _video_cb, _audio_cb = None, None, None
 
 cdef void depth_cb(void *dev, char *data, int timestamp):
     nbytes = 614400  # 480 * 640 * 2
@@ -271,12 +281,36 @@ cdef void video_cb(void *dev, char *data, int timestamp):
     if _video_cb:
         _video_cb(*_video_cb_np(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp))
 
+cdef void audio_cb(void *dev, int num_samples, int *mic1, int *mic2, int *mic3, int *mic4, short *cancelled, void *unknown):
+    cdef DevPtr dev_out
+    cdef char *mic1_c
+    cdef char *mic2_c
+    cdef char *mic3_c
+    cdef char *mic4_c
+    cdef char *cancelled_c
+    cdef int i
+    nbytes_mic = num_samples * 4
+    nbytes_cancelled = num_samples * 2
+    dev_out = DevPtr()
+    dev_out._ptr = dev
+    if _audio_cb:
+        mic1_c = convertIntToChar(mic1)
+        mic2_c = convertIntToChar(mic2)
+        mic3_c = convertIntToChar(mic3)
+        mic4_c = convertIntToChar(mic4)
+        cancelled_c = convertShortToChar(cancelled)
+        _audio_cb(*_audio_cb_np(dev_out,
+                                PyString_FromStringAndSize(mic1_c, nbytes_mic),
+                                PyString_FromStringAndSize(mic2_c, nbytes_mic),
+                                PyString_FromStringAndSize(mic3_c, nbytes_mic),
+                                PyString_FromStringAndSize(mic4_c, nbytes_mic),
+                                PyString_FromStringAndSize(cancelled_c, nbytes_cancelled)))
 
 class Kill(Exception):
     """This kills the runloop, raise from the body only"""
 
 
-def runloop(depth=None, video=None, body=None):
+def runloop(depth=None, video=None, audio=None, body=None):
     """Sets up the kinect and maintains a runloop
 
     This is where most of the action happens.  You can get the dev pointer from the callback
@@ -290,11 +324,13 @@ def runloop(depth=None, video=None, body=None):
             If None (default), then you won't get a callback for video.
         body: A function that takes (dev, ctx) and is called in the body of process_events
     """
-    global _depth_cb, _video_cb
+    global _depth_cb, _video_cb, _audio_cb
     if depth:
        _depth_cb = depth
     if video:
        _video_cb = video
+    if audio:
+       _audio_cb = audio
     cdef DevPtr dev
     cdef CtxPtr ctx
     cdef void* devp
@@ -315,6 +351,8 @@ def runloop(depth=None, video=None, body=None):
     freenect_start_video(devp)
     freenect_set_depth_callback(devp, depth_cb)
     freenect_set_video_callback(devp, video_cb)
+    freenect_start_audio(devp)
+    freenect_set_audio_in_callback(devp, audio_cb)
     try:
         while freenect_process_events(ctxp) >= 0:
             if body:
@@ -323,6 +361,7 @@ def runloop(depth=None, video=None, body=None):
         pass
     freenect_stop_depth(devp)
     freenect_stop_video(devp)
+    freenect_stop_audio(devp)
     freenect_close_device(devp)
     freenect_shutdown(ctxp)
 
@@ -356,6 +395,24 @@ def _video_cb_np(dev, string, timestamp):
     data = np.fromstring(string, dtype=np.uint8)
     data.resize((480, 640, 3))
     return dev, data, timestamp
+
+def _audio_cb_np(dev, mic1, mic2, mic3, mic4, cancelled):
+    """Converts the raw audio data into a numpy array for your function
+
+     Args:
+         dev: DevPtr object
+         string: A python string with the video data
+         timestamp: An int representing the time
+
+     Returns:
+         (dev, data, timestamp) where data is a 2D numpy array
+    """
+    mic1_np = np.fromstring(mic1, dtype=np.int32)
+    mic2_np = np.fromstring(mic2, dtype=np.int32)
+    mic3_np = np.fromstring(mic3, dtype=np.int32)
+    mic4_np = np.fromstring(mic4, dtype=np.int32)
+    cancelled_np = np.fromstring(cancelled, dtype=np.int16)
+    return dev, mic1_np, mic2_np, mic3_np, mic4_np, cancelled_np
 
 import_array()
 
