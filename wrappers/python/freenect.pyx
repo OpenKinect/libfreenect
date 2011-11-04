@@ -129,10 +129,6 @@ cdef extern from "libfreenect-audio.h":
     int freenect_start_audio(void* dev)
     int freenect_stop_audio(void* dev)
 
-cdef extern from "tools.h":
-    char *convertShortToChar(short *)
-    char *convertIntToChar(int *)
-
 cdef class DevPtr:
     cdef void* _ptr 
     def __repr__(self): 
@@ -294,11 +290,11 @@ cdef void audio_cb(void *dev, int num_samples, int *mic1, int *mic2, int *mic3, 
     dev_out = DevPtr()
     dev_out._ptr = dev
     if _audio_cb:
-        mic1_c = convertIntToChar(mic1)
-        mic2_c = convertIntToChar(mic2)
-        mic3_c = convertIntToChar(mic3)
-        mic4_c = convertIntToChar(mic4)
-        cancelled_c = convertShortToChar(cancelled)
+        mic1_c = <char *>mic1
+        mic2_c = <char *>mic2
+        mic3_c = <char *>mic3
+        mic4_c = <char *>mic4
+        cancelled_c = <char *>cancelled
         _audio_cb(*_audio_cb_np(dev_out,
                                 PyString_FromStringAndSize(mic1_c, nbytes_mic),
                                 PyString_FromStringAndSize(mic2_c, nbytes_mic),
