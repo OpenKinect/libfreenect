@@ -46,6 +46,15 @@ typedef enum {
 	FREENECT_DEVICE_AUDIO  = 0x04,
 } freenect_device_flags;
 
+/// A struct used in enumeration to give access to serial numbers, so you can
+/// open a particular device by serial rather than depending on index.  This
+/// is most useful if you have more than one Kinect.
+struct freenect_device_attributes;
+struct freenect_device_attributes {
+	struct freenect_device_attributes *next; /**< Next device in the linked list */
+	const char* camera_serial; /**< Serial number of this device's camera subdevice */
+};
+
 /// Enumeration of available resolutions.
 /// Not all available resolutions are actually supported for all video formats.
 /// Frame modes may not perfectly match resolutions.  For instance,
@@ -233,6 +242,25 @@ FREENECTAPI int freenect_process_events(freenect_context *ctx);
 FREENECTAPI int freenect_num_devices(freenect_context *ctx);
 
 /**
+ * Scans for kinect devices and produces a linked list of their attributes
+ * (namely, serial numbers), returning the number of devices.
+ *
+ * @param ctx Context to scan for kinect devices with
+ * @param attribute_list Pointer to where this function will store the resultant linked list
+ *
+ * @return Number of devices connected, < 0 on error
+ */
+FREENECTAPI int freenect_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes** attribute_list);
+
+/**
+ * Free the linked list produced by freenect_list_device_attributes().
+ *
+ * @param ctx Context from which the list was allocated
+ * @param attribute_list Linked list of attributes to free.
+ */
+FREENECTAPI void freenect_free_device_attributes(struct freenect_device_attributes* attribute_list);
+
+/**
  * Set which subdevices any subsequent calls to freenect_open_device()
  * should open.  This will not affect devices which have already been
  * opened.  The default behavior, should you choose not to call this
@@ -256,6 +284,19 @@ FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_devi
  * @return 0 on success, < 0 on error
  */
 FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index);
+
+/**
+ * Opens a kinect device (via a context) associated with a particular camera
+ * subdevice serial number.  This function will fail if no device with a
+ * matching serial number is found.
+ *
+ * @param ctx Context to open device through
+ * @param dev Device structure to assign opened device to
+ * @param camera_serial Null-terminated ASCII string containing the serial number of the camera subdevice in the device to open
+ *
+ * @return 0 on success, < 0 on error
+ */
+FREENECTAPI int freenect_open_device_by_camera_serial(freenect_context *ctx, freenect_device **dev, const char* camera_serial);
 
 /**
  * Closes a device that is currently open

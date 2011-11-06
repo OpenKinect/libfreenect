@@ -56,6 +56,66 @@ int fnusb_num_devices(fnusb_ctx *ctx)
 	return nr;
 }
 
+int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_device_attributes** attribute_list)
+{
+	*attribute_list = NULL; // initialize some return value in case the user is careless.
+	libusb_device **devs;
+	//pointer to pointer of device, used to retrieve a list of devices
+	ssize_t count = libusb_get_device_list (ctx->ctx, &devs);
+	if (count < 0)
+		return -1;
+
+	struct freenect_device_attributes** camera_prev_next = attribute_list;
+
+	// Pass over the list.  For each camera seen, if we already have a camera
+	// for the newest_camera device, allocate a new one and append it to the list,
+	// incrementing num_devs.  Likewise for each audio device.
+	struct libusb_device_descriptor desc;
+	int num_cams = 0;
+	int i;
+	for (i = 0; i < count; i++) {
+		int r = libusb_get_device_descriptor (devs[i], &desc);
+		if (r < 0)
+			continue;
+		if (desc.idVendor == VID_MICROSOFT && desc.idProduct == PID_NUI_CAMERA) {
+			// Verify that a serial number exists to query.  If not, don't touch the device.
+			if (desc.iSerialNumber == 0) {
+				continue;
+			}
+
+			// Open device.
+			int res;
+			libusb_device_handle *this_device;
+			res = libusb_open(devs[i], &this_device);
+			unsigned char string_desc[256]; // String descriptors are at most 256 bytes.
+			if (res != 0) {
+				continue;
+			}
+
+			// Read string descriptor referring to serial number.
+			res = libusb_get_string_descriptor_ascii(this_device, desc.iSerialNumber, string_desc, 256);
+			libusb_close(this_device);
+			if (res < 0) {
+				continue;
+			}
+
+			// Add item to linked list.
+			struct freenect_device_attributes* new_dev_attrs = (struct freenect_device_attributes*)malloc(sizeof(struct freenect_device_attributes));
+			memset(new_dev_attrs, 0, sizeof(*new_dev_attrs));
+
+			*camera_prev_next = new_dev_attrs;
+			// Copy string with serial number
+			new_dev_attrs->camera_serial = strdup((char*)string_desc);
+			camera_prev_next = &(new_dev_attrs->next);
+			// Increment number of cameras found
+			num_cams++;
+		}
+	}
+
+	libusb_free_device_list(devs, 1);
+	return num_cams;
+}
+
 int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
 {
 	int res;

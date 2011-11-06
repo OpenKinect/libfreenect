@@ -77,6 +77,27 @@ FREENECTAPI int freenect_num_devices(freenect_context *ctx)
 	return fnusb_num_devices(&ctx->usb);
 }
 
+FREENECTAPI int freenect_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes **attribute_list)
+{
+	return fnusb_list_device_attributes(&ctx->usb, attribute_list);
+}
+
+FREENECTAPI void freenect_free_device_attributes(struct freenect_device_attributes *attribute_list)
+{
+	// Iterate over list, freeing contents of each item as we go.
+	struct freenect_device_attributes* to_free;
+	while(attribute_list != NULL) {
+		to_free = attribute_list;
+		if (attribute_list->camera_serial != NULL) {
+			free((char*)attribute_list->camera_serial);
+			attribute_list->camera_serial = NULL;
+		}
+		attribute_list = attribute_list->next;
+		free(to_free);
+	}
+	return;
+}
+
 FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs) {
 	ctx->enabled_subdevices = (freenect_device_flags)(subdevs & (FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA
 #ifdef BUILD_AUDIO
@@ -121,6 +142,30 @@ FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **de
 	}
 
 	return 0;
+}
+
+FREENECTAPI int freenect_open_device_by_camera_serial(freenect_context *ctx, freenect_device **dev, const char* camera_serial)
+{
+	// This is implemented by listing the devices and seeing which index (if
+	// any) has a camera with a matching serial number, and then punting to
+	// freenect_open_device with that index.
+	struct freenect_device_attributes* attrlist;
+	struct freenect_device_attributes* item;
+	int count = fnusb_list_device_attributes(&ctx->usb, &attrlist);
+	if (count < 0) {
+		FN_ERROR("freenect_open_device_by_camera_serial: Couldn't enumerate serial numbers\n");
+		return -1;
+	}
+	int index = 0;
+	for(item = attrlist ; item != NULL; item = item->next , index++) {
+		if (strlen(item->camera_serial) == strlen(camera_serial) && strcmp(item->camera_serial, camera_serial) == 0) {
+			freenect_free_device_attributes(attrlist);
+			return freenect_open_device(ctx, dev, index);
+		}
+	}
+	freenect_free_device_attributes(attrlist);
+	FN_ERROR("freenect_open_device_by_camera_serial: Couldn't find a device with serial %s\n", camera_serial);
+	return -1;
 }
 
 FREENECTAPI int freenect_close_device(freenect_device *dev)
