@@ -27,6 +27,7 @@
 #ifndef USB_LIBUSB10
 #define USB_LIBUSB10
 
+#include "libfreenect.h"
 #include <libusb-1.0/libusb.h>
 
 #if defined(__APPLE__)
