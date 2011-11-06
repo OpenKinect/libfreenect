@@ -22,24 +22,30 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
- package org.openkinect.freenect;
+package org.openkinect.freenect;
 
-public interface Device {
-    double[] getAccel();
-    int setLed(LedStatus status);
-    void refreshTiltState();
-    double getTiltAngle();
-    int setTiltAngle(double angle);
-    TiltStatus getTiltStatus();
-	void setResolution(Resolution res);
-	//void setDepthFormat(DepthFrameMode mode);
-    void setDepthFormat(DepthFormat fmt);
-	//void setVideoFormat(VideoFrameMode mode);
-    void setVideoFormat(VideoFormat fmt);
-    int startDepth(DepthHandler handler);
-    int startVideo(VideoHandler handler);
-    int stopDepth();
-    int stopVideo();
-    void close();
-    public abstract int getDeviceIndex();
+/**
+ * User: Erwan Daubert - erwan.daubert@gmail.com
+ * Date: 12/08/11
+ * Time: 13:40
+ */
+public enum Flags {
+	FREENECT_DEVICE_MOTOR(0x01),
+	FREENECT_DEVICE_CAMERA(0x02),
+	FREENECT_DEVICE_AUDIO(0x04),;
+
+	private int value;
+
+	Flags (int value) {
+		this.value = value;
+	}
+
+	public int getValue () {
+		return value;
+	}
 }
+/*typedef enum {
+	FREENECT_DEVICE_MOTOR  = 0x01,
+	FREENECT_DEVICE_CAMERA = 0x02,
+	FREENECT_DEVICE_AUDIO  = 0x04,
+} freenect_device_flags;*/
