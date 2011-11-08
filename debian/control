@@ -15,7 +15,7 @@ Description:  libfreenect library for using Kinect - library files
 Package: libfreenect-dev
 Architecture: any
 Section: libdevel
-Depends: libfreenect (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Depends: libfreenect (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}, libusb-1.0-0-dev
 Description:  libfreenect library for using Kinect - development headers
 
 Package: libfreenect-demos
