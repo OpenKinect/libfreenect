@@ -1,3 +1,2 @@
 usr/lib*/libfreenect_sync.so.* usr/lib/
 usr/lib*/libfreenect.so.* usr/lib/
-usr/bin/* usr/bin/

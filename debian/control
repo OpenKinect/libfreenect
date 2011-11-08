@@ -4,7 +4,7 @@ Priority: optional
 DM-Upload-Allowed: yes
 Maintainer: OpenKinect <openkinect@googlegroups.com>
 Build-Depends: debhelper, cdbs, cmake, libusb-1.0-0-dev, freeglut3-dev (>= 2.6.0), libxi-dev, libxmu-dev
-Standards-Version: 3.9.1
+Standards-Version: 3.9.2
 Homepage: http://www.openkinect.org/
 
 Package: libfreenect
