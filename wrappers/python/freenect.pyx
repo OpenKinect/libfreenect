@@ -77,9 +77,12 @@ cdef extern from "numpy/arrayobject.h":
 
 cdef extern from "stdlib.h":
     void free(void *ptr)
+    void *memcpy(void *str1, void *str2, unsigned int n)
+    void *memset(void *str1, int c, unsigned int n)
 
 cdef extern from "Python.h":
     object PyString_FromStringAndSize(char *s, Py_ssize_t len)
+    char *PyString_AsString(object str)
 
 cdef extern from "libfreenect_sync.h":
     int freenect_sync_get_video(void **video, unsigned int *timestamp, int index, int fmt) nogil
@@ -122,6 +125,23 @@ cdef extern from "libfreenect.h":
     freenect_raw_tilt_state* freenect_get_tilt_state(void *dev)
     void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z)
     double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
+
+cdef extern from "libfreenect-audio.h":
+    ctypedef struct freenect_sample_51:
+        short left
+        short right
+        short center
+        short lfe
+        short surround_left
+        short surround_right
+
+    ctypedef void (*freenect_audio_in_cb)(void *dev, int num_samples, int *mic1, int *mic2, int *mic3, int *mic4, short *cancelled, void *unknown)
+    ctypedef void (*freenect_audio_out_cb)(void *dev, freenect_sample_51 *samples, int *sample_count)
+
+    void freenect_set_audio_in_callback(void *dev, freenect_audio_in_cb callback)
+    void freenect_set_audio_out_callback(void *dev, freenect_audio_out_cb callback)
+    int freenect_start_audio(void* dev)
+    int freenect_stop_audio(void* dev)
 
 cdef class DevPtr:
     cdef void* _ptr 
@@ -236,9 +256,7 @@ cdef init():
         return
     # We take both the motor and camera devices here, since we provide access
     # to both but haven't wrapped the python API for selecting subdevices yet.
-    # Also, we don't support audio in the python wrapper yet, so no sense claiming
-    # the device.
-    freenect_select_subdevices(ctx, DEVICE_MOTOR | DEVICE_CAMERA)
+    freenect_select_subdevices(ctx, DEVICE_MOTOR | DEVICE_CAMERA | DEVICE_AUDIO)
     cdef CtxPtr ctx_out
     ctx_out = CtxPtr()
     ctx_out._ptr = ctx
@@ -253,7 +271,7 @@ cdef open_device(CtxPtr ctx, int index):
     dev_out._ptr = dev
     return dev_out
 
-_depth_cb, _video_cb = None, None
+_depth_cb, _video_cb, _audio_cb, _audio_out_cb = None, None, None, None
 
 cdef void depth_cb(void *dev, char *data, int timestamp):
     nbytes = 614400  # 480 * 640 * 2
@@ -271,12 +289,75 @@ cdef void video_cb(void *dev, char *data, int timestamp):
     if _video_cb:
         _video_cb(*_video_cb_np(dev_out, PyString_FromStringAndSize(data, nbytes), timestamp))
 
+cdef void audio_cb(void *dev, int num_samples, int *mic1, int *mic2, int *mic3, int *mic4, short *cancelled, void *unknown):
+    cdef DevPtr dev_out
+    cdef char *mic1_c
+    cdef char *mic2_c
+    cdef char *mic3_c
+    cdef char *mic4_c
+    cdef char *cancelled_c
+    cdef int i
+    nbytes_mic = num_samples * 4
+    nbytes_cancelled = num_samples * 2
+    dev_out = DevPtr()
+    dev_out._ptr = dev
+    if _audio_cb:
+        mic1_c = <char *>mic1
+        mic2_c = <char *>mic2
+        mic3_c = <char *>mic3
+        mic4_c = <char *>mic4
+        cancelled_c = <char *>cancelled
+        _audio_cb(*_audio_cb_np(dev_out,
+                                PyString_FromStringAndSize(mic1_c, nbytes_mic),
+                                PyString_FromStringAndSize(mic2_c, nbytes_mic),
+                                PyString_FromStringAndSize(mic3_c, nbytes_mic),
+                                PyString_FromStringAndSize(mic4_c, nbytes_mic),
+                                PyString_FromStringAndSize(cancelled_c, nbytes_cancelled)))
+
+cdef void audio_out_cb(void *dev, freenect_sample_51 *samples, int *sample_count):
+    cdef num_samples = sample_count[0]
+    cdef char *c_data 
+    cdef int numbytes = 6 * 2 * num_samples # channels * sample_size * num_samples
+    cdef int diff
+    if _audio_out_cb:
+        dev_out = DevPtr()
+        dev_out._ptr = dev
+
+        left, right, center, lfe, sur_l, sur_r = _audio_out_cb(dev_out, num_samples)
+
+        # Make sure not too many samples are supplied and that
+        # an equal number of samples is supplied for each channel
+        assert(len(left) <= num_samples)
+        assert(len(left) == len(right))
+        assert(len(left) == len(center))
+        assert(len(left) == len(lfe))
+        assert(len(left) == len(sur_l))
+        assert(len(left) == len(sur_r))
+        # Make sure the total number of samples is supplied, if not,
+        # extend with zeros
+        if (len(left) < num_samples):
+            diff   = num_samples - len(left)
+            zeros  = np.zeros(diff)
+            left   = np.append(left, zeros)
+            right  = np.append(left, zeros)
+            center = np.append(left, zeros)
+            lfe    = np.append(left, zeros)
+            sur_l  = np.append(left, zeros)
+            sur_r  = np.append(left, zeros)
+        # Format data and copy to the right location
+        data = np.column_stack((left, right, center, lfe, sur_l, sur_r)).astype('int16').tostring()
+        assert(len(data) == numbytes)
+        c_data = PyString_AsString(data)
+        memcpy(samples, c_data, numbytes)
+    else:
+        # Send silence
+        memset(samples, 0, numbytes)
 
 class Kill(Exception):
     """This kills the runloop, raise from the body only"""
 
 
-def runloop(depth=None, video=None, body=None):
+def runloop(depth=None, video=None, audio=None, audio_out=None, body=None):
     """Sets up the kinect and maintains a runloop
 
     This is where most of the action happens.  You can get the dev pointer from the callback
@@ -288,13 +369,23 @@ def runloop(depth=None, video=None, body=None):
             If None (default), then you won't get a callback for depth.
         video: A function that takes (dev, video, timestamp), corresponding to C function.
             If None (default), then you won't get a callback for video.
+        audio: A function that takes (dev, mic1, mic2, mic3, mic4, cancelled), corresponding to C function.
+            If None (default), then you won't get a callback for incoming audio.
+        audio_out: A function that takes (dev, num_samples), corresponding to C function.
+            If None (default), then you won't get a callback for outgoing audio.
+            If not None, you still will not get a callback because the C code
+            does not actually call the callback function yet. (see src/audio.c:36)
         body: A function that takes (dev, ctx) and is called in the body of process_events
     """
-    global _depth_cb, _video_cb
+    global _depth_cb, _video_cb, _audio_cb
     if depth:
-       _depth_cb = depth
+        _depth_cb = depth
     if video:
-       _video_cb = video
+        _video_cb = video
+    if audio:
+        _audio_cb = audio
+    if audio_out:
+        _audio_out_cb = audio_out
     cdef DevPtr dev
     cdef CtxPtr ctx
     cdef void* devp
@@ -315,6 +406,9 @@ def runloop(depth=None, video=None, body=None):
     freenect_start_video(devp)
     freenect_set_depth_callback(devp, depth_cb)
     freenect_set_video_callback(devp, video_cb)
+    freenect_start_audio(devp)
+    freenect_set_audio_in_callback(devp, audio_cb)
+    freenect_set_audio_out_callback(devp, audio_out_cb)
     try:
         while freenect_process_events(ctxp) >= 0:
             if body:
@@ -323,6 +417,7 @@ def runloop(depth=None, video=None, body=None):
         pass
     freenect_stop_depth(devp)
     freenect_stop_video(devp)
+    freenect_stop_audio(devp)
     freenect_close_device(devp)
     freenect_shutdown(ctxp)
 
@@ -356,6 +451,24 @@ def _video_cb_np(dev, string, timestamp):
     data = np.fromstring(string, dtype=np.uint8)
     data.resize((480, 640, 3))
     return dev, data, timestamp
+
+def _audio_cb_np(dev, mic1, mic2, mic3, mic4, cancelled):
+    """Converts the raw audio data into a numpy array for your function
+
+     Args:
+         dev: DevPtr object
+         string: A python string with the video data
+         timestamp: An int representing the time
+
+     Returns:
+         (dev, data, timestamp) where data is a 2D numpy array
+    """
+    mic1_np = np.fromstring(mic1, dtype=np.int32)
+    mic2_np = np.fromstring(mic2, dtype=np.int32)
+    mic3_np = np.fromstring(mic3, dtype=np.int32)
+    mic4_np = np.fromstring(mic4, dtype=np.int32)
+    cancelled_np = np.fromstring(cancelled, dtype=np.int16)
+    return dev, mic1_np, mic2_np, mic3_np, mic4_np, cancelled_np
 
 import_array()
 

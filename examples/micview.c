@@ -40,6 +40,7 @@ static freenect_device* f_dev;
 
 typedef struct {
 	int32_t* buffers[4];
+	int16_t* canc_buffers;
 	int max_samples;
 	int current_idx;  // index to the oldest data in the buffer (equivalently, where the next new data will be placed)
 	int new_data;
@@ -65,6 +66,7 @@ void in_callback(freenect_device* dev, int num_samples,
 		memcpy(&(c->buffers[1][c->current_idx]), mic2, num_samples*sizeof(int32_t));
 		memcpy(&(c->buffers[2][c->current_idx]), mic3, num_samples*sizeof(int32_t));
 		memcpy(&(c->buffers[3][c->current_idx]), mic4, num_samples*sizeof(int32_t));
+		memcpy(&(c->canc_buffers[c->current_idx]), cancelled, num_samples*sizeof(int16_t));
 	} else {
 		int first = c->max_samples - c->current_idx;
 		int left = num_samples - first;
@@ -72,10 +74,12 @@ void in_callback(freenect_device* dev, int num_samples,
 		memcpy(&(c->buffers[1][c->current_idx]), mic2, first*sizeof(int32_t));
 		memcpy(&(c->buffers[2][c->current_idx]), mic3, first*sizeof(int32_t));
 		memcpy(&(c->buffers[3][c->current_idx]), mic4, first*sizeof(int32_t));
+		memcpy(&(c->canc_buffers[c->current_idx]), cancelled, first*sizeof(int16_t));
 		memcpy(c->buffers[0], &mic1[first], left*sizeof(int32_t));
 		memcpy(c->buffers[1], &mic2[first], left*sizeof(int32_t));
 		memcpy(c->buffers[2], &mic3[first], left*sizeof(int32_t));
 		memcpy(c->buffers[3], &mic4[first], left*sizeof(int32_t));
+		memcpy(c->canc_buffers, &cancelled[first], left*sizeof(int16_t));
 	}
 	c->current_idx = (c->current_idx + num_samples) % c->max_samples;
 	c->new_data = 1;
@@ -118,11 +122,18 @@ void DrawMicData() {
 	// This is kinda slow.  It should be possible to compile each sample
 	// window into a glCallList, but that's overly complex.
 	int mic;
-	for(mic = 0; mic < 4; mic++) {
+	for(mic = 0; mic < 5; mic++) {
 		glBegin(GL_LINE_STRIP);
 		glColor4f(1.0f, 1.0f, 1.0f, 0.7f);
 		for(x = 0, i = 0; i < state.max_samples; i++) {
-			glVertex3f(x, ((float)win_h * (float)(2*mic + 1) / 8. ) + (float)(state.buffers[mic][(base_idx + i) % state.max_samples]) * ((float)win_h/4) /2147483647. , 0);
+            if (mic == 4)
+            {
+                glVertex3f(x, ((float)win_h * (float)(2*mic + 1) / 10. ) + (float)(state.canc_buffers[(base_idx + i) % state.max_samples]) * ((float)win_h/5) /32767. , 0);
+            }
+            else
+            {
+                glVertex3f(x, ((float)win_h * (float)(2*mic + 1) / 10. ) + (float)(state.buffers[mic][(base_idx + i) % state.max_samples]) * ((float)win_h/5) /2147483647. , 0);
+            }
 			x += xIncr;
 		}
 		glEnd();
@@ -176,10 +187,12 @@ int main(int argc, char** argv) {
 	state.buffers[1] = malloc(state.max_samples * sizeof(int32_t));
 	state.buffers[2] = malloc(state.max_samples * sizeof(int32_t));
 	state.buffers[3] = malloc(state.max_samples * sizeof(int32_t));
+	state.canc_buffers = malloc(state.max_samples * sizeof(int16_t));
 	memset(state.buffers[0], 0, state.max_samples * sizeof(int32_t));
 	memset(state.buffers[1], 0, state.max_samples * sizeof(int32_t));
 	memset(state.buffers[2], 0, state.max_samples * sizeof(int32_t));
 	memset(state.buffers[3], 0, state.max_samples * sizeof(int32_t));
+	memset(state.canc_buffers, 0, state.max_samples * sizeof(int16_t));
 	freenect_set_user(f_dev, &state);
 
 	freenect_set_audio_in_callback(f_dev, in_callback);
