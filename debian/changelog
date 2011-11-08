@@ -1,3 +1,17 @@
+libfreenect (1:0.1.1.3-0ubuntu1~lucid) lucid; urgency=low
+
+  * add libfreenect-demos package
+  * bump version to 0.1.1.3 using git unstable snapshot from 2011-11-07
+
+ -- Florian Echtler <floe@butterbrot.org>  Mon, 07 Nov 2011 12:44:10 +0100
+
+libfreenect (1:0.1.1.2-0ubuntu1~lucid) lucid; urgency=low
+
+  * update to Oneiric Ocelot, bump version to 1:0.1.1.2
+    (overriding the outdated package from oneiric)
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 16 Oct 2011 22:26:49 +0200
+
 libfreenect (0.1.1-0ubuntu5~natty) natty; urgency=low
 
   * moved include files to /usr/include
