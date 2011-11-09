@@ -34,9 +34,6 @@ cdef extern from "numpy/arrayobject.h":
 cdef extern from "stdlib.h":
     void free(void *ptr)
 
-cdef extern from "Python.h":
-    object PyString_FromStringAndSize(char *s, Py_ssize_t len)
-
 cdef extern from "libfreenect.h":
     ctypedef enum freenect_video_format:
         FREENECT_VIDEO_RGB
@@ -305,7 +302,7 @@ cdef void depth_cb(freenect_device *dev, void *data, uint32_t timestamp) with gi
     dev_out = DevPtr()
     dev_out._ptr = dev
     if _depth_cb:
-        _depth_cb(*_depth_cb_np(dev_out, PyString_FromStringAndSize(<char*>data, nbytes), timestamp))
+        _depth_cb(*_depth_cb_np(dev_out, (<char*>data)[:nbytes], timestamp))
 
 cdef void video_cb(freenect_device *dev, void *data, uint32_t timestamp) with gil:
     nbytes = 921600  # 480 * 640 * 3
@@ -313,7 +310,25 @@ cdef void video_cb(freenect_device *dev, void *data, uint32_t timestamp) with gi
     dev_out = DevPtr()
     dev_out._ptr = dev
     if _video_cb:
-        _video_cb(*_video_cb_np(dev_out, PyString_FromStringAndSize(<char*>data, nbytes), timestamp))
+        _video_cb(*_video_cb_np(dev_out, (<char*>data)[:nbytes], timestamp))
+
+def set_depth_callback(DevPtr dev, cb):
+    global _depth_cb
+    if cb is not None:
+        _depth_cb = cb
+        freenect_set_depth_callback(dev._ptr, depth_cb)
+    else:
+        _depth_cb = None
+        freenect_set_depth_callback(dev._ptr, NULL)
+
+def set_video_callback(DevPtr dev, cb):
+    global _video_cb
+    if cb is not None:
+        _video_cb = cb
+        freenect_set_video_callback(dev._ptr, video_cb)
+    else:
+        _video_cb = None
+        freenect_set_video_callback(dev._ptr, NULL)
 
 
 class Kill(Exception):
@@ -380,6 +395,30 @@ def runloop(depth=None, video=None, body=None, dev=None):
     if dev is None:
         freenect_close_device(devp)
         freenect_shutdown(ctxp)
+
+def base_runloop(CtxPtr ctx, body=None):
+    """Starts a runloop
+
+    This function can be used instead of runloop() to allow the Python code to
+    perform all setup steps independently. This simply calls process_events in
+    a loop, optionally calling a body function in between. Raise the Kill
+    exception to break out of the runloop.
+
+    Args:
+        ctx: Freenect library context
+        body: A function that takes (ctx) and is called in the body of process_events
+    """
+    cdef freenect_context* ctxp
+    ctxp = ctx._ptr
+    try:
+        while True:
+            with nogil:
+                if freenect_process_events(ctxp) < 0:
+                    break
+            if body:
+                body(ctx)
+    except Kill:
+        pass
 
 def _depth_cb_np(dev, string, timestamp):
     """Converts the raw depth data into a numpy array for your function
