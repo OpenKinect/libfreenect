@@ -466,11 +466,13 @@ def sync_get_depth(index=0, format=DEPTH_11BIT):
         timestamp: int representing the time
     """
     cdef void* data
-    cdef unsigned int timestamp
+    cdef uint32_t timestamp
     cdef npc.npy_intp dims[2]
     cdef int out
+    cdef int _index = index
+    cdef freenect_depth_format _format = format
     with nogil:
-        out = freenect_sync_get_depth(&data, &timestamp, index, format)
+        out = freenect_sync_get_depth(&data, &timestamp, _index, _format)
     if out:
         error_open_device()
         return
@@ -494,11 +496,13 @@ def sync_get_video(index=0, format=VIDEO_RGB):
         timestamp: int representing the time
     """
     cdef void* data
-    cdef unsigned int timestamp
+    cdef uint32_t timestamp
     cdef npc.npy_intp dims[3]
     cdef int out
+    cdef int _index = index
+    cdef freenect_video_format _format = format
     with nogil:
-        out = freenect_sync_get_video(&data, &timestamp, index, format)
+        out = freenect_sync_get_video(&data, &timestamp, _index, _format)
     if out:
         error_open_device()
         return
