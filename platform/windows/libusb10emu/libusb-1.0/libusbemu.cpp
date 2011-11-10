@@ -624,6 +624,25 @@ int libusb_handle_events(libusb_context* ctx)
   return(0);
 }
 
+int libusb_handle_events_timeout(libusb_context* ctx, struct timeval* timeout)
+{
+  if (ctx == NULL)
+    ctx = default_context;
+
+  if (failguard::Abort())
+    return(LIBUSB_ERROR_INTERRUPTED);
+
+  RAIIMutex lock (ctx->mutex);
+
+  if (timeout == NULL)
+    libusbemu_handle_isochronous(ctx, 0);
+  else
+    libusbemu_handle_isochronous(ctx, (timeout->tv_sec * 1000) + (timeout->tv_usec / 1000));
+
+  // 0 on success, or a LIBUSB_ERROR code on failure
+  return(0);
+}
+
 void PreprocessTransferNaive(libusb_transfer* transfer, const int read);
 void PreprocessTransferFreenect(libusb_transfer* transfer, const int read);
 static void(*PreprocessTransfer)(libusb_transfer*, const int) (PreprocessTransferFreenect);

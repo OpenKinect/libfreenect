@@ -72,6 +72,11 @@ FREENECTAPI int freenect_process_events(freenect_context *ctx)
 	return fnusb_process_events(&ctx->usb);
 }
 
+FREENECTAPI int freenect_process_events_timeout(freenect_context *ctx, struct timeval *timeout)
+{
+	return fnusb_process_events_timeout(&ctx->usb, timeout);
+}
+
 FREENECTAPI int freenect_num_devices(freenect_context *ctx)
 {
 	return fnusb_num_devices(&ctx->usb);

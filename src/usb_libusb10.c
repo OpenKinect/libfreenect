@@ -152,6 +152,11 @@ int fnusb_process_events(fnusb_ctx *ctx)
 	return libusb_handle_events(ctx->ctx);
 }
 
+int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* timeout)
+{
+	return libusb_handle_events_timeout(ctx->ctx, timeout);
+}
+
 int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	freenect_context *ctx = dev->parent;

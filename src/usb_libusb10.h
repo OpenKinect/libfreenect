@@ -89,6 +89,7 @@ int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_device_attribut
 int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx);
 int fnusb_shutdown(fnusb_ctx *ctx);
 int fnusb_process_events(fnusb_ctx *ctx);
+int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* timeout);
 
 int fnusb_open_subdevices(freenect_device *dev, int index);
 int fnusb_close_subdevices(freenect_device *dev);

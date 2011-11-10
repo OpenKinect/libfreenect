@@ -232,6 +232,18 @@ FREENECTAPI void freenect_set_log_callback(freenect_context *ctx, freenect_log_c
 FREENECTAPI int freenect_process_events(freenect_context *ctx);
 
 /**
+ * Calls the platform specific usb event processor until either an event occurs
+ * or the timeout parameter time has passed.  If a zero timeval is passed, this
+ * function will handle any already-pending events, then return immediately.
+ *
+ * @param ctx Context to process events for
+ * @param timeout Pointer to a timeval containing the maximum amount of time to block waiting for events, or zero for nonblocking mode
+ *
+ * @return 0 on success, other values on error, platform/library dependant
+ */
+FREENECTAPI int freenect_process_events_timeout(freenect_context *ctx, struct timeval* timeout);
+
+/**
  * Return the number of kinect devices currently connected to the
  * system
  *

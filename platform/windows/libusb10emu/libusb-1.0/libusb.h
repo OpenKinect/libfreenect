@@ -96,6 +96,7 @@ int libusb_submit_transfer(struct libusb_transfer* transfer);
 int libusb_cancel_transfer(struct libusb_transfer* transfer);
 
 int libusb_handle_events(libusb_context* ctx);  // WORK IN PROGRESS...
+int libusb_handle_events_timeout(libusb_context* ctx, struct timeval* timeout);
 
 // the signature of libusb_device_descriptor is identical to usb_device_descriptor
 // which means that the below struct could be replaced by a typedef; however, that
