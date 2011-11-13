@@ -273,6 +273,16 @@ FREENECTAPI int freenect_list_device_attributes(freenect_context *ctx, struct fr
 FREENECTAPI void freenect_free_device_attributes(struct freenect_device_attributes* attribute_list);
 
 /**
+ * Answer which subdevices this library supports.  This is most useful for
+ * wrappers trying to determine whether the underlying library was built with
+ * audio support or not, so the wrapper can avoid calling functions that do not
+ * exist.
+ *
+ * @return Flags representing the subdevices that the library supports opening (see freenect_device_flags)
+ */
+FREENECTAPI int freenect_supported_subdevices(void);
+
+/**
  * Set which subdevices any subsequent calls to freenect_open_device()
  * should open.  This will not affect devices which have already been
  * opened.  The default behavior, should you choose not to call this

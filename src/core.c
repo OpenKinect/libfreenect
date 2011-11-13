@@ -103,6 +103,14 @@ FREENECTAPI void freenect_free_device_attributes(struct freenect_device_attribut
 	return;
 }
 
+FREENECTAPI int freenect_supported_subdevices(void) {
+#ifdef BUILD_AUDIO
+	return FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA | FREENECT_DEVICE_AUDIO;
+#else
+	return FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA;
+#endif
+}
+
 FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs) {
 	ctx->enabled_subdevices = (freenect_device_flags)(subdevs & (FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA
 #ifdef BUILD_AUDIO
