@@ -26,7 +26,7 @@ IF(BUILD_AUDIO)
     add_custom_target(firmware ALL
         COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py" "../audios.bin"
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py")
-    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share")
+    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/libfreenect")
   ENDIF()
 ENDIF()
 
