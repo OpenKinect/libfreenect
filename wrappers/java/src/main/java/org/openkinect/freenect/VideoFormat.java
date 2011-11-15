@@ -24,41 +24,35 @@
  */
 package org.openkinect.freenect;
 
+import java.util.HashMap;
+import java.util.Map;
 
 public enum VideoFormat {
-    RGB(0, Freenect.FREENECT_FRAME_W, Freenect.FREENECT_FRAME_H, Freenect.FREENECT_VIDEO_RGB_SIZE),
-    BAYER(1, Freenect.FREENECT_FRAME_W, Freenect.FREENECT_FRAME_H, Freenect.FREENECT_VIDEO_BAYER_SIZE),
-    IR_8BIT(2, Freenect.FREENECT_IR_FRAME_W, Freenect.FREENECT_IR_FRAME_H, Freenect.FREENECT_VIDEO_IR_8BIT_SIZE),
-    IR_10BIT(3, Freenect.FREENECT_IR_FRAME_W, Freenect.FREENECT_IR_FRAME_H, Freenect.FREENECT_VIDEO_IR_10BIT_SIZE),
-    IR_10BIT_PACKED(4, Freenect.FREENECT_IR_FRAME_W, Freenect.FREENECT_IR_FRAME_H, Freenect.FREENECT_VIDEO_IR_10BIT_PACKED_SIZE),
-    YUV_RGB(5, Freenect.FREENECT_FRAME_W, Freenect.FREENECT_FRAME_H, Freenect.FREENECT_VIDEO_RGB_SIZE),
-    YUV_RAW(6, Freenect.FREENECT_FRAME_W, Freenect.FREENECT_FRAME_H, Freenect.FREENECT_VIDEO_YUV_SIZE);
-    
-    private final int value;
-    private final int frameSize;
-    private final int width;
-    private final int height;
+    RGB(0),
+    BAYER(1),
+    IR_8BIT(2),
+    IR_10BIT(3),
+    IR_10BIT_PACKED(4),
+    YUV_RGB(5),
+    YUV_RAW(6);
 
-    private VideoFormat(int value, int width, int height, int frameSize) {
-        this.value = value;
-        this.width = width;
-        this.height = height;
-        this.frameSize = frameSize;
+    private final int value;
+    private static final Map<Integer, VideoFormat> MAP = new HashMap<Integer, VideoFormat>(7);
+    static {
+        for(VideoFormat v : VideoFormat.values()) {
+            MAP.put(v.intValue(), v);
+        }
     }
-    
+
+    private VideoFormat(int value) {
+        this.value = value;
+    }
+
     public int intValue() {
         return value;
     }
-    
-    public int getFrameSize() {
-        return frameSize;
-    }
-    
-    public int getWidth() {
-        return width;
-    }
-    
-    public int getHeight() {
-        return height;
+
+    public static VideoFormat fromInt(int value) {
+        return MAP.get(value);
     }
 }

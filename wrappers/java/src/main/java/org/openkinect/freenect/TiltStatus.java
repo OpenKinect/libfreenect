@@ -31,13 +31,13 @@ public enum TiltStatus {
     STOPPED(0),
     LIMIT(1),
     MOVING(4);
-    private final int value;
 
-    static final Map<Integer, TiltStatus> MAP = new HashMap<Integer, TiltStatus>(3);
+    private final int value;
+    private static final Map<Integer, TiltStatus> MAP = new HashMap<Integer, TiltStatus>(3);
     static {
-      for (TiltStatus ts : TiltStatus.values()) {
-        MAP.put(ts.intValue(), ts);
-      }
+        for(TiltStatus v : TiltStatus.values()) {
+            MAP.put(v.intValue(), v);
+        }
     }
 
     private TiltStatus(int value) {
