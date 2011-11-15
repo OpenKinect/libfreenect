@@ -24,35 +24,54 @@
  */
 package org.openkinect.freenect;
 
-import java.util.HashMap;
-import java.util.Map;
+import com.sun.jna.Structure;
 
-public enum LedStatus {
-    OFF(0),
-    GREEN(1),
-    RED(2),
-    YELLOW(3),
-    BLINK_YELLOW(4),
-    BLINK_GREEN(5),
-    BLINK_RED_YELLOW(6);
+public class FrameMode extends Structure {
+    /* All fields are public because Structure requires it.
+       However, fields should NOT be altered by external code. */
+    public int reserved;
+    public int resolution;
+    public int format;
+    public int bytes;
+    public short width, height;
+    public byte dataBitsPerPixel, paddingBitsPerPixel;
+    public byte framerate, valid;
 
-    private final int value;
-    private static final Map<Integer, LedStatus> MAP = new HashMap<Integer, LedStatus>(7);
-    static {
-        for(LedStatus v : LedStatus.values()) {
-            MAP.put(v.intValue(), v);
-        }
+    public FrameMode() {
+        valid = 0;
     }
 
-    private LedStatus(int value) {
-        this.value = value;
+    public Resolution getResolution() {
+        return Resolution.fromInt(resolution);
     }
 
-    public int intValue() {
-        return value;
+    public DepthFormat getDepthFormat() {
+        return DepthFormat.fromInt(format);
     }
 
-    public static LedStatus fromInt(int value) {
-      return MAP.get(value);
+    public VideoFormat getVideoFormat() {
+        return VideoFormat.fromInt(format);
     }
+
+    public int getFrameSize() {
+        return bytes;
+    }
+
+    public short getWidth() {
+        return width;
+    }
+
+    public short getHeight() {
+        return height;
+    }
+
+    public int getFrameRate() {
+        return framerate;
+    }
+
+    public boolean isValid() {
+        return (valid != 0);
+    }
+
+    public static class ByValue extends FrameMode implements Structure.ByValue { }
 }

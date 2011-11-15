@@ -22,33 +22,33 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
- package org.openkinect.freenect;
+package org.openkinect.freenect;
 
-/**
- * User: Erwan Daubert - erwan.daubert@gmail.com
- * Date: 12/08/11
- * Time: 13:48
- */
+import java.util.HashMap;
+import java.util.Map;
+
 public enum Resolution {
-	FREENECT_RESOLUTION_LOW    (0),
-	FREENECT_RESOLUTION_MEDIUM (1),
-	FREENECT_RESOLUTION_HIGH   (2),
-	FREENECT_RESOLUTION_DUMMY  (2147483647);
+    LOW(0),
+    MEDIUM(1),
+    HIGH(2);
 
-	private int value;
+    private final int value;
+    private static final Map<Integer, Resolution> MAP = new HashMap<Integer, Resolution>(3);
+    static {
+        for(Resolution v : Resolution.values()) {
+            MAP.put(v.intValue(), v);
+        }
+    }
 
-	Resolution (int value) {
-		this.value = value;
-	}
+    private Resolution(int value) {
+        this.value = value;
+    }
 
-	public int getValue () {
-		return value;
-	}
+    public int intValue() {
+        return value;
+    }
+
+    public static Resolution fromInt(int value) {
+      return MAP.get(value);
+    }
 }
-
-/*typedef enum {
-	FREENECT_RESOLUTION_LOW    = 0, *//**< QVGA - 320x240 *//*
-	FREENECT_RESOLUTION_MEDIUM = 1, *//**< VGA  - 640x480 *//*
-	FREENECT_RESOLUTION_HIGH   = 2, *//**< SXGA - 1280x1024 *//*
-	FREENECT_RESOLUTION_DUMMY  = 2147483647, *//**< Dummy value to force enum to be 32 bits wide *//*
-} freenect_resolution;*/
