@@ -31,11 +31,12 @@ public interface Device {
     double getTiltAngle();
     int setTiltAngle(double angle);
     TiltStatus getTiltStatus();
-	void setResolution(Resolution res);
-	//void setDepthFormat(DepthFrameMode mode);
     void setDepthFormat(DepthFormat fmt);
-	//void setVideoFormat(VideoFrameMode mode);
     void setVideoFormat(VideoFormat fmt);
+    void setDepthFormat(DepthFormat fmt, Resolution res);
+    void setVideoFormat(VideoFormat fmt, Resolution res);
+    FrameMode getDepthMode();
+    FrameMode getVideoMode();
     int startDepth(DepthHandler handler);
     int startVideo(VideoHandler handler);
     int stopDepth();

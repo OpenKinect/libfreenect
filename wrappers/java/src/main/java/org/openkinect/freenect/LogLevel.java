@@ -37,14 +37,13 @@ public enum LogLevel {
     SPEW(6),
     FLOOD(7);
 
+    private final int value;
     private static final Map<Integer, LogLevel> MAP = new HashMap<Integer, LogLevel>(8);
     static {
-        for (LogLevel value : values()) {
-            MAP.put(value.intValue(), value);
+        for(LogLevel v : LogLevel.values()) {
+            MAP.put(v.intValue(), v);
         }
     }
-
-    private final int value;
 
     private LogLevel(int value) {
         this.value = value;
@@ -55,6 +54,6 @@ public enum LogLevel {
     }
 
     public static LogLevel fromInt(int value) {
-        return MAP.get(value);
+      return MAP.get(value);
     }
 }

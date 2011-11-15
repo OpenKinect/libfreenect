@@ -34,7 +34,6 @@ import java.nio.DoubleBuffer;
 public class Freenect implements Library {
 	static {
 		try {
-			NativeLibrary.addSearchPath("freenect", "/home/edaubert/tmp/kinect/libfreenect/results/lib/");
 			NativeLibrary.addSearchPath("freenect", "/usr/local/lib");
 			NativeLibrary instance = NativeLibrary.getInstance("freenect");
 			System.err.println("Loaded " + instance.getName() + " from " + instance.getFile().getCanonicalPath());
@@ -43,24 +42,6 @@ public class Freenect implements Library {
 			throw new AssertionError(e);
 		}
 	}
-
-	// constants from libfreenect.h
-	static final int FREENECT_FRAME_W = 640;
-	static final int FREENECT_FRAME_H = 480;
-	static final int FREENECT_FRAME_PIX = (FREENECT_FRAME_H * FREENECT_FRAME_W);
-	static final int FREENECT_IR_FRAME_W = 640;
-	static final int FREENECT_IR_FRAME_H = 488;
-	static final int FREENECT_IR_FRAME_PIX = (FREENECT_IR_FRAME_H * FREENECT_IR_FRAME_W);
-	static final int FREENECT_VIDEO_RGB_SIZE = (FREENECT_FRAME_PIX * 3);
-	static final int FREENECT_VIDEO_BAYER_SIZE = (FREENECT_FRAME_PIX);
-	static final int FREENECT_VIDEO_YUV_SIZE = (FREENECT_FRAME_PIX * 2);
-	static final int FREENECT_VIDEO_IR_8BIT_SIZE = (FREENECT_IR_FRAME_PIX);
-	static final int FREENECT_VIDEO_IR_10BIT_SIZE = (FREENECT_IR_FRAME_PIX * 2);
-	static final int FREENECT_VIDEO_IR_10BIT_PACKED_SIZE = 390400;
-	static final int FREENECT_DEPTH_11BIT_SIZE = (FREENECT_FRAME_PIX * 2);
-	static final int FREENECT_DEPTH_10BIT_SIZE = FREENECT_DEPTH_11BIT_SIZE;
-	static final int FREENECT_DEPTH_11BIT_PACKED_SIZE = 422400;
-	static final int FREENECT_DEPTH_10BIT_PACKED_SIZE = 384000;
 
 	protected Freenect () {
 	}
@@ -150,16 +131,18 @@ public class Freenect implements Library {
 	}
 
 	protected static class NativeDevice extends PointerType implements Device {
-		private Resolution resolution = Resolution.FREENECT_RESOLUTION_MEDIUM;
-		private VideoFormat videoFormat;
+		private FrameMode videoMode;
 		private ByteBuffer videoBuffer;
-		private DepthFormat depthFormat;
+		private VideoHandler videoHandler;
+
+		private FrameMode depthMode;
 		private ByteBuffer depthBuffer;
+		private DepthHandler depthHandler;
+
 		private final DoubleBuffer accelX = DoubleBuffer.allocate(1);
 		private final DoubleBuffer accelY = DoubleBuffer.allocate(1);
 		private final DoubleBuffer accelZ = DoubleBuffer.allocate(1);
-		private VideoHandler videoHandler;
-		private DepthHandler depthHandler;
+
 		private int index;
 
 		private TiltState rawTiltState;
@@ -170,14 +153,14 @@ public class Freenect implements Library {
 		private final NativeVideoCallback videoCallback = new NativeVideoCallback() {
 			@Override
 			public void callback (Pointer dev, Pointer depth, int timestamp) {
-				videoHandler.onFrameReceived(videoFormat, videoBuffer, timestamp);
+				videoHandler.onFrameReceived(videoMode, videoBuffer, timestamp);
 			}
 		};
 
 		private final NativeDepthCallback depthCallback = new NativeDepthCallback() {
 			@Override
 			public void callback (Pointer dev, Pointer depth, int timestamp) {
-				depthHandler.onFrameReceived(depthFormat, depthBuffer, timestamp);
+				depthHandler.onFrameReceived(depthMode, depthBuffer, timestamp);
 			}
 		};
 
@@ -209,30 +192,45 @@ public class Freenect implements Library {
 
 		@Override
 		public void setDepthFormat (DepthFormat fmt) {
-//			 Native.setProtected(true);
-			DepthFrameMode.DepthFrameModeByValue mode = freenect_find_depth_mode(resolution.getValue(), fmt.intValue());
-			if (mode.valid != 0) {
-				freenect_set_depth_mode(this, mode);
-
-				//freenect_set_depth_format(this, fmt.intValue());
-				depthBuffer = ByteBuffer.allocateDirect(fmt.getFrameSize());
-				freenect_set_depth_buffer(this, depthBuffer);
-				this.depthFormat = fmt;
-			}
+		    setDepthFormat(fmt, Resolution.MEDIUM);
 		}
 
 		@Override
 		public void setVideoFormat (VideoFormat fmt) {
-//			 Native.setProtected(true);
-			VideoFrameMode.VideoFrameModeByValue mode = freenect_find_video_mode(resolution.getValue(), fmt.intValue());
-			if (mode.valid != 0) {
-				freenect_set_video_mode(this, mode);
-				//freenect_set_video_format(this, fmt.intValue());
-				videoBuffer = ByteBuffer.allocateDirect(fmt.getFrameSize());
-				freenect_set_video_buffer(this, videoBuffer);
-				this.videoFormat = fmt;
-			}
+		    setVideoFormat(fmt, Resolution.MEDIUM);
 		}
+
+        @Override
+        public void setDepthFormat (DepthFormat fmt, Resolution res) {
+            FrameMode.ByValue mode = freenect_find_depth_mode(res.intValue(), fmt.intValue());
+            if (mode.isValid()) {
+				freenect_set_depth_mode(this, mode);
+				depthBuffer = ByteBuffer.allocateDirect(mode.getFrameSize());
+				freenect_set_depth_buffer(this, depthBuffer);
+				this.depthMode = mode;
+			}
+        }
+
+        @Override
+        public void setVideoFormat (VideoFormat fmt, Resolution res) {
+            FrameMode.ByValue mode = freenect_find_video_mode(res.intValue(), fmt.intValue());
+			if (mode.isValid()) {
+				freenect_set_video_mode(this, mode);
+				videoBuffer = ByteBuffer.allocateDirect(mode.getFrameSize());
+				freenect_set_video_buffer(this, videoBuffer);
+				this.videoMode = mode;
+			}
+        }
+
+        @Override
+        public FrameMode getDepthMode() {
+            return depthMode;
+        }
+
+        @Override
+        public FrameMode getVideoMode() {
+            return videoMode;
+        }
 
 		@Override
 		public int setLed (LedStatus status) {
@@ -264,11 +262,6 @@ public class Freenect implements Library {
 		@Override
 		public TiltStatus getTiltStatus () {
 			return tiltStatus;
-		}
-
-		@Override
-		public void setResolution (Resolution res) {
-			this.resolution = res;
 		}
 
 		@Override
@@ -379,8 +372,6 @@ public class Freenect implements Library {
 
 	private static native void freenect_set_video_callback (NativeDevice dev, NativeVideoCallback cb);
 
-	//    private static native int freenect_set_depth_format(NativeDevice dev, int i);
-//    private static native int freenect_set_video_format(NativeDevice dev, int i);
 	private static native int freenect_set_depth_buffer (NativeDevice dev, ByteBuffer buf);
 
 	private static native int freenect_set_video_buffer (NativeDevice dev, ByteBuffer buf);
@@ -412,22 +403,22 @@ public class Freenect implements Library {
 
 	private static native int freenect_get_video_mode_count ();
 
-	private static native VideoFrameMode.VideoFrameModeByValue freenect_get_video_mode (int mode_num);
+	private static native FrameMode.ByValue freenect_get_video_mode (int mode_num);
 
-	private static native VideoFrameMode.VideoFrameModeByValue freenect_get_current_video_mode (NativeDevice dev);
+	private static native FrameMode.ByValue freenect_get_current_video_mode (NativeDevice dev);
 
-	private static native VideoFrameMode.VideoFrameModeByValue freenect_find_video_mode (int res, int fmt);
+	private static native FrameMode.ByValue freenect_find_video_mode (int res, int fmt);
 
-	private static native int freenect_set_video_mode (NativeDevice dev, VideoFrameMode.VideoFrameModeByValue mode);
+	private static native int freenect_set_video_mode (NativeDevice dev, FrameMode.ByValue mode);
 
 	private static native int freenect_get_depth_mode_count ();
 
-	private static native DepthFrameMode.DepthFrameModeByValue freenect_get_depth_mode (int mode_num);
+	private static native FrameMode.ByValue freenect_get_depth_mode (int mode_num);
 
-	private static native DepthFrameMode.DepthFrameModeByValue freenect_get_current_depth_mode (NativeDevice dev);
+	private static native FrameMode.ByValue freenect_get_current_depth_mode (NativeDevice dev);
 
-	private static native DepthFrameMode.DepthFrameModeByValue freenect_find_depth_mode (int res, int fmt);
+	private static native FrameMode.ByValue freenect_find_depth_mode (int res, int fmt);
 
-	private static native int freenect_set_depth_mode (NativeDevice dev, DepthFrameMode.DepthFrameModeByValue mode);
+	private static native int freenect_set_depth_mode (NativeDevice dev, FrameMode.ByValue mode);
 
 }

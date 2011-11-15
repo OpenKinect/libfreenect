@@ -28,7 +28,7 @@ set_target_properties(cython_freenect PROPERTIES
   PREFIX ""
   OUTPUT_NAME "freenect"
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-target_link_libraries(cython_freenect freenect_sync)
+target_link_libraries(cython_freenect freenect_sync ${PYTHON_LIBRARIES})
 include_directories(${PYTHON_INCLUDE_PATH} ../c_sync/ ${NUMPY_INCLUDE_PATH})
 
 # Install the extension
