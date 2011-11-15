@@ -30,6 +30,8 @@
 #include <unistd.h>
 
 #include "freenect_internal.h"
+#include "registration.h"
+#include "cameras.h"
 
 #define MAKE_RESERVED(res, fmt) (uint32_t)(((res & 0xff) << 8) | (((fmt & 0xff))))
 #define RESERVED_TO_RESOLUTION(reserved) (freenect_resolution)((reserved >> 8) & 0xff)
@@ -58,13 +60,15 @@ freenect_frame_mode supported_video_modes[video_mode_count] = {
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_YUV_RAW), FREENECT_RESOLUTION_MEDIUM, {FREENECT_VIDEO_YUV_RAW}, 640*480*2, 640, 480, 16, 0, 15, 1 },
 };
 
-#define depth_mode_count 4
+#define depth_mode_count 6
 freenect_frame_mode supported_depth_modes[depth_mode_count] = {
 	// reserved, resolution, format, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate, is_valid
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT}, 640*480*2, 640, 480, 11, 5, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT}, 640*480*2, 640, 480, 10, 6, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT_PACKED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT_PACKED}, 640*480*11/8, 640, 480, 11, 0, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT_PACKED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT_PACKED}, 640*480*10/8, 640, 480, 10, 0, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_REGISTERED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_REGISTERED}, 640*480*2, 640, 480, 16, 0, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_MM}, 640*480*2, 640, 480, 16, 0, 30, 1},
 };
 static const freenect_frame_mode invalid_mode = {0, (freenect_resolution)0, {(freenect_video_format)0}, 0, 0, 0, 0, 0, 0, 0};
 
@@ -380,6 +384,12 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
 			convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
+			break;
+		case FREENECT_DEPTH_REGISTERED:
+			freenect_apply_registration(dev, dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf );
+			break;
+		case FREENECT_DEPTH_MM:
+			freenect_apply_depth_to_mm(dev, dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf );
 			break;
 		case FREENECT_DEPTH_10BIT:
 			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 10, 640*480);
@@ -735,6 +745,7 @@ static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
 	return 0;
 }
 
+// This function is here for completeness.  We don't actually use it for anything right now.
 static uint16_t read_register(freenect_device *dev, uint16_t reg)
 {
 	freenect_context *ctx = dev->parent;
@@ -754,6 +765,166 @@ static uint16_t read_register(freenect_device *dev, uint16_t reg)
 	return reply[1];
 }
 
+static int freenect_fetch_reg_info(freenect_device *dev)
+{
+	freenect_context *ctx = dev->parent;
+	char reply[0x200];
+	uint16_t cmd[5];
+	freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+	cmd[0] = fn_le16(0x40); // ParamID - in this scenario, XN_HOST_PROTOCOL_ALGORITHM_REGISTRATION
+	cmd[1] = fn_le16(0); // Format
+	cmd[2] = fn_le16((uint16_t)mode.resolution); // Resolution
+	cmd[3] = fn_le16((uint16_t)mode.framerate); // FPS
+	cmd[4] = fn_le16(0); // Offset
+
+	int res;
+	res = send_cmd(dev, 0x16, cmd, 10, reply, 118); // OPCODE_ALGORITHM_PARAMS
+	if(res != 118) {
+		FN_ERROR("freenect_fetch_reg_info: send_cmd read %d bytes (expected 118)\n", res);
+		return -1;
+	}
+	freenect_reg_info *reg_info_ptr = (freenect_reg_info*)(&reply[2]);
+	freenect_reg_info *dev_reg_info = &(dev->registration.reg_info);
+	dev_reg_info->ax = fn_le32s(reg_info_ptr->ax);
+	dev_reg_info->bx = fn_le32s(reg_info_ptr->bx);
+	dev_reg_info->cx = fn_le32s(reg_info_ptr->cx);
+	dev_reg_info->dx = fn_le32s(reg_info_ptr->dx);
+	dev_reg_info->ay = fn_le32s(reg_info_ptr->ay);
+	dev_reg_info->by = fn_le32s(reg_info_ptr->by);
+	dev_reg_info->cy = fn_le32s(reg_info_ptr->cy);
+	dev_reg_info->dy = fn_le32s(reg_info_ptr->dy);
+	dev_reg_info->dx_start = fn_le32s(reg_info_ptr->dx_start);
+	dev_reg_info->dy_start = fn_le32s(reg_info_ptr->dy_start);
+	dev_reg_info->dx_beta_start = fn_le32s(reg_info_ptr->dx_beta_start);
+	dev_reg_info->dy_beta_start = fn_le32s(reg_info_ptr->dy_beta_start);
+	dev_reg_info->dx_beta_inc = fn_le32s(reg_info_ptr->dx_beta_inc);
+	dev_reg_info->dy_beta_inc = fn_le32s(reg_info_ptr->dy_beta_inc);
+	dev_reg_info->dxdx_start = fn_le32s(reg_info_ptr->dxdx_start);
+	dev_reg_info->dxdy_start = fn_le32s(reg_info_ptr->dxdy_start);
+	dev_reg_info->dydx_start = fn_le32s(reg_info_ptr->dydx_start);
+	dev_reg_info->dydy_start = fn_le32s(reg_info_ptr->dydy_start);
+	dev_reg_info->dxdxdx_start = fn_le32s(reg_info_ptr->dxdxdx_start);
+	dev_reg_info->dydxdx_start = fn_le32s(reg_info_ptr->dydxdx_start);
+	dev_reg_info->dxdxdy_start = fn_le32s(reg_info_ptr->dxdxdy_start);
+	dev_reg_info->dydxdy_start = fn_le32s(reg_info_ptr->dydxdy_start);
+	dev_reg_info->dydydx_start = fn_le32s(reg_info_ptr->dydydx_start);
+	dev_reg_info->dydydy_start = fn_le32s(reg_info_ptr->dydydy_start);
+	FN_SPEW("ax:                %d\n", dev_reg_info->ax);
+	FN_SPEW("bx:                %d\n", dev_reg_info->bx);
+	FN_SPEW("cx:                %d\n", dev_reg_info->cx);
+	FN_SPEW("dx:                %d\n", dev_reg_info->dx);
+	FN_SPEW("ay:                %d\n", dev_reg_info->ay);
+	FN_SPEW("by:                %d\n", dev_reg_info->by);
+	FN_SPEW("cy:                %d\n", dev_reg_info->cy);
+	FN_SPEW("dy:                %d\n", dev_reg_info->dy);
+	FN_SPEW("dx_start:          %d\n", dev_reg_info->dx_start);
+	FN_SPEW("dy_start:          %d\n", dev_reg_info->dy_start);
+	FN_SPEW("dx_beta_start:     %d\n", dev_reg_info->dx_beta_start);
+	FN_SPEW("dy_beta_start:     %d\n", dev_reg_info->dy_beta_start);
+	FN_SPEW("dx_beta_inc:       %d\n", dev_reg_info->dx_beta_inc);
+	FN_SPEW("dy_beta_inc:       %d\n", dev_reg_info->dy_beta_inc);
+	FN_SPEW("dxdx_start:        %d\n", dev_reg_info->dxdx_start);
+	FN_SPEW("dxdy_start:        %d\n", dev_reg_info->dxdy_start);
+	FN_SPEW("dydx_start:        %d\n", dev_reg_info->dydx_start);
+	FN_SPEW("dydy_start:        %d\n", dev_reg_info->dydy_start);
+	FN_SPEW("dxdxdx_start:      %d\n", dev_reg_info->dxdxdx_start);
+	FN_SPEW("dydxdx_start:      %d\n", dev_reg_info->dydxdx_start);
+	FN_SPEW("dxdxdy_start:      %d\n", dev_reg_info->dxdxdy_start);
+	FN_SPEW("dydxdy_start:      %d\n", dev_reg_info->dydxdy_start);
+	FN_SPEW("dydydx_start:      %d\n", dev_reg_info->dydydx_start);
+	FN_SPEW("dydydy_start:      %d\n", dev_reg_info->dydydy_start);
+	/*
+	// NOTE: Not assigned above
+	FN_SPEW("dx_center:         %d\n", dev_reg_info->dx_center);
+	FN_SPEW("rollout_blank:     %d\n", dev_reg_info->rollout_blank);
+	FN_SPEW("rollout_size:      %d\n", dev_reg_info->rollout_size);
+	FN_SPEW("back_comp1:            %d\n", dev_reg_info->back_comp1);
+	FN_SPEW("back_comp2:            %d\n", dev_reg_info->back_comp2);
+	*/
+	return 0;
+}
+
+static int freenect_fetch_reg_pad_info(freenect_device *dev)
+{
+	freenect_context *ctx = dev->parent;
+	char reply[0x200];
+	uint16_t cmd[5];
+	freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+	cmd[0] = fn_le16(0x41); // ParamID
+	cmd[1] = fn_le16(0); // Format
+	cmd[2] = fn_le16((uint16_t)mode.resolution); // Resolution
+	cmd[3] = fn_le16((uint16_t)mode.framerate); // FPS
+	cmd[4] = fn_le16(0); // Offset
+	int res;
+	res = send_cmd(dev, 0x16, cmd, 10, reply, 8); // OPCODE_ALGORITHM_PARAMS
+	if(res != 8) {
+		FN_ERROR("freenect_fetch_reg_pad_info: send_cmd read %d bytes (expected 8)\n", res);
+		return -1;
+	}
+	freenect_reg_pad_info *pad_info_ptr = (freenect_reg_pad_info*)(&reply[2]);
+	dev->registration.reg_pad_info.start_lines    = fn_le16s(pad_info_ptr->start_lines);
+	dev->registration.reg_pad_info.end_lines      = fn_le16s(pad_info_ptr->end_lines);
+	dev->registration.reg_pad_info.cropping_lines = fn_le16s(pad_info_ptr->cropping_lines);
+	FN_SPEW("start_lines:    %u\n",dev->registration.reg_pad_info.start_lines);
+	FN_SPEW("end_lines:      %u\n",dev->registration.reg_pad_info.end_lines);
+	FN_SPEW("cropping_lines: %u\n",dev->registration.reg_pad_info.cropping_lines);
+	return 0;
+}
+
+static int freenect_fetch_reg_const_shift(freenect_device *dev)
+{
+	freenect_context *ctx = dev->parent;
+	char reply[0x200];
+	uint16_t cmd[5];
+	freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+	cmd[0] = fn_le16(0x00); // ParamID
+	cmd[1] = fn_le16(0); // Format
+	cmd[2] = fn_le16((uint16_t)mode.resolution); // Resolution
+	cmd[3] = fn_le16((uint16_t)mode.framerate); // FPS
+	cmd[4] = fn_le16(0); // Offset
+	int res;
+	res = send_cmd(dev, 0x16, cmd, 10, reply, 4); // OPCODE_ALGORITHM_PARAMS
+	if(res != 4) {
+		FN_ERROR("freenect_fetch_reg_const_shift: send_cmd read %d bytes (expected 8)\n", res);
+		return -1;
+	}
+	uint16_t shift = fn_le16(*((uint16_t*)(reply+2)));
+	dev->registration.const_shift = (double)shift;
+	FN_SPEW("const_shift: %f\n",dev->registration.const_shift);
+	return 0;
+}
+
+static int freenect_fetch_zero_plane_info(freenect_device *dev)
+{
+	freenect_context *ctx = dev->parent;
+
+	char reply[0x200];
+	uint16_t cmd[5] = {0}; // Offset is the only field in this command, and it's 0
+
+	int res;
+	res = send_cmd(dev, 0x04, cmd, 10, reply, 322); //OPCODE_GET_FIXED_PARAMS = 4,
+	if (res != 322) {
+		FN_ERROR("freenect_fetch_zero_plane_info: send_cmd read %d bytes (expected 322)\n", res);
+		return -1;
+	}
+	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
+	FN_SPEW("dcmos_emitter_distance: %f\n", *((float*)(reply+94)));
+	FN_SPEW("dcmos_rcmos_distance:   %f\n", *((float*)(reply+98)));
+	FN_SPEW("reference_distance:     %f\n", *((float*)(reply+102)));
+	FN_SPEW("reference_pixel_size:   %f\n", *((float*)(reply+106)));
+
+	// The values are 32-bit floats in little-endian.  So:
+	dev->registration.zero_plane_info.dcmos_emitter_dist   = *((float*)(&fn_le32(*((uint32_t*)(reply+94)))));
+	dev->registration.zero_plane_info.dcmos_rcmos_dist     = *((float*)(&fn_le32(*((uint32_t*)(reply+98)))));
+	dev->registration.zero_plane_info.reference_distance   = *((float*)(&fn_le32(*((uint32_t*)(reply+102)))));
+	dev->registration.zero_plane_info.reference_pixel_size = *((float*)(&fn_le32(*((uint32_t*)(reply+106)))));
+
+	// FIXME: OpenNI seems to use a hardcoded value of 2.4 instead of 2.3 as reported by Kinect
+	dev->registration.zero_plane_info.dcmos_rcmos_dist = 2.4;
+
+	return 0;
+}
+
 int freenect_start_depth(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
@@ -767,6 +938,9 @@ int freenect_start_depth(freenect_device *dev)
 	dev->depth.variable_length = 0;
 
 	switch (dev->depth_format) {
+		case FREENECT_DEPTH_REGISTERED:
+		case FREENECT_DEPTH_MM:
+			freenect_init_registration(dev);
 		case FREENECT_DEPTH_11BIT:
 			stream_init(ctx, &dev->depth, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_11BIT_PACKED).bytes, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_11BIT).bytes);
 			break;
@@ -791,6 +965,8 @@ int freenect_start_depth(freenect_device *dev)
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
 		case FREENECT_DEPTH_11BIT_PACKED:
+		case FREENECT_DEPTH_REGISTERED:
+		case FREENECT_DEPTH_MM:
 			write_register(dev, 0x12, 0x03);
 			break;
 		case FREENECT_DEPTH_10BIT:
@@ -965,6 +1141,7 @@ int freenect_stop_depth(freenect_device *dev)
 		return -1;
 
 	dev->depth.running = 0;
+	freenect_destroy_registration(&(dev->registration));
 	write_register(dev, 0x06, 0x00); // stop depth stream
 
 	res = fnusb_stop_iso(&dev->usb_cam, &dev->depth_isoc);
@@ -1013,7 +1190,7 @@ int freenect_get_video_mode_count()
 	return video_mode_count;
 }
 
-const freenect_frame_mode freenect_get_video_mode(int mode_num)
+freenect_frame_mode freenect_get_video_mode(int mode_num)
 {
 	if (mode_num >= 0 && mode_num < video_mode_count)
 		return supported_video_modes[mode_num];
@@ -1022,12 +1199,12 @@ const freenect_frame_mode freenect_get_video_mode(int mode_num)
 	return retval;
 }
 
-const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
+freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 {
 	return freenect_find_video_mode(dev->video_resolution, dev->video_format);
 }
 
-const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
+freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
 {
 	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
@@ -1040,7 +1217,8 @@ const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, free
 	return retval;
 }
 
-int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode) {
+int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode)
+{
 	freenect_context *ctx = dev->parent;
 	if (dev->video.running) {
 		FN_ERROR("Tried to set video mode while stream is active\n");
@@ -1064,6 +1242,9 @@ int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode
 	freenect_video_format fmt = (freenect_video_format)RESERVED_TO_FORMAT(mode.reserved);
 	dev->video_format = fmt;
 	dev->video_resolution = res;
+	// Now that we've changed video format and resolution, we need to update
+	// registration tables.
+	freenect_fetch_reg_info(dev);
 	return 0;
 }
 
@@ -1072,7 +1253,7 @@ int freenect_get_depth_mode_count()
 	return depth_mode_count;
 }
 
-const freenect_frame_mode freenect_get_depth_mode(int mode_num)
+freenect_frame_mode freenect_get_depth_mode(int mode_num)
 {
 	if (mode_num >= 0 && mode_num < depth_mode_count)
 		return supported_depth_modes[mode_num];
@@ -1081,12 +1262,12 @@ const freenect_frame_mode freenect_get_depth_mode(int mode_num)
 	return retval;
 }
 
-const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
+freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
 {
 	return freenect_find_depth_mode(dev->depth_resolution, dev->depth_format);
 }
 
-const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
+freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
 {
 	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
@@ -1135,3 +1316,48 @@ int freenect_set_video_buffer(freenect_device *dev, void *buf)
 	return stream_setbuf(dev->parent, &dev->video, buf);
 }
 
+int freenect_camera_init(freenect_device *dev)
+{
+	freenect_context *ctx = dev->parent;
+	int res;
+	res = freenect_fetch_reg_pad_info(dev);
+	if (res < 0) {
+		FN_ERROR("freenect_camera_init(): Failed to fetch registration pad info for device\n");
+		return res;
+	}
+	res = freenect_fetch_zero_plane_info(dev);
+	if (res < 0) {
+		FN_ERROR("freenect_camera_init(): Failed to fetch zero plane info for device\n");
+		return res;
+	}
+	res = freenect_set_video_mode(dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
+	res = freenect_set_depth_mode(dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
+	res = freenect_fetch_reg_const_shift(dev);
+	if (res < 0) {
+		FN_ERROR("freenect_camera_init(): Failed to fetch const shift for device\n");
+		return res;
+	}
+	return 0;
+}
+
+int freenect_camera_teardown(freenect_device *dev)
+{
+	freenect_context *ctx = dev->parent;
+	int res = 0;
+	if (dev->depth.running) {
+		res = freenect_stop_depth(dev);
+		if (res < 0) {
+			FN_ERROR("freenect_camera_teardown(): Failed to stop depth camera\n");
+		}
+		return res;
+	}
+	if (dev->video.running) {
+		res = freenect_stop_video(dev);
+		if (res < 0) {
+			FN_ERROR("freenect_camera_teardown(): Failed to stop video camera\n");
+		}
+		return res;
+	}
+	freenect_destroy_registration(&(dev->registration));
+	return 0;
+}

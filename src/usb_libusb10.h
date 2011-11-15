@@ -27,6 +27,7 @@
 #ifndef USB_LIBUSB10
 #define USB_LIBUSB10
 
+#include "libfreenect.h"
 #include <libusb-1.0/libusb.h>
 
 #if defined(__APPLE__)
@@ -83,10 +84,12 @@ typedef struct {
 } fnusb_isoc_stream;
 
 int fnusb_num_devices(fnusb_ctx *ctx);
+int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_device_attributes** attribute_list);
 
 int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx);
 int fnusb_shutdown(fnusb_ctx *ctx);
 int fnusb_process_events(fnusb_ctx *ctx);
+int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* timeout);
 
 int fnusb_open_subdevices(freenect_device *dev, int index);
 int fnusb_close_subdevices(freenect_device *dev);

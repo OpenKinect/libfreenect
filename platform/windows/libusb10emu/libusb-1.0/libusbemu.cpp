@@ -83,6 +83,8 @@ using namespace libusbemu;
   #define LIBUSB_DEBUG_CMD(cmd)
 #endif//LIBUSBEMU_DEBUG_BUILD
 
+static libusb_context *default_context = NULL;
+
 int libusb_init(libusb_context** context)
 {
 	usb_init();
@@ -97,6 +99,9 @@ int libusb_init(libusb_context** context)
 	// however, it is wise to emulate such context structure to localize and
   // keep track of any resource and/or internal data structures, as well as
   // to be able to clean-up itself at libusb_exit()
+  if (context == NULL)
+    context = &default_context;
+
 	*context = new libusb_context;
 	// 0 on success; LIBUSB_ERROR on failure
 	return(0);
@@ -104,6 +109,9 @@ int libusb_init(libusb_context** context)
 
 void libusb_exit(libusb_context* ctx)
 {
+  if (ctx == NULL)
+    ctx = default_context;
+
   ctx->mutex.Enter();
   // before deleting the context, delete all devices/transfers still in there:
   while (!ctx->devices.empty())
@@ -130,8 +138,21 @@ void libusb_exit(libusb_context* ctx)
 	delete(ctx);
 }
 
+
+void libusb_set_debug(libusb_context *ctx, int level)
+{
+	// Note: libusb-win32 doesn't support context-specific loglevels, so this
+	// sets the loglevel globally.  If this is actually an issue for you, I
+	// will be surprised.
+	usb_set_debug(level);
+	return;
+}
+
 ssize_t libusb_get_device_list(libusb_context* ctx, libusb_device*** list)
 {
+  if (ctx == NULL)
+    ctx = default_context;
+
 	// libusb_device*** list demystified:
 	// libusb_device*** is the C equivalent to libusb_device**& in C++; such declaration
 	// allows the scope of this function libusb_get_device_list() to write on a variable
@@ -243,6 +264,44 @@ void libusb_close(libusb_device_handle*	dev_handle)
   libusbemu_unregister_device(device);
 }
 
+int libusb_get_string_descriptor(libusb_device_handle *dev_handle, uint8_t desc_index, uint16_t langid, unsigned char *data, int length)
+{
+  RAIIMutex lock (dev_handle->dev->ctx->mutex);
+  int bytes = usb_get_string(dev_handle->handle, (int)desc_index, (int)langid, (char*)data, (size_t)length);
+  if (bytes < 0) {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+  }
+  return bytes;
+}
+int libusb_get_string_descriptor_ascii(libusb_device_handle *dev_handle, uint8_t desc_index, unsigned char *data, int length)
+{
+  RAIIMutex lock (dev_handle->dev->ctx->mutex);
+  int bytes = usb_get_string_simple(dev_handle->handle, (int)desc_index, (char*)data, (size_t)length);
+  if (bytes < 0) {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+  }
+  return bytes;
+}
+
+int libusb_set_configuration(libusb_device_handle *dev, int configuration)
+{
+  RAIIMutex lock (dev->dev->ctx->mutex);
+  int ret = usb_set_configuration(dev->handle, configuration);
+  if (0 != ret)
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+    return ret;
+  }
+  // returns:
+  // 0 on success
+  // LIBUSB_ERROR_NOT_FOUND if the requested configuration does not exist
+  // LIBUSB_ERROR_BUSY if interfaces are currently claimed
+  // LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
+  // another LIBUSB_ERROR code on other failure
+  //
+  return 0;
+}
+
 int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
 {
   RAIIMutex lock (dev->dev->ctx->mutex);
@@ -289,6 +348,38 @@ int libusb_release_interface(libusb_device_handle* dev, int interface_number)
 	return(0);
 }
 
+libusb_device_handle *libusb_open_device_with_vid_pid(libusb_context *ctx, uint16_t vendor_id, uint16_t product_id)
+{
+	int num_devices;
+	libusb_device** list;
+	libusb_device_handle *dev_handle = NULL;
+
+	if (ctx == NULL)
+		ctx = default_context;
+
+	num_devices = libusb_get_device_list(ctx, &list);
+	if (num_devices < 0)
+		return NULL;
+
+	unsigned int i = 0;
+	while (list[i] != NULL) {
+		struct libusb_device_descriptor desc;
+		int ret = libusb_get_device_descriptor(list[i], &desc);
+		if (ret < 0)
+			break;
+
+		if (desc.idVendor == vendor_id && desc.idProduct == product_id) {
+			ret = libusb_open(list[i], &dev_handle);
+			if (ret)
+				break;
+		}
+		i++;
+	}
+
+	libusb_free_device_list(list, 1);
+	return dev_handle;
+}
+
 int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, unsigned char* data, uint16_t wLength, unsigned int timeout)
 {
 	// in libusb-1.0 a timeout of zero it means 'wait indefinitely'; in libusb-0.1, a timeout of zero means 'return immediatelly'!
@@ -305,6 +396,31 @@ int libusb_control_transfer(libusb_device_handle* dev_handle, uint8_t bmRequestT
 	// LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
 	// another LIBUSB_ERROR code on other failures
 	return(bytes_transferred);
+}
+
+int libusb_bulk_transfer(libusb_device_handle* dev_handle, uint8_t endpoint, uint8_t *data, int length, int *transferred, unsigned int timeout)
+{
+       // in libusb-1.0 a timeout of zero it means 'wait indefinitely'; in libusb-0.1, a timeout of zero means 'return immediately'!
+       timeout = (0 == timeout) ? 60000 : timeout;   // wait 60000ms (60s = 1min) if the transfer is supposed to wait indefinitely...
+       int bytes_transferred;
+       if (endpoint & LIBUSB_ENDPOINT_IN) { // Device to Host
+               bytes_transferred = usb_bulk_read(dev_handle->handle, endpoint, (char*)data, length, timeout);
+       } else { // Host to Device
+               bytes_transferred = usb_bulk_write(dev_handle->handle, endpoint, (char*)data, length, timeout);
+       }
+       if (bytes_transferred < 0) {
+               // 0 on success (and populates transferred)
+               // LIBUSB_ERROR_TIMEOUT if the transfer timed out (and populates transferred)
+               // LIBUSB_ERROR_PIPE if the endpoint halted
+               // LIBUSB_ERROR_OVERFLOW if the device offered more data, see Packets and overflows
+               // LIBUSB_ERROR_NO_DEVICE if the device has been disconnected
+               // another LIBUSB_ERROR code on other failures
+               *transferred = 0;
+               LIBUSBEMU_ERROR_LIBUSBWIN32();
+               return(LIBUSB_ERROR_OTHER);
+       }
+       *transferred = bytes_transferred;
+       return 0;
 }
 
 // FROM HERE ON CODE BECOMES QUITE MESSY: ASYNCHRONOUS TRANSFERS MANAGEMENT
@@ -471,6 +587,9 @@ int libusb_cancel_transfer(struct libusb_transfer* transfer)
 
 int libusbemu_handle_isochronous(libusb_context* ctx, const unsigned int milliseconds)
 {
+  if (ctx == NULL)
+    ctx = default_context;
+
   //QuickThread::Myself().RaisePriority();
   RAIIMutex lock (ctx->mutDeliveryPool);
   int index = ctx->hWantToDeliverPool.WaitAnyUntilTimeout(milliseconds);
@@ -491,12 +610,34 @@ int libusbemu_handle_isochronous(libusb_context* ctx, const unsigned int millise
 
 int libusb_handle_events(libusb_context* ctx)
 {
+  if (ctx == NULL)
+    ctx = default_context;
+
   if (failguard::Abort())
     return(LIBUSB_ERROR_INTERRUPTED);
 
   RAIIMutex lock (ctx->mutex);
 
   libusbemu_handle_isochronous(ctx, 60000);
+
+  // 0 on success, or a LIBUSB_ERROR code on failure
+  return(0);
+}
+
+int libusb_handle_events_timeout(libusb_context* ctx, struct timeval* timeout)
+{
+  if (ctx == NULL)
+    ctx = default_context;
+
+  if (failguard::Abort())
+    return(LIBUSB_ERROR_INTERRUPTED);
+
+  RAIIMutex lock (ctx->mutex);
+
+  if (timeout == NULL)
+    libusbemu_handle_isochronous(ctx, 0);
+  else
+    libusbemu_handle_isochronous(ctx, (timeout->tv_sec * 1000) + (timeout->tv_usec / 1000));
 
   // 0 on success, or a LIBUSB_ERROR code on failure
   return(0);
@@ -695,6 +836,9 @@ int ReapTransfer(transfer_wrapper* wrapper, unsigned int timeout, libusb_device:
     // (a) the timeout passed to usb_reap_async_nocancel() expired;
     // (b) the transfer was cancelled via usb_cancel_async();
     // (c) some fatal error triggered.
+#undef EIO
+#undef EINVAL
+#undef ETIMEOUT
     enum EReapResult { EIO = -5, EINVAL = -22, ETIMEOUT = -116 };
     switch(read)
     {

@@ -98,6 +98,10 @@ SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 if(CMAKE_C_FLAGS STREQUAL "")
   set(CMAKE_C_FLAGS "-O2")
 endif()
+SET(CMAKE_C_FLAGS_DEBUG "-g -DDEBUG=1")
+SET(CMAKE_C_FLAGS_RELEASE "-O2")
+SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
+
 add_definitions(-Wall)
 
 # Pretty much everyone is going to need the main includes
@@ -182,6 +186,7 @@ IF ( BUILD_CPACK )
     INSTALL(FILES "include/libfreenect-audio.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   endif()
   INSTALL(FILES "include/libfreenect.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+  INSTALL(FILES "include/libfreenect-registration.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   INSTALL(FILES "APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "README.asciidoc" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")

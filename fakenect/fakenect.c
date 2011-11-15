@@ -264,7 +264,7 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
         return 0;
 }
 
-const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt) {
+freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt) {
     assert(FREENECT_RESOLUTION_MEDIUM == res);
     assert(FREENECT_VIDEO_RGB == fmt);
     // NOTE: This will leave uninitialized values if new fields are added.
@@ -273,7 +273,7 @@ const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, free
     return out;
 }
 
-const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt) {
+freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt) {
     assert(FREENECT_RESOLUTION_MEDIUM == res);
     assert(FREENECT_DEPTH_11BIT == fmt);
     // NOTE: This will leave uninitialized values if new fields are added.

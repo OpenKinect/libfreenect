@@ -22,25 +22,33 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
- package org.openkinect.freenect;
+package org.openkinect.freenect;
 
-public interface Device {
-    double[] getAccel();
-    int setLed(LedStatus status);
-    void refreshTiltState();
-    double getTiltAngle();
-    int setTiltAngle(double angle);
-    TiltStatus getTiltStatus();
-    void setDepthFormat(DepthFormat fmt);
-    void setVideoFormat(VideoFormat fmt);
-    void setDepthFormat(DepthFormat fmt, Resolution res);
-    void setVideoFormat(VideoFormat fmt, Resolution res);
-    FrameMode getDepthMode();
-    FrameMode getVideoMode();
-    int startDepth(DepthHandler handler);
-    int startVideo(VideoHandler handler);
-    int stopDepth();
-    int stopVideo();
-    void close();
-    public abstract int getDeviceIndex();
+import java.util.HashMap;
+import java.util.Map;
+
+public enum Resolution {
+    LOW(0),
+    MEDIUM(1),
+    HIGH(2);
+
+    private final int value;
+    private static final Map<Integer, Resolution> MAP = new HashMap<Integer, Resolution>(3);
+    static {
+        for(Resolution v : Resolution.values()) {
+            MAP.put(v.intValue(), v);
+        }
+    }
+
+    private Resolution(int value) {
+        this.value = value;
+    }
+
+    public int intValue() {
+        return value;
+    }
+
+    public static Resolution fromInt(int value) {
+      return MAP.get(value);
+    }
 }

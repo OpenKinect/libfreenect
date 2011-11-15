@@ -30,6 +30,7 @@
 #include <stdint.h>
 
 #include "libfreenect.h"
+#include "libfreenect-registration.h"
 
 #ifdef BUILD_AUDIO
 #include "libfreenect-audio.h"
@@ -85,9 +86,21 @@ static inline uint32_t fn_le32(uint32_t d)
 {
 	return (d<<24) | ((d<<8)&0xFF0000) | ((d>>8)&0xFF00) | (d>>24);
 }
+static inline int16_t fn_le16s(int16_t s)
+{
+	// reinterpret cast to unsigned, use the normal fn_le16, and then reinterpret cast back
+	return *((int16_t*)(&fn_le16(*((uint16_t*)(&s)))));
+}
+static inline int32_t fn_le32s(int32_t s)
+{
+	// reinterpret cast to unsigned, use the normal fn_le32, and then reinterpret cast back
+	return *((int32_t*)(&fn_le32(*((uint32_t*)(&s)))));
+}
 #else
 #define fn_le16(x) (x)
 #define fn_le32(x) (x)
+#define fn_le16s(x) (x)
+#define fn_le32s(x) (x)
 #endif
 
 #define DEPTH_PKTSIZE 1760
@@ -188,6 +201,9 @@ struct _freenect_device {
 
 	packet_stream depth;
 	packet_stream video;
+
+	// Registration
+	freenect_registration registration;
 
 #ifdef BUILD_AUDIO
 	// Audio

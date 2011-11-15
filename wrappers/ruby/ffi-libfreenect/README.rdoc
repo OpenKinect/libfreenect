@@ -51,8 +51,8 @@ FFI-based Ruby wrapper for the OpenKinect libfreenect library.
     #
     # The example below shows how to write a single video frame to a PPM file.
 
-    dev.set_depth_format(Freenect::DEPTH_11BIT)
-    dev.set_video_format(Freenect::VIDEO_RGB)
+    dev.depth_mode = Freenect.depth_mode(:medium, :depth_11bit)
+	dev.video_mode = Freenect.video_mode(:medium, :rgb)
     dev.start_depth()
     dev.start_video()
 
@@ -64,9 +64,9 @@ FFI-based Ruby wrapper for the OpenKinect libfreenect library.
         fname = "%u.ppm" % timestamp
         STDERR.puts "Writing #{fname}"
         File.open(fname, "w") do |f|
-          f.puts("P6 %d %d 255\n" % [ Freenect::FRAME_W, Freenect::FRAME_H ] )
-          f.write(video.read_string_length(Freenect::RGB_SIZE))
-        end
+          f.puts("P6 %d %d 255\n" % [ dev.video_mode.width, dev.video_mode.height ] )
+		  f.write(video.read_string_length(dev.video_mode.bytes))
+		end
         $snapshot_finished = true
       end
     end

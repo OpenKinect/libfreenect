@@ -8,10 +8,10 @@ set(CMAKE_C_FLAGS "-Wall")
 
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
 IF(WIN32)
-  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c ../platform/windows/libusb10emu/libusb-1.0/libusbemu.cpp ../platform/windows/libusb10emu/libusb-1.0/failguard.cpp)
+  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c registration.c ../platform/windows/libusb10emu/libusb-1.0/libusbemu.cpp ../platform/windows/libusb10emu/libusb-1.0/failguard.cpp)
   set_source_files_properties(${SRC} PROPERTIES LANGUAGE CXX)
 ELSE(WIN32)
-  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c)
+  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c registration.c)
 ENDIF(WIN32)
 
 IF(BUILD_AUDIO)
@@ -26,7 +26,7 @@ IF(BUILD_AUDIO)
     add_custom_target(firmware ALL
         COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py" "../audios.bin"
         DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py")
-    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share")
+    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/libfreenect")
   ENDIF()
 ENDIF()
 
@@ -49,7 +49,7 @@ target_link_libraries (freenect ${LIBUSB_1_LIBRARIES})
 target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
 
 # Install the header files
-install (FILES "../include/libfreenect.h"
+install (FILES "../include/libfreenect.h" "../include/libfreenect-registration.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 if(BUILD_AUDIO)
   install (FILES "../include/libfreenect-audio.h"

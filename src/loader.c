@@ -96,7 +96,7 @@ static int check_version_string(fnusb_dev* dev) {
 	// Send "get version string" command
 	res = fnusb_bulk(dev, 1, (unsigned char*)&bootcmd, sizeof(bootcmd), &transferred);
 	if(res != 0 || transferred != sizeof(bootcmd)) {
-		FN_ERROR("Error: res: %d\ttransferred: %d (expected %d)\n",res, transferred, sizeof(bootcmd));
+		FN_ERROR("Error: res: %d\ttransferred: %d (expected %d)\n",res, transferred, (int)sizeof(bootcmd));
 		return -1;
 	}
 

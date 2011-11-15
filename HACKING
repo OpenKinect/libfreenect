@@ -57,18 +57,18 @@ the body.
 
 Functions should have the opening brace on the next line, like this:
 
-void foo(int a_thing, int something_else)
-{
-	...
-}
+	void foo(int a_thing, int something_else)
+	{
+		...
+	}
 
 No-args functions should be (void), and function arguments should be separated
 with a space after the comma, like this:
 
-void baz(void)
-{
-	foo(bluh, blah);
-}
+	void baz(void)
+	{
+		foo(bluh, blah);
+	}
 
 Try to avoid having excessively long function names (abbreviating is fine) and
 don't make multiple functions that do essentially the same thing (and certainly
@@ -78,7 +78,25 @@ In general, for data obtained with the Kinect, we'll provide a raw and a
 "cooked" variant, where it makes sense, but we don't need to support every
 "cooked" value convention under the sun.
 
-== WHITESPACE ===
+=== WHITESPACE ===
 
 Avoid trailing whitespace. No lines should end in a tab or a space. Keep a
 newline (blank line) at the end of each file.
+
+=== DEBUG BUILD ===
+
+In order to build the binaries with debug symbols the following commands
+can be used:
+
+	$ mkdir build
+	$ cd build
+	$ cmake ../ -DCMAKE_BUILD_TYPE=debug
+	$ make
+
+If you want to build in release mode (with optimizations) but still have debug
+symbols, try RelWithDebInfo:
+
+	$ mkdir build
+	$ cd build
+	$ cmake ../ -DCMAKE_BUILD_TYPE=RelWithDebInfo
+	$ make
