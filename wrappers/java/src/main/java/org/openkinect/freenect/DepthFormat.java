@@ -24,33 +24,34 @@
  */
 package org.openkinect.freenect;
 
+import java.util.HashMap;
+import java.util.Map;
 
 public enum DepthFormat {
-    D11BIT(0, Freenect.FREENECT_FRAME_W, Freenect.FREENECT_FRAME_H, Freenect.FREENECT_DEPTH_11BIT_SIZE),
-    D10BIT(1, Freenect.FREENECT_FRAME_W, Freenect.FREENECT_FRAME_H, Freenect.FREENECT_DEPTH_10BIT_SIZE),
-    D11BIT_PACKED(2, Freenect.FREENECT_FRAME_W, Freenect.FREENECT_FRAME_H, Freenect.FREENECT_DEPTH_11BIT_PACKED_SIZE),
-    D10BIT_PACKED(3, Freenect.FREENECT_FRAME_W, Freenect.FREENECT_FRAME_H, Freenect.FREENECT_DEPTH_10BIT_PACKED_SIZE);
-    private int value;
-    private int frameSize;
-    private int width;
-    private int height;
+    D11BIT(0),
+    D10BIT(1),
+    D11BIT_PACKED(2),
+    D10BIT_PACKED(3),
+    REGISTERED(4),
+    MM(5);
 
-    private DepthFormat(int value, int width, int height, int frameSize) {
-        this.value = value;
-        this.width = width;
-        this.height = height;
-        this.frameSize = frameSize;
+    private final int value;
+    private static final Map<Integer, DepthFormat> MAP = new HashMap<Integer, DepthFormat>(6);
+    static {
+        for(DepthFormat v : DepthFormat.values()) {
+            MAP.put(v.intValue(), v);
+        }
     }
+
+    private DepthFormat(int value) {
+        this.value = value;
+    }
+
     public int intValue() {
         return value;
     }
-    public int getWidth() {
-        return width;
-    }
-    public int getHeight() {
-        return height;
-    }
-    public int getFrameSize() {
-        return frameSize;
+
+    public static DepthFormat fromInt(int value) {
+        return MAP.get(value);
     }
 }
