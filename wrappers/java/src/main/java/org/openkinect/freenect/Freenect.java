@@ -28,6 +28,7 @@ import com.sun.jna.*;
 import com.sun.jna.ptr.PointerByReference;
 
 import java.io.IOException;
+import java.nio.ByteOrder;
 import java.nio.ByteBuffer;
 import java.nio.DoubleBuffer;
 
@@ -206,6 +207,7 @@ public class Freenect implements Library {
             if (mode.isValid()) {
 				freenect_set_depth_mode(this, mode);
 				depthBuffer = ByteBuffer.allocateDirect(mode.getFrameSize());
+				depthBuffer.order(ByteOrder.nativeOrder());
 				freenect_set_depth_buffer(this, depthBuffer);
 				this.depthMode = mode;
 			}
@@ -217,6 +219,7 @@ public class Freenect implements Library {
 			if (mode.isValid()) {
 				freenect_set_video_mode(this, mode);
 				videoBuffer = ByteBuffer.allocateDirect(mode.getFrameSize());
+				videoBuffer.order(ByteOrder.nativeOrder());
 				freenect_set_video_buffer(this, videoBuffer);
 				this.videoMode = mode;
 			}
