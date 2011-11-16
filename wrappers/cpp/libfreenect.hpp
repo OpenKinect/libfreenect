@@ -61,7 +61,9 @@ namespace Freenect {
 
 	class FreenectDevice : Noncopyable {
 	  public:
-		FreenectDevice(freenect_context *_ctx, int _index) {
+		FreenectDevice(freenect_context *_ctx, int _index)
+			: m_video_resolution(FREENECT_RESOLUTION_MEDIUM), m_depth_resolution(FREENECT_RESOLUTION_MEDIUM)
+		{
 			if(freenect_open_device(_ctx, &m_dev, _index) < 0) throw std::runtime_error("Cannot open Kinect");
 			freenect_set_user(m_dev, this);
 			freenect_set_video_mode(m_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
@@ -96,31 +98,39 @@ namespace Freenect {
 		FreenectTiltState getState() const {
 			return FreenectTiltState(freenect_get_tilt_state(m_dev));
 		}
-		void setVideoFormat(freenect_video_format requested_format) {
-			if (requested_format != m_video_format) {
+		void setVideoFormat(freenect_video_format requested_format, freenect_resolution requested_resolution = FREENECT_RESOLUTION_MEDIUM) {
+			if (requested_format != m_video_format || requested_resolution != m_video_resolution) {
 				freenect_stop_video(m_dev);
-				freenect_frame_mode mode = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, requested_format);
+				freenect_frame_mode mode = freenect_find_video_mode(requested_resolution, requested_format);
 				if (!mode.is_valid) throw std::runtime_error("Cannot set video format: invalid mode");
 				if (freenect_set_video_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set video format");
 				freenect_start_video(m_dev);
 				m_video_format = requested_format;
+				m_video_resolution = requested_resolution;
 			}
 		}
 		freenect_video_format getVideoFormat() {
 			return m_video_format;
 		}
-		void setDepthFormat(freenect_depth_format requested_format) {
-			if (requested_format != m_depth_format) {
+		freenect_resolution getVideoResolution() {
+			return m_video_resolution;
+		}
+		void setDepthFormat(freenect_depth_format requested_format, freenect_resolution requested_resolution = FREENECT_RESOLUTION_MEDIUM) {
+			if (requested_format != m_depth_format || requested_resolution != m_depth_resolution) {
 				freenect_stop_depth(m_dev);
-				freenect_frame_mode mode = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, requested_format);
+				freenect_frame_mode mode = freenect_find_depth_mode(requested_resolution, requested_format);
 				if (!mode.is_valid) throw std::runtime_error("Cannot set depth format: invalid mode");
 				if (freenect_set_depth_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set depth format");
 				freenect_start_depth(m_dev);
 				m_depth_format = requested_format;
+				m_depth_resolution = requested_resolution;
 			}
 		}
 		freenect_depth_format getDepthFormat() {
 			return m_depth_format;
+		}
+		freenect_resolution getDepthResolution() {
+			return m_depth_resolution;
 		}
 		// Do not call directly even in child
 		virtual void VideoCallback(void *video, uint32_t timestamp) = 0;
@@ -136,7 +146,7 @@ namespace Freenect {
 				case FREENECT_VIDEO_IR_10BIT_PACKED:
 				case FREENECT_VIDEO_YUV_RGB:
 				case FREENECT_VIDEO_YUV_RAW:
-					return freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, m_video_format).bytes;
+					return freenect_find_video_mode(m_video_resolution, m_video_format).bytes;
 				default:
 					return 0;
 			}
@@ -148,6 +158,8 @@ namespace Freenect {
 		freenect_device *m_dev;
 		freenect_video_format m_video_format;
 		freenect_depth_format m_depth_format;
+		freenect_resolution m_video_resolution;
+		freenect_resolution m_depth_resolution;
 		static void freenect_depth_callback(freenect_device *dev, void *depth, uint32_t timestamp) {
 			FreenectDevice* device = static_cast<FreenectDevice*>(freenect_get_user(dev));
 			device->DepthCallback(depth, timestamp);
