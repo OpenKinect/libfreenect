@@ -421,9 +421,9 @@ static void iso_callback(struct libusb_transfer *xfer)
 {
 	int i;
 	fnusb_isoc_stream *strm = (fnusb_isoc_stream*)xfer->user_data;
+	freenect_context *ctx = strm->parent->parent->parent;
 
 	if (strm->dead) {
-		freenect_context *ctx = strm->parent->parent->parent;
 		strm->dead_xfers++;
 		FN_SPEW("EP %02x transfer complete, %d left\n", xfer->endpoint, strm->num_xfers - strm->dead_xfers);
 		return;
@@ -437,7 +437,15 @@ static void iso_callback(struct libusb_transfer *xfer)
 				strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
 				buf += strm->len;
 			}
-			libusb_submit_transfer(xfer);
+			int res;
+			res = libusb_submit_transfer(xfer);
+			if (res != 0) {
+				FN_ERROR("iso_callback(): failed to resubmit transfer after successful completion: %d\n", res);
+				strm->dead_xfers++;
+				if (res == LIBUSB_TRANSFER_NO_DEVICE) {
+					fnusb_stop_iso(strm->parent, strm);
+				}
+			}
 			break;
 		}
 		case LIBUSB_TRANSFER_NO_DEVICE:
@@ -445,7 +453,6 @@ static void iso_callback(struct libusb_transfer *xfer)
 			// We lost the device we were talking to.  This is a large problem,
 			// and one that we should eventually come up with a way to
 			// properly propagate up to the caller.
-			freenect_context *ctx = strm->parent->parent->parent;
 			FN_ERROR("USB device disappeared, cancelling stream :(\n");
 			strm->dead_xfers++;
 			fnusb_stop_iso(strm->parent, strm);
@@ -453,7 +460,6 @@ static void iso_callback(struct libusb_transfer *xfer)
 		}
 		case LIBUSB_TRANSFER_CANCELLED:
 		{
-			freenect_context *ctx = strm->parent->parent->parent;
 			FN_SPEW("EP %02x transfer cancelled\n", xfer->endpoint);
 			strm->dead_xfers++;
 			break;
@@ -464,9 +470,16 @@ static void iso_callback(struct libusb_transfer *xfer)
 			// on OSX tends to hit random errors a lot.  If we don't resubmit
 			// the transfers, eventually all of them die and then we don't get
 			// any more data from the Kinect.
-			freenect_context *ctx = strm->parent->parent->parent;
 			FN_WARNING("Isochronous transfer error: %d\n", xfer->status);
-			libusb_submit_transfer(xfer);
+			int res;
+			res = libusb_submit_transfer(xfer);
+			if (res != 0) {
+				FN_ERROR("Isochronous transfer resubmission failed after unknown error: %d\n", res);
+				strm->dead_xfers++;
+				if (res == LIBUSB_TRANSFER_NO_DEVICE) {
+					fnusb_stop_iso(strm->parent, strm);
+				}
+			}
 			break;
 		}
 	}
