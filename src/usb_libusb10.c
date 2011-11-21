@@ -442,8 +442,8 @@ static void iso_callback(struct libusb_transfer *xfer)
 			if (res != 0) {
 				FN_ERROR("iso_callback(): failed to resubmit transfer after successful completion: %d\n", res);
 				strm->dead_xfers++;
-				if (res == LIBUSB_TRANSFER_NO_DEVICE) {
-					fnusb_stop_iso(strm->parent, strm);
+				if (res == LIBUSB_ERROR_NO_DEVICE) {
+					strm->parent->device_dead = 1;
 				}
 			}
 			break;
@@ -453,14 +453,28 @@ static void iso_callback(struct libusb_transfer *xfer)
 			// We lost the device we were talking to.  This is a large problem,
 			// and one that we should eventually come up with a way to
 			// properly propagate up to the caller.
-			FN_ERROR("USB device disappeared, cancelling stream :(\n");
+			if(!strm->parent->device_dead) {
+				FN_ERROR("USB device disappeared, cancelling stream %02x :(\n", xfer->endpoint);
+			}
 			strm->dead_xfers++;
-			fnusb_stop_iso(strm->parent, strm);
+			strm->parent->device_dead = 1;
 			break;
 		}
 		case LIBUSB_TRANSFER_CANCELLED:
 		{
-			FN_SPEW("EP %02x transfer cancelled\n", xfer->endpoint);
+			if(strm->dead) {
+				FN_SPEW("EP %02x transfer cancelled\n", xfer->endpoint);
+			} else {
+				// This seems to be a libusb bug on OSX - instead of completing
+				// the transfer with LIBUSB_TRANSFER_NO_DEVICE, the transfers
+				// simply come back cancelled by the OS.  We can detect this,
+				// though - the stream should be marked dead if we're
+				// intentionally cancelling transfers.
+				if(!strm->parent->device_dead) {
+					FN_ERROR("Got cancelled transfer, but we didn't request it - device disconnected?\n");
+				}
+				strm->parent->device_dead = 1;
+			}
 			strm->dead_xfers++;
 			break;
 		}
@@ -476,8 +490,8 @@ static void iso_callback(struct libusb_transfer *xfer)
 			if (res != 0) {
 				FN_ERROR("Isochronous transfer resubmission failed after unknown error: %d\n", res);
 				strm->dead_xfers++;
-				if (res == LIBUSB_TRANSFER_NO_DEVICE) {
-					fnusb_stop_iso(strm->parent, strm);
+				if (res == LIBUSB_ERROR_NO_DEVICE) {
+					strm->parent->device_dead = 1;
 				}
 			}
 			break;
@@ -528,22 +542,29 @@ int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm)
 	freenect_context *ctx = dev->parent->parent;
 	int i;
 
+	FN_FLOOD("fnusb_stop_iso() called\n");
+
 	strm->dead = 1;
 
 	for (i=0; i<strm->num_xfers; i++)
 		libusb_cancel_transfer(strm->xfers[i]);
+	FN_FLOOD("fnusb_stop_iso() cancelled all transfers\n");
 
 	while (strm->dead_xfers < strm->num_xfers) {
+		FN_FLOOD("fnusb_stop_iso() dead = %d\tnum = %d\n", strm->dead_xfers, strm->num_xfers);
 		libusb_handle_events(ctx->usb.ctx);
 	}
 
 	for (i=0; i<strm->num_xfers; i++)
 		libusb_free_transfer(strm->xfers[i]);
+	FN_FLOOD("fnusb_stop_iso() freed all transfers\n");
 
 	free(strm->buffer);
 	free(strm->xfers);
 
+	FN_FLOOD("fnusb_stop_iso() freed buffers and stream\n");
 	memset(strm, 0, sizeof(*strm));
+	FN_FLOOD("fnusb_stop_iso() done\n");
 	return 0;
 }
 
