@@ -39,6 +39,8 @@
 #if defined(_MSC_VER)
   typedef unsigned __int8   uint8_t;
   typedef unsigned __int16  uint16_t;
+  // We need struct timeval.
+  #include <winsock.h>
 #else
 #include <stdint.h>
 #endif
