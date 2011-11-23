@@ -42,7 +42,8 @@
   // We need struct timeval.
   #include <winsock.h>
 #else
-#include <stdint.h>
+  #include <stdint.h>
+  #include <sys/time.h>
 #endif
 
 #define LIBUSBEMU 1
