@@ -276,7 +276,6 @@ FREENECTAPI int freenect_list_device_attributes(freenect_context *ctx, struct fr
 /**
  * Free the linked list produced by freenect_list_device_attributes().
  *
- * @param ctx Context from which the list was allocated
  * @param attribute_list Linked list of attributes to free.
  */
 FREENECTAPI void freenect_free_device_attributes(struct freenect_device_attributes* attribute_list);
@@ -525,7 +524,7 @@ FREENECTAPI int freenect_get_video_mode_count();
  * Get the frame descriptor of the nth supported video mode for the
  * video camera.
  *
- * @param n Which of the supported modes to return information about
+ * @param mode_num Which of the supported modes to return information about
  *
  * @return A freenect_frame_mode describing the nth video mode
  */
@@ -577,7 +576,7 @@ FREENECTAPI int freenect_get_depth_mode_count();
  * Get the frame descriptor of the nth supported depth mode for the
  * depth camera.
  *
- * @param n Which of the supported modes to return information about
+ * @param mode_num Which of the supported modes to return information about
  *
  * @return A freenect_frame_mode describing the nth depth mode
  */
