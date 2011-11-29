@@ -165,22 +165,41 @@ DEVICE_MOTOR = FREENECT_DEVICE_MOTOR
 DEVICE_CAMERA = FREENECT_DEVICE_CAMERA
 DEVICE_AUDIO = FREENECT_DEVICE_AUDIO
 
+cdef inline str _format_ptr(void *ptr):
+    if sizeof(void *) == 4:
+        return "0x%08x" % <Py_ssize_t>ptr
+    elif sizeof(void *) == 8:
+        return "0x%016x" % <Py_ssize_t>ptr
+    else:
+        raise TypeError("What kind of system are you using?!")
 
 cdef class CtxPtr:
     cdef freenect_context* _ptr
+    def __init__(self):
+        # Safety: do not allow Python to create instances as they would be NULL
+        raise TypeError("Cannot create instances of CtxPtr from Python")
+
     def __repr__(self):
-        return "<Ctx Pointer>"
+        return "<Ctx Pointer %s>" % _format_ptr(self._ptr)
 
 cdef class DevPtr:
     cdef freenect_device* _ptr
     cdef CtxPtr ctx
+    def __init__(self):
+        # Safety: do not allow Python to create instances as they would be NULL
+        raise TypeError("Cannot create instances of DevPtr from Python")
+
     def __repr__(self):
-        return "<Dev Pointer>"
+        return "<Dev Pointer %s>" % _format_ptr(self._ptr)
 
 cdef class StatePtr:
     cdef freenect_raw_tilt_state* _ptr
+    def __init__(self):
+        # Safety: do not allow Python to create instances as they would be NULL
+        raise TypeError("Cannot create instances of StatePtr from Python")
+
     def __repr__(self):
-        return "<State Pointer>"
+        return "<State Pointer %s>" % _format_ptr(self._ptr)
 
     def _get_accelx(self):
         return int(self._ptr.accelerometer_x)
@@ -244,8 +263,7 @@ def update_tilt_state(DevPtr dev):
 
 def get_tilt_state(DevPtr dev):
     cdef freenect_raw_tilt_state* state = freenect_get_tilt_state(dev._ptr)
-    cdef StatePtr state_out
-    state_out = StatePtr()
+    cdef StatePtr state_out = StatePtr.__new__(StatePtr)
     state_out._ptr = state
     return state_out
 
@@ -283,8 +301,7 @@ cpdef init():
     # Also, we don't support audio in the python wrapper yet, so no sense claiming
     # the device.
     freenect_select_subdevices(ctx, <freenect_device_flags> (FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA))
-    cdef CtxPtr ctx_out
-    ctx_out = CtxPtr()
+    cdef CtxPtr ctx_out = CtxPtr.__new__(CtxPtr)
     ctx_out._ptr = ctx
     return ctx_out
 
@@ -292,8 +309,7 @@ cpdef open_device(CtxPtr ctx, int index):
     cdef freenect_device* dev
     if freenect_open_device(ctx._ptr, &dev, index) < 0:
         return
-    cdef DevPtr dev_out
-    dev_out = DevPtr()
+    cdef DevPtr dev_out = DevPtr.__new__(DevPtr)
     dev_out._ptr = dev
     dev_out.ctx = ctx
     return dev_out
@@ -302,16 +318,14 @@ _depth_cb, _video_cb = None, None
 
 cdef void depth_cb(freenect_device *dev, void *data, uint32_t timestamp) with gil:
     nbytes = 614400  # 480 * 640 * 2
-    cdef DevPtr dev_out
-    dev_out = DevPtr()
+    cdef DevPtr dev_out = DevPtr.__new__(DevPtr)
     dev_out._ptr = dev
     if _depth_cb:
         _depth_cb(*_depth_cb_np(dev_out, (<char*>data)[:nbytes], timestamp))
 
 cdef void video_cb(freenect_device *dev, void *data, uint32_t timestamp) with gil:
     nbytes = 921600  # 480 * 640 * 3
-    cdef DevPtr dev_out
-    dev_out = DevPtr()
+    cdef DevPtr dev_out = DevPtr.__new__(DevPtr)
     dev_out._ptr = dev
     if _video_cb:
         _video_cb(*_video_cb_np(dev_out, (<char*>data)[:nbytes], timestamp))
