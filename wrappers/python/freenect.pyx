@@ -49,6 +49,8 @@ cdef extern from "libfreenect.h":
         FREENECT_DEPTH_10BIT
         FREENECT_DEPTH_11BIT_PACKED
         FREENECT_DEPTH_10BIT_PACKED
+        FREENECT_DEPTH_REGISTERED
+        FREENECT_DEPTH_MM
 
     ctypedef enum freenect_led_options:
         FREENECT_LED_OFF "LED_OFF"
@@ -148,6 +150,8 @@ DEPTH_11BIT = FREENECT_DEPTH_11BIT
 DEPTH_10BIT = FREENECT_DEPTH_10BIT
 DEPTH_11BIT_PACKED = FREENECT_DEPTH_11BIT_PACKED
 DEPTH_10BIT_PACKED = FREENECT_DEPTH_10BIT_PACKED
+DEPTH_REGISTERED = FREENECT_DEPTH_REGISTERED
+DEPTH_MM = FREENECT_DEPTH_MM
 LED_OFF = FREENECT_LED_OFF
 LED_GREEN = FREENECT_LED_GREEN
 LED_RED = FREENECT_LED_RED
@@ -278,7 +282,7 @@ cpdef init():
     # to both but haven't wrapped the python API for selecting subdevices yet.
     # Also, we don't support audio in the python wrapper yet, so no sense claiming
     # the device.
-    freenect_select_subdevices(ctx, FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA)
+    freenect_select_subdevices(ctx, <freenect_device_flags> (FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA))
     cdef CtxPtr ctx_out
     ctx_out = CtxPtr()
     ctx_out._ptr = ctx
@@ -369,16 +373,19 @@ def runloop(depth=None, video=None, body=None, dev=None):
         if not mdev:
             error_open_device()
             return
+        if depth is not None:
+            freenect_set_depth_mode(mdev._ptr, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT))
+        if video is not None:
+            freenect_set_video_mode(mdev._ptr, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB))
+
     else:
         mdev = dev
     devp = mdev._ptr
     ctxp = mdev.ctx._ptr
     if depth is not None:
-        freenect_set_depth_mode(devp, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT))
         freenect_start_depth(devp)
         freenect_set_depth_callback(devp, depth_cb)
     if video is not None:
-        freenect_set_video_mode(devp, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB))
         freenect_start_video(devp)
         freenect_set_video_callback(devp, video_cb)
     try:
@@ -476,7 +483,7 @@ def sync_get_depth(index=0, format=DEPTH_11BIT):
     if out:
         error_open_device()
         return
-    if format == DEPTH_11BIT:
+    if format in (DEPTH_11BIT, DEPTH_10BIT, DEPTH_MM, DEPTH_REGISTERED):
         dims[0], dims[1]  = 480, 640
         return PyArray_SimpleNewFromData(2, dims, npc.NPY_UINT16, data), timestamp
     else:
