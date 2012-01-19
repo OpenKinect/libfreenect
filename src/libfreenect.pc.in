@@ -5,7 +5,7 @@ includedir=${prefix}/@PROJECT_INCLUDE_INSTALL_DIR@
 	
 Name: @CMAKE_PROJECT_NAME@
 Description: Interface to the Microsoft Kinect sensor device.
-Requires: libusb-1.0
+Requires.private: libusb-1.0
 Version: @PROJECT_APIVER@
 Libs: -L${libdir} -lfreenect
 Cflags: -I${includedir}
