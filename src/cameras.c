@@ -783,56 +783,55 @@ static int freenect_fetch_reg_info(freenect_device *dev)
 		FN_ERROR("freenect_fetch_reg_info: send_cmd read %d bytes (expected 118)\n", res);
 		return -1;
 	}
-	freenect_reg_info *reg_info_ptr = (freenect_reg_info*)(&reply[2]);
-	freenect_reg_info *dev_reg_info = &(dev->registration.reg_info);
-	dev_reg_info->ax = fn_le32s(reg_info_ptr->ax);
-	dev_reg_info->bx = fn_le32s(reg_info_ptr->bx);
-	dev_reg_info->cx = fn_le32s(reg_info_ptr->cx);
-	dev_reg_info->dx = fn_le32s(reg_info_ptr->dx);
-	dev_reg_info->ay = fn_le32s(reg_info_ptr->ay);
-	dev_reg_info->by = fn_le32s(reg_info_ptr->by);
-	dev_reg_info->cy = fn_le32s(reg_info_ptr->cy);
-	dev_reg_info->dy = fn_le32s(reg_info_ptr->dy);
-	dev_reg_info->dx_start = fn_le32s(reg_info_ptr->dx_start);
-	dev_reg_info->dy_start = fn_le32s(reg_info_ptr->dy_start);
-	dev_reg_info->dx_beta_start = fn_le32s(reg_info_ptr->dx_beta_start);
-	dev_reg_info->dy_beta_start = fn_le32s(reg_info_ptr->dy_beta_start);
-	dev_reg_info->dx_beta_inc = fn_le32s(reg_info_ptr->dx_beta_inc);
-	dev_reg_info->dy_beta_inc = fn_le32s(reg_info_ptr->dy_beta_inc);
-	dev_reg_info->dxdx_start = fn_le32s(reg_info_ptr->dxdx_start);
-	dev_reg_info->dxdy_start = fn_le32s(reg_info_ptr->dxdy_start);
-	dev_reg_info->dydx_start = fn_le32s(reg_info_ptr->dydx_start);
-	dev_reg_info->dydy_start = fn_le32s(reg_info_ptr->dydy_start);
-	dev_reg_info->dxdxdx_start = fn_le32s(reg_info_ptr->dxdxdx_start);
-	dev_reg_info->dydxdx_start = fn_le32s(reg_info_ptr->dydxdx_start);
-	dev_reg_info->dxdxdy_start = fn_le32s(reg_info_ptr->dxdxdy_start);
-	dev_reg_info->dydxdy_start = fn_le32s(reg_info_ptr->dydxdy_start);
-	dev_reg_info->dydydx_start = fn_le32s(reg_info_ptr->dydydx_start);
-	dev_reg_info->dydydy_start = fn_le32s(reg_info_ptr->dydydy_start);
-	FN_SPEW("ax:                %d\n", dev_reg_info->ax);
-	FN_SPEW("bx:                %d\n", dev_reg_info->bx);
-	FN_SPEW("cx:                %d\n", dev_reg_info->cx);
-	FN_SPEW("dx:                %d\n", dev_reg_info->dx);
-	FN_SPEW("ay:                %d\n", dev_reg_info->ay);
-	FN_SPEW("by:                %d\n", dev_reg_info->by);
-	FN_SPEW("cy:                %d\n", dev_reg_info->cy);
-	FN_SPEW("dy:                %d\n", dev_reg_info->dy);
-	FN_SPEW("dx_start:          %d\n", dev_reg_info->dx_start);
-	FN_SPEW("dy_start:          %d\n", dev_reg_info->dy_start);
-	FN_SPEW("dx_beta_start:     %d\n", dev_reg_info->dx_beta_start);
-	FN_SPEW("dy_beta_start:     %d\n", dev_reg_info->dy_beta_start);
-	FN_SPEW("dx_beta_inc:       %d\n", dev_reg_info->dx_beta_inc);
-	FN_SPEW("dy_beta_inc:       %d\n", dev_reg_info->dy_beta_inc);
-	FN_SPEW("dxdx_start:        %d\n", dev_reg_info->dxdx_start);
-	FN_SPEW("dxdy_start:        %d\n", dev_reg_info->dxdy_start);
-	FN_SPEW("dydx_start:        %d\n", dev_reg_info->dydx_start);
-	FN_SPEW("dydy_start:        %d\n", dev_reg_info->dydy_start);
-	FN_SPEW("dxdxdx_start:      %d\n", dev_reg_info->dxdxdx_start);
-	FN_SPEW("dydxdx_start:      %d\n", dev_reg_info->dydxdx_start);
-	FN_SPEW("dxdxdy_start:      %d\n", dev_reg_info->dxdxdy_start);
-	FN_SPEW("dydxdy_start:      %d\n", dev_reg_info->dydxdy_start);
-	FN_SPEW("dydydx_start:      %d\n", dev_reg_info->dydydx_start);
-	FN_SPEW("dydydy_start:      %d\n", dev_reg_info->dydydy_start);
+	memcpy(&dev->registration.reg_info, reply + 2, sizeof(dev->registration.reg_info));
+	dev->registration.reg_info.ax            = fn_le32s(dev->registration.reg_info.ax);
+	dev->registration.reg_info.bx            = fn_le32s(dev->registration.reg_info.bx);
+	dev->registration.reg_info.cx            = fn_le32s(dev->registration.reg_info.cx);
+	dev->registration.reg_info.dx            = fn_le32s(dev->registration.reg_info.dx);
+	dev->registration.reg_info.ay            = fn_le32s(dev->registration.reg_info.ay);
+	dev->registration.reg_info.by            = fn_le32s(dev->registration.reg_info.by);
+	dev->registration.reg_info.cy            = fn_le32s(dev->registration.reg_info.cy);
+	dev->registration.reg_info.dy            = fn_le32s(dev->registration.reg_info.dy);
+	dev->registration.reg_info.dx_start      = fn_le32s(dev->registration.reg_info.dx_start);
+	dev->registration.reg_info.dy_start      = fn_le32s(dev->registration.reg_info.dy_start);
+	dev->registration.reg_info.dx_beta_start = fn_le32s(dev->registration.reg_info.dx_beta_start);
+	dev->registration.reg_info.dy_beta_start = fn_le32s(dev->registration.reg_info.dy_beta_start);
+	dev->registration.reg_info.dx_beta_inc   = fn_le32s(dev->registration.reg_info.dx_beta_inc);
+	dev->registration.reg_info.dy_beta_inc   = fn_le32s(dev->registration.reg_info.dy_beta_inc);
+	dev->registration.reg_info.dxdx_start    = fn_le32s(dev->registration.reg_info.dxdx_start);
+	dev->registration.reg_info.dxdy_start    = fn_le32s(dev->registration.reg_info.dxdy_start);
+	dev->registration.reg_info.dydx_start    = fn_le32s(dev->registration.reg_info.dydx_start);
+	dev->registration.reg_info.dydy_start    = fn_le32s(dev->registration.reg_info.dydy_start);
+	dev->registration.reg_info.dxdxdx_start  = fn_le32s(dev->registration.reg_info.dxdxdx_start);
+	dev->registration.reg_info.dydxdx_start  = fn_le32s(dev->registration.reg_info.dydxdx_start);
+	dev->registration.reg_info.dxdxdy_start  = fn_le32s(dev->registration.reg_info.dxdxdy_start);
+	dev->registration.reg_info.dydxdy_start  = fn_le32s(dev->registration.reg_info.dydxdy_start);
+	dev->registration.reg_info.dydydx_start  = fn_le32s(dev->registration.reg_info.dydydx_start);
+	dev->registration.reg_info.dydydy_start  = fn_le32s(dev->registration.reg_info.dydydy_start);
+	FN_SPEW("ax:                %d\n", dev->registration.reg_info.ax);
+	FN_SPEW("bx:                %d\n", dev->registration.reg_info.bx);
+	FN_SPEW("cx:                %d\n", dev->registration.reg_info.cx);
+	FN_SPEW("dx:                %d\n", dev->registration.reg_info.dx);
+	FN_SPEW("ay:                %d\n", dev->registration.reg_info.ay);
+	FN_SPEW("by:                %d\n", dev->registration.reg_info.by);
+	FN_SPEW("cy:                %d\n", dev->registration.reg_info.cy);
+	FN_SPEW("dy:                %d\n", dev->registration.reg_info.dy);
+	FN_SPEW("dx_start:          %d\n", dev->registration.reg_info.dx_start);
+	FN_SPEW("dy_start:          %d\n", dev->registration.reg_info.dy_start);
+	FN_SPEW("dx_beta_start:     %d\n", dev->registration.reg_info.dx_beta_start);
+	FN_SPEW("dy_beta_start:     %d\n", dev->registration.reg_info.dy_beta_start);
+	FN_SPEW("dx_beta_inc:       %d\n", dev->registration.reg_info.dx_beta_inc);
+	FN_SPEW("dy_beta_inc:       %d\n", dev->registration.reg_info.dy_beta_inc);
+	FN_SPEW("dxdx_start:        %d\n", dev->registration.reg_info.dxdx_start);
+	FN_SPEW("dxdy_start:        %d\n", dev->registration.reg_info.dxdy_start);
+	FN_SPEW("dydx_start:        %d\n", dev->registration.reg_info.dydx_start);
+	FN_SPEW("dydy_start:        %d\n", dev->registration.reg_info.dydy_start);
+	FN_SPEW("dxdxdx_start:      %d\n", dev->registration.reg_info.dxdxdx_start);
+	FN_SPEW("dydxdx_start:      %d\n", dev->registration.reg_info.dydxdx_start);
+	FN_SPEW("dxdxdy_start:      %d\n", dev->registration.reg_info.dxdxdy_start);
+	FN_SPEW("dydxdy_start:      %d\n", dev->registration.reg_info.dydxdy_start);
+	FN_SPEW("dydydx_start:      %d\n", dev->registration.reg_info.dydydx_start);
+	FN_SPEW("dydydy_start:      %d\n", dev->registration.reg_info.dydydy_start);
 	/*
 	// NOTE: Not assigned above
 	FN_SPEW("dx_center:         %d\n", dev_reg_info->dx_center);
@@ -861,10 +860,10 @@ static int freenect_fetch_reg_pad_info(freenect_device *dev)
 		FN_ERROR("freenect_fetch_reg_pad_info: send_cmd read %d bytes (expected 8)\n", res);
 		return -1;
 	}
-	freenect_reg_pad_info *pad_info_ptr = (freenect_reg_pad_info*)(&reply[2]);
-	dev->registration.reg_pad_info.start_lines    = fn_le16s(pad_info_ptr->start_lines);
-	dev->registration.reg_pad_info.end_lines      = fn_le16s(pad_info_ptr->end_lines);
-	dev->registration.reg_pad_info.cropping_lines = fn_le16s(pad_info_ptr->cropping_lines);
+	memcpy(&dev->registration.reg_pad_info, reply+2, sizeof(dev->registration.reg_pad_info));
+	dev->registration.reg_pad_info.start_lines    = fn_le16s(dev->registration.reg_pad_info.start_lines);
+	dev->registration.reg_pad_info.end_lines      = fn_le16s(dev->registration.reg_pad_info.end_lines);
+	dev->registration.reg_pad_info.cropping_lines = fn_le16s(dev->registration.reg_pad_info.cropping_lines);
 	FN_SPEW("start_lines:    %u\n",dev->registration.reg_pad_info.start_lines);
 	FN_SPEW("end_lines:      %u\n",dev->registration.reg_pad_info.end_lines);
 	FN_SPEW("cropping_lines: %u\n",dev->registration.reg_pad_info.cropping_lines);
@@ -888,7 +887,9 @@ static int freenect_fetch_reg_const_shift(freenect_device *dev)
 		FN_ERROR("freenect_fetch_reg_const_shift: send_cmd read %d bytes (expected 8)\n", res);
 		return -1;
 	}
-	uint16_t shift = fn_le16(*((uint16_t*)(reply+2)));
+	uint16_t shift;
+	memcpy(&shift, reply+2, sizeof(shift));
+	shift = fn_le16(shift);
 	dev->registration.const_shift = (double)shift;
 	FN_SPEW("const_shift: %f\n",dev->registration.const_shift);
 	return 0;
@@ -907,17 +908,18 @@ static int freenect_fetch_zero_plane_info(freenect_device *dev)
 		FN_ERROR("freenect_fetch_zero_plane_info: send_cmd read %d bytes (expected 322)\n", res);
 		return -1;
 	}
-	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
-	FN_SPEW("dcmos_emitter_distance: %f\n", *((float*)(reply+94)));
-	FN_SPEW("dcmos_rcmos_distance:   %f\n", *((float*)(reply+98)));
-	FN_SPEW("reference_distance:     %f\n", *((float*)(reply+102)));
-	FN_SPEW("reference_pixel_size:   %f\n", *((float*)(reply+106)));
 
-	// The values are 32-bit floats in little-endian.  So:
-	dev->registration.zero_plane_info.dcmos_emitter_dist   = *((float*)(&fn_le32(*((uint32_t*)(reply+94)))));
-	dev->registration.zero_plane_info.dcmos_rcmos_dist     = *((float*)(&fn_le32(*((uint32_t*)(reply+98)))));
-	dev->registration.zero_plane_info.reference_distance   = *((float*)(&fn_le32(*((uint32_t*)(reply+102)))));
-	dev->registration.zero_plane_info.reference_pixel_size = *((float*)(&fn_le32(*((uint32_t*)(reply+106)))));
+	memcpy(&(dev->registration.zero_plane_info), reply + 94, sizeof(dev->registration.zero_plane_info));
+	dev->registration.zero_plane_info.dcmos_emitter_dist   = *((float*)(&fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.dcmos_emitter_dist)))));
+	dev->registration.zero_plane_info.dcmos_rcmos_dist     = *((float*)(&fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.dcmos_rcmos_dist)))));
+	dev->registration.zero_plane_info.reference_distance   = *((float*)(&fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.reference_distance)))));
+	dev->registration.zero_plane_info.reference_pixel_size = *((float*)(&fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.reference_pixel_size)))));
+
+	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
+	FN_SPEW("dcmos_emitter_distance: %f\n", dev->registration.zero_plane_info.dcmos_emitter_dist);
+	FN_SPEW("dcmos_rcmos_distance:   %f\n", dev->registration.zero_plane_info.dcmos_rcmos_dist);
+	FN_SPEW("reference_distance:     %f\n", dev->registration.zero_plane_info.reference_distance);
+	FN_SPEW("reference_pixel_size:   %f\n", dev->registration.zero_plane_info.reference_pixel_size);
 
 	// FIXME: OpenNI seems to use a hardcoded value of 2.4 instead of 2.3 as reported by Kinect
 	dev->registration.zero_plane_info.dcmos_rcmos_dist = 2.4;
