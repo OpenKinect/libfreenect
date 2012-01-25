@@ -85,8 +85,8 @@ cdef extern from "libfreenect.h":
     ctypedef struct freenect_frame_mode:
         uint32_t reserved
         freenect_resolution resolution
-        int32_t pixel_format
-        int32_t nbytes
+        int32_t video_format # we chose one of video_format/depth_format arbitrarily, since they are in a union
+        int32_t bytes
         int16_t width
         int16_t height
         int8_t data_bits_per_pixel
@@ -228,6 +228,12 @@ def set_depth_mode(DevPtr dev, int res, int mode):
 def set_video_mode(DevPtr dev, int res, int mode):
     return freenect_set_video_mode(dev._ptr, freenect_find_video_mode(res, mode))
 
+def get_depth_format(DevPtr dev):
+    return freenect_get_current_depth_mode(dev._ptr).video_format
+
+def get_video_format(DevPtr dev):
+    return freenect_get_current_video_mode(dev._ptr).video_format
+
 def start_depth(DevPtr dev):
     return freenect_start_depth(dev._ptr)
 
@@ -317,18 +323,26 @@ cpdef open_device(CtxPtr ctx, int index):
 _depth_cb, _video_cb = None, None
 
 cdef void depth_cb(freenect_device *dev, void *data, uint32_t timestamp) with gil:
-    nbytes = 614400  # 480 * 640 * 2
+    cdef freenect_frame_mode mode = freenect_get_current_depth_mode(dev)
+    if not mode.is_valid:
+        return
+    if not _depth_cb:
+        return
     cdef DevPtr dev_out = DevPtr.__new__(DevPtr)
     dev_out._ptr = dev
-    if _depth_cb:
-        _depth_cb(*_depth_cb_np(dev_out, (<char*>data)[:nbytes], timestamp))
+    pydata = _depth_cb_np(data, &mode)
+    _depth_cb(dev_out, pydata, timestamp)
 
 cdef void video_cb(freenect_device *dev, void *data, uint32_t timestamp) with gil:
-    nbytes = 921600  # 480 * 640 * 3
+    cdef freenect_frame_mode mode = freenect_get_current_video_mode(dev)
+    if not mode.is_valid:
+        return
+    if not _video_cb:
+        return
     cdef DevPtr dev_out = DevPtr.__new__(DevPtr)
     dev_out._ptr = dev
-    if _video_cb:
-        _video_cb(*_video_cb_np(dev_out, (<char*>data)[:nbytes], timestamp))
+    pydata = _video_cb_np(data, &mode)
+    _video_cb(dev_out, pydata, timestamp)
 
 def set_depth_callback(DevPtr dev, cb):
     global _depth_cb
@@ -441,38 +455,32 @@ def base_runloop(CtxPtr ctx, body=None):
     except Kill:
         pass
 
-def _depth_cb_np(dev, string, timestamp):
-    """Converts the raw depth data into a numpy array for your function
-
-     Args:
-         dev: DevPtr object
-         string: A python string with the depth data
-         timestamp: An int representing the time
-
-     Returns:
-         (dev, data, timestamp) where data is a 2D numpy array
-    """
-    data = np.fromstring(string, dtype=np.uint16)
-    data.resize((480, 640))
-    return dev, data, timestamp
-
-
-def _video_cb_np(dev, string, timestamp):
-    """Converts the raw depth data into a numpy array for your function
-
-     Args:
-         dev: DevPtr object
-         string: A python string with the video data
-         timestamp: An int representing the time
-
-     Returns:
-         (dev, data, timestamp) where data is a 2D numpy array
-    """
-    data = np.fromstring(string, dtype=np.uint8)
-    data.resize((480, 640, 3))
-    return dev, data, timestamp
-
 import_array()
+
+cdef object _depth_cb_np(void *data, freenect_frame_mode *mode):
+    cdef npc.npy_intp dims[2]
+
+    if mode.video_format in (DEPTH_11BIT, DEPTH_10BIT, DEPTH_REGISTERED, DEPTH_MM):
+        dims[0], dims[1] = mode.height, mode.width
+        return PyArray_SimpleNewFromData(2, dims, npc.NPY_UINT16, data)
+    else:
+        return (<char *>data)[:mode.bytes]
+
+
+cdef _video_cb_np(void *data, freenect_frame_mode *mode):
+    cdef npc.npy_intp dims[3]
+
+    if mode.video_format in (VIDEO_RGB, VIDEO_YUV_RGB):
+        dims[0], dims[1], dims[2]  = mode.height, mode.width, 3
+        return PyArray_SimpleNewFromData(3, dims, npc.NPY_UINT8, data)
+    elif mode.video_format == VIDEO_IR_8BIT:
+        dims[0], dims[1]  = mode.height, mode.width
+        return PyArray_SimpleNewFromData(2, dims, npc.NPY_UINT8, data)
+    elif mode.video_format == VIDEO_IR_10BIT:
+        dims[0], dims[1]  = mode.height, mode.width
+        return PyArray_SimpleNewFromData(2, dims, npc.NPY_UINT16, data)
+    else:
+        return (<char *>data)[:mode.bytes]
 
 def sync_get_depth(index=0, format=DEPTH_11BIT):
     """Get the next available depth frame from the kinect, as a numpy array.
@@ -533,6 +541,9 @@ def sync_get_video(index=0, format=VIDEO_RGB):
     elif format == VIDEO_IR_8BIT:
         dims[0], dims[1]  = 480, 640
         return PyArray_SimpleNewFromData(2, dims, npc.NPY_UINT8, data), timestamp
+    elif format == VIDEO_IR_10BIT:
+        dims[0], dims[1]  = 480, 640
+        return PyArray_SimpleNewFromData(2, dims, npc.NPY_UINT16, data), timestamp
     else:
         raise TypeError('Conversion not implemented for type [%d]' % (format))
 
