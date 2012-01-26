@@ -119,7 +119,7 @@ static int check_version_string(fnusb_dev* dev) {
 	return res;
 }
 
-int upload_firmware(fnusb_dev* dev) {
+FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 	freenect_context* ctx = dev->parent->parent;
 	bootloader_command bootcmd;
 	memset(&bootcmd, 0, sizeof(bootcmd));
@@ -247,7 +247,7 @@ int upload_firmware(fnusb_dev* dev) {
 	return 0;
 }
 
-int upload_cemd_data(fnusb_dev* dev) {
+FN_INTERNAL int upload_cemd_data(fnusb_dev* dev) {
 	// Now we upload the CEMD data.
 	freenect_context* ctx = dev->parent->parent;
 	cemdloader_command cemdcmd;
