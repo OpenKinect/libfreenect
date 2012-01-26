@@ -260,7 +260,7 @@ FREENECTAPI void freenect_set_log_callback(freenect_context *ctx, freenect_log_c
 	ctx->log_cb = cb;
 }
 
-void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...)
+FN_INTERNAL void fn_log(freenect_context *ctx, freenect_loglevel level, const char *fmt, ...)
 {
 	va_list ap;
 

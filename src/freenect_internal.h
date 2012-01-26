@@ -36,6 +36,13 @@
 #include "libfreenect-audio.h"
 #endif
 
+#ifdef __ELF__
+#define FN_INTERNAL	__attribute__ ((visibility ("hidden")))
+#else
+#define FN_INTERNAL
+#endif
+
+
 typedef void (*fnusb_iso_cb)(freenect_device *dev, uint8_t *buf, int len);
 
 #include "usb_libusb10.h"

@@ -38,7 +38,7 @@
 #define RESERVED_TO_FORMAT(reserved) ((reserved) & 0xff)
 
 #define video_mode_count 12
-freenect_frame_mode supported_video_modes[video_mode_count] = {
+static freenect_frame_mode supported_video_modes[video_mode_count] = {
 	// reserved, resolution, format, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate, is_valid
 	{MAKE_RESERVED(FREENECT_RESOLUTION_HIGH,   FREENECT_VIDEO_RGB), FREENECT_RESOLUTION_HIGH, {FREENECT_VIDEO_RGB}, 1280*1024*3, 1280, 1024, 24, 0, 10, 1 },
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB), FREENECT_RESOLUTION_MEDIUM, {FREENECT_VIDEO_RGB}, 640*480*3, 640,  480, 24, 0, 30, 1 },
@@ -61,7 +61,7 @@ freenect_frame_mode supported_video_modes[video_mode_count] = {
 };
 
 #define depth_mode_count 6
-freenect_frame_mode supported_depth_modes[depth_mode_count] = {
+static freenect_frame_mode supported_depth_modes[depth_mode_count] = {
 	// reserved, resolution, format, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate, is_valid
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT}, 640*480*2, 640, 480, 11, 5, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT}, 640*480*2, 640, 480, 10, 6, 30, 1},
@@ -1323,7 +1323,7 @@ int freenect_set_video_buffer(freenect_device *dev, void *buf)
 	return stream_setbuf(dev->parent, &dev->video, buf);
 }
 
-int freenect_camera_init(freenect_device *dev)
+FN_INTERNAL int freenect_camera_init(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	int res;
@@ -1347,7 +1347,7 @@ int freenect_camera_init(freenect_device *dev)
 	return 0;
 }
 
-int freenect_camera_teardown(freenect_device *dev)
+FN_INTERNAL int freenect_camera_teardown(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	int res = 0;

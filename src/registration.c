@@ -74,7 +74,7 @@ static void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plan
 }
 
 // unrolled inner loop of the 11-bit unpacker
-inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
+static inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
 {
 	uint16_t baseMask = 0x7FF;
 
@@ -101,7 +101,7 @@ inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
 }
 
 // apply registration data to a single packed frame
-int freenect_apply_registration(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
+FN_INTERNAL int freenect_apply_registration(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
 {
 	freenect_registration* reg = &(dev->registration);
 	// set output buffer to zero using pointer-sized memory access (~ 30-40% faster than memset)
@@ -169,7 +169,7 @@ int freenect_apply_registration(freenect_device* dev, uint8_t* input_packed, uin
 }
 
 // Same as freenect_apply_registration, but don't bother aligning to the RGB image
-int freenect_apply_depth_to_mm(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
+FN_INTERNAL int freenect_apply_depth_to_mm(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
 {
 	freenect_registration* reg = &(dev->registration);
 	uint16_t unpack[8];
@@ -289,9 +289,9 @@ static void freenect_init_registration_table(int32_t (*registration_table)[2], f
 }
 
 // These are just constants.
-double parameter_coefficient = 4;
-double shift_scale = 10;
-double pixel_size_factor = 1;
+static double parameter_coefficient = 4;
+static double shift_scale = 10;
+static double pixel_size_factor = 1;
 
 /// convert raw shift value to metric depth (in mm)
 static uint16_t freenect_raw_to_mm(uint16_t raw, freenect_registration* reg)
@@ -332,7 +332,7 @@ void freenect_camera_to_world(freenect_device* dev, int cx, int cy, int wz, doub
 /// Allocate and fill registration tables
 /// This function should be called every time a new video (not depth!) mode is
 /// activated.
-int freenect_init_registration(freenect_device* dev)
+FN_INTERNAL int freenect_init_registration(freenect_device* dev)
 {
 	freenect_registration* reg = &(dev->registration);
 
