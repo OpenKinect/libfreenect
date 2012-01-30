@@ -49,14 +49,15 @@ static void dump_cemd_cmd(freenect_context* ctx, cemdloader_command cmd) {
 static int get_reply(fnusb_dev* dev) {
 	freenect_context* ctx = dev->parent->parent;
 	unsigned char dump[512];
-	bootloader_status_code buffer = ((bootloader_status_code*)dump)[0];
+	bootloader_status_code buffer;
 	int res;
 	int transferred;
-	res = fnusb_bulk(dev, 0x81, (unsigned char*)&buffer, 512, &transferred);
+	res = fnusb_bulk(dev, 0x81, dump, 512, &transferred);
 	if(res != 0 || transferred != sizeof(bootloader_status_code)) {
 		FN_ERROR("Error reading reply: %d\ttransferred: %d (expected %d)\n", res, transferred, (int)(sizeof(bootloader_status_code)));
 		return res;
 	}
+	memcpy(&buffer, dump, sizeof(bootloader_status_code));
 	if(fn_le32(buffer.magic) != 0x0a6fe000) {
 		FN_ERROR("Error reading reply: invalid magic %08X\n",buffer.magic);
 		return -1;
