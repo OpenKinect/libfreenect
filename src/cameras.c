@@ -910,10 +910,15 @@ static int freenect_fetch_zero_plane_info(freenect_device *dev)
 	}
 
 	memcpy(&(dev->registration.zero_plane_info), reply + 94, sizeof(dev->registration.zero_plane_info));
-	dev->registration.zero_plane_info.dcmos_emitter_dist   = *((float*)(&fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.dcmos_emitter_dist)))));
-	dev->registration.zero_plane_info.dcmos_rcmos_dist     = *((float*)(&fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.dcmos_rcmos_dist)))));
-	dev->registration.zero_plane_info.reference_distance   = *((float*)(&fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.reference_distance)))));
-	dev->registration.zero_plane_info.reference_pixel_size = *((float*)(&fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.reference_pixel_size)))));
+	uint32_t temp;
+	temp = fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.dcmos_emitter_dist)));
+	dev->registration.zero_plane_info.dcmos_emitter_dist   = *((float*)(&temp));
+	temp = fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.dcmos_rcmos_dist)));
+	dev->registration.zero_plane_info.dcmos_rcmos_dist     = *((float*)(&temp));
+	temp = fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.reference_distance)));
+	dev->registration.zero_plane_info.reference_distance   = *((float*)(&temp));
+	temp = fn_le32(*((uint32_t*)(&dev->registration.zero_plane_info.reference_pixel_size)));
+	dev->registration.zero_plane_info.reference_pixel_size = *((float*)(&temp));
 
 	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
 	FN_SPEW("dcmos_emitter_distance: %f\n", dev->registration.zero_plane_info.dcmos_emitter_dist);
