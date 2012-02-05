@@ -96,16 +96,24 @@ static inline uint32_t fn_le32(uint32_t d)
 static inline int16_t fn_le16s(int16_t s)
 {
 	// reinterpret cast to unsigned, use the normal fn_le16, and then reinterpret cast back
-	uint16_t temp = (*(uint16_t*)(&s));
-	temp = fn_le16(temp);
-	return *((int16_t*)(&temp));
+	union {
+		int16_t s;
+		uint16_t u;
+	} conversion_union;
+	conversion_union.s = s;
+	conversion_union.u = fn_le16(conversion_union.u);
+	return conversion_union.s;
 }
 static inline int32_t fn_le32s(int32_t s)
 {
 	// reinterpret cast to unsigned, use the normal fn_le32, and then reinterpret cast back
-	uint32_t temp = (*(uint32_t*)(&s));
-	temp = fn_le32(temp);
-	return *((int32_t*)(&temp));
+	union {
+		int32_t s;
+		uint32_t u;
+	} conversion_union;
+	conversion_union.s = s;
+	conversion_union.u = fn_le32(conversion_union.u);
+	return conversion_union.s;
 }
 #else
 #define fn_le16(x) (x)
