@@ -29,6 +29,13 @@
 
 #include <stdint.h>
 
+/* We need struct timeval */
+#ifdef _WIN32
+#include <winsock.h>
+#else
+#include <sys/time.h>
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif

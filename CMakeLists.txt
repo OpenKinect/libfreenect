@@ -112,7 +112,7 @@ include_directories(${LIBUSB_1_INCLUDE_DIRS})
 
 if(WIN32)
   include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows")
-  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu")
+  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu/libusb-1.0")
 endif()
 
 # Add library project
