@@ -575,6 +575,7 @@ FN_INTERNAL int fnusb_control(fnusb_dev *dev, uint8_t bmRequestType, uint8_t bRe
 
 #ifdef BUILD_AUDIO
 FN_INTERNAL int fnusb_bulk(fnusb_dev *dev, uint8_t endpoint, uint8_t *data, int len, int *transferred) {
+	*transferred = 0;
 	return libusb_bulk_transfer(dev->dev, endpoint, data, len, transferred, 0);
 }
 
