@@ -160,7 +160,7 @@ int timeval_cmp(struct timeval *t1, struct timeval *t2) {
 }
 
 static void update_device(freenect_device *dev) {
-    if(dev->last_video != dev->device->video.timestamp) {
+    if(dev->last_video != dev->device->video.timestamp && dev->video_running) {
         int bufsel = dev->device->video.bufsel;
         uint8_t *video_buf = dev->device->video.data[bufsel];
         freenect_frame_mode *video_format = &dev->device->video.frame_mode[bufsel];
@@ -177,7 +177,7 @@ static void update_device(freenect_device *dev) {
         }
     }
 
-    if(dev->last_depth != dev->device->depth.timestamp) {
+    if(dev->last_depth != dev->device->depth.timestamp && dev->depth_running) {
         int bufsel = dev->device->depth.bufsel;
         uint8_t *depth_buf = dev->device->depth.data[bufsel];
         freenect_frame_mode *depth_format = &dev->device->depth.frame_mode[bufsel];
