@@ -177,7 +177,7 @@ int main(int argc, char **argv)
             loglevel = atoi(argv[c+1]);
             c++;
         } else if(argv[c][0] == '-') {
-            fprintf(stderr, "Unrecognized option %s; use --help for help.", argv[c]);
+            fprintf(stderr, "Unrecognized option %s; use --help for help.\n", argv[c]);
             exit(1);
         } else {
             index = atoi(argv[c]);
