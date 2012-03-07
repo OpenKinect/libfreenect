@@ -30,6 +30,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define log(level, ...) do { if(device->loglevel >= FREENECT_LOG_##level) { fprintf(stderr, __VA_ARGS__); } } while(0)
+
 volatile sig_atomic_t running = 1;
 
 struct proxynect_device *device;
@@ -63,7 +65,7 @@ int run()
 	freenect_device *dev;
 
 	if(freenect_init(&ctx, 0)) {
-	    fprintf(stderr, "Error: Failed to get context\n");
+	    log(FATAL, "Error: Failed to get context\n");
 	    return 1;
 	}
 
@@ -79,7 +81,7 @@ int run()
     device->depth.timestamp = 0;
 
 	if(freenect_open_device(ctx, &dev, device->index)) {
-	    fprintf(stderr, "Error: Failed to open device %d\n", device->index);
+	    log(FATAL, "Error: Failed to open device %d\n", device->index);
 	    return 2;
 	}
 
@@ -93,22 +95,40 @@ int run()
 
 	while (running && freenect_process_events(ctx) >= 0) {
 	    if(device->settings.tilt_degs_changed) {
+	        log(INFO, "Updating tilt degrees to %.1f", device->settings.tilt_degs);
 	        freenect_set_tilt_degs(dev, device->settings.tilt_degs);
 	        device->settings.tilt_degs_changed = 0;
 	    }
 
         if(device->settings.led_changed) {
+	        log(INFO, "Updating LED to %d", device->settings.led);
 	        freenect_set_led(dev, device->settings.led);
 	        device->settings.led_changed = 0;
 	    }
 
         if(device->settings.video_mode_changed) {
-	        freenect_set_video_mode(dev, device->settings.video_mode);
+            freenect_frame_mode curmode = freenect_get_current_video_mode(dev);
+            if(!memcmp(&device->settings.video_mode, &curmode, sizeof(freenect_frame_mode))) {
+                log(DEBUG, "Ignoring video format update request for %d\n", device->settings.video_mode.video_format);
+            } else {
+                log(INFO, "Updating video format to %d\n", device->settings.video_mode.video_format);
+                freenect_stop_video(dev);
+                freenect_set_video_mode(dev, device->settings.video_mode);
+                freenect_start_video(dev);
+            }
 	        device->settings.video_mode_changed = 0;
 	    }
 
         if(device->settings.depth_mode_changed) {
-	        freenect_set_depth_mode(dev, device->settings.depth_mode);
+	        freenect_frame_mode curmode = freenect_get_current_depth_mode(dev);
+            if(!memcmp(&device->settings.depth_mode, &curmode, sizeof(freenect_frame_mode))) {
+                log(DEBUG, "Ignoring depth format update request for %d\n", device->settings.depth_mode.depth_format);
+            } else {
+                log(INFO, "Updating depth format to %d\n", device->settings.depth_mode.depth_format);
+                freenect_stop_depth(dev);
+                freenect_set_depth_mode(dev, device->settings.depth_mode);
+                freenect_start_depth(dev);
+            }
 	        device->settings.depth_mode_changed = 0;
 	    }
         
@@ -128,7 +148,7 @@ int run()
 void signal_cleanup(int num)
 {
 	running = 0;
-	fprintf(stderr, "Caught signal, cleaning up\n");
+	log(NOTICE, "Caught signal, cleaning up\n");
 	signal(SIGINT, signal_cleanup);
 }
 
