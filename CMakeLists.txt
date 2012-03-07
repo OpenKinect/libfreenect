@@ -57,6 +57,7 @@ set (PROJECT_APIVER
 OPTION(BUILD_AUDIO "Build audio support" OFF)
 OPTION(BUILD_REDIST_PACKAGE "Build libfreenect in a legally-redistributable manner (only affects audio)" OFF)
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
+OPTION(BUILD_PROXYNECT "Build proxynect persistent-connection library" ON)
 OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
 OPTION(BUILD_CPP "Build C++ Library (currently header only)" ON)
@@ -143,6 +144,10 @@ ENDIF()
 
 IF(BUILD_FAKENECT)
   add_subdirectory (fakenect)
+ENDIF()
+
+IF(BUILD_PROXYNECT)
+  add_subdirectory (proxynect)
 ENDIF()
 
 IF(BUILD_C_SYNC)
