@@ -174,8 +174,8 @@ public class Freenect implements Library {
 			this.rawTiltState = freenect_get_tilt_state(this);
 			this.accel = new double[3];
 			refreshTiltState();
-			setVideoFormat(VideoFormat.RGB);
-			setDepthFormat(DepthFormat.D10BIT);
+			//setVideoFormat(VideoFormat.RGB);
+			//setDepthFormat(DepthFormat.D10BIT);
 		}
 
 		protected void setDeviceIndex (int index) {
