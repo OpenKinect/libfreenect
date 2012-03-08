@@ -31,6 +31,9 @@
 #include <unistd.h>
 #include <time.h>
 #include <assert.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #define GRAVITY 9.80665
 
@@ -54,19 +57,41 @@ static void *user_ptr = NULL;
 
 static void sleep_highres(double tm)
 {
+#ifdef _WIN32
+	int msec = floor(tm * 1000);
+	if (msec > 0) {
+		Sleep(msec);
+	}
+#else
 	int sec = floor(tm);
 	int usec = (tm - sec) * 1000000;
 	if (tm > 0) {
 		sleep(sec);
 		usleep(usec);
 	}
+#endif
 }
 
 static double get_time()
 {
+#ifdef _WIN32
+	SYSTEMTIME st;
+	GetSystemTime(&st);
+	FILETIME ft;
+	SystemTimeToFileTime(&st, &ft);
+	ULARGE_INTEGER li;
+	li.LowPart = ft.dwLowDateTime;
+	li.HighPart = ft.dwHighDateTime;
+	// FILETIME is given as a 64-bit value for the number of 100-nanosecond
+	// intervals that have passed since Jan 1, 1601 (UTC).  The difference between that
+	// epoch and the POSIX epoch (Jan 1, 1970) is 116444736000000000 such ticks.
+	uint64_t total_usecs = (li.QuadPart - 116444736000000000L) / 10L;
+	return (total_usecs / 1000000.);
+#else
 	struct timeval cur;
 	gettimeofday(&cur, NULL);
 	return cur.tv_sec + cur.tv_usec / 1000000.;
+#endif
 }
 
 static char *one_line(FILE *fp)
@@ -107,7 +132,7 @@ static int parse_line(char *type, double *cur_time, unsigned int *timestamp, uns
 	char *file_path = malloc(file_path_size);
 	snprintf(file_path, file_path_size, "%s/%s", input_path, line);
 	// Open file
-	FILE *cur_fp = fopen(file_path, "r");
+	FILE *cur_fp = fopen(file_path, "rb");
 	if (!cur_fp) {
 		printf("Error: Cannot open file [%s]\n", file_path);
 		exit(1);
@@ -136,7 +161,7 @@ static void open_index()
 	int index_path_size = strlen(input_path) + 50;
 	char *index_path = malloc(index_path_size);
 	snprintf(index_path, index_path_size, "%s/INDEX.txt", input_path);
-	index_fp = fopen(index_path, "r");
+	index_fp = fopen(index_path, "rb");
 	if (!index_fp) {
 		printf("Error: Cannot open file [%s]\n", index_path);
 		exit(1);
