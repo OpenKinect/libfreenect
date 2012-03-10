@@ -25,12 +25,6 @@ if(APPLE)
 	set(CMAKE_EXE_LINKER_FLAGS "-framework CoreFoundation -framework IOKit")
 else(APPLE)
 	find_package(Threads REQUIRED)
-	if (WIN32)
-	   set(MATH_LIB "")
-	else(WIN32)
-	  set(MATH_LIB "m")
-	endif()
-
 endif()
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../../wrappers/c_sync)
 
