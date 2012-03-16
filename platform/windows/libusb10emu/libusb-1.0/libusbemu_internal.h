@@ -28,7 +28,7 @@
 #define LIBUSB_EMULATOR_INTERNAL_H
 
 #include "libusbemu_threads.h"
-#include <usb.h>
+#include <lusb0_usb.h>
 #include <map>
 #include <cassert>
 
