@@ -95,13 +95,13 @@ int run()
 
 	while (running && freenect_process_events(ctx) >= 0) {
 	    if(device->settings.tilt_degs_changed) {
-	        log(INFO, "Updating tilt degrees to %.1f", device->settings.tilt_degs);
+	        log(INFO, "Updating tilt degrees to %.1f\n", device->settings.tilt_degs);
 	        freenect_set_tilt_degs(dev, device->settings.tilt_degs);
 	        device->settings.tilt_degs_changed = 0;
 	    }
 
         if(device->settings.led_changed) {
-	        log(INFO, "Updating LED to %d", device->settings.led);
+	        log(INFO, "Updating LED to %d\n", device->settings.led);
 	        freenect_set_led(dev, device->settings.led);
 	        device->settings.led_changed = 0;
 	    }
