@@ -13,9 +13,9 @@ target_link_libraries(fakenect ${MATH_LIB})
 install (TARGETS fakenect
   DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/fakenect")
 
-add_executable(record record.c)
-target_link_libraries(record freenect)
-install (TARGETS record
+add_executable(fakenect-record record.c)
+target_link_libraries(fakenect-record freenect m)
+install (TARGETS fakenect-record
   DESTINATION bin)
 
 CONFIGURE_FILE("fakenect.sh.in"
