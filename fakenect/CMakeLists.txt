@@ -24,3 +24,6 @@ CONFIGURE_FILE("fakenect.sh.in"
 install (PROGRAMS ${CMAKE_CURRENT_BINARY_DIR}/fakenect.sh
   DESTINATION bin
   RENAME fakenect)
+
+install(FILES fakenect.1 fakenect-record.1
+  DESTINATION ${PROJECT_MANPAGE_INSTALL_DIR}/man1)
