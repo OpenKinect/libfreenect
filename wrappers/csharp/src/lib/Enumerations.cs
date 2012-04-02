@@ -54,7 +54,9 @@ namespace freenect
 		Depth11Bit 			= 0,
 		Depth10Bit 			= 1,
 		DepthPacked11Bit 	= 2,
-		DepthPacked10Bit 	= 3
+		DepthPacked10Bit 	= 3,
+		DepthRegistered		= 4,
+		DepthMm				= 5	
 	}
 	
 	/// <summary>
