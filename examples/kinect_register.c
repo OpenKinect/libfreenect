@@ -284,7 +284,7 @@ void apply_registration(char* regfile, char* PGMfile)
   freenect_apply_registration(&reg, data, wz);
 
   // then, convert x and y to world_x and world_y
-  printf("Converting camera to world coordinates\n");
+  //printf("Converting camera to world coordinates\n");
 
   // see freenect_camera_to_world() in registration.c
   double ref_pix_size = reg.zero_plane_info.reference_pixel_size;
@@ -307,9 +307,10 @@ void apply_registration(char* regfile, char* PGMfile)
   write_xyz_bin(PGMfile, wx, wy, wz);
 
   /* Write out x,y,z ASCII file */
-  printf("Writing xyz file\n");
+  //printf("Writing xyz file\n");
   char *outfile_ascii = (char *)malloc(strlen(PGMfile) + 3);
-  sprintf(outfile_ascii, "%s.xyz", PGMfile ); // append '.xyz' to input filename
+  sprintf(outfile_ascii, "%s", PGMfile ); // append '.xyz' to input filename
+  sprintf(outfile_ascii+strlen(PGMfile)-3, "%s", "xyz");
   FILE *fp;
   fp = fopen(outfile_ascii, "w");
   if (!fp) {
@@ -328,7 +329,7 @@ void apply_registration(char* regfile, char* PGMfile)
 	fprintf(fp, "%d %d %d\n", (int16_t)wx[i], (int16_t)wy[i], wz[i]);
   }
   fclose(fp);
-  printf("Wrote xyz file\n");
+  //printf("Wrote xyz file\n");
 
 }
 
