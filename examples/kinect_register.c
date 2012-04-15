@@ -122,6 +122,7 @@ void dump_registration(char* regfile) {
 
 
 // From: https://github.com/floe/libfreenect/blob/ee8666614e9ff620f49c83f466e5a99f6a0be4a0/src/registration.c
+/*
 int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw, uint16_t* output_mm) {
 
   memset(output_mm, DEPTH_NO_MM_VALUE, DEPTH_X_RES * DEPTH_Y_RES * sizeof(uint16_t)); // clear the output image
@@ -162,6 +163,8 @@ int freenect_apply_registration(freenect_registration* reg, uint16_t* input_raw,
   }
   return 0;
 }
+*/
+
 
 freenect_registration load_registration(char* regfile) 
 {
@@ -204,6 +207,40 @@ void load_PGM(char *PGMfile, uint16_t* data)
   }
   while (getc(fp) != '\n'); // skip header line
   fread(data, sizeof(uint16_t), DEPTH_X_RES*DEPTH_Y_RES, fp);
+  fclose(fp);
+}
+
+void load_PPM(char *PPMfile, uint8_t* data)
+{
+  // written like this:
+  //fprintf(fp, "P6 %d %d 255\n", FREENECT_FRAME_W, FREENECT_FRAME_H);
+  //fwrite(data, data_size, 1, fp);
+  FILE *fp = NULL;
+  fp = fopen(PPMfile, "r");
+  if (!fp) {
+	perror(PPMfile);
+	exit(1);
+  }
+  while (getc(fp) != '\n'); // skip P6 header
+  fread(data, sizeof(uint8_t), DEPTH_X_RES*DEPTH_Y_RES*3, fp);
+}
+
+void write_PPM(char *PPMfile, uint8_t* data)
+{
+  char *PPMfile_out = (char *)malloc(strlen(PPMfile) + 4); // ".reg"
+  sprintf(PPMfile_out, "%s", PPMfile);
+  sprintf(PPMfile_out+strlen(PPMfile)-4, "%s", ".reg");
+  sprintf(PPMfile_out+strlen(PPMfile), "%s", ".ppm");
+  
+  FILE *fp = NULL;
+  fp = fopen(PPMfile_out, "w");
+  if (!fp) {
+	perror(PPMfile_out);
+	exit(1);
+  }
+
+  fprintf(fp, "P6 %d %d 255\n", DEPTH_X_RES, DEPTH_Y_RES);
+  fwrite(data, DEPTH_X_RES*DEPTH_Y_RES*3, 1, fp);
   fclose(fp);
 }
 
@@ -269,22 +306,36 @@ void write_xyz_bin(char *infile, double* x, double* y, uint16_t* z)
   fclose(fp);
 }
 
-
-/*
-/// convert raw shift value to metric depth (in mm)                                  
-static uint16_t freenect_raw_to_mm(uint16_t raw, freenect_registration* reg)
+/// RGB -> depth mapping function (inverse of default FREENECT_DEPTH_REGISTERED mapping)
+void freenect_map_rgb_to_depth(freenect_registration* reg, uint16_t* depth_mm, uint8_t* rgb_raw, uint8_t* rgb_registered)
 {
-  double parameter_coefficient = 4;
-  double shift_scale = 10;
-  double pixel_size_factor = 1;
-  freenect_zero_plane_info* zpi = &(reg->zero_plane_info);
-  double fixed_ref_x = ((raw - (parameter_coefficient * reg->const_shift / pixel_size_factor)) / parameter_coefficient) - S2D_CONST_OFFSET;
-  double metric = fixed_ref_x * zpi->reference_pixel_size * pixel_size_factor;
-  return shift_scale * ((metric * zpi->reference_distance / (zpi->dcmos_emitter_dist - metric)) + zpi->reference_distance);
-}
-*/
+  uint32_t target_offset = reg->reg_pad_info.start_lines * DEPTH_Y_RES;
+	int x,y;
 
-void apply_registration(char* regfile, char* PGMfile)
+	for (y = 0; y < DEPTH_Y_RES; y++) for (x = 0; x < DEPTH_X_RES; x++) {
+
+		uint32_t index = y * DEPTH_X_RES + x;
+		uint32_t cx,cy,cindex;
+
+		int wz = depth_mm[index];
+		//if (wz == 0) continue;
+
+		// coordinates in rgb image corresponding to x,y
+		cx = (reg->registration_table[index][0] + reg->depth_to_rgb_shift[wz]) / REG_X_VAL_SCALE; 
+		cy =  reg->registration_table[index][1];
+
+		if (cx >= DEPTH_X_RES) continue;
+
+		cindex = (cy * DEPTH_X_RES + cx - target_offset) * 3;
+		index  = index*3;
+
+		rgb_registered[index+0] = rgb_raw[cindex+0];
+		rgb_registered[index+1] = rgb_raw[cindex+1];
+		rgb_registered[index+2] = rgb_raw[cindex+2];
+	}
+}
+
+void apply_registration(char* regfile, char* PGMfile, char* PPMfile)
 {
   int i, j;
   int x, y;
@@ -295,10 +346,18 @@ void apply_registration(char* regfile, char* PGMfile)
   uint16_t data[DEPTH_X_RES*DEPTH_Y_RES];
   load_PGM(PGMfile, data);
 
+  uint8_t data_ppm[DEPTH_X_RES*DEPTH_Y_RES*3];
+  uint8_t data_ppm_reg[DEPTH_X_RES*DEPTH_Y_RES*3];
+  if (PPMfile != NULL) {
+	load_PPM(PPMfile, data_ppm);
+	// write_PPM(PPMfile, data_ppm);
+  }
+
   // freenect_apply_depth_to_mm from registration.c
   // This converts the raw data to depth data, but does not mess with
   // pixel alignment.
   uint16_t wz[DEPTH_X_RES*DEPTH_Y_RES];
+  double wx[DEPTH_X_RES*DEPTH_Y_RES], wy[DEPTH_X_RES*DEPTH_Y_RES];
   for (y = 0; y < DEPTH_Y_RES; y++) {
 	for (x = 0; x < DEPTH_X_RES; x++) {
 	  // get the value at the current depth pixel, convert to millimeters      
@@ -311,33 +370,9 @@ void apply_registration(char* regfile, char* PGMfile)
 
   /* Convert DN to world */
   // first, convert the DN to worldz
-  double wx[DEPTH_X_RES*DEPTH_Y_RES], wy[DEPTH_X_RES*DEPTH_Y_RES];
-  //uint16_t wz[DEPTH_X_RES*DEPTH_Y_RES];
 
-  // freenect_map_rgd_to_depth from registration.c
-  /*
-  uint32_t target_offset = dev->registration.reg_pad_info.start_lines * DEPTH_Y_RES;
-  for (y = 0; y < DEPTH_Y_RES; y++) for (x = 0; x < DEPTH_X_RES; x++) {
-	  uint32_t index = y * DEPTH_X_RES + x;
-	  //uint32_t cx,cy,cindex;
-	  wz[index] = depth_mm[index];
-	  // coordinates in rgb image corresponding to x,y
-	  cx = (dev->registration.registration_table[index][0] + dev->registration.depth_to_rgb_shift[wz]) / REG_X_VAL_SCALE; 
-	  cy =  dev->registration.registration_table[index][1];
-	  if (cx >= DEPTH_X_RES) continue;
-	  cindex = (cy * DEPTH_X_RES + cx - target_offset) * 3;
-	  index  = index*3;
-	  rgb_registered[index+0] = rgb_raw[cindex+0];
-	  rgb_registered[index+1] = rgb_raw[cindex+1];
-	  rgb_registered[index+2] = rgb_raw[cindex+2];
-	}
-  */
-
-  //freenect_apply_registration(&reg, data, wz);
-  //wz = output_mm;
-  
-  // then, convert x and y to world_x and world_y
-  //printf("Converting camera to world coordinates\n");
+  freenect_map_rgb_to_depth(&reg, wz, data_ppm, data_ppm_reg);
+  write_PPM(PPMfile, data_ppm_reg);
 
   // see freenect_camera_to_world() in registration.c
   double ref_pix_size = reg.zero_plane_info.reference_pixel_size;
@@ -392,10 +427,11 @@ void usage()
 {
   printf("Kinect Offline Registration\n");
   printf("Usage:\n");
-  printf("  kinect_register [-h] [-s <regfile> | -a <regfile> <PGM>\n");
+  printf("  kinect_register [-h] [-s <regfile> | -a <regfile> <PGM> [<PPM>]\n");
   printf(" -h: Display this help message\n"
 		 " -s: Save the registration parameters from a connected Kinect to <regfile>\n"
 		 " -a: Apply the registration parameters from <regfile> to <PGM> (from 'record')\n"
+         "     Optionally align a PPM file with the PGM file\n"
 		 );
   exit(0);
 }
@@ -403,7 +439,7 @@ void usage()
 int main(int argc, char **argv)
 {
   int c=1;
-  char *regfile=0, *PGMfile=0;
+  char *regfile=0, *PGMfile=0, *PPMfile=0;
   if (argc == 1)
 	usage();
 
@@ -420,6 +456,10 @@ int main(int argc, char **argv)
 		usage();
 	  regfile = argv[c+1];
 	  PGMfile = argv[c+2];
+	  if (argc == (c+4)) {
+		PPMfile = argv[c+3];
+		printf("Will register color too...\n");
+	  }
 	}
 	c++;
   }
@@ -427,7 +467,7 @@ int main(int argc, char **argv)
   if (regfile != 0 && PGMfile == 0)
 	dump_registration(regfile);
   else
-	apply_registration(regfile, PGMfile);
+	apply_registration(regfile, PGMfile, PPMfile);
   
   return 0;
 }
