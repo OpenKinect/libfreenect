@@ -371,8 +371,10 @@ void apply_registration(char* regfile, char* PGMfile, char* PPMfile)
   /* Convert DN to world */
   // first, convert the DN to worldz
 
-  freenect_map_rgb_to_depth(&reg, wz, data_ppm, data_ppm_reg);
-  write_PPM(PPMfile, data_ppm_reg);
+  if (PPMfile != 0) {
+	freenect_map_rgb_to_depth(&reg, wz, data_ppm, data_ppm_reg);
+	write_PPM(PPMfile, data_ppm_reg);
+  }
 
   // see freenect_camera_to_world() in registration.c
   double ref_pix_size = reg.zero_plane_info.reference_pixel_size;
@@ -414,7 +416,15 @@ void apply_registration(char* regfile, char* PGMfile, char* PPMfile)
 	if (wz[i] == 0)
 	  continue;
 
-	fprintf(fp, "%d %d %d\n", (int16_t)wx[i], (int16_t)wy[i], wz[i]);
+	fprintf(fp, "%d %d %d", (int16_t)wx[i], (int16_t)wy[i], wz[i]);
+	if (PPMfile != 0) {
+	  int ii = i*3;
+	  fprintf( fp, " %d %d %d", 
+			   (uint8_t)data_ppm_reg[ii], 
+			   (uint8_t)data_ppm_reg[ii+1], 
+			   (uint8_t)data_ppm_reg[ii+2]);
+	}
+	fprintf(fp, "\n");
   }
   fclose(fp);
   //printf("Wrote xyz file\n");
