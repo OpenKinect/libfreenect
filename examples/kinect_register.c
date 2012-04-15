@@ -47,6 +47,12 @@
 #define REG_X_VAL_SCALE 256 // "fixed-point" precision for double -> int32_t conversion
 #define DEPTH_MIRROR_X 0
 
+
+#define S2D_PIXEL_CONST 10
+#define S2D_CONST_OFFSET 0.375
+
+
+
 void dump_registration(char* regfile) {
   printf("Dumping Kinect registration to %s\n", regfile);
 
@@ -201,7 +207,6 @@ void load_PGM(char *PGMfile, uint16_t* data)
   fclose(fp);
 }
 
-/*
 void write_PGM(char *PGMfile, uint16_t* data, char *type)
 {
   // make filename <whatever>.dist.pgm
@@ -221,7 +226,6 @@ void write_PGM(char *PGMfile, uint16_t* data, char *type)
   fwrite(data, sizeof(uint16_t), DEPTH_X_RES*DEPTH_Y_RES, fp);
   fclose(fp);
 }
-*/
 
 
 void write_xyz_bin(char *infile, double* x, double* y, uint16_t* z)
@@ -266,10 +270,24 @@ void write_xyz_bin(char *infile, double* x, double* y, uint16_t* z)
 }
 
 
+/*
+/// convert raw shift value to metric depth (in mm)                                  
+static uint16_t freenect_raw_to_mm(uint16_t raw, freenect_registration* reg)
+{
+  double parameter_coefficient = 4;
+  double shift_scale = 10;
+  double pixel_size_factor = 1;
+  freenect_zero_plane_info* zpi = &(reg->zero_plane_info);
+  double fixed_ref_x = ((raw - (parameter_coefficient * reg->const_shift / pixel_size_factor)) / parameter_coefficient) - S2D_CONST_OFFSET;
+  double metric = fixed_ref_x * zpi->reference_pixel_size * pixel_size_factor;
+  return shift_scale * ((metric * zpi->reference_distance / (zpi->dcmos_emitter_dist - metric)) + zpi->reference_distance);
+}
+*/
 
 void apply_registration(char* regfile, char* PGMfile)
 {
   int i, j;
+  int x, y;
 
   freenect_registration reg;
   reg = load_registration(regfile);
@@ -277,12 +295,47 @@ void apply_registration(char* regfile, char* PGMfile)
   uint16_t data[DEPTH_X_RES*DEPTH_Y_RES];
   load_PGM(PGMfile, data);
 
+  // freenect_apply_depth_to_mm from registration.c
+  // This converts the raw data to depth data, but does not mess with
+  // pixel alignment.
+  uint16_t wz[DEPTH_X_RES*DEPTH_Y_RES];
+  for (y = 0; y < DEPTH_Y_RES; y++) {
+	for (x = 0; x < DEPTH_X_RES; x++) {
+	  // get the value at the current depth pixel, convert to millimeters      
+	  uint16_t metric_depth = (&reg)->raw_to_mm_shift[ data[y*DEPTH_X_RES+x] ];
+	  wz[y * DEPTH_X_RES + x] = metric_depth < DEPTH_MAX_METRIC_VALUE ? metric_depth : DEPTH_MAX_METRIC_VALUE;
+	}
+  }
+  write_PGM( PGMfile, wz, "d" );
+  // inputfile.pgm -> inputfile.d.pgm
+
   /* Convert DN to world */
   // first, convert the DN to worldz
   double wx[DEPTH_X_RES*DEPTH_Y_RES], wy[DEPTH_X_RES*DEPTH_Y_RES];
-  uint16_t wz[DEPTH_X_RES*DEPTH_Y_RES];
-  freenect_apply_registration(&reg, data, wz);
+  //uint16_t wz[DEPTH_X_RES*DEPTH_Y_RES];
 
+  // freenect_map_rgd_to_depth from registration.c
+  /*
+  uint32_t target_offset = dev->registration.reg_pad_info.start_lines * DEPTH_Y_RES;
+  for (y = 0; y < DEPTH_Y_RES; y++) for (x = 0; x < DEPTH_X_RES; x++) {
+	  uint32_t index = y * DEPTH_X_RES + x;
+	  //uint32_t cx,cy,cindex;
+	  wz[index] = depth_mm[index];
+	  // coordinates in rgb image corresponding to x,y
+	  cx = (dev->registration.registration_table[index][0] + dev->registration.depth_to_rgb_shift[wz]) / REG_X_VAL_SCALE; 
+	  cy =  dev->registration.registration_table[index][1];
+	  if (cx >= DEPTH_X_RES) continue;
+	  cindex = (cy * DEPTH_X_RES + cx - target_offset) * 3;
+	  index  = index*3;
+	  rgb_registered[index+0] = rgb_raw[cindex+0];
+	  rgb_registered[index+1] = rgb_raw[cindex+1];
+	  rgb_registered[index+2] = rgb_raw[cindex+2];
+	}
+  */
+
+  //freenect_apply_registration(&reg, data, wz);
+  //wz = output_mm;
+  
   // then, convert x and y to world_x and world_y
   //printf("Converting camera to world coordinates\n");
 
