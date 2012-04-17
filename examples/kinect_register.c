@@ -314,7 +314,7 @@ void apply_registration(char* regfile, char* PGMfile, char* PPMfile)
 	  wz[y * DEPTH_X_RES + x] = metric_depth < DEPTH_MAX_METRIC_VALUE ? metric_depth : DEPTH_MAX_METRIC_VALUE;
 	}
   }
-  write_PGM( PGMfile, wz, "d" );
+  // write_PGM( PGMfile, wz, "d" );
 
   if (PPMfile != 0) {
 	freenect_map_rgb_to_depth(&reg, wz, data_ppm, data_ppm_reg);
