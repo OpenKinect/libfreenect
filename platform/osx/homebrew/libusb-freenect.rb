@@ -5,6 +5,10 @@ class LibusbFreenect <Formula
   homepage 'http://www.libusb.org/'
   version "7da756e09fd97efad2b3"
   md5 ''
+  
+  depends_on 'libtool'
+  depends_on 'automake'
+  
   def patches
     # patches libusb to work with libfreenect
     "https://github.com/OpenKinect/libfreenect/raw/master/platform/osx/libusb-osx-kinect.diff"
