@@ -154,7 +154,7 @@ namespace Freenect {
 		int getDepthBufferSize(){
 			return freenect_get_current_depth_mode(m_dev).bytes;
 		}
-#ifdef OPT_CLIPPING
+#ifdef LIBFREENECT_OPT_CLIPPING
 		/* Enable clipping in libfreenect driver
 		 * The range values are irrelvant, if enable=false. */
 		int setClipping(bool enable, int16_t top, int16_t bottom, int16_t left, int16_t right){

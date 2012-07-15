@@ -240,7 +240,7 @@ struct _freenect_device {
 	fnusb_dev usb_motor;
 	freenect_raw_tilt_state raw_state;
 
-#ifdef OPT_CLIPPING
+#ifdef LIBFREENECT_OPT_CLIPPING
 	// Clip
 	freenect_clip clip;
 #endif

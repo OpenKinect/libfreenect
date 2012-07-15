@@ -196,7 +196,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	// copy data
 	uint8_t *dbuf = strm->raw_buf + strm->pkt_num * strm->pkt_size;
 
-#ifdef OPT_CLIPPING
+#ifdef LIBFREENECT_OPT_CLIPPING
 	//assume 11bit depth data (TODO: Find out general value)
 	freenect_clip *clip = &ctx->first->clip;
 	if( clip->on /*&& datalen == 1748*/ ){
@@ -409,7 +409,7 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 	}
 }
 
-#ifdef OPT_CLIPPING
+#ifdef LIBFREENECT_OPT_CLIPPING
 // Loop-unrolled version of the 11-to-16 bit unpacker.  n must be a multiple of 8.
 // Cut of clipped area. Thus the loop is unrolled, some clipped points will convert, too.
 static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int n,freenect_clip *clip)
@@ -485,7 +485,7 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
-#ifdef OPT_CLIPPING
+#ifdef LIBFREENECT_OPT_CLIPPING
 			convert_packed11_to_16bit_clipped(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480,
 					&dev->clip);
 #else
@@ -1431,7 +1431,7 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
 	return 0;
 }
 
-#ifdef OPT_CLIPPING
+#ifdef LIBFREENECT_OPT_CLIPPING
 int freenect_set_clipping(freenect_device* dev, const	freenect_clip clip)
 {
 	dev->clip.on = clip.on;

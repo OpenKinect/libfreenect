@@ -156,7 +156,7 @@ typedef struct {
 	freenect_tilt_status_code tilt_status;     /**< State of the tilt motor (stopped, moving, etc...) */
 } freenect_raw_tilt_state;
 
-#ifdef OPT_CLIPPING
+#ifdef LIBFREENECT_OPT_CLIPPING
 /// Information about cliping data streams.
 /*
  This values allows to clip depth or rgb streams to
@@ -631,7 +631,7 @@ FREENECTAPI freenect_frame_mode freenect_find_depth_mode(freenect_resolution res
  */
 FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode);
 
-#ifdef OPT_CLIPPING
+#ifdef LIBFREENECT_OPT_CLIPPING
 /**
  * Sets the clipping values.
  * Set clip->on=false to disable clipping.

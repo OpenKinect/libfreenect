@@ -60,7 +60,7 @@ OPTION(BUILD_PYTHON "Build Python extension" OFF)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
-OPTION(OPT_CLIPPING "Allow clipping. " ON)
+OPTION(LIBFREENECT_OPT_CLIPPING "Allow clipping. " ON)
 
 ######################################################################################
 # CMake Modules
@@ -83,8 +83,8 @@ if(BIG_ENDIAN)
   add_definitions(-DFN_BIGENDIAN)
 endif()
 
-if(OPT_CLIPPING)
-	add_definitions(-DOPT_CLIPPING)
+if(LIBFREENECT_OPT_CLIPPING)
+	add_definitions(-DLIBFREENECT_OPT_CLIPPING)
 endif()
 
 if(BUILD_AUDIO)
