@@ -36,5 +36,23 @@
 int freenect_camera_init(freenect_device *dev);
 int freenect_camera_teardown(freenect_device *dev);
 
+/* memcpy in intersection of two intervalls.
+ * Length of interval: 			min(E,R) - max(S,L)
+ * Index of *src and *dst:	S.
+ * Assumptions:							S<E, L<R
+ *
+ */
+
+static inline void memcpy_intersection(uint8_t *dst, uint8_t *src, int S, int E, int L, int R){
+	int m = S>L?S:L;//lower bound index
+	int M = E<R?E:R;//upper bound index
+	if( M-m> 0 ){
+		//uint8_t *dst2 = dst + m;			//dst+S is associated with index S
+		//uint8_t *src2 = src + (m - S);//*src is associated index S.
+		memcpy(dst+(m-S), src+(m-S), M-m);
+		//memset(dst+(m-S), 0, M-m);
+	}
+};
+
 #endif
 

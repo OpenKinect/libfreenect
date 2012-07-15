@@ -195,7 +195,53 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 
 	// copy data
 	uint8_t *dbuf = strm->raw_buf + strm->pkt_num * strm->pkt_size;
+
+#ifdef OPT_CLIPPING
+	//assume 11bit depth data (TODO: Find out general value)
+	freenect_clip *clip = &ctx->first->clip;
+	if( clip->on /*&& datalen == 1748*/ ){
+
+		const int startbyte = (strm->pkt_num)*1748; //*13984; //= pkt_num*8*1748
+		const int endbyte = startbyte+datalen;//datalen<1748 for last line.
+
+		const int lineminbyte = clip->top*880;
+		const int linemaxbyte = (480-clip->bottom)*880;
+
+		/* Ignore data of top lines and bottom lines. */
+		if( !(lineminbyte > endbyte || linemaxbyte < startbyte ) ){
+
+		int line = startbyte/880;// 11*880 bits = one line.
+
+		int leftbyte = line*880 + clip->left*11/8;
+		int rightbyte = line*880 + 880 - clip->right*11/8;
+
+		// copy bytes of frist line
+		/* On top border is leftbyte<lineminbyte and a extra row are copied.
+			Alternative:
+			memcpy_intersection(dbuf,data,startbyte, endbyte,
+				max(leftbyte,lineminbyte), rightbyte);
+		*/ 
+		memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+		// copy byes of second line
+		leftbyte+=880; rightbyte+=880;
+		memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+		// copy bytes of third line
+		leftbyte+=880; rightbyte+=880;
+		/* Alternative:
+			memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte,
+			min(rightbyte,lineminbyte) );
+		 */
+		memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+		}
+	}else{
+		memcpy(dbuf, data, datalen);
+	}
+#else
 	memcpy(dbuf, data, datalen);
+#endif
 
 	strm->pkt_num++;
 	strm->seq++;
@@ -363,6 +409,62 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 	}
 }
 
+#ifdef OPT_CLIPPING
+// Loop-unrolled version of the 11-to-16 bit unpacker.  n must be a multiple of 8.
+// Cut of clipped area. Thus the loop is unrolled, some clipped points will convert, too.
+static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int n,freenect_clip *clip)
+{
+	uint16_t baseMask = (1 << 11) - 1;
+
+	int left = (clip->left/8)*8;// & 0xF8;//round to base 8
+	int width = 640 - left - (clip->right/8)*8; //width in bytes. (round up)
+
+	int t = 880*clip->top; // = 640*top*11/8
+	int l = left*11 >> 3; // = left*11/8
+
+	//reduce n to clip top and bottom lines
+	n -= 640*(clip->top+clip->bottom);
+	raw += t;
+	frame += 640*clip->top; 
+
+	while(n>=640){
+		uint8_t *raw2 = raw + l;
+		uint16_t *frame2 = frame + left;
+		int w2 = width;
+		while(w2>=8){
+			uint8_t r0  = *(raw2+0);
+			uint8_t r1  = *(raw2+1);
+			uint8_t r2  = *(raw2+2);
+			uint8_t r3  = *(raw2+3);
+			uint8_t r4  = *(raw2+4);
+			uint8_t r5  = *(raw2+5);
+			uint8_t r6  = *(raw2+6);
+			uint8_t r7  = *(raw2+7);
+			uint8_t r8  = *(raw2+8);
+			uint8_t r9  = *(raw2+9);
+			uint8_t r10 = *(raw2+10);
+
+			frame2[0] =  (r0<<3)  | (r1>>5);
+			frame2[1] = ((r1<<6)  | (r2>>2) )           & baseMask;
+			frame2[2] = ((r2<<9)  | (r3<<1) | (r4>>7) ) & baseMask;
+			frame2[3] = ((r4<<4)  | (r5>>4) )           & baseMask;
+			frame2[4] = ((r5<<7)  | (r6>>1) )           & baseMask;
+			frame2[5] = ((r6<<10) | (r7<<2) | (r8>>6) ) & baseMask;
+			frame2[6] = ((r8<<5)  | (r9>>3) )           & baseMask;
+			frame2[7] = ((r9<<8)  | (r10)   )           & baseMask;
+
+			w2 -= 8;
+			raw2 += 11;
+			frame2 += 8;
+		}
+		n -= 640;
+		raw += 880;
+		frame += 640;
+	}
+
+}
+#endif
+
 static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 {
 	freenect_context *ctx = dev->parent;
@@ -383,7 +485,12 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
+#ifdef OPT_CLIPPING
+			convert_packed11_to_16bit_clipped(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480,
+					&dev->clip);
+#else
 			convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
+#endif
 			break;
 		case FREENECT_DEPTH_REGISTERED:
 			freenect_apply_registration(dev, dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf );
@@ -1323,6 +1430,42 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
 	dev->depth_resolution = res;
 	return 0;
 }
+
+#ifdef OPT_CLIPPING
+int freenect_set_clipping(freenect_device* dev, const	freenect_clip clip)
+{
+	dev->clip.on = clip.on;
+
+	if( dev->clip.on){
+		freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+		if( mode.width - clip.left - clip.right < 0
+				|| mode.height - clip.top - clip.bottom < 0
+				|| clip.top < 0 || clip.bottom < 0 || clip.left < 0 || clip.right < 0
+			){
+			freenect_context *ctx = dev->parent;
+			FN_SPEW("freenect_set_clipping: ignore range. Maximal clipping was exceeded.\n");
+			return 0;
+		}
+
+		dev->clip.top = clip.top;
+		dev->clip.bottom = clip.bottom;
+		dev->clip.left = clip.left;
+		dev->clip.right = clip.right;
+	}
+	return 1;
+}
+
+freenect_clip freenect_get_clipping(freenect_device* dev){
+	freenect_clip retval;
+	retval.on = dev->clip.on;
+	retval.top = dev->clip.top;
+	retval.bottom = dev->clip.bottom;
+	retval.left = dev->clip.left;
+	retval.right = dev->clip.right;
+	return retval;
+}
+#endif
+
 int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 {
 	return stream_setbuf(dev->parent, &dev->depth, buf);
