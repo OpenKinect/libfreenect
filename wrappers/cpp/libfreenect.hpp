@@ -192,10 +192,10 @@ namespace Freenect {
 			if(pthread_create(&m_thread, NULL, pthread_callback, (void*)this) != 0) throw std::runtime_error("Cannot initialize freenect thread");
 		}
 		~Freenect() {
+			m_stop = true;
 			for(DeviceMap::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
 				delete it->second;
 			}
-			m_stop = true;
 			pthread_join(m_thread, NULL);
 			if(freenect_shutdown(m_ctx) < 0){} //FN_WARNING("Freenect did not shutdown in a clean fashion");
 		}
