@@ -56,6 +56,8 @@ static pthread_mutex_t runloop_lock = PTHREAD_MUTEX_INITIALIZER;
 static int pending_runloop_tasks = 0;
 static pthread_mutex_t pending_runloop_tasks_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t pending_runloop_tasks_cond = PTHREAD_COND_INITIALIZER;
+static freenect_resolution m_video_resolution = FREENECT_RESOLUTION_MEDIUM;
+static freenect_resolution m_depth_resolution = FREENECT_RESOLUTION_MEDIUM;
 
 /* Locking Convention
    Rules:
@@ -76,7 +78,7 @@ static int alloc_buffer_ring_video(freenect_video_format fmt, buffer_ring_t *buf
 		case FREENECT_VIDEO_IR_8BIT:
 		case FREENECT_VIDEO_IR_10BIT:
 		case FREENECT_VIDEO_IR_10BIT_PACKED:
-			sz = freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, fmt).bytes;
+			sz = freenect_find_video_mode(m_video_resolution, fmt).bytes;
 			break;
 		default:
 			printf("Invalid video format %d\n", fmt);
@@ -100,7 +102,7 @@ static int alloc_buffer_ring_depth(freenect_depth_format fmt, buffer_ring_t *buf
 		case FREENECT_DEPTH_10BIT_PACKED:
 		case FREENECT_DEPTH_REGISTERED:
 		case FREENECT_DEPTH_MM:
-			sz = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, fmt).bytes;
+			sz = freenect_find_depth_mode(m_depth_resolution, fmt).bytes;
 			break;
 		default:
 			printf("Invalid depth format %d\n", fmt);
@@ -217,27 +219,29 @@ static void init_thread(void)
 	pthread_create(&thread, NULL, init, NULL);
 }
 
-static int change_video_format(sync_kinect_t *kinect, freenect_video_format fmt)
+static int change_video_format(sync_kinect_t *kinect, freenect_video_format fmt, freenect_resolution requested_resolution)
 {
 	freenect_stop_video(kinect->dev);
 	free_buffer_ring(&kinect->video);
 	if (alloc_buffer_ring_video(fmt, &kinect->video))
 		return -1;
-	freenect_set_video_mode(kinect->dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, fmt));
+	freenect_set_video_mode(kinect->dev, freenect_find_video_mode(requested_resolution, fmt));
 	freenect_set_video_buffer(kinect->dev, kinect->video.bufs[2]);
 	freenect_start_video(kinect->dev);
+	m_video_resolution = requested_resolution;
 	return 0;
 }
 
-static int change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt)
+static int change_depth_format(sync_kinect_t *kinect, freenect_depth_format fmt, freenect_resolution requested_resolution)
 {
 	freenect_stop_depth(kinect->dev);
 	free_buffer_ring(&kinect->depth);
 	if (alloc_buffer_ring_depth(fmt, &kinect->depth))
 		return -1;
-	freenect_set_depth_mode(kinect->dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, fmt));
+	freenect_set_depth_mode(kinect->dev, freenect_find_depth_mode(requested_resolution, fmt));
 	freenect_set_depth_buffer(kinect->dev, kinect->depth.bufs[2]);
 	freenect_start_depth(kinect->dev);
+	m_depth_resolution = requested_resolution;
 	return 0;
 }
 
@@ -297,9 +301,9 @@ static int setup_kinect(int index, int fmt, int is_depth)
 	pthread_mutex_lock(&buf->lock);
 	if (buf->fmt != fmt) {
 		if (is_depth)
-			change_depth_format(kinects[index], (freenect_depth_format)fmt);
+			change_depth_format(kinects[index], (freenect_depth_format)fmt, m_video_resolution);
 		else
-			change_video_format(kinects[index], (freenect_video_format)fmt);
+			change_video_format(kinects[index], (freenect_video_format)fmt, m_video_resolution);
 	}
 	pthread_mutex_unlock(&buf->lock);
 	pthread_mutex_unlock(&runloop_lock);
