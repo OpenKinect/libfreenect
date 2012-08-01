@@ -67,7 +67,7 @@ int main(void)
 	FILE *fp;
 	int ret;
 
-	ret = freenect_sync_get_video((void**)&rgb, &ts, 0, FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB);
+	ret = freenect_sync_get_video((void**)&rgb, &ts, 0, FREENECT_VIDEO_RGB);
 	if (ret < 0)
 		no_kinect_quit();
 
@@ -75,7 +75,7 @@ int main(void)
 	dump_rgb(fp, rgb, 640, 480);
 	fclose(fp);
 
-	ret = freenect_sync_get_depth((void**)&depth, &ts, 0, FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT);
+	ret = freenect_sync_get_depth((void**)&depth, &ts, 0, FREENECT_DEPTH_11BIT);
 	if (ret < 0)
 		no_kinect_quit();
 
@@ -83,7 +83,7 @@ int main(void)
 	dump_depth(fp, depth, 640, 480);
 	fclose(fp);
 
-	ret = freenect_sync_get_depth((void**)&depth, &ts, 0, FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_REGISTERED);
+	ret = freenect_sync_get_depth((void**)&depth, &ts, 0, FREENECT_DEPTH_REGISTERED);
 	if (ret < 0)
 		no_kinect_quit();
 
@@ -91,7 +91,7 @@ int main(void)
 	dump_depth(fp, depth, 640, 480);
 	fclose(fp);
 
-	ret = freenect_sync_get_depth((void**)&depth, &ts, 0, FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM);
+	ret = freenect_sync_get_depth((void**)&depth, &ts, 0, FREENECT_DEPTH_MM);
 	if (ret < 0)
 		no_kinect_quit();
 
