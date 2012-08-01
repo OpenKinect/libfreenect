@@ -33,7 +33,8 @@
 extern "C" {
 #endif
 
-int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt);
+int freenect_sync_get_video(void **video, uint32_t *timestamp, int index,
+        freenect_resolution res, freenect_video_format fmt);
 /*  Synchronous video function, starts the runloop if it isn't running
 
     The returned buffer is valid until this function is called again, after which the buffer must not
@@ -49,8 +50,8 @@ int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freene
         Nonzero on error.
 */
 
-
-int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freenect_depth_format fmt);
+int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index,
+        freenect_resolution res, freenect_depth_format fmt);
 /*  Synchronous depth function, starts the runloop if it isn't running
 
     The returned buffer is valid until this function is called again, after which the buffer must not
