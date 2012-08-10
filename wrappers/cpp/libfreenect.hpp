@@ -28,8 +28,10 @@
 
 #include <libfreenect.h>
 #include <stdexcept>
+#include <sstream>
 #include <map>
 #include <pthread.h>
+#include <libusb-1.0/libusb.h>
 
 namespace Freenect {
 	class Noncopyable {
@@ -162,7 +164,7 @@ namespace Freenect {
 			return freenect_set_clipping(m_dev, clip );
 		};
 #endif
-	  private:
+		private:
 		freenect_device *m_dev;
 		freenect_video_format m_video_format;
 		freenect_depth_format m_depth_format;
@@ -190,10 +192,10 @@ namespace Freenect {
 			if(pthread_create(&m_thread, NULL, pthread_callback, (void*)this) != 0) throw std::runtime_error("Cannot initialize freenect thread");
 		}
 		~Freenect() {
+			m_stop = true;
 			for(DeviceMap::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
 				delete it->second;
 			}
-			m_stop = true;
 			pthread_join(m_thread, NULL);
 			if(freenect_shutdown(m_ctx) < 0){} //FN_WARNING("Freenect did not shutdown in a clean fashion");
 		}
@@ -217,7 +219,20 @@ namespace Freenect {
 		// Do not call directly, thread runs here
 		void operator()() {
 			while(!m_stop) {
-				if(freenect_process_events(m_ctx) < 0) throw std::runtime_error("Cannot process freenect events");
+				int res = freenect_process_events(m_ctx);
+				if (res < 0)
+				{
+					// libusb signals an error has occurred
+					if (res == LIBUSB_ERROR_INTERRUPTED)
+					{
+						// This happens sometimes, it means that a system call in libusb was interrupted somehow (perhaps due to a signal)
+						// The simple solution seems to be just ignore it.
+						continue;
+					}
+					std::stringstream ss;
+					ss << "Cannot process freenect events (libusb error code: " << res << ")";
+					throw std::runtime_error(ss.str());
+				}
 			}
 		}
 		static void *pthread_callback(void *user_data) {
