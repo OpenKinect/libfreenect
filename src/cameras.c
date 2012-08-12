@@ -384,17 +384,19 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 #endif
 
 #ifdef ARM_ASMB
+//require 9 register
 	asm volatile ( \
-			"mov %[nn], %[nn], ROR #3 \n\t" /* loop dec counter. %[nn]=n/8 */
-
-			"loop: \n\t" /* Label for while loop */
-			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
-			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer r11.*/
-			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
-			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-11. r11 points now to [val+11]. */
+			"mov %[nn], %[nn], LSR #3 \n\t" /* loop dec counter. %[nn]=n/8 */
 
 			"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
 			"orr r10, r10, r10, LSL #3 \n\t"/* and-mask for 11 bits. [0|0|3|8] */
+//			"eor r9, r10, #0x0000001 \n\t" /* and-mask for 10 bits. [0|0|3|7] */
+
+			"loop: \n\t" /* Label for while loop */
+			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
+			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer %[raw].*/
+			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
+			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-10. r2 points now to [val+11]. */
 
 			"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
 			/* Target: Save frame[0], frame[1] in one register, [l0,h0,l1,h1] */
@@ -405,8 +407,8 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[0] and frame[1]. */
 
 			/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
-			"eor r9, r10, #0x0000001 \n\t" /* and-mask for 10 bits. [0|0|3|7] */
-			"and r3, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
+//			"and r3, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
+			"and r3, r10, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
 			"orr r3, r3, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
 			"and r4, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
 			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h2,l2,h3,l3]. */
@@ -414,10 +416,10 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[2] and frame[3]. */
 
 			/* Target: Save frame[4], frame[5] in one register, [l4,h4,l5,h5] */
-			"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
 			"and r4, r10, r1, LSL #2 \n\t" /* Store bytes of frame[5]. [0|0|h5|l5'] Last two bits missing. */
-			"mov r5, r2, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
-			"orr r4, r4, r5, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
+			"mov r3, r2, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
+			"orr r4, r4, r3, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
+			"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
 			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h4,l4,h5,l5]. */
 			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[4] and frame[5] */
@@ -431,11 +433,12 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 
 			"subs %[nn], %[nn], #1 \n\t" /* Dec loop counter */
 			"bne loop \n\t" /* Looping... */
-
+#ifndef NF_BIGENDIAN
 			"setend le \n\t" /* Litte Endian. */
+#endif
 			: 
 			: [raw] "r" (raw), [frame] "r" (frame), [nn] "r" (n) 
-			: "r0","r1","r2","r3","r4","r5","r9","r10");
+			: "r0","r1","r2","r3","r4","r10");
 		n -= 8;
 #else
 	while(n >= 8)
@@ -471,42 +474,52 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 #ifdef LIBFREENECT_OPT_CLIPPING
 // Loop-unrolled version of the 11-to-16 bit unpacker.  n must be a multiple of 8.
 // Cut of clipped area. Thus the loop is unrolled, some clipped points will convert, too.
-static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int n,freenect_clip *clip)
+// w - image width, n = w*h
+static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uint32_t n, uint32_t w, freenect_clip *clip)
 {
 
 #ifndef ARM_ASMB
 	uint16_t baseMask = (1 << 11) - 1;
 #endif
 
-	int left = (clip->left/8)*8;// & 0xF8;//round to base 8
-	int width = 640 - left - (clip->right/8)*8; //width in bytes. (round up)
 	//int left = (clip->left) & 0xFFFFFFF8;//round to base 8
-	//int width = 640 - left - ((clip->right)&0xFFFFFFF8); //width in bytes. (round up)
+	const int left = (clip->left/8)*8;// & 0xF8;//round to base 8
+	int frameshift = left + (clip->right/8)*8; //multiple of 8.
+	const int roiWidth = w - frameshift; //width in bytes. (round up)
 
-	int t = 880*clip->top; // = 640*top*11/8
-	int l = left*11 >> 3; // = left*11/8
+	const uint32_t wraw = w*11 >> 3; //i.e. 880
+	const int t = wraw*clip->top; // i.e. 640*top*11/8
+	const int l = left*11 >> 3; // = left*11/8
+	const int rawshift = frameshift*11 >> 3; 
+
+	uint8_t *rs = raw;
+	uint16_t *fs = frame;
 
 	//reduce n to clip top and bottom lines
-	n -= 640*(clip->top+clip->bottom);
+	n -= w*(clip->top+clip->bottom);
 	raw += t;
-	frame += 640*clip->top; 
+	frame += w*clip->top; 
 
-	while(n>=640){
-		uint8_t *raw2 = raw + l;
-		uint16_t *frame2 = frame + left;
-		int w2 = width;
 #ifdef ARM_ASMB
+	n = n/w; /* replace n by number of lines */
+	frameshift *= 2; /* convert to byte count */
+	raw += l;
+	frame += left;
+
+	//require 12 register
 	asm volatile ( \
-			"mov %[nn], %[nn], ROR #3 \n\t" /* loop dec counter. %[nn]=n/8 */
-
-			"loop: \n\t" /* Label for while loop */
-			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
-			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer r11.*/
-			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
-			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-11. r11 points now to [val+11]. */
-
 			"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
-			"orr r10, r10, r10, LSL #3 \n\t"/* and-mask for 11 bits. [0|0|3|8] */
+			"orr r10, r10, r10, LSL #3 \n\t" /* and-mask for 11 bits. [0|0|3|8] */
+
+			"outloop: \n\t" /* Label for outer while loop */
+
+			"mov r5, %[w], LSR #3 \n\t" /*Counter for inner loop %[w]=n/8. Change by 1 per cycle.*/
+
+			"inloop: \n\t" /* Label for inner while loop */
+			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
+			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer */
+			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
+//			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-10. %[raw] points now to [val+11]. */
 
 			"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
 			/* Target: Save frame[0], frame[1] in one register, [l0,h0,l1,h1] */
@@ -517,8 +530,8 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[0] and frame[1]. */
 
 			/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
-			"eor r9, r10, #0x0000001 \n\t" /* and-mask for 10 bits. [0|0|3|7] */
-			"and r3, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
+			//"and r3, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
+			"and r3, r10, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
 			"orr r3, r3, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
 			"and r4, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
 			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h2,l2,h3,l3]. */
@@ -526,29 +539,51 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[2] and frame[3]. */
 
 			/* Target: Save frame[4], frame[5] in one register, [l4,h4,l5,h5] */
-			"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
 			"and r4, r10, r1, LSL #2 \n\t" /* Store bytes of frame[5]. [0|0|h5|l5'] Last two bits missing. */
-			"mov r5, r2, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
-			"orr r4, r4, r5, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
+			/* Overwrite Bytes 0-3 with 7-10. This saves a register, but require big endian (or rearrange code...) */
+			"setend be \n\t" 
+			"ldr r0, [%[raw]], #4 \n\t" /* Bytes 7-10. %[raw] points now to [val+11]. */
+			"setend me \n\t"
+
+			"mov r3, r0, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
+			"orr r4, r4, r3, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
+
+			"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
 			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h4,l4,h5,l5]. */
 			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[4] and frame[5] */
 
 			/* Target: Save frame[6], frame[7] in one register, [l6,h6,l7,h7] */
-			"and r4, r10, r2 \n\t" /* Store bytes of frame[7]. [0|0|h7|l7] */
-			"and r3, r10, r2, ROR #11 \n\t" /* Store bytes of frame[6], [0|0|h6|l6] */
+			"and r4, r10, r0 \n\t" /* Store bytes of frame[7]. [0|0|h7|l7] */
+			"and r3, r10, r0, ROR #11 \n\t" /* Store bytes of frame[6], [0|0|h6|l6] */
 			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h6,l6,h7,l7] */
 			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l6,h6,l7,h7] */
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[6] and frame[7] */
 
-			"subs %[nn], %[nn], #1 \n\t" /* Dec loop counter */
-			"bne loop \n\t" /* Looping... */
+			"subs r5, r5, #1 \n\t" /* Dec inloop counter */
+			"bne inloop \n\t" /* Looping... */
 
+			"add %[raw], %[raw], %[rawshift] \n\t" /* Go to begin of next line. */
+			"add %[frame], %[frame], %[frameshift] \n\t" /* Go to begin of next line. */
+
+			"subs %[n], %[n], #1 \n\t" /* Lines to go. */
+			"bne outloop \n\t" /* Looping... */
+
+#ifndef NF_BIGENDIAN
 			"setend le \n\t" /* Litte Endian. */
-			: 
-			: [raw] "r" (raw2), [frame] "r" (frame2), [nn] "r" (w2) 
-			: "r0","r1","r2","r3","r4","r5","r9","r10");
+			#endif
+			:
+			: [raw] "r" (raw), [frame] "r" (frame)
+			, [rawshift] "r" (rawshift), [frameshift] "r" (frameshift)
+			, [w] "r" (roiWidth), [n] "r" (n)
+			: "r0","r1","r3","r4","r5","r10" );
+
 #else
+	while(n>=w){
+		uint8_t *raw2 = raw + l;
+		uint16_t *frame2 = frame + left;
+		uint32_t w2 = roiWidth;
+
 		while(w2>=8){
 			uint8_t r0  = *(raw2+0);
 			uint8_t r1  = *(raw2+1);
@@ -574,13 +609,12 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int
 			w2 -= 8;
 			raw2 += 11;
 			frame2 += 8;
-			printf("Not use assembler...\n");
 		}
-#endif
-		n -= 640;
-		raw += 880;
-		frame += 640;
+		n -= w;
+		raw += wraw;
+		frame += w;
 	}
+#endif
 
 }
 #endif
@@ -606,8 +640,8 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
 #ifdef LIBFREENECT_OPT_CLIPPING
-			convert_packed11_to_16bit_clipped(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480,
-					&dev->clip);
+			convert_packed11_to_16bit_clipped(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480, 640, &dev->clip);
+			//convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
 #else
 			convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
 #endif
