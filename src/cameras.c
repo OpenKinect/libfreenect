@@ -433,7 +433,9 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 
 			"subs %[nn], %[nn], #1 \n\t" /* Dec loop counter */
 			"bne loop \n\t" /* Looping... */
-#ifndef NF_BIGENDIAN
+#ifdef NF_BIGENDIAN
+			"setend be \n\t" 
+#else
 			"setend le \n\t" /* Litte Endian. */
 #endif
 			: 
@@ -502,7 +504,7 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uin
 
 #ifdef ARM_ASMB
 	n = n/w; /* replace n by number of lines */
-	frameshift *= 2; /* convert to byte count */
+	frameshift <<= 1; /* convert to byte count */
 	raw += l;
 	frame += left;
 
@@ -569,9 +571,11 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uin
 			"subs %[n], %[n], #1 \n\t" /* Lines to go. */
 			"bne outloop \n\t" /* Looping... */
 
-#ifndef NF_BIGENDIAN
+#ifdef NF_BIGENDIAN
+			"setend be \n\t" 
+#else
 			"setend le \n\t" /* Litte Endian. */
-			#endif
+#endif
 			:
 			: [raw] "r" (raw), [frame] "r" (frame)
 			, [rawshift] "r" (rawshift), [frameshift] "r" (frameshift)
