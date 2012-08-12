@@ -641,7 +641,6 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 		case FREENECT_DEPTH_11BIT:
 #ifdef LIBFREENECT_OPT_CLIPPING
 			convert_packed11_to_16bit_clipped(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480, 640, &dev->clip);
-			//convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
 #else
 			convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
 #endif
