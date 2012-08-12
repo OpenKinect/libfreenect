@@ -382,64 +382,64 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 #ifndef ARM_ASMB
 	uint16_t baseMask = (1 << 11) - 1;
 #endif
-uint8_t *tr = raw;
-uint16_t *tf = frame;
 
+#ifdef ARM_ASMB
+	asm volatile ( \
+			"mov %[nn], %[nn], ROR #3 \n\t" /* loop dec counter. %[nn]=n/8 */
+
+			"loop: \n\t" /* Label for while loop */
+			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
+			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer r11.*/
+			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
+			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-11. r11 points now to [val+11]. */
+
+			"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
+			"orr r10, r10, r10, LSL #3 \n\t"/* and-mask for 11 bits. [0|0|3|8] */
+
+			"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
+			/* Target: Save frame[0], frame[1] in one register, [l0,h0,l1,h1] */
+			"and r3, r10, r0, ROR #21 \n\t" /* Store bytes of frame[0], [0|0|h0|l0] */
+			"and r4, r10, r0, ROR #10 \n\t" /* Store bytes of frame[1]. [0|0|h1|l1] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h0,l0,h1,l1]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l0,h0,l1,h1]. */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[0] and frame[1]. */
+
+			/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
+			"eor r9, r10, #0x0000001 \n\t" /* and-mask for 10 bits. [0|0|3|7] */
+			"and r3, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
+			"orr r3, r3, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
+			"and r4, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h2,l2,h3,l3]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l2,h2,l3,h2] */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[2] and frame[3]. */
+
+			/* Target: Save frame[4], frame[5] in one register, [l4,h4,l5,h5] */
+			"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
+			"and r4, r10, r1, LSL #2 \n\t" /* Store bytes of frame[5]. [0|0|h5|l5'] Last two bits missing. */
+			"mov r5, r2, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
+			"orr r4, r4, r5, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h4,l4,h5,l5]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[4] and frame[5] */
+
+			/* Target: Save frame[6], frame[7] in one register, [l6,h6,l7,h7] */
+			"and r4, r10, r2 \n\t" /* Store bytes of frame[7]. [0|0|h7|l7] */
+			"and r3, r10, r2, ROR #11 \n\t" /* Store bytes of frame[6], [0|0|h6|l6] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h6,l6,h7,l7] */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l6,h6,l7,h7] */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[6] and frame[7] */
+
+			"subs %[nn], %[nn], #1 \n\t" /* Dec loop counter */
+			"bne loop \n\t" /* Looping... */
+
+			"setend le \n\t" /* Litte Endian. */
+			: 
+			: [raw] "r" (raw), [frame] "r" (frame), [nn] "r" (n) 
+			: "r0","r1","r2","r3","r4","r5","r9","r10");
+		n -= 8;
+#else
 	while(n >= 8)
 	{
-#ifdef ARM_ASMB
-		asm volatile ("mov r11, %[raw] \n\t" /* Pointer to first byte. */
-				"mov r12, %[frame] \n\t" /* Pointer to frist uint16_t of frame. */
-				"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
-				"ldr r0, [r11], #4 \n\t" /* Load first 4 bytes and shift pointer r11.*/
-				"ldr r1, [r11], #3 \n\t" /* Bytes 4-7. */
-				"ldr r2, [r11], #4 \n\t" /* Bytes 7-11. r11 points now to [val+11]. */
-
-				"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
-				"orr r10, r10, r10, LSL #3 \n\t"/* and-mask for 11 bits. [0|0|3|8] */
-
-				"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
-				/* Target: Save frame[0], frame[1] in one register, [l0,h0,l1,h1] */
-				"and r3, r10, r0, ROR #21 \n\t" /* Store bytes of frame[0], [0|0|h0|l0] */
-				"and r4, r10, r0, ROR #9 \n\t" /* Store bytes of frame[1]. [0|0|h1|l1] */
-				"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h0,l0,h1,l1]. */
-				//		 "rev16 r4, r4 \n\t" /* Swap endianess [l0,h0,l1,h1]. */
-				"str r4, [r12], #4 \n\t" /* Save frame[0] and frame[1]. */
-
-				/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
-				"eor r9, r10, #0x0000001 \n\t" /* and-mask for 10 bits. [0|0|3|7] */
-				"and r5, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
-				"orr r5, r5, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
-				"and r6, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
-				"orr r6, r5, r6, ROR #16 \n\t" /* Join bytes [h2,l2,h3,l3]. */
-				//		 "rev16 r6, r6 \n\t" /* Swap endianess [l2,h2,l3,h2] */
-				"str r6, [r12], #4 \n\t" /* Save frame[2] and frame[3]. */
-
-				/* Target: Save frame[4], frame[5] in one register, [l4,h4,l5,h5] */
-				"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
-				"and r4, r10, r1, LSL #2 \n\t" /* Store bytes of frame[5]. [0|0|h5|l5'] Last two bits missing. */
-				"mov r5, r2, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
-				"orr r4, r4, r5, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
-				"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h4,l4,h5,l5]. */
-				//		 "rev16 r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
-				//		 "rev r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
-				"str r4, [r12], #4 \n\t" /* Save frame[4] and frame[5] */
-
-				/* Target: Save frame[6], frame[7] in one register, [l6,h6,l7,h7] */
-				"and r8, r10, r2, ROR #11 \n\t" /* Store low byte of frame[6], [0|0|h6|l6] */
-				"and r9, r10, r2 \n\t" /* Store high and low byte of frame[7]. [0|0|h7|l7] */
-				"orr r9, r8, r9, ROR #16 \n\t" /* Join bytes [h6,l6,h7,l7] */
-				//		 "rev16 r9, r9 \n\t" /* Swap endianess [l6,h6,l7,h7] */
-				"str r9, [r12], #4 \n\t" /* Save frame[6] and frame[7] */
-
-				"setend le \n\t" /* Litte Endian. */
-//				"mov %[frame], r12 \n\t" /* frame += 8. r12 is free, now. */
-//				"mov %[raw], r11 \n\t" /* raw += 11. r11 is free, now. */
-				: : [raw] "r" (tr), [frame] "r" (tf)  );
-		n -= 8;
-		tr += 11;
-		tf += 8;
-#else
 		uint8_t r0  = *(raw+0);
 		uint8_t r1  = *(raw+1);
 		uint8_t r2  = *(raw+2);
@@ -464,9 +464,8 @@ uint16_t *tf = frame;
 		n -= 8;
 		raw += 11;
 		frame += 8;
-#endif
-		printf("%i %i %i\n", n, tr-raw, tf-frame);
 	}
+#endif
 }
 
 #ifdef LIBFREENECT_OPT_CLIPPING
@@ -474,14 +473,15 @@ uint16_t *tf = frame;
 // Cut of clipped area. Thus the loop is unrolled, some clipped points will convert, too.
 static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int n,freenect_clip *clip)
 {
+
 #ifndef ARM_ASMB
 	uint16_t baseMask = (1 << 11) - 1;
 #endif
 
-	//int left = (clip->left/8)*8;// & 0xF8;//round to base 8
-	//int width = 640 - left - (clip->right/8)*8; //width in bytes. (round up)
-	int left = (clip->left) & 0xFFFFFFF8;//round to base 8
-	int width = 640 - left - ((clip->right)&0xFFFFFFF8); //width in bytes. (round up)
+	int left = (clip->left/8)*8;// & 0xF8;//round to base 8
+	int width = 640 - left - (clip->right/8)*8; //width in bytes. (round up)
+	//int left = (clip->left) & 0xFFFFFFF8;//round to base 8
+	//int width = 640 - left - ((clip->right)&0xFFFFFFF8); //width in bytes. (round up)
 
 	int t = 880*clip->top; // = 640*top*11/8
 	int l = left*11 >> 3; // = left*11/8
@@ -495,58 +495,61 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int
 		uint8_t *raw2 = raw + l;
 		uint16_t *frame2 = frame + left;
 		int w2 = width;
-		while(w2>=8){
 #ifdef ARM_ASMB
-			asm volatile ("mov r11, %[raw] \n\t" /* Pointer to first byte. */
-					"mov r12, %[frame] \n\t" /* Pointer to frist uint16_t of frame2. */
-					"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
-					"ldr r0, [r11], #4 \n\t" /* Load first 4 bytes and shift pointer r11.*/
-					"ldr r1, [r11], #3 \n\t" /* Bytes 4-7. */
-					"ldr r2, [r11], #4 \n\t" /* Bytes 7-11. r11 points now to [val+11]. */
+	asm volatile ( \
+			"mov %[nn], %[nn], ROR #3 \n\t" /* loop dec counter. %[nn]=n/8 */
 
-					"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
-					"orr r10, r10, r10, LSL #3 \n\t"/* and-mask for 11 bits. [0|0|3|8] */
+			"loop: \n\t" /* Label for while loop */
+			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
+			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer r11.*/
+			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
+			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-11. r11 points now to [val+11]. */
 
-					"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
-					/* Target: Save frame[0], frame[1] in one register, [l0,h0,l1,h1] */
-					"and r3, r10, r0, ROR #21 \n\t" /* Store bytes of frame[0], [0|0|h0|l0] */
-					"and r4, r10, r0, ROR #9 \n\t" /* Store bytes of frame[1]. [0|0|h1|l1] */
-					"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h0,l0,h1,l1]. */
-					//		 "rev16 r4, r4 \n\t" /* Swap endianess [l0,h0,l1,h1]. */
-					"str r4, [r12], #4 \n\t" /* Save frame[0] and frame[1]. */
+			"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
+			"orr r10, r10, r10, LSL #3 \n\t"/* and-mask for 11 bits. [0|0|3|8] */
 
-					/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
-					"eor r9, r10, #0x0000001 \n\t" /* and-mask for 10 bits. [0|0|3|7] */
-					"and r5, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
-					"orr r5, r5, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
-					"and r6, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
-					"orr r6, r5, r6, ROR #16 \n\t" /* Join bytes [h2,l2,h3,l3]. */
-					//		 "rev16 r6, r6 \n\t" /* Swap endianess [l2,h2,l3,h2] */
-					"str r6, [r12], #4 \n\t" /* Save frame[2] and frame[3]. */
+			"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
+			/* Target: Save frame[0], frame[1] in one register, [l0,h0,l1,h1] */
+			"and r3, r10, r0, ROR #21 \n\t" /* Store bytes of frame[0], [0|0|h0|l0] */
+			"and r4, r10, r0, ROR #10 \n\t" /* Store bytes of frame[1]. [0|0|h1|l1] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h0,l0,h1,l1]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l0,h0,l1,h1]. */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[0] and frame[1]. */
 
-					/* Target: Save frame[4], frame[5] in one register, [l4,h4,l5,h5] */
-					"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
-					"and r4, r10, r1, LSL #2 \n\t" /* Store bytes of frame[5]. [0|0|h5|l5'] Last two bits missing. */
-					"mov r5, r2, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
-					"orr r4, r4, r5, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
-					"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h4,l4,h5,l5]. */
-					//		 "rev16 r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
-					//		 "rev r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
-					"str r4, [r12], #4 \n\t" /* Save frame[4] and frame[5] */
+			/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
+			"eor r9, r10, #0x0000001 \n\t" /* and-mask for 10 bits. [0|0|3|7] */
+			"and r3, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
+			"orr r3, r3, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
+			"and r4, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h2,l2,h3,l3]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l2,h2,l3,h2] */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[2] and frame[3]. */
 
-					/* Target: Save frame[6], frame[7] in one register, [l6,h6,l7,h7] */
-					"and r8, r10, r2, ROR #11 \n\t" /* Store low byte of frame[6], [0|0|h6|l6] */
-					"and r9, r10, r2 \n\t" /* Store high and low byte of frame[7]. [0|0|h7|l7] */
-					"orr r9, r8, r9, ROR #16 \n\t" /* Join bytes [h6,l6,h7,l7] */
-					//		 "rev16 r9, r9 \n\t" /* Swap endianess [l6,h6,l7,h7] */
-					"str r9, [r12], #4 \n\t" /* Save frame[6] and frame[7] */
+			/* Target: Save frame[4], frame[5] in one register, [l4,h4,l5,h5] */
+			"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
+			"and r4, r10, r1, LSL #2 \n\t" /* Store bytes of frame[5]. [0|0|h5|l5'] Last two bits missing. */
+			"mov r5, r2, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
+			"orr r4, r4, r5, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h4,l4,h5,l5]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[4] and frame[5] */
 
-					"setend le \n\t" /* Litte Endian. */
-					"mov %[frame], r12 \n\t" /* frame2 += 8. r12 is free, now. */
-					"mov %[raw], r11 \n\t" /* raw2 += 11. r11 is free, now. */
-					: [raw] "+r" (raw2), [frame] "+r" (frame2) : );
-			w2 -= 8;
+			/* Target: Save frame[6], frame[7] in one register, [l6,h6,l7,h7] */
+			"and r4, r10, r2 \n\t" /* Store bytes of frame[7]. [0|0|h7|l7] */
+			"and r3, r10, r2, ROR #11 \n\t" /* Store bytes of frame[6], [0|0|h6|l6] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h6,l6,h7,l7] */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l6,h6,l7,h7] */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[6] and frame[7] */
+
+			"subs %[nn], %[nn], #1 \n\t" /* Dec loop counter */
+			"bne loop \n\t" /* Looping... */
+
+			"setend le \n\t" /* Litte Endian. */
+			: 
+			: [raw] "r" (raw2), [frame] "r" (frame2), [nn] "r" (w2) 
+			: "r0","r1","r2","r3","r4","r5","r9","r10");
 #else
+		while(w2>=8){
 			uint8_t r0  = *(raw2+0);
 			uint8_t r1  = *(raw2+1);
 			uint8_t r2  = *(raw2+2);
@@ -572,8 +575,8 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, int
 			raw2 += 11;
 			frame2 += 8;
 			printf("Not use assembler...\n");
-#endif
 		}
+#endif
 		n -= 640;
 		raw += 880;
 		frame += 640;
