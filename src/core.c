@@ -182,7 +182,6 @@ FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **de
 			return -1;
 		}
 	}
-
 	return 0;
 }
 

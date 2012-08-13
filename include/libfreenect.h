@@ -156,6 +156,22 @@ typedef struct {
 	freenect_tilt_status_code tilt_status;     /**< State of the tilt motor (stopped, moving, etc...) */
 } freenect_raw_tilt_state;
 
+#ifdef LIBFREENECT_OPT_CLIPPING
+/// Information about cliping data streams.
+/*
+ This values allows to clip depth or rgb streams to
+ reduce memcpy operation. Problem: Stream
+ resolution changes at runtime. (TODO)
+*/
+typedef struct {
+ char on;
+ int16_t top;
+ int16_t bottom;
+ int16_t left;
+ int16_t right;
+} freenect_clip;
+#endif
+
 struct _freenect_context;
 typedef struct _freenect_context freenect_context; /**< Holds information about the usb context. */
 
@@ -614,6 +630,22 @@ FREENECTAPI freenect_frame_mode freenect_find_depth_mode(freenect_resolution res
  * @return 0 on success, < 0 if error
  */
 FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode);
+
+#ifdef LIBFREENECT_OPT_CLIPPING
+/**
+ * Sets the clipping values.
+ * Set clip->on=false to disable clipping.
+ * Set clip->on=true and clip->[left|right|top|bottom]
+ * to valid values to enable clipping.
+ */
+FREENECTAPI int freenect_set_clipping(freenect_device* dev,
+const	freenect_clip clip);	
+	
+/**
+ * Gets the clipping values.
+ */
+FREENECTAPI freenect_clip freenect_get_clipping(freenect_device* dev);
+#endif
 
 #ifdef __cplusplus
 }

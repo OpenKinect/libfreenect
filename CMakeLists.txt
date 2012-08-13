@@ -60,6 +60,8 @@ OPTION(BUILD_PYTHON "Build Python extension" OFF)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
+OPTION(LIBFREENECT_OPT_CLIPPING "Allow clipping. " ON)
+OPTION(ARM "Set ARM compiler flags and enable assembler optimation." OFF)
 
 ######################################################################################
 # CMake Modules
@@ -80,7 +82,18 @@ include (TestBigEndian)
 test_big_endian(BIG_ENDIAN)
 if(BIG_ENDIAN)
   add_definitions(-DFN_BIGENDIAN)
-endif()
+endif(BIG_ENDIAN)
+
+if(LIBFREENECT_OPT_CLIPPING)
+	add_definitions(-DLIBFREENECT_OPT_CLIPPING)
+endif(LIBFREENECT_OPT_CLIPPING)
+
+if(ARM)
+	#set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mcpu=cortex-a8 -mfpu=neon -ftree-vectorize -ffast-math" )
+	#set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mcpu=cortex-a8 -mfpu=neon -ftree-vectorize -ffast-math" )
+  add_definitions(-DARM)
+  add_definitions(-DARM_ASMB)
+endif(ARM)
 
 if(BUILD_AUDIO)
   add_definitions(-DBUILD_AUDIO)

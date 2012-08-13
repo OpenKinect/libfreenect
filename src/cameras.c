@@ -195,7 +195,82 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 
 	// copy data
 	uint8_t *dbuf = strm->raw_buf + strm->pkt_num * strm->pkt_size;
+
+#ifdef LIBFREENECT_OPT_CLIPPING
+	freenect_clip *clip = &ctx->first->clip;
+	if( clip->on /*&& datalen == 1748*/ ){
+
+		//distinct between 11bit depth packages and
+		//8bit video packages.
+		if( hdr->flag & 0x70 ){ /*match 71,72,75 */
+			//assume 11bit depth data and 640x480 resolution. 
+
+			const int startbyte = (strm->pkt_num)*1748; //*13984; //= pkt_num*8*1748
+			const int endbyte = startbyte+datalen;//datalen<1748 for last line.
+
+			const int lineminbyte = clip->top*880;
+			const int linemaxbyte = (480-clip->bottom)*880;
+
+			/* Ignore data of top lines and bottom lines. */
+			if( !(lineminbyte > endbyte || linemaxbyte < startbyte ) ){
+
+				int line = startbyte/880;// 11*880 bits = one line.
+
+				int leftbyte = line*880 + clip->left*11/8;
+				int rightbyte = line*880 + 880 - clip->right*11/8;
+
+				// copy bytes of frist line
+				/* On top border is leftbyte<lineminbyte and a extra row are copied.  */ 
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy byes of second line
+				leftbyte+=880; rightbyte+=880;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy bytes of third line
+				leftbyte+=880; rightbyte+=880;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+			}
+		}else{
+			//copy of video frame
+			//same like above with other constans. 
+			const int startbyte = (strm->pkt_num)*1908; 
+			const int endbyte = startbyte+datalen;//datalen=12<1908 for last line.
+
+			const int lineminbyte = clip->top*640;
+			const int linemaxbyte = (480-clip->bottom)*640;
+
+			/* Ignore data of top lines and bottom lines. */
+			if( !(lineminbyte > endbyte || linemaxbyte < startbyte ) ){
+
+				int line = startbyte/640;// 8*640 bits = one line.
+				int leftbyte = line*640 + clip->left;
+				int rightbyte = line*640 + 640 - clip->right;
+
+				// copy bytes of frist line
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy byes of second line
+				leftbyte+=640; rightbyte+=640;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy bytes of third line
+				leftbyte+=640; rightbyte+=640;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy bytes of fourth line
+				leftbyte+=640; rightbyte+=640;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+			}
+
+		}
+	}else{
+		memcpy(dbuf, data, datalen);
+	}
+#else
 	memcpy(dbuf, data, datalen);
+#endif
 
 	strm->pkt_num++;
 	strm->seq++;
@@ -333,7 +408,68 @@ static inline void convert_packed_to_8bit(uint8_t *src, uint8_t *dest, int vw, i
 // Loop-unrolled version of the 11-to-16 bit unpacker.  n must be a multiple of 8.
 static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 {
+#ifndef ARM_ASMB
 	uint16_t baseMask = (1 << 11) - 1;
+#endif
+
+#ifdef ARM_ASMB
+//require 9 registers
+	asm volatile ( \
+			"mov %[nn], %[nn], LSR #3 \n\t" /* loop dec counter. %[nn]=n/8 */
+
+			"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
+			"orr r10, r10, r10, LSL #3 \n\t"/* and-mask for 11 bits. [0|0|3|8] */
+
+			"loop: \n\t" /* Label for while loop */
+			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
+			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer %[raw].*/
+			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
+			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-10. r2 points now to [val+11]. */
+
+			"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
+			/* Target: Save frame[0], frame[1] in one register, [l0,h0,l1,h1] */
+			"and r3, r10, r0, ROR #21 \n\t" /* Store bytes of frame[0], [0|0|h0|l0] */
+			"and r4, r10, r0, ROR #10 \n\t" /* Store bytes of frame[1]. [0|0|h1|l1] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h0,l0,h1,l1]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l0,h0,l1,h1]. */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[0] and frame[1]. */
+
+			/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
+			"and r3, r10, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
+			"orr r3, r3, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
+			"and r4, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h2,l2,h3,l3]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l2,h2,l3,h2] */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[2] and frame[3]. */
+
+			/* Target: Save frame[4], frame[5] in one register, [l4,h4,l5,h5] */
+			"and r4, r10, r1, LSL #2 \n\t" /* Store bytes of frame[5]. [0|0|h5|l5'] Last two bits missing. */
+			"mov r3, r2, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
+			"orr r4, r4, r3, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
+			"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h4,l4,h5,l5]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[4] and frame[5] */
+
+			/* Target: Save frame[6], frame[7] in one register, [l6,h6,l7,h7] */
+			"and r4, r10, r2 \n\t" /* Store bytes of frame[7]. [0|0|h7|l7] */
+			"and r3, r10, r2, ROR #11 \n\t" /* Store bytes of frame[6], [0|0|h6|l6] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h6,l6,h7,l7] */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l6,h6,l7,h7] */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[6] and frame[7] */
+
+			"subs %[nn], %[nn], #1 \n\t" /* Dec loop counter */
+			"bne loop \n\t" /* Looping... */
+#ifdef NF_BIGENDIAN
+			"setend be \n\t" 
+#else
+			"setend le \n\t" /* Litte Endian. */
+#endif
+			: 
+			: [raw] "r" (raw), [frame] "r" (frame), [nn] "r" (n) 
+			: "r0","r1","r2","r3","r4","r10");
+		n -= 8;
+#else
 	while(n >= 8)
 	{
 		uint8_t r0  = *(raw+0);
@@ -361,7 +497,154 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 		raw += 11;
 		frame += 8;
 	}
+#endif
 }
+
+#ifdef LIBFREENECT_OPT_CLIPPING
+// Loop-unrolled version of the 11-to-16 bit unpacker.  n must be a multiple of 8.
+// Cut of clipped area. Thus the loop is unrolled, some clipped points will convert, too.
+// w - image width, n = w*h
+static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uint32_t n, uint32_t w, freenect_clip *clip)
+{
+
+#ifndef ARM_ASMB
+	uint16_t baseMask = (1 << 11) - 1;
+#endif
+
+	const int left = (clip->left) & 0xFFF8;//round to base 8
+	int frameshift = left + (clip->right & 0xFFF8); //multiple of 8.
+	const int roiWidth = w - frameshift; //width in bytes. (round up)
+
+	const uint32_t wraw = w*11 >> 3; //i.e. 880
+	const int t = wraw*clip->top; // i.e. 640*top*11/8
+	const int l = left*11 >> 3; // = left*11/8
+
+	//reduce n to clip top and bottom lines
+	n -= w*(clip->top+clip->bottom);
+	raw += t;
+	frame += w*clip->top; 
+
+#ifdef ARM_ASMB
+	const int rawshift = frameshift*11 >> 3; 
+	n = n/w; /* replace n by number of lines */
+	frameshift <<= 1; /* convert to byte count */
+	raw += l;
+	frame += left;
+
+	//require 12 registers
+	asm volatile ( \
+			"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
+			"orr r10, r10, r10, LSL #3 \n\t" /* and-mask for 11 bits. [0|0|3|8] */
+
+			"outloop: \n\t" /* Label for outer while loop */
+
+			"mov r5, %[w], LSR #3 \n\t" /*Counter for inner loop %[w]=n/8. Change by 1 per cycle.*/
+
+			"inloop: \n\t" /* Label for inner while loop */
+			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
+			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer */
+			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
+			//do not use r2 because 12 registers already in usage. Reuse r0 later... 
+//			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-10. %[raw] points now to [val+11]. */
+
+			"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
+			/* Target: Save frame[0], frame[1] in one register, [l0,h0,l1,h1] */
+			"and r3, r10, r0, ROR #21 \n\t" /* Store bytes of frame[0], [0|0|h0|l0] */
+			"and r4, r10, r0, ROR #10 \n\t" /* Store bytes of frame[1]. [0|0|h1|l1] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h0,l0,h1,l1]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l0,h0,l1,h1]. */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[0] and frame[1]. */
+
+			/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
+			"and r3, r10, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
+			"orr r3, r3, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
+			"and r4, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h2,l2,h3,l3]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l2,h2,l3,h2] */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[2] and frame[3]. */
+
+			/* Target: Save frame[4], frame[5] in one register, [l4,h4,l5,h5] */
+			"and r4, r10, r1, LSL #2 \n\t" /* Store bytes of frame[5]. [0|0|h5|l5'] Last two bits missing. */
+			/* Overwrite Bytes 0-3 with 7-10. This saves a register, but require big endian (or rearrange code...) */
+			"setend be \n\t" 
+			"ldr r0, [%[raw]], #4 \n\t" /* Bytes 7-10. %[raw] points now to [val+11]. */
+			"setend me \n\t"
+
+			"mov r3, r0, LSL #8 \n\t" /* Move needed two bits at highest bit positions.*/
+			"orr r4, r4, r3, LSR #30 \n\t" /* Add last bits (from thrid register), [0|0|h5|l5] .*/
+
+			"and r3, r10, r1, ROR #9 \n\t" /* Store bytes of frame[4]. [0|0|h4|l4] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h4,l4,h5,l5]. */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l4,h4,l5,h5]. */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[4] and frame[5] */
+
+			/* Target: Save frame[6], frame[7] in one register, [l6,h6,l7,h7] */
+			"and r4, r10, r0 \n\t" /* Store bytes of frame[7]. [0|0|h7|l7] */
+			"and r3, r10, r0, ROR #11 \n\t" /* Store bytes of frame[6], [0|0|h6|l6] */
+			"orr r4, r3, r4, ROR #16 \n\t" /* Join bytes [h6,l6,h7,l7] */
+			//		 "rev16 r4, r4 \n\t" /* Swap endianess [l6,h6,l7,h7] */
+			"str r4, [%[frame]], #4 \n\t" /* Save frame[6] and frame[7] */
+
+			"subs r5, r5, #1 \n\t" /* Dec inloop counter */
+			"bne inloop \n\t" /* Looping... */
+
+			"add %[raw], %[raw], %[rawshift] \n\t" /* Go to begin of next line. */
+			"add %[frame], %[frame], %[frameshift] \n\t" /* Go to begin of next line. */
+
+			"subs %[n], %[n], #1 \n\t" /* Lines to go. */
+			"bne outloop \n\t" /* Looping... */
+
+#ifdef NF_BIGENDIAN
+			"setend be \n\t" 
+#else
+			"setend le \n\t" /* Litte Endian. */
+#endif
+			:
+			: [raw] "r" (raw), [frame] "r" (frame)
+			, [rawshift] "r" (rawshift), [frameshift] "r" (frameshift)
+			, [w] "r" (roiWidth), [n] "r" (n)
+			: "r0","r1","r3","r4","r5","r10" );
+
+#else
+	while(n>=w){
+		uint8_t *raw2 = raw + l;
+		uint16_t *frame2 = frame + left;
+		uint32_t w2 = roiWidth;
+
+		while(w2>=8){
+			uint8_t r0  = *(raw2+0);
+			uint8_t r1  = *(raw2+1);
+			uint8_t r2  = *(raw2+2);
+			uint8_t r3  = *(raw2+3);
+			uint8_t r4  = *(raw2+4);
+			uint8_t r5  = *(raw2+5);
+			uint8_t r6  = *(raw2+6);
+			uint8_t r7  = *(raw2+7);
+			uint8_t r8  = *(raw2+8);
+			uint8_t r9  = *(raw2+9);
+			uint8_t r10 = *(raw2+10);
+
+			frame2[0] =  (r0<<3)  | (r1>>5);
+			frame2[1] = ((r1<<6)  | (r2>>2) )           & baseMask;
+			frame2[2] = ((r2<<9)  | (r3<<1) | (r4>>7) ) & baseMask;
+			frame2[3] = ((r4<<4)  | (r5>>4) )           & baseMask;
+			frame2[4] = ((r5<<7)  | (r6>>1) )           & baseMask;
+			frame2[5] = ((r6<<10) | (r7<<2) | (r8>>6) ) & baseMask;
+			frame2[6] = ((r8<<5)  | (r9>>3) )           & baseMask;
+			frame2[7] = ((r9<<8)  | (r10)   )           & baseMask;
+
+			w2 -= 8;
+			raw2 += 11;
+			frame2 += 8;
+		}
+		n -= w;
+		raw += wraw;
+		frame += w;
+	}
+#endif
+
+}
+#endif
 
 static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 {
@@ -383,7 +666,11 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
+#ifdef LIBFREENECT_OPT_CLIPPING
+			convert_packed11_to_16bit_clipped(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480, 640, &dev->clip);
+#else
 			convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
+#endif
 			break;
 		case FREENECT_DEPTH_REGISTERED:
 			freenect_apply_registration(dev, dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf );
@@ -603,6 +890,156 @@ static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_f
 	} // end of for y loop
 }
 
+#ifdef LIBFREENECT_OPT_CLIPPING
+/*
+ * Clipped version extend boundaries of the region of interrest to get subimage
+ * with the same bayer pattern pixel arrangement. Convertion like nonclipped
+ * version.
+ */
+static void convert_bayer_to_rgb_clipped(uint8_t *raw_buf, uint8_t *proc_buf, freenect_frame_mode frame_mode, freenect_clip *clip)
+{
+	int x,y;
+	/* Pixel arrangement:
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 * [...]
+	 */
+
+	const int left = clip->left & 0xFFFE;//round to even
+	// right border of ROI will extend by two pixels.
+	const int right = (clip->right>1)?((clip->right & 0xFFFE)+2):0;
+	const int lineshift = left + right; 
+	const int roiWidth = frame_mode.width - lineshift; 
+
+	const int ystart = (clip->top & 0xFFFE);
+	const int startshift = ystart*frame_mode.width;
+	const int yend = frame_mode.height - (clip->bottom & 0xFFFE);
+
+	const int lineshiftDst = lineshift*3; 
+
+	uint8_t *dst = proc_buf; // pointer to destination
+
+	uint8_t *prevLine;        // pointer to previous, current and next line
+	uint8_t *curLine;         // of the source bayer pattern
+	uint8_t *nextLine;
+
+	// storing horizontal values in hVals:
+	// previous << 16, current << 8, next
+	uint32_t hVals;
+	// storing vertical averages in vSums:
+	// previous << 16, current << 8, next
+	uint32_t vSums;
+
+	// init curLine and nextLine pointers
+	curLine  = raw_buf + startshift + left;
+	nextLine = curLine + frame_mode.width;
+	prevLine = curLine - frame_mode.width;
+	dst += 3*(startshift + left);
+
+	for (y = ystart; y < yend; ++y) {
+
+		if ((y > 0) && (y < frame_mode.height-1))
+			prevLine = curLine - frame_mode.width; // normal case
+		else if (y == 0)
+			prevLine = nextLine;      // top boundary case
+		else
+			nextLine = prevLine;      // bottom boundary case
+
+		// init horizontal shift-buffer with current value
+		hVals  = (*(curLine++) << 8);
+		// handle left column boundary case
+		hVals |= (*curLine << 16);
+		// init vertical average shift-buffer with current values average
+		vSums = ((*(prevLine++) + *(nextLine++)) << 7) & 0xFF00;
+		// handle left column boundary case
+		vSums |= ((*prevLine + *nextLine) << 15) & 0xFF0000;
+
+		// store if line is odd or not
+		uint8_t yOdd = y & 1;
+		// the right column boundary case is not handled inside this loop
+		// thus the "639"
+		for (x = 0; x < roiWidth-1; ++x) {
+			// place next value in shift buffers
+			hVals |= *(curLine++);
+			vSums |= (*(prevLine++) + *(nextLine++)) >> 1;
+
+			// calculate the horizontal sum as this sum is needed in
+			// any configuration
+			uint8_t hSum = ((uint8_t)(hVals >> 16) + (uint8_t)(hVals)) >> 1;
+
+			if (yOdd == 0) {
+				if ((x & 1) == 0) {
+					// Configuration 1
+					*(dst++) = hSum;		// r
+					*(dst++) = hVals >> 8;	// g
+					*(dst++) = vSums >> 8;	// b
+				} else {
+					// Configuration 2
+					*(dst++) = hVals >> 8;
+					*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+					*(dst++) = ((uint8_t)(vSums >> 16) + (uint8_t)(vSums)) >> 1;
+				}
+			} else {
+				if ((x & 1) == 0) {
+					// Configuration 3
+					*(dst++) = ((uint8_t)(vSums >> 16) + (uint8_t)(vSums)) >> 1;
+					*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+					*(dst++) = hVals >> 8;
+				} else {
+					// Configuration 4
+					*(dst++) = vSums >> 8;
+					*(dst++) = hVals >> 8;
+					*(dst++) = hSum;
+				}
+			}
+
+			// shift the shift-buffers
+			hVals <<= 8;
+			vSums <<= 8;
+		} // end of for x loop
+		// right column boundary case, mirroring second last column
+		hVals |= (uint8_t)(hVals >> 16);
+		vSums |= (uint8_t)(vSums >> 16);
+
+		// the horizontal sum simplifies to the second last column value
+		uint8_t hSum = (uint8_t)(hVals);
+
+		if (yOdd == 0) {
+			if ((x & 1) == 0) {
+				*(dst++) = hSum;
+				*(dst++) = hVals >> 8;
+				*(dst++) = vSums >> 8;
+			} else {
+				*(dst++) = hVals >> 8;
+				*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+				*(dst++) = vSums;
+			}
+		} else {
+			if ((x & 1) == 0) {
+				*(dst++) = vSums;
+				*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+				*(dst++) = hVals >> 8;
+			} else {
+				*(dst++) = vSums >> 8;
+				*(dst++) = hVals >> 8;
+				*(dst++) = hSum;
+			}
+		}
+
+		/* Go to most left pixel of next line in the ROI. */
+		prevLine += lineshift;
+		curLine += lineshift;
+		nextLine += lineshift;
+		dst += lineshiftDst;
+	} // end of for y loop
+}
+#endif
+
+
 static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 {
 	freenect_context *ctx = dev->parent;
@@ -624,7 +1061,12 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 	freenect_frame_mode frame_mode = freenect_get_current_video_mode(dev);
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
+#ifdef LIBFREENECT_OPT_CLIPPING
+			convert_bayer_to_rgb_clipped(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode, &dev->clip);
+			//convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode);
+#else
 			convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode);
+#endif
 			break;
 		case FREENECT_VIDEO_BAYER:
 			break;
@@ -1323,6 +1765,42 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
 	dev->depth_resolution = res;
 	return 0;
 }
+
+#ifdef LIBFREENECT_OPT_CLIPPING
+int freenect_set_clipping(freenect_device* dev, const	freenect_clip clip)
+{
+	dev->clip.on = clip.on;
+
+	if( dev->clip.on){
+		freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+		if( mode.width - clip.left - clip.right < 0
+				|| mode.height - clip.top - clip.bottom < 0
+				|| clip.top < 0 || clip.bottom < 0 || clip.left < 0 || clip.right < 0
+			){
+			freenect_context *ctx = dev->parent;
+			FN_SPEW("freenect_set_clipping: ignore range. Maximal clipping was exceeded.\n");
+			return 0;
+		}
+
+		dev->clip.top = clip.top;
+		dev->clip.bottom = clip.bottom;
+		dev->clip.left = clip.left;
+		dev->clip.right = clip.right;
+	}
+	return 1;
+}
+
+freenect_clip freenect_get_clipping(freenect_device* dev){
+	freenect_clip retval;
+	retval.on = dev->clip.on;
+	retval.top = dev->clip.top;
+	retval.bottom = dev->clip.bottom;
+	retval.left = dev->clip.left;
+	retval.right = dev->clip.right;
+	return retval;
+}
+#endif
+
 int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 {
 	return stream_setbuf(dev->parent, &dev->depth, buf);
