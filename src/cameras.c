@@ -926,6 +926,8 @@ static void convert_bayer_to_rgb_clipped(uint8_t *raw_buf, uint8_t *proc_buf, fr
 	const int startshift = ystart*frame_mode.width;
 	const int yend = frame_mode.height - (clip->bottom & 0xFFFE);
 
+	const int lineshiftDst = lineshift*3; 
+
 	uint8_t *dst = proc_buf; // pointer to destination
 
 	uint8_t *prevLine;        // pointer to previous, current and next line
@@ -940,9 +942,10 @@ static void convert_bayer_to_rgb_clipped(uint8_t *raw_buf, uint8_t *proc_buf, fr
 	uint32_t vSums;
 
 	// init curLine and nextLine pointers
-	curLine  = raw_buf + left;
+	curLine  = raw_buf + startshift + left;
 	nextLine = curLine + frame_mode.width;
 	prevLine = curLine - frame_mode.width;
+	dst += 3*(startshift + left);
 
 	for (y = ystart; y < yend; ++y) {
 
@@ -1038,6 +1041,7 @@ static void convert_bayer_to_rgb_clipped(uint8_t *raw_buf, uint8_t *proc_buf, fr
 		prevLine += lineshift;
 		curLine += lineshift;
 		nextLine += lineshift;
+		dst += lineshiftDst;
 	} // end of for y loop
 }
 #endif
@@ -1066,6 +1070,7 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 		case FREENECT_VIDEO_RGB:
 #ifdef LIBFREENECT_OPT_CLIPPING
 			convert_bayer_to_rgb_clipped(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode, &dev->clip);
+			//convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode);
 #else
 			convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode);
 #endif
