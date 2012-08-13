@@ -1,3 +1,33 @@
+== About this fork:
+
+Two features were added:
+- Clipping: Select region of interest to reduce copy and conversion operations. 
+	All data structures keep their sizes, but will partially updated only.
+
+Use cmake variable LIBFREENECT_OPT_CLIPPING to activate/deactivate feature.
+
+Example usage of clipping feature (cpp-Wrapper):
+#ifdef LIBFREENECT_OPT_CLIPPING 
+	 int top = 100
+	 int bottom = 100 ;
+	 int left = 100;
+	 int right = 100;
+	 setClipping(true, top, bottom, left, right);
+	 //deactivating with 
+	 //setClipping(false,top,bottom,left,right);
+ #endif
+
+ToDo:
+Update other wrapper classes.
+
+- Assembler code for ARM platform:
+ The 11bit depth data are unpacked by convert_packed11_to_16bit.
+ I replaced the function by an assembler version to get better 
+ performance on Arm platforms (tested on beagleboard xm, igep board).
+
+Use cmake variable ARM to activate/deactivate feature.
+
+
 == libfreenect
 
 Ongoing Development and Maintenance by the OpenKinect Community

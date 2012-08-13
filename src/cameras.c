@@ -417,13 +417,12 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 #endif
 
 #ifdef ARM_ASMB
-//require 9 register
+//require 9 registers
 	asm volatile ( \
 			"mov %[nn], %[nn], LSR #3 \n\t" /* loop dec counter. %[nn]=n/8 */
 
 			"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
 			"orr r10, r10, r10, LSL #3 \n\t"/* and-mask for 11 bits. [0|0|3|8] */
-//			"eor r9, r10, #0x0000001 \n\t" /* and-mask for 10 bits. [0|0|3|7] */
 
 			"loop: \n\t" /* Label for while loop */
 			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
@@ -440,7 +439,6 @@ static void convert_packed11_to_16bit(uint8_t *raw, uint16_t *frame, int n)
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[0] and frame[1]. */
 
 			/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
-//			"and r3, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
 			"and r3, r10, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
 			"orr r3, r3, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
 			"and r4, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
@@ -518,7 +516,6 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uin
 #endif
 
 	const int left = (clip->left) & 0xFFF8;//round to base 8
-	//const int left = (clip->left/8)*8;// & 0xF8;//round to base 8
 	int frameshift = left + (clip->right & 0xFFF8); //multiple of 8.
 	const int roiWidth = w - frameshift; //width in bytes. (round up)
 
@@ -538,7 +535,7 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uin
 	raw += l;
 	frame += left;
 
-	//require 12 register
+	//require 12 registers
 	asm volatile ( \
 			"mov r10, 0x000000FF \n\t" /*bit mask [0|0|0|8] */
 			"orr r10, r10, r10, LSL #3 \n\t" /* and-mask for 11 bits. [0|0|3|8] */
@@ -551,6 +548,7 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uin
 			"setend be \n\t" /* Activate Big Endian to omit byte shuffle during loading */
 			"ldr r0, [%[raw]], #4 \n\t" /* Load first 4 bytes and shift pointer */
 			"ldr r1, [%[raw]], #3 \n\t" /* Bytes 4-7. */
+			//do not use r2 because 12 registers already in usage. Reuse r0 later... 
 //			"ldr r2, [%[raw]], #4 \n\t" /* Bytes 7-10. %[raw] points now to [val+11]. */
 
 			"setend me \n\t" /* Set up Middle Endian to get automatic shuffle of bytes! */
@@ -562,7 +560,6 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uin
 			"str r4, [%[frame]], #4 \n\t" /* Save frame[0] and frame[1]. */
 
 			/* Target: Save frame[2], frame[3] in one register, [l2,h2,l3,h3] */
-			//"and r3, r9, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
 			"and r3, r10, r0, LSL #1 \n\t" /* Store bytes of frame[3]. [0|0|h2|l2'] Last bit of l3 is missing. */
 			"orr r3, r3, r1, LSR #31 \n\t" /* Add last bit (from second register), [0|0|h2|l2] .*/
 			"and r4, r10, r1, ROR #20 \n\t" /* Store bytes of frame[3]. [0|0|h3|l3] */
