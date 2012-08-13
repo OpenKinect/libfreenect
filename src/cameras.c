@@ -220,11 +220,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 				int rightbyte = line*880 + 880 - clip->right*11/8;
 
 				// copy bytes of frist line
-				/* On top border is leftbyte<lineminbyte and a extra row are copied.
-Alternative:
-memcpy_intersection(dbuf,data,startbyte, endbyte,
-max(leftbyte,lineminbyte), rightbyte);
-*/ 
+				/* On top border is leftbyte<lineminbyte and a extra row are copied.  */ 
 				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
 
 				// copy byes of second line
@@ -233,10 +229,6 @@ max(leftbyte,lineminbyte), rightbyte);
 
 				// copy bytes of third line
 				leftbyte+=880; rightbyte+=880;
-				/* Alternative:
-					 memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte,
-					 min(rightbyte,lineminbyte) );
-					 */
 				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
 
 			}
