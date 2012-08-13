@@ -197,13 +197,13 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	uint8_t *dbuf = strm->raw_buf + strm->pkt_num * strm->pkt_size;
 
 #ifdef LIBFREENECT_OPT_CLIPPING
-	//assume 11bit depth data (TODO: Find out general value)
 	freenect_clip *clip = &ctx->first->clip;
 	if( clip->on /*&& datalen == 1748*/ ){
 
 		//distinct between 11bit depth packages and
 		//8bit video packages.
 		if( hdr->flag & 0x70 ){ /*match 71,72,75 */
+			//assume 11bit depth data and 640x480 resolution. 
 
 			const int startbyte = (strm->pkt_num)*1748; //*13984; //= pkt_num*8*1748
 			const int endbyte = startbyte+datalen;//datalen<1748 for last line.
@@ -256,6 +256,10 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
 
 				// copy bytes of third line
+				leftbyte+=640; rightbyte+=640;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy bytes of fourth line
 				leftbyte+=640; rightbyte+=640;
 				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
 			}
