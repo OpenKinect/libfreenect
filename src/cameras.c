@@ -201,39 +201,72 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	freenect_clip *clip = &ctx->first->clip;
 	if( clip->on /*&& datalen == 1748*/ ){
 
-		const int startbyte = (strm->pkt_num)*1748; //*13984; //= pkt_num*8*1748
-		const int endbyte = startbyte+datalen;//datalen<1748 for last line.
+		//distinct between 11bit depth packages and
+		//8bit video packages.
+		if( hdr->flag & 0x70 ){ /*match 71,72,75 */
 
-		const int lineminbyte = clip->top*880;
-		const int linemaxbyte = (480-clip->bottom)*880;
+			const int startbyte = (strm->pkt_num)*1748; //*13984; //= pkt_num*8*1748
+			const int endbyte = startbyte+datalen;//datalen<1748 for last line.
 
-		/* Ignore data of top lines and bottom lines. */
-		if( !(lineminbyte > endbyte || linemaxbyte < startbyte ) ){
+			const int lineminbyte = clip->top*880;
+			const int linemaxbyte = (480-clip->bottom)*880;
 
-		int line = startbyte/880;// 11*880 bits = one line.
+			/* Ignore data of top lines and bottom lines. */
+			if( !(lineminbyte > endbyte || linemaxbyte < startbyte ) ){
 
-		int leftbyte = line*880 + clip->left*11/8;
-		int rightbyte = line*880 + 880 - clip->right*11/8;
+				int line = startbyte/880;// 11*880 bits = one line.
 
-		// copy bytes of frist line
-		/* On top border is leftbyte<lineminbyte and a extra row are copied.
-			Alternative:
-			memcpy_intersection(dbuf,data,startbyte, endbyte,
-				max(leftbyte,lineminbyte), rightbyte);
-		*/ 
-		memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+				int leftbyte = line*880 + clip->left*11/8;
+				int rightbyte = line*880 + 880 - clip->right*11/8;
 
-		// copy byes of second line
-		leftbyte+=880; rightbyte+=880;
-		memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+				// copy bytes of frist line
+				/* On top border is leftbyte<lineminbyte and a extra row are copied.
+Alternative:
+memcpy_intersection(dbuf,data,startbyte, endbyte,
+max(leftbyte,lineminbyte), rightbyte);
+*/ 
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
 
-		// copy bytes of third line
-		leftbyte+=880; rightbyte+=880;
-		/* Alternative:
-			memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte,
-			min(rightbyte,lineminbyte) );
-		 */
-		memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+				// copy byes of second line
+				leftbyte+=880; rightbyte+=880;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy bytes of third line
+				leftbyte+=880; rightbyte+=880;
+				/* Alternative:
+					 memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte,
+					 min(rightbyte,lineminbyte) );
+					 */
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+			}
+		}else{
+			//copy of video frame
+			//same like above with other constans. 
+			const int startbyte = (strm->pkt_num)*1908; 
+			const int endbyte = startbyte+datalen;//datalen=12<1908 for last line.
+
+			const int lineminbyte = clip->top*640;
+			const int linemaxbyte = (480-clip->bottom)*640;
+
+			/* Ignore data of top lines and bottom lines. */
+			if( !(lineminbyte > endbyte || linemaxbyte < startbyte ) ){
+
+				int line = startbyte/640;// 8*640 bits = one line.
+				int leftbyte = line*640 + clip->left;
+				int rightbyte = line*640 + 640 - clip->right;
+
+				// copy bytes of frist line
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy byes of second line
+				leftbyte+=640; rightbyte+=640;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+
+				// copy bytes of third line
+				leftbyte+=640; rightbyte+=640;
+				memcpy_intersection(dbuf,data,startbyte, endbyte, leftbyte, rightbyte);
+			}
 
 		}
 	}else{
@@ -484,18 +517,14 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uin
 	uint16_t baseMask = (1 << 11) - 1;
 #endif
 
-	//int left = (clip->left) & 0xFFFFFFF8;//round to base 8
-	const int left = (clip->left/8)*8;// & 0xF8;//round to base 8
-	int frameshift = left + (clip->right/8)*8; //multiple of 8.
+	const int left = (clip->left) & 0xFFF8;//round to base 8
+	//const int left = (clip->left/8)*8;// & 0xF8;//round to base 8
+	int frameshift = left + (clip->right & 0xFFF8); //multiple of 8.
 	const int roiWidth = w - frameshift; //width in bytes. (round up)
 
 	const uint32_t wraw = w*11 >> 3; //i.e. 880
 	const int t = wraw*clip->top; // i.e. 640*top*11/8
 	const int l = left*11 >> 3; // = left*11/8
-	const int rawshift = frameshift*11 >> 3; 
-
-	uint8_t *rs = raw;
-	uint16_t *fs = frame;
 
 	//reduce n to clip top and bottom lines
 	n -= w*(clip->top+clip->bottom);
@@ -503,6 +532,7 @@ static void convert_packed11_to_16bit_clipped(uint8_t *raw, uint16_t *frame, uin
 	frame += w*clip->top; 
 
 #ifdef ARM_ASMB
+	const int rawshift = frameshift*11 >> 3; 
 	n = n/w; /* replace n by number of lines */
 	frameshift <<= 1; /* convert to byte count */
 	raw += l;
@@ -867,6 +897,152 @@ static void convert_bayer_to_rgb(uint8_t *raw_buf, uint8_t *proc_buf, freenect_f
 	} // end of for y loop
 }
 
+#ifdef LIBFREENECT_OPT_CLIPPING
+/*
+ * Clipped version extend boundaries of the region of interrest to get subimage
+ * with the same bayer pattern pixel arrangement. Convertion like nonclipped
+ * version.
+ */
+static void convert_bayer_to_rgb_clipped(uint8_t *raw_buf, uint8_t *proc_buf, freenect_frame_mode frame_mode, freenect_clip *clip)
+{
+	int x,y;
+	/* Pixel arrangement:
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 * G R G R G R G R
+	 * B G B G B G B G
+	 * [...]
+	 */
+
+	const int left = clip->left & 0xFFFE;//round to even
+	// right border of ROI will extend by two pixels.
+	const int right = (clip->right>1)?((clip->right & 0xFFFE)+2):0;
+	const int lineshift = left + right; 
+	const int roiWidth = frame_mode.width - lineshift; 
+
+	const int ystart = (clip->top & 0xFFFE);
+	const int startshift = ystart*frame_mode.width;
+	const int yend = frame_mode.height - (clip->bottom & 0xFFFE);
+
+	uint8_t *dst = proc_buf; // pointer to destination
+
+	uint8_t *prevLine;        // pointer to previous, current and next line
+	uint8_t *curLine;         // of the source bayer pattern
+	uint8_t *nextLine;
+
+	// storing horizontal values in hVals:
+	// previous << 16, current << 8, next
+	uint32_t hVals;
+	// storing vertical averages in vSums:
+	// previous << 16, current << 8, next
+	uint32_t vSums;
+
+	// init curLine and nextLine pointers
+	curLine  = raw_buf + left;
+	nextLine = curLine + frame_mode.width;
+	prevLine = curLine - frame_mode.width;
+
+	for (y = ystart; y < yend; ++y) {
+
+		if ((y > 0) && (y < frame_mode.height-1))
+			prevLine = curLine - frame_mode.width; // normal case
+		else if (y == 0)
+			prevLine = nextLine;      // top boundary case
+		else
+			nextLine = prevLine;      // bottom boundary case
+
+		// init horizontal shift-buffer with current value
+		hVals  = (*(curLine++) << 8);
+		// handle left column boundary case
+		hVals |= (*curLine << 16);
+		// init vertical average shift-buffer with current values average
+		vSums = ((*(prevLine++) + *(nextLine++)) << 7) & 0xFF00;
+		// handle left column boundary case
+		vSums |= ((*prevLine + *nextLine) << 15) & 0xFF0000;
+
+		// store if line is odd or not
+		uint8_t yOdd = y & 1;
+		// the right column boundary case is not handled inside this loop
+		// thus the "639"
+		for (x = 0; x < roiWidth-1; ++x) {
+			// place next value in shift buffers
+			hVals |= *(curLine++);
+			vSums |= (*(prevLine++) + *(nextLine++)) >> 1;
+
+			// calculate the horizontal sum as this sum is needed in
+			// any configuration
+			uint8_t hSum = ((uint8_t)(hVals >> 16) + (uint8_t)(hVals)) >> 1;
+
+			if (yOdd == 0) {
+				if ((x & 1) == 0) {
+					// Configuration 1
+					*(dst++) = hSum;		// r
+					*(dst++) = hVals >> 8;	// g
+					*(dst++) = vSums >> 8;	// b
+				} else {
+					// Configuration 2
+					*(dst++) = hVals >> 8;
+					*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+					*(dst++) = ((uint8_t)(vSums >> 16) + (uint8_t)(vSums)) >> 1;
+				}
+			} else {
+				if ((x & 1) == 0) {
+					// Configuration 3
+					*(dst++) = ((uint8_t)(vSums >> 16) + (uint8_t)(vSums)) >> 1;
+					*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+					*(dst++) = hVals >> 8;
+				} else {
+					// Configuration 4
+					*(dst++) = vSums >> 8;
+					*(dst++) = hVals >> 8;
+					*(dst++) = hSum;
+				}
+			}
+
+			// shift the shift-buffers
+			hVals <<= 8;
+			vSums <<= 8;
+		} // end of for x loop
+		// right column boundary case, mirroring second last column
+		hVals |= (uint8_t)(hVals >> 16);
+		vSums |= (uint8_t)(vSums >> 16);
+
+		// the horizontal sum simplifies to the second last column value
+		uint8_t hSum = (uint8_t)(hVals);
+
+		if (yOdd == 0) {
+			if ((x & 1) == 0) {
+				*(dst++) = hSum;
+				*(dst++) = hVals >> 8;
+				*(dst++) = vSums >> 8;
+			} else {
+				*(dst++) = hVals >> 8;
+				*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+				*(dst++) = vSums;
+			}
+		} else {
+			if ((x & 1) == 0) {
+				*(dst++) = vSums;
+				*(dst++) = (hSum + (uint8_t)(vSums >> 8)) >> 1;
+				*(dst++) = hVals >> 8;
+			} else {
+				*(dst++) = vSums >> 8;
+				*(dst++) = hVals >> 8;
+				*(dst++) = hSum;
+			}
+		}
+
+		/* Go to most left pixel of next line in the ROI. */
+		prevLine += lineshift;
+		curLine += lineshift;
+		nextLine += lineshift;
+	} // end of for y loop
+}
+#endif
+
+
 static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 {
 	freenect_context *ctx = dev->parent;
@@ -888,7 +1064,11 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 	freenect_frame_mode frame_mode = freenect_get_current_video_mode(dev);
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
+#ifdef LIBFREENECT_OPT_CLIPPING
+			convert_bayer_to_rgb_clipped(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode, &dev->clip);
+#else
 			convert_bayer_to_rgb(dev->video.raw_buf, (uint8_t*)dev->video.proc_buf, frame_mode);
+#endif
 			break;
 		case FREENECT_VIDEO_BAYER:
 			break;
