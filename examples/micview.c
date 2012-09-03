@@ -54,6 +54,12 @@ pthread_cond_t audiobuf_cond = PTHREAD_COND_INITIALIZER;
 
 int win_h, win_w;
 
+int have_opengl_vbo = 0;
+GLint opengl_buffer;
+GLint opengl_projection_matrix_location;
+GLint opengl_microphone_number_location;
+
+
 void in_callback(freenect_device* dev, int num_samples,
                  int32_t* mic1, int32_t* mic2,
                  int32_t* mic3, int32_t* mic4,
@@ -102,8 +108,10 @@ void DrawMicData() {
 	state.new_data = 0;
 	// Draw:
 	glClear(GL_COLOR_BUFFER_BIT);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+	if (!have_opengl_vbo) {
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+	}
 
 	float xIncr = (float)win_w / state.max_samples;
 	float x = 0.;
@@ -115,18 +123,33 @@ void DrawMicData() {
 	// provided we don't reallocate buffers.
 	pthread_mutex_unlock(&audiobuf_mutex);
 
-	// This is kinda slow.  It should be possible to compile each sample
-	// window into a glCallList, but that's overly complex.
+	// We use either fast OpenGL Buffer Objects (VBO) where hardware
+	// supports it, or slow old-style glBegin/glVertex/glEnd 
 	int mic;
+	GLfloat *array;
+	array = malloc(sizeof(GLfloat) * state.max_samples * 2);
 	for(mic = 0; mic < 4; mic++) {
-		glBegin(GL_LINE_STRIP);
-		glColor4f(1.0f, 1.0f, 1.0f, 0.7f);
-		for(x = 0, i = 0; i < state.max_samples; i++) {
-			glVertex3f(x, ((float)win_h * (float)(2*mic + 1) / 8. ) + (float)(state.buffers[mic][(base_idx + i) % state.max_samples]) * ((float)win_h/4) /2147483647. , 0);
-			x += xIncr;
+		if (have_opengl_vbo) {
+			glUniform1i(opengl_microphone_number_location, mic);
+			for(x = 0, i = 0; i < state.max_samples; i++) {
+				array[2*i]   = i;
+				array[2*i+1] = state.buffers[mic][(base_idx + i) % state.max_samples];
+			}
+			glBindBuffer(GL_ARRAY_BUFFER, opengl_buffer);
+			glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * state.max_samples * 2, array, GL_STREAM_DRAW);
+			glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
+			glDrawArrays(GL_LINE_STRIP, 0, state.max_samples);
+		} else {
+			glBegin(GL_LINE_STRIP);
+			glColor4f(1.0f, 1.0f, 1.0f, 0.7f);
+			for(x = 0, i = 0; i < state.max_samples; i++) {
+				glVertex3f(x, ((float)win_h * (float)(2*mic + 1) / 8. ) + (float)(state.buffers[mic][(base_idx + i) % state.max_samples]) * ((float)win_h/4) /2147483647. , 0);
+				x += xIncr;
+			}
+			glEnd();
 		}
-		glEnd();
 	}
+	free(array);
 	glutSwapBuffers();
 }
 
@@ -134,11 +157,35 @@ void Reshape(int w, int h) {
 	win_w = w;
 	win_h = h;
 	glViewport(0, 0, w, h);
-	glMatrixMode(GL_PROJECTION);
-	glLoadIdentity();
-	glOrtho(0.0, (float)w, (float)h, 0.0, -1.0, 1.0);
-	glMatrixMode(GL_MODELVIEW);
-	glLoadIdentity();
+	if (have_opengl_vbo) {
+		float matrix[16];
+		matrix[0] = 2.0f/(float)w;
+		matrix[1] = 0.0f;
+		matrix[2] = 0.0f;
+		matrix[3] = -1.0f;
+
+		matrix[4] = 0.0f;
+		matrix[5] = 2.0f/(float)h;
+		matrix[6] = 0.0f;
+		matrix[7] = -1.0f;
+
+		matrix[8]  = 0.0f;
+		matrix[9]  = 0.0f;
+		matrix[10] = -1.0f;
+		matrix[11] = 0.0f;
+
+		matrix[12] = 0.0f;
+		matrix[13] = 0.0f;
+		matrix[14] = 0.0f;
+		matrix[15] = 1.0f;
+		glUniformMatrix4fv(opengl_projection_matrix_location, 1, GL_TRUE, matrix);
+	} else {
+		glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		glOrtho(0.0, (float)w, (float)h, 0.0, -1.0, 1.0);
+		glMatrixMode(GL_MODELVIEW);
+		glLoadIdentity();
+	}
 }
 
 void Keyboard(unsigned char key, int x, int y) {
@@ -202,8 +249,54 @@ int main(int argc, char** argv) {
 	glutInitWindowPosition(0, 0);
 	glutCreateWindow("Microphones");
 	glClearColor(0.0, 0.0, 0.0, 0.0);
-	glEnable(GL_BLEND);
-	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	// TODO: get real value, either checking OpenGL version or presence
+	// of GL_ARB_VERTEX_BUFFER_OBJECT extension 
+	have_opengl_vbo = 0;
+	if (have_opengl_vbo) {
+
+const char *vertex_shader_source = "#version 150 core"
+"uniform mat4 projectionMatrix;"
+"uniform int microphoneNumber;"
+"uniform int win_h;"
+
+"in vec2 vertexCoordinate;"
+
+"void main() {"
+"	float x = vertexCoordinate.x;"
+"	float y = ((float)win_h * (float)(2*microphoneNumber + 1) / 8. ) +  vertexCoordinate.y * ((float)win_h/4) /2147483647.;"
+"	gl_Position = projectionMatrix * vec4(x, y, 0.0, 1.0);"
+"}";
+
+const char *fragment_shader_source = "#version 150 core"
+"void main() {"
+"	gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);"
+"}";
+		GLuint program = glCreateProgram();
+		GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+		glShaderSource(vertex_shader, 1, &vertex_shader_source, NULL);
+		glCompileShader(vertex_shader);
+		glAttachShader(program, vertex_shader);
+		GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+		glShaderSource(fragment_shader, 1, &fragment_shader_source, NULL);
+		glCompileShader(fragment_shader);
+		glAttachShader(program, fragment_shader);
+		glBindAttribLocation(program, 0, "vertexCoordinate");
+		glLinkProgram(program);
+		glValidateProgram(program);
+		glUseProgram(program);
+		opengl_projection_matrix_location = glGetUniformLocation(program, "projectionMatrix");
+		opengl_microphone_number_location = glGetUniformLocation(program, "microphoneNumber");
+		glEnableVertexAttribArray(0);
+
+// TODO: is it needed?		glEnableClientState(GL_VERTEX_ARRAY);
+
+		glGenBuffers(1, &opengl_buffer);
+		glBindBuffer(GL_ARRAY_BUFFER, opengl_buffer);
+		glBufferData(GL_ARRAY_BUFFER, 0, NULL, GL_STREAM_DRAW);
+	} else {
+		glEnable(GL_BLEND);
+		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+	}
 	Reshape(800, 600);
 	glutReshapeFunc(Reshape);
 	glutDisplayFunc(DrawMicData);
