@@ -803,6 +803,18 @@ uint16_t read_cmos_register(freenect_device *dev, uint16_t reg)
 	return reply[2];
 }
 
+void freenect_autoexposure_off(freenect_device *dev) {
+	uint16_t opmode = read_cmos_register(dev, 0x0106);
+	opmode &= ~0x4002;
+	write_cmos_register(dev, 0x0106, opmode);
+}
+
+void freenect_autoexposure_on(freenect_device *dev) {
+	uint16_t opmode = read_cmos_register(dev, 0x0106);
+	opmode |= 0x4002;
+	write_cmos_register(dev, 0x0106, opmode);
+}
+
 static int freenect_fetch_reg_info(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
