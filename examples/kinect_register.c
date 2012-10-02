@@ -414,20 +414,24 @@ void apply_registration(char* regfile, char* PGMfile, char* PPMfile)
 
 void usage()
 {
-  printf("\nKinect Offline Registration\n");
-  printf("\nUsage:\n");
-  printf("  kinect_register [-h] -s <regfile> | -a <regfile> <PGM> [<PPM>]\n");
-  printf("  -h: Display this help message\n"
+  printf("\n"
+		 "Kinect Offline Registration\n"
+		 "Citation: http://dx.doi.org/10.1002/esp.3332\n"
+		 "\n"
+		 "Usage:\n"
+		 "  kinect_register [-h] -s <regfile> | -a <regfile> <PGM> [<PPM>]\n"
+		 "  -h: Display this help message\n"
 		 "  -s: Save the registration parameters from a connected Kinect to <regfile>\n"
 		 "  -a: Apply the registration parameters from <regfile> to <PGM> (from 'record')\n"
          "      Optionally align a PPM file with the PGM file\n"
 		 "\n"
-		 " Data Formats (units: mm):\n"
+		 "Data Formats (units: mm):\n"
 		 "  file.x: 640x480 double of x values\n"
 		 "  file.y: 640x480 double of y values\n"
 		 "  file.z: 640x480 integer of z values\n"
 		 "  file.ply: ASCII PLY file of x y z r g b. RGB only if PPM argument provided\n"
-		 "  file.reg.ppm: PPM shifted so pixels align with file.{x,y,z} data\n\n"
+		 "  file.reg.ppm: PPM shifted so pixels align with file.{x,y,z} data\n"
+		 "\n"
 		 );
   exit(0);
 }
