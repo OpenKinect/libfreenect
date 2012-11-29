@@ -25,6 +25,8 @@
 package org.openkinect.freenect;
 
 import com.sun.jna.Structure;
+import java.util.List;
+import java.util.Arrays;
 
 public class FrameMode extends Structure {
     /* All fields are public because Structure requires it.
@@ -39,6 +41,12 @@ public class FrameMode extends Structure {
 
     public FrameMode() {
         valid = 0;
+    }
+
+    protected List getFieldOrder() {
+        return Arrays.asList(new String[] {"reserved", "resolution", "format",
+                "bytes", "width", "height", "dataBitsPerPixel",
+                "paddingBitsPerPixel", "framerate", "valid"});
     }
 
     public Resolution getResolution() {
