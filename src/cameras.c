@@ -688,7 +688,8 @@ static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned i
 
 	do {
 		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
-	} while (actual_len == 0);
+		FN_FLOOD("actual_len: %d\n", actual_len);
+	} while ((actual_len == 0) || (actual_len == 0x200));
 	FN_SPEW("Control reply: %d\n", res);
 	if (actual_len < (int)sizeof(*rhdr)) {
 		FN_ERROR("send_cmd: Input control transfer failed (%d)\n", res);
