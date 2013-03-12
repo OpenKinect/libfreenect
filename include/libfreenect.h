@@ -402,6 +402,26 @@ FREENECTAPI int freenect_set_depth_buffer(freenect_device *dev, void *buf);
 FREENECTAPI int freenect_set_video_buffer(freenect_device *dev, void *buf);
 
 /**
+ * Toggle mirroring for the depth stream.
+ * 
+ * @param dev Device for which to set mirroring
+ * @param flag 0 for "off", 1 for "on"
+ * 
+ * @return 0 on success, < 0 on error
+ */
+FREENECTAPI int freenect_set_depth_mirroring(freenect_device *dev, unsigned int flag);
+
+/**
+ * Toggle mirroring for the video stream.
+ * 
+ * @param dev Device for which to set mirroring
+ * @param flag 0 for "off", 1 for "on"
+ * 
+ * @return 0 on success, < 0 on error
+ */
+FREENECTAPI int freenect_set_video_mirroring(freenect_device *dev, unsigned int flag);
+
+/**
  * Start the depth information stream for a device.
  *
  * @param dev Device to start depth information stream for.

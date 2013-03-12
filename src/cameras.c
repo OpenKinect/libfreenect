@@ -1324,6 +1324,7 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
 	dev->depth_resolution = res;
 	return 0;
 }
+
 int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 {
 	return stream_setbuf(dev->parent, &dev->depth, buf);
@@ -1332,6 +1333,22 @@ int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 int freenect_set_video_buffer(freenect_device *dev, void *buf)
 {
 	return stream_setbuf(dev->parent, &dev->video, buf);
+}
+
+int freenect_set_depth_mirroring(freenect_device *dev, unsigned int flag)
+{
+	if (flag > 1)
+		return -1;
+	write_register(dev, 0x0017, flag);
+	return 0;
+}
+
+int freenect_set_video_mirroring(freenect_device *dev, unsigned int flag)
+{
+	if (flag > 1)
+		return -1;
+	write_register(dev, 0x0047, flag);
+	return 0;
 }
 
 FN_INTERNAL int freenect_camera_init(freenect_device *dev)
