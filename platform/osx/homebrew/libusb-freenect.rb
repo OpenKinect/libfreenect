@@ -15,6 +15,9 @@ class LibusbFreenect <Formula
   end
 
   def install
+    # Compatibility with Automake 1.13 and newer.
+    inreplace 'configure.ac', 'AM_CONFIG_HEADER', 'AC_CONFIG_HEADERS'
+    
     ENV.universal_binary
     system "./autogen.sh"
     system "./configure", "--prefix=#{prefix}", "--disable-dependency-tracking", "LDFLAGS=-framework IOKit -framework CoreFoundation"
