@@ -128,16 +128,35 @@ void DrawMicData() {
 	int mic;
 	for(mic = 0; mic < 4; mic++) {
 		if (have_opengl_vbo) {
+#if GL_VERSION_2_0
 			glUniform1i(opengl_microphone_number_location, mic);
+#elif GL_ARB_shader_objects
+			glUniform1iARB(opengl_microphone_number_location, mic);
+#endif
+#if GL_VERSION_1_5
 			glBindBuffer(GL_ARRAY_BUFFER, opengl_buffer[1]);
+#elif GL_ARB_vertex_buffer_object
+			glBindBufferARB(GL_ARRAY_BUFFER_ARB, opengl_buffer[1]);
+#endif
 			// Avoid copying to array and then to OpenGL
 			if (base_idx) {
+#if GL_VERSION_1_5
 				glBufferSubData(GL_ARRAY_BUFFER, sizeof(GLint) * (state.max_samples - base_idx), sizeof(GLint) * base_idx, state.buffers[mic]);
 				glBufferSubData(GL_ARRAY_BUFFER, sizeof(GLint) * base_idx, sizeof(GLint) * (state.max_samples - base_idx), state.buffers[mic]);
+#elif GL_ARB_vertex_buffer_object
+				glBufferSubDataARB(GL_ARRAY_BUFFER_ARB, sizeof(GLint) * (state.max_samples - base_idx), sizeof(GLint) * base_idx, state.buffers[mic]);
+				glBufferSubDataARB(GL_ARRAY_BUFFER_ARB, sizeof(GLint) * base_idx, sizeof(GLint) * (state.max_samples - base_idx), state.buffers[mic]);
+#endif
 			} else {
+#if GL_VERSION_1_5
 				glBufferData(GL_ARRAY_BUFFER, sizeof(GLint) * state.max_samples, state.buffers[mic], GL_DYNAMIC_DRAW);
+#elif GL_ARB_vertex_buffer_object
+				glBufferDataARB(GL_ARRAY_BUFFER_ARB, sizeof(GLint) * state.max_samples, state.buffers[mic], GL_DYNAMIC_DRAW);
+#endif
 			}
+#if GL_VERSION_1_1
 			glDrawArrays(GL_LINE_STRIP, 0, state.max_samples);
+#endif
 		} else {
 			glBegin(GL_LINE_STRIP);
 			glColor4f(1.0f, 1.0f, 1.0f, 0.7f);
@@ -247,9 +266,39 @@ int main(int argc, char** argv) {
 	glutInitWindowPosition(0, 0);
 	glutCreateWindow("Microphones");
 	glClearColor(0.0, 0.0, 0.0, 0.0);
-	// TODO: get real value, either checking OpenGL version or presence
-	// of GL_ARB_VERTEX_BUFFER_OBJECT extension 
-	have_opengl_vbo = 0;
+
+	// Check OpenGL version to see whether VBO and shaders are supported
+	GLint opengl_major_version, opengl_minor_version;
+	glGetIntegerv(GL_MAJOR_VERSION, &opengl_major_version);
+	glGetIntegerv(GL_MINOR_VERSION, &opengl_minor_version);
+	have_opengl_vbo = (opengl_major_version >= 2);
+	if (!have_opengl_vbo) {
+		// Check for GL_ARB_VERTEX_BUFFER_OBJECT, GL_ARB_VERTEX_SHADER,
+		// and GL_ARB_FRAGMENT_SHADER extensions
+		int required_extension_count = 0;
+		int opengl_extension_count = glGetIntegerv(GL_NUM_EXTENSIONS);
+		for (int i = 0; i < opengl_extension_count; i++) {
+			if (!strcmp("GL_ARB_VERTEX_BUFFER_OBJECT", glGetStringi(GL_EXTENSIONS, i))) {
+				required_extension_count++;
+			}
+			if (!strcmp("GL_ARB_VERTEX_SHADER", glGetStringi(GL_EXTENSIONS, i))) {
+				required_extension_count++;
+			}
+			if (!strcmp("GL_ARB_FRAGMENT_SHADER", glGetStringi(GL_EXTENSIONS, i))) {
+				required_extension_count++;
+			}
+			if (!strcmp("GL_ARB_SHADER_OBJECTS", glGetStringi(GL_EXTENSIONS, i))) {
+				required_extension_count++;
+			}
+		}
+		// All extensions are present and OpenGL has version 1.1 for glDrawArrays
+		if (required_extension_count == 4 &&
+
+			(opengl_major_version >= 2 || (opengl_major_version == 1 && opengl_minor_version >= 1))) {
+			have_opengl_vbo = 1;
+		}
+	}
+
 	if (have_opengl_vbo) {
 
 const char *vertex_shader_source = "#version 150 core\n"
@@ -271,12 +320,14 @@ const char *fragment_shader_source = "#version 150 core\n"
 "void main() {"
 "	gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);"
 "}";
-		GLuint program = glCreateProgram();
-		GLuint vertex_shader = glCreateShader(GL_VERTEX_SHADER);
+		GLuint program, vertex_shader, fragment_shader;
+#if GL_VERSION_2_0
+		program = glCreateProgram();
+		vertex_shader = glCreateShader(GL_VERTEX_SHADER);
 		glShaderSource(vertex_shader, 1, &vertex_shader_source, NULL);
 		glCompileShader(vertex_shader);
 		glAttachShader(program, vertex_shader);
-		GLuint fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
+		fragment_shader = glCreateShader(GL_FRAGMENT_SHADER);
 		glShaderSource(fragment_shader, 1, &fragment_shader_source, NULL);
 		glCompileShader(fragment_shader);
 		glAttachShader(program, fragment_shader);
@@ -288,18 +339,36 @@ const char *fragment_shader_source = "#version 150 core\n"
 
 		opengl_projection_matrix_location = glGetUniformLocation(program, "projectionMatrix");
 		opengl_microphone_number_location = glGetUniformLocation(program, "microphoneNumber");
+#elif GL_ARB_shader_objects
+		program = glCreateProgramObjectARB();
+		vertex_shader = glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
+		glShaderSourceARB(vertex_shader, 1, &vertex_shader_source, NULL);
+		glCompileShaderARB(vertex_shader);
+		glAttachObjectARB(program, vertex_shader);
+		fragment_shader = glCreateShaderObjectARB(GL_FRAGMENT_SHADER);
+		glShaderSourceARB(fragment_shader, 1, &fragment_shader_source, NULL);
+		glCompileShaderARB(fragment_shader);
+		glAttachObjectARB(program, fragment_shader);
+		glBindAttribLocationARB(program, 0, "vertexCoordinate_x");
+		glBindAttribLocationARB(program, 1, "vertexCoordinate_y");
+		glLinkProgramARB(program);
+		glValidateProgramARB(program);
+		glUseProgramObjectARB(program);
 
-		glGenBuffers(2, opengl_buffer);
+		opengl_projection_matrix_location = glGetUniformLocationARB(program, "projectionMatrix");
+		opengl_microphone_number_location = glGetUniformLocationARB(program, "microphoneNumber");
+#endif
 
 		// Prepare X coordinates for shader (the same for all microphones)
-		glBindBuffer(GL_ARRAY_BUFFER, opengl_buffer[0]);
 		GLfloat *array = malloc(sizeof(GLfloat) * state.max_samples);
-		int i;
-		for(i = 0; i < state.max_samples; i++) {
+		for(int i = 0; i < state.max_samples; i++) {
 			array[i] = i;
 		}
+#if GL_VERSION_1_5
+		glGenBuffers(2, opengl_buffer);
+		glBindBuffer(GL_ARRAY_BUFFER, opengl_buffer[0]);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(GLfloat) * state.max_samples, array, GL_STATIC_DRAW);
-		free(array);
+
 		glVertexAttribPointer(0, 1, GL_FLOAT, GL_FALSE, 0, NULL);
 		glEnableVertexAttribArray(0);
 
@@ -307,6 +376,20 @@ const char *fragment_shader_source = "#version 150 core\n"
 		glBufferData(GL_ARRAY_BUFFER, sizeof(GLint) * state.max_samples, NULL, GL_DYNAMIC_DRAW);
 		glVertexAttribIPointer(1, 1, GL_INT, GL_FALSE, 0, NULL);
 		glEnableVertexAttribArray(1);
+#elif GL_ARB_vertex_buffer_object
+		glGenBuffersARB(2, opengl_buffer);
+		glBindBufferARB(GL_ARRAY_BUFFER_ARB, opengl_buffer[0]);
+		glBufferDataARB(GL_ARRAY_BUFFER_ARB, sizeof(GLfloat) * state.max_samples, array, GL_STATIC_DRAW_ARB);
+
+		glVertexAttribPointerARB(0, 1, GL_FLOAT, GL_FALSE, 0, NULL);
+		glEnableVertexAttribArrayARB(0);
+
+		glBindBufferARB(GL_ARRAY_BUFFER_ARB, opengl_buffer[1]);
+		glBufferDataARB(GL_ARRAY_BUFFER_ARB, sizeof(GLint) * state.max_samples, NULL, GL_DYNAMIC_DRAW_ARB);
+		glVertexAttribIPointerARB(1, 1, GL_INT, GL_FALSE, 0, NULL);
+		glEnableVertexAttribArrayARB(1);
+#endif
+		free(array);
 	} else {
 		glEnable(GL_BLEND);
 		glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
