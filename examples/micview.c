@@ -24,6 +24,8 @@
  * either License.
  */
 
+#define GL_GLEXT_PROTOTYPES
+
 #include "libfreenect.h"
 #include "libfreenect-audio.h"
 #include <stdio.h>
@@ -55,7 +57,7 @@ pthread_cond_t audiobuf_cond = PTHREAD_COND_INITIALIZER;
 int win_h, win_w;
 
 int have_opengl_vbo = 0;
-GLint opengl_buffer[2];
+GLuint opengl_buffer[2];
 GLint opengl_projection_matrix_location;
 GLint opengl_microphone_number_location;
 
@@ -276,18 +278,20 @@ int main(int argc, char** argv) {
 		// Check for GL_ARB_VERTEX_BUFFER_OBJECT, GL_ARB_VERTEX_SHADER,
 		// and GL_ARB_FRAGMENT_SHADER extensions
 		int required_extension_count = 0;
-		int opengl_extension_count = glGetIntegerv(GL_NUM_EXTENSIONS);
-		for (int i = 0; i < opengl_extension_count; i++) {
-			if (!strcmp("GL_ARB_VERTEX_BUFFER_OBJECT", glGetStringi(GL_EXTENSIONS, i))) {
+		int opengl_extension_count;
+		glGetIntegerv(GL_NUM_EXTENSIONS, &opengl_extension_count);
+		int i;
+		for (i = 0; i < opengl_extension_count; i++) {
+			if (!strcmp("GL_ARB_VERTEX_BUFFER_OBJECT", (const char *)glGetStringi(GL_EXTENSIONS, i))) {
 				required_extension_count++;
 			}
-			if (!strcmp("GL_ARB_VERTEX_SHADER", glGetStringi(GL_EXTENSIONS, i))) {
+			if (!strcmp("GL_ARB_VERTEX_SHADER", (const char *)glGetStringi(GL_EXTENSIONS, i))) {
 				required_extension_count++;
 			}
-			if (!strcmp("GL_ARB_FRAGMENT_SHADER", glGetStringi(GL_EXTENSIONS, i))) {
+			if (!strcmp("GL_ARB_FRAGMENT_SHADER", (const char *)glGetStringi(GL_EXTENSIONS, i))) {
 				required_extension_count++;
 			}
-			if (!strcmp("GL_ARB_SHADER_OBJECTS", glGetStringi(GL_EXTENSIONS, i))) {
+			if (!strcmp("GL_ARB_SHADER_OBJECTS", (const char *)glGetStringi(GL_EXTENSIONS, i))) {
 				required_extension_count++;
 			}
 		}
@@ -361,7 +365,8 @@ const char *fragment_shader_source = "#version 150 core\n"
 
 		// Prepare X coordinates for shader (the same for all microphones)
 		GLfloat *array = malloc(sizeof(GLfloat) * state.max_samples);
-		for(int i = 0; i < state.max_samples; i++) {
+		int i;
+		for(i = 0; i < state.max_samples; i++) {
 			array[i] = i;
 		}
 #if GL_VERSION_1_5
@@ -374,7 +379,7 @@ const char *fragment_shader_source = "#version 150 core\n"
 
 		glBindBuffer(GL_ARRAY_BUFFER, opengl_buffer[1]);
 		glBufferData(GL_ARRAY_BUFFER, sizeof(GLint) * state.max_samples, NULL, GL_DYNAMIC_DRAW);
-		glVertexAttribIPointer(1, 1, GL_INT, GL_FALSE, 0, NULL);
+		glVertexAttribPointer(1, 1, GL_INT, GL_FALSE, 0, NULL);
 		glEnableVertexAttribArray(1);
 #elif GL_ARB_vertex_buffer_object
 		glGenBuffersARB(2, opengl_buffer);
