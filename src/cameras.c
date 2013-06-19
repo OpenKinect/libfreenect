@@ -766,6 +766,56 @@ static uint16_t read_register(freenect_device *dev, uint16_t reg)
 	return reply[1];
 }
 
+int write_cmos_register(freenect_device *dev, uint16_t reg, uint16_t data)
+{
+	freenect_context *ctx = dev->parent;
+	uint16_t reply[3];
+	uint16_t cmd[3];
+	int res;
+	
+	cmd[0] = fn_le16(1);
+	cmd[1] = fn_le16(0x8000 | reg);
+	cmd[2] = fn_le16(data);
+	
+	FN_DEBUG("Write Reg 0x%04x =>\n", reg);
+	res = send_cmd(dev, 0x0095, &cmd, 6, reply, 6);
+	if (res < 0)
+		FN_ERROR("write_cmos_register: send_cmd() failed: %d\n", res);
+	
+	return res;
+}
+
+uint16_t read_cmos_register(freenect_device *dev, uint16_t reg)
+{
+	freenect_context *ctx = dev->parent;
+	uint16_t reply[3];
+	uint16_t cmd[3];
+	int res;
+	
+	cmd[0] = fn_le16(1);
+	cmd[1] = fn_le16(reg);
+	cmd[2] = 0;
+	
+	FN_DEBUG("Read Reg 0x%04x =>\n", reg);
+	res = send_cmd(dev, 0x0095, &cmd, 6, reply, 6);
+	if (res < 0)
+		FN_ERROR("read_cmos_register: send_cmd() failed: %d\n", res);
+	
+	return reply[2];
+}
+
+void freenect_autoexposure_off(freenect_device *dev) {
+	uint16_t opmode = read_cmos_register(dev, 0x0106);
+	opmode &= ~0x4002;
+	write_cmos_register(dev, 0x0106, opmode);
+}
+
+void freenect_autoexposure_on(freenect_device *dev) {
+	uint16_t opmode = read_cmos_register(dev, 0x0106);
+	opmode |= 0x4002;
+	write_cmos_register(dev, 0x0106, opmode);
+}
+
 static int freenect_fetch_reg_info(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;

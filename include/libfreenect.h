@@ -401,6 +401,20 @@ FREENECTAPI int freenect_set_depth_buffer(freenect_device *dev, void *buf);
 FREENECTAPI int freenect_set_video_buffer(freenect_device *dev, void *buf);
 
 /**
+ * Turn off auto-exposure on the RGB camera
+ *
+ * @param dev Device to set auto-exposure for.
+ */
+FREENECTAPI void freenect_autoexposure_off(freenect_device *dev);
+
+/**
+ * Turn on auto-exposure on the RGB camera
+ *
+ * @param dev Device to set auto-exposure for.
+ */
+FREENECTAPI void freenect_autoexposure_on(freenect_device *dev);
+
+/**
  * Start the depth information stream for a device.
  *
  * @param dev Device to start depth information stream for.
