@@ -24,8 +24,7 @@
  * either License.
  */
 
-#ifndef __LOADER_H__
-#define __LOADER_H__
+#pragma once
 
 #include <stdint.h>
 #include "usb_libusb10.h"
@@ -56,5 +55,3 @@ typedef struct {
 
 int upload_firmware(fnusb_dev* dev);
 int upload_cemd_data(fnusb_dev* dev);
-
-#endif //__LOADER_H__

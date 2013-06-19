@@ -24,8 +24,7 @@
  * either License.
  */
 
-#ifndef LIBFREENECT_H
-#define LIBFREENECT_H
+#pragma once
 
 #include <stdint.h>
 
@@ -618,6 +617,3 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
 #ifdef __cplusplus
 }
 #endif
-
-#endif //
-

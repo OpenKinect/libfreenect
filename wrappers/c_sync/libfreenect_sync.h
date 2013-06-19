@@ -24,8 +24,8 @@
  * either License.
  */
 
-#ifndef FREENECT_SYNC_H
-#define FREENECT_SYNC_H
+#pragma once
+
 #include <libfreenect.h>
 #include <stdint.h>
 
@@ -103,6 +103,4 @@ int freenect_sync_set_led(freenect_led_options led, int index);
 void freenect_sync_stop(void);
 #ifdef __cplusplus
 }
-#endif
-
 #endif
