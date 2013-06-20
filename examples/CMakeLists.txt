@@ -20,6 +20,7 @@ endif()
 add_executable(glview glview.c)
 add_executable(regview regview.c)
 add_executable(hiview hiview.c)
+add_executable(kinect_register kinect_register.c)
 if(BUILD_AUDIO)
   add_executable(wavrecord wavrecord.c)
   add_executable(micview micview.c)
@@ -40,6 +41,7 @@ if(APPLE)
   target_link_libraries(glview freenect)
   target_link_libraries(regview freenect)
   target_link_libraries(hiview freenect)
+  target_link_libraries(kinect_register freenect)
   if (BUILD_AUDIO)
     target_link_libraries(wavrecord freenect)
     target_link_libraries(micview freenect)
@@ -56,11 +58,12 @@ else()
   find_package(OpenGL REQUIRED)
   find_package(GLUT REQUIRED)
 
-  include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS} ${USB_INCLUDE_DIRS})
+  include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIR} ${USB_INCLUDE_DIRS})
 
   target_link_libraries(glview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   target_link_libraries(regview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   target_link_libraries(hiview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+  target_link_libraries(kinect_register freenect ${CMAKE_THREAD_LIBS_INIT})
   if (BUILD_AUDIO)
     target_link_libraries(wavrecord freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
     target_link_libraries(micview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
@@ -74,7 +77,7 @@ else()
 endif()
 
 
-install (TARGETS glview regview hiview
+install (TARGETS glview regview hiview kinect_register
   DESTINATION bin)
 
 if (BUILD_C_SYNC)

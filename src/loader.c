@@ -193,11 +193,37 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 		return -errno;
 	}
 	// Now we have an open firmware file handle.
-	uint32_t addr = 0x00080000;
-	int read;
+	firmware_header fwheader;
+	int read = 0;
+	read = fread(&fwheader, 1, sizeof(firmware_header), fw);
+	if (read != sizeof(firmware_header)) {
+		FN_ERROR("upload_firmware: firmware image too small, has no header?\n");
+		fclose(fw);
+		return -errno;
+	}
+	// The file is serialized as little endian.
+	fwheader.magic = fn_le32(fwheader.magic);
+	fwheader.ver_major = fn_le16(fwheader.ver_major);
+	fwheader.ver_minor = fn_le16(fwheader.ver_minor);
+	fwheader.ver_release = fn_le16(fwheader.ver_release);
+	fwheader.ver_patch = fn_le16(fwheader.ver_patch);
+	fwheader.base_addr = fn_le32(fwheader.base_addr);
+	fwheader.size = fn_le32(fwheader.size);
+	fwheader.entry_addr = fn_le32(fwheader.entry_addr);
+	FN_INFO("Found firmware image:\n");
+	FN_INFO("\tmagic        %08X\n", fwheader.magic);
+	FN_INFO("\tversion      %02d.%02d.%02d.%02d\n", fwheader.ver_major, fwheader.ver_minor, fwheader.ver_release, fwheader.ver_patch);
+	FN_INFO("\tbase address 0x%08x\n", fwheader.base_addr);
+	FN_INFO("\tsize         0x%08x\n", fwheader.size);
+	FN_INFO("\tentry point  0x%08x\n", fwheader.entry_addr);
+
+	rewind(fw);
+	uint32_t addr = fwheader.base_addr;
 	unsigned char page[0x4000];
+	int total_bytes_sent = 0;
 	do {
-		read = fread(page, 1, 0x4000, fw);
+		size_t block_size = (0x4000 > fwheader.size - total_bytes_sent) ? fwheader.size - total_bytes_sent : 0x4000;
+		read = fread(page, 1, block_size, fw);
 		if(read <= 0) {
 			break;
 		}
@@ -224,6 +250,7 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 				return -1;
 			}
 			bytes_sent += to_send;
+			total_bytes_sent += to_send;
 		}
 		res = get_reply(dev);
 		addr += (uint32_t)read;
@@ -231,11 +258,15 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 	} while (read > 0);
 	fclose(fw);
 	fw = NULL;
+	if (total_bytes_sent != fwheader.size) {
+		FN_ERROR("upload_firmware: firmware image declared %d bytes, but file only contained %d bytes\n", fwheader.size, total_bytes_sent);
+		return -1;
+	}
 
 	bootcmd.tag   = fn_le32(dev->parent->audio_tag);
 	bootcmd.bytes = fn_le32(0);
 	bootcmd.cmd   = fn_le32(0x04);
-	bootcmd.addr  = fn_le32(0x00080030);
+	bootcmd.addr  = fn_le32(fwheader.entry_addr);
 	dump_bl_cmd(ctx, bootcmd);
 	res = fnusb_bulk(dev, 1, (unsigned char*)&bootcmd, sizeof(bootcmd), &transferred);
 	if(res != 0 || transferred != sizeof(bootcmd)) {
