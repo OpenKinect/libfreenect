@@ -106,6 +106,11 @@ typedef enum {
 	FREENECT_DEPTH_DUMMY        = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_depth_format;
 
+typedef enum {
+	FREENECT_MIRRORING_OFF = 0,
+	FREENECT_MIRRORING_ON = 1,
+} freenect_mirroring_flag;
+
 /// Structure to give information about the width, height, bitrate,
 /// framerate, and buffer size of a frame in a particular mode, as
 /// well as the total number of bytes needed to hold a single frame.
@@ -399,6 +404,23 @@ FREENECTAPI int freenect_set_depth_buffer(freenect_device *dev, void *buf);
  * @return 0 on success, < 0 on error
  */
 FREENECTAPI int freenect_set_video_buffer(freenect_device *dev, void *buf);
+
+/**
+ * Toggle mirroring for the depth stream.
+ * 
+ * @param dev Device for which to set mirroring
+ * @param flag Flag to toggle mirroring
+ */
+FREENECTAPI void freenect_set_depth_mirroring(freenect_device *dev, freenect_mirroring_flag flag);
+
+/**
+ * Toggle mirroring for the video stream.
+ * Note that the IR stream cannot be mirrored since that would corrupt depth.
+ * 
+ * @param dev Device for which to set mirroring
+ * @param flag Flag to toggle mirroring
+ */
+FREENECTAPI void freenect_set_video_mirroring(freenect_device *dev, freenect_mirroring_flag flag);
 
 /**
  * Start the depth information stream for a device.
