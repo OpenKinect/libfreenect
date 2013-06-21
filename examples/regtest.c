@@ -43,13 +43,13 @@ FILE *open_dump(const char *filename)
 
 void dump_depth(FILE *fp, void *data, unsigned int width, unsigned int height)
 {
-	fprintf(fp, "P5 %d %d 65535\n", width, height);
+	fprintf(fp, "P5 %u %u 65535\n", width, height);
 	fwrite(data, width * height * 2, 1, fp);
 }
 
 void dump_rgb(FILE *fp, void *data, unsigned int width, unsigned int height)
 {
-	fprintf(fp, "P6 %d %d 255\n", width, height);
+	fprintf(fp, "P6 %u %u 255\n", width, height);
 	fwrite(data, width * height * 3, 1, fp);
 }
 

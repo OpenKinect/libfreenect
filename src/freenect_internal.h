@@ -24,8 +24,7 @@
  * either License.
  */
 
-#ifndef FREENECT_INTERNAL_H
-#define FREENECT_INTERNAL_H
+#pragma once
 
 #include <stdint.h>
 
@@ -240,5 +239,3 @@ struct _freenect_device {
 	fnusb_dev usb_motor;
 	freenect_raw_tilt_state raw_state;
 };
-
-#endif
