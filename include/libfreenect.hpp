@@ -1,7 +1,27 @@
-/* Copyright 2013 Benn Snyder <benn.snyder@gmail.com>
+/*
+ * This file is part of the OpenKinect Project. http://www.openkinect.org
  *
- * This file is part of FreeNUI, distributed under the terms of the GNU Lesser General Public License, version 3.
- * See LICENSE in the root of this project for the full text of the license.
+ * Copyright (c) 2011 individual OpenKinect contributors. See the CONTRIB file
+ * for details.
+ *
+ * This code is licensed to you under the terms of the Apache License, version
+ * 2.0, or, at your option, the terms of the GNU General Public License,
+ * version 2.0. See the APACHE20 and GPL2 files for the text of the licenses,
+ * or the following URLs:
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.gnu.org/licenses/gpl-2.0.txt
+ *
+ * If you redistribute this file in source form, modified or unmodified, you
+ * may:
+ *   1) Leave this header intact and distribute it under the same terms,
+ *      accompanying it with the APACHE20 and GPL20 files, or
+ *   2) Delete the Apache 2.0 clause and accompany it with the GPL2 file, or
+ *   3) Delete the GPL v2 clause and accompany it with the APACHE20 file
+ * In all cases you must keep the copyright notice intact and include a copy
+ * of the CONTRIB file.
+ *
+ * Binary distributions must follow the binary distribution requirements of
+ * either License.
  */
 #pragma once
 
@@ -342,8 +362,7 @@ namespace Freenect {
 		std::unique_ptr<Motor> motor;
 
 		/// @throw freenect_exception A call to a freenect function returned an error
-		Device(unsigned int index) :
-			motor(nullptr) {
+		Device(unsigned int index) {
 			freenect_select_subdevices(fn_context, SUBDEVICES);
 			
 			int ret = freenect_open_device(fn_context, &fn_device, index);
@@ -353,11 +372,12 @@ namespace Freenect {
 				ret = freenect_open_device(fn_context, &fn_device, index);
 				if (ret < 0)
 					throw freenect_exception(ret, "freenect_open_device");
+				motor.reset(nullptr);
 			} else {
-				motor = std::unique_ptr<Motor>(new Motor(fn_device));
+				motor.reset(new Motor(fn_device));
 			}
-			video = std::unique_ptr<VideoStream>(new VideoStream(fn_device));
-			depth = std::unique_ptr<DepthStream>(new DepthStream(fn_device));
+			video.reset(new VideoStream(fn_device));
+			depth.reset(new DepthStream(fn_device));
 			
 			freenect_set_user(fn_device, this);
 		}
