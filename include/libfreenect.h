@@ -106,6 +106,19 @@ typedef enum {
 	FREENECT_DEPTH_DUMMY        = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_depth_format;
 
+/// Enumeration of flags to toggle features with freenect_set_flag()
+typedef enum {
+	FREENECT_AUTO_EXPOSURE = 1 << 14,
+	FREENECT_AUTO_WHITE_BALANCE = 1 << 1,
+	FREENECT_RAW_COLOR = 1 << 4,
+} freenect_flag;
+
+/// Possible values for setting each `freenect_flag`
+typedef enum {
+	FREENECT_ON = 1,
+	FREENECT_OFF = 0,
+} freenect_flag_value;
+
 /// Structure to give information about the width, height, bitrate,
 /// framerate, and buffer size of a frame in a particular mode, as
 /// well as the total number of bytes needed to hold a single frame.
@@ -613,6 +626,16 @@ FREENECTAPI freenect_frame_mode freenect_find_depth_mode(freenect_resolution res
  * @return 0 on success, < 0 if error
  */
 FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode);
+
+/**
+ * Enables or disables the specified flag.
+ * 
+ * @param flag Feature to set
+ * @param value `FREENECT_ON` or `FREENECT_OFF`
+ * 
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value);
 
 #ifdef __cplusplus
 }

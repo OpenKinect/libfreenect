@@ -179,6 +179,21 @@ void keyPressed(unsigned char key, int x, int y)
 			freenect_angle = -30;
 		}
 	}
+	if (key == 'e') {
+		static freenect_flag_value auto_exposure = FREENECT_ON;
+		freenect_set_flag(f_dev, FREENECT_AUTO_EXPOSURE, auto_exposure);
+		auto_exposure = !auto_exposure;
+	}
+	if (key == 'b') {
+		static freenect_flag_value white_balance = FREENECT_ON;
+		freenect_set_flag(f_dev, FREENECT_AUTO_WHITE_BALANCE, white_balance);
+		white_balance = !white_balance;
+	}
+	if (key == 'r') {
+		static freenect_flag_value raw_color = FREENECT_ON;
+		freenect_set_flag(f_dev, FREENECT_RAW_COLOR, raw_color);
+		raw_color = !raw_color;
+	}
 	if (key == '1') {
 		freenect_set_led(f_dev,LED_GREEN);
 	}
@@ -348,7 +363,7 @@ void *freenect_threadfunc(void *arg)
 	freenect_start_depth(f_dev);
 	freenect_start_video(f_dev);
 
-	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format\n");
+	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format, 'e' - auto exposure, 'b' - white balance, r - raw color\n");
 
 	while (!die && freenect_process_events(f_ctx) >= 0) {
 		//Throttle the text output
