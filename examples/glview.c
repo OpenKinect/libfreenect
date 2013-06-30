@@ -194,6 +194,12 @@ void keyPressed(unsigned char key, int x, int y)
 		freenect_set_flag(f_dev, FREENECT_RAW_COLOR, raw_color);
 		raw_color = !raw_color;
 	}
+	if (key == 'm') {
+		static freenect_flag_value mirror = FREENECT_ON;
+		freenect_set_flag(f_dev, FREENECT_MIRROR_DEPTH, mirror);
+		freenect_set_flag(f_dev, FREENECT_MIRROR_VIDEO, mirror);
+		mirror = !mirror;
+	}
 	if (key == '1') {
 		freenect_set_led(f_dev,LED_GREEN);
 	}
@@ -363,7 +369,8 @@ void *freenect_threadfunc(void *arg)
 	freenect_start_depth(f_dev);
 	freenect_start_video(f_dev);
 
-	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format, 'e' - auto exposure, 'b' - white balance, r - raw color\n");
+	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format\n");
+	printf("'e' - auto exposure, 'b' - white balance, 'r' - raw color, 'm' - mirror\n");
 
 	while (!die && freenect_process_events(f_ctx) >= 0) {
 		//Throttle the text output

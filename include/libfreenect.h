@@ -108,15 +108,19 @@ typedef enum {
 
 /// Enumeration of flags to toggle features with freenect_set_flag()
 typedef enum {
-	FREENECT_AUTO_EXPOSURE = 1 << 14,
+	// values written to the CMOS register
+	FREENECT_AUTO_EXPOSURE      = 1 << 14,
 	FREENECT_AUTO_WHITE_BALANCE = 1 << 1,
-	FREENECT_RAW_COLOR = 1 << 4,
+	FREENECT_RAW_COLOR          = 1 << 4,
+	// registers to be written with 0 or 1
+	FREENECT_MIRROR_DEPTH       = 0x0017,
+	FREENECT_MIRROR_VIDEO       = 0x0047,
 } freenect_flag;
 
 /// Possible values for setting each `freenect_flag`
 typedef enum {
-	FREENECT_ON = 1,
 	FREENECT_OFF = 0,
+	FREENECT_ON  = 1,
 } freenect_flag_value;
 
 /// Structure to give information about the width, height, bitrate,
@@ -631,7 +635,7 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
  * Enables or disables the specified flag.
  * 
  * @param flag Feature to set
- * @param value `FREENECT_ON` or `FREENECT_OFF`
+ * @param value `FREENECT_OFF` or `FREENECT_ON`
  * 
  * @return 0 on success, < 0 if error
  */

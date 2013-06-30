@@ -35,6 +35,9 @@
 
 int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value)
 {
+	if (flag == FREENECT_MIRROR_DEPTH || flag == FREENECT_MIRROR_VIDEO)
+		return write_register(dev, flag, value);
+	
 	uint16_t reg = read_cmos_register(dev, 0x0106);
 	if (reg < 0)
 		return reg;
