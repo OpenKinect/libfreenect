@@ -32,6 +32,22 @@
 #include <pthread.h>
 
 namespace Freenect {
+
+	class Mutex {
+	  public:
+		Mutex() {
+			pthread_mutex_init( &m_mutex, NULL );
+		}
+		void lock() {
+			pthread_mutex_lock( &m_mutex );
+		}
+		void unlock() {
+			pthread_mutex_unlock( &m_mutex );
+		}
+	  private:
+		pthread_mutex_t m_mutex;
+	};
+	
 	class Noncopyable {
 	  public:
 		Noncopyable() {}
@@ -191,17 +207,23 @@ namespace Freenect {
 		}
 		template <typename ConcreteDevice>
 		ConcreteDevice& createDevice(int _index) {
+			m_HasDeviceMutex.lock(); 		// Windows Fix
 			DeviceMap::iterator it = m_devices.find(_index);
 			if (it != m_devices.end()) delete it->second;
 			ConcreteDevice * device = new ConcreteDevice(m_ctx, _index);
 			m_devices.insert(std::make_pair<int, FreenectDevice*>(_index, device));
+			m_HasDevice = (m_devices.size() != 0); 	// Windows Fix
+			m_HasDeviceMutex.unlock(); 		// Windows Fix
 			return *device;
 		}
 		void deleteDevice(int _index) {
+			m_HasDeviceMutex.lock(); 		// Windows Fix
 			DeviceMap::iterator it = m_devices.find(_index);
 			if (it == m_devices.end()) return;
 			delete it->second;
 			m_devices.erase(it);
+			m_HasDevice = (m_devices.size() != 0); 	// Windows Fix
+			m_HasDeviceMutex.unlock(); 		// Windows Fix
 		}
 		int deviceCount() {
 			return freenect_num_devices(m_ctx);
@@ -209,7 +231,9 @@ namespace Freenect {
 		// Do not call directly, thread runs here
 		void operator()() {
 			while(!m_stop) {
-				if(freenect_process_events(m_ctx) < 0) throw std::runtime_error("Cannot process freenect events");
+				m_HasDeviceMutex.lock();
+				if(m_HasDevice && freenect_process_events(m_ctx) < 0) throw std::runtime_error("Cannot process freenect events");
+				m_HasDeviceMutex.unlock();
 			}
 		}
 		static void *pthread_callback(void *user_data) {
@@ -222,6 +246,8 @@ namespace Freenect {
 		volatile bool m_stop;
 		pthread_t m_thread;
 		DeviceMap m_devices;
+		Mutex m_HasDeviceMutex;   	// Windows Fix: Mutex for the has device bool
+		volatile bool m_HasDevice;	// Windows Fix: Flag to indicate a loaded device
 	};
 
 }
