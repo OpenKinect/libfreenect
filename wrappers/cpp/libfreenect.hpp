@@ -134,6 +134,9 @@ namespace Freenect {
 		freenect_resolution getDepthResolution() {
 			return m_depth_resolution;
 		}
+		const freenect_device *getDevice() {
+			return m_dev;
+		}
 		// Do not call directly even in child
 		virtual void VideoCallback(void *video, uint32_t timestamp) = 0;
 		// Do not call directly even in child

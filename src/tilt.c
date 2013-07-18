@@ -47,6 +47,8 @@ freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev)
 int freenect_update_tilt_state(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
+	if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
+		return 0;
 	uint8_t buf[10];
 	uint16_t ux, uy, uz;
 	int ret = fnusb_control(&dev->usb_motor, 0xC0, 0x32, 0x0, 0x0, buf, 10);
@@ -70,6 +72,9 @@ int freenect_update_tilt_state(freenect_device *dev)
 
 int freenect_set_tilt_degs(freenect_device *dev, double angle)
 {
+	freenect_context *ctx = dev->parent;
+	if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
+		return 0;
 	int ret;
 	uint8_t empty[0x1];
 
@@ -82,6 +87,9 @@ int freenect_set_tilt_degs(freenect_device *dev, double angle)
 
 int freenect_set_led(freenect_device *dev, freenect_led_options option)
 {
+	freenect_context *ctx = dev->parent;
+	if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
+		return 0;
 	int ret;
 	uint8_t empty[0x1];
 	ret = fnusb_control(&dev->usb_motor, 0x40, 0x06, (uint16_t)option, 0x0, empty, 0x0);
