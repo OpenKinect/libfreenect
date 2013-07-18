@@ -302,6 +302,17 @@ int libusb_set_configuration(libusb_device_handle *dev, int configuration)
   return 0;
 }
 
+int libusb_set_interface_alt_setting(libusb_device_handle *dev, int interface_number,int alternate_setting){
+  RAIIMutex lock (dev->dev->ctx->mutex);
+  if (0 != usb_set_altinterface(dev->handle, alternate_setting))
+  {
+    LIBUSBEMU_ERROR_LIBUSBWIN32();
+    return(LIBUSB_ERROR_OTHER);
+  }
+	
+  return(0);	
+}	
+
 int libusb_claim_interface(libusb_device_handle* dev, int interface_number)
 {
   RAIIMutex lock (dev->dev->ctx->mutex);

@@ -303,6 +303,15 @@ FREENECTAPI int freenect_supported_subdevices(void);
 FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs);
 
 /**
+ * Returns the devices that are enabled after calls to freenect_open_device()
+ * On newer kinects the motor and audio are automatically disabled for now
+ *
+ * @param ctx Context to set future subdevice selection for
+ * @return Flags representing the subdevices that were actually opened (see freenect_device_flags)
+ */
+FREENECTAPI freenect_device_flags freenect_enabled_subdevices(freenect_context *ctx);
+
+/**
  * Opens a kinect device via a context. Index specifies the index of
  * the device on the current state of the bus. Bus resets may cause
  * indexes to shift.

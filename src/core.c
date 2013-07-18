@@ -148,6 +148,10 @@ FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_devi
 			));
 }
 
+FREENECTAPI freenect_device_flags freenect_enabled_subdevices(freenect_context *ctx) {
+	return ctx->enabled_subdevices;
+}
+
 FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
 {
 	int res;
