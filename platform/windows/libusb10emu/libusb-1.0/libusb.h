@@ -77,6 +77,7 @@ int libusb_get_string_descriptor(libusb_device_handle *dev_handle, uint8_t desc_
 int libusb_get_string_descriptor_ascii(libusb_device_handle *dev_handle, uint8_t desc_index, unsigned char *data, int length);
 
 int libusb_set_configuration(libusb_device_handle *dev, int configuration);
+int libusb_set_interface_alt_setting(libusb_device_handle *dev,int interface_number,int alternate_setting);	
 int libusb_claim_interface(libusb_device_handle* dev, int interface_number);
 int libusb_release_interface(libusb_device_handle* dev, int interface_number);
 

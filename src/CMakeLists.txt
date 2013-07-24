@@ -8,10 +8,10 @@ set(CMAKE_C_FLAGS "-Wall")
 
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
 IF(WIN32)
-  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c registration.c ../platform/windows/libusb10emu/libusb-1.0/libusbemu.cpp ../platform/windows/libusb10emu/libusb-1.0/failguard.cpp)
+  LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c ../platform/windows/libusb10emu/libusb-1.0/libusbemu.cpp ../platform/windows/libusb10emu/libusb-1.0/failguard.cpp)
   set_source_files_properties(${SRC} PROPERTIES LANGUAGE CXX)
 ELSE(WIN32)
-  LIST(APPEND SRC core.c tilt.c cameras.c usb_libusb10.c registration.c)
+  LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c)
 ENDIF(WIN32)
 
 IF(BUILD_AUDIO)

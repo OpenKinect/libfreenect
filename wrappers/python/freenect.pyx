@@ -49,6 +49,8 @@ cdef extern from "libfreenect.h":
         FREENECT_DEPTH_10BIT
         FREENECT_DEPTH_11BIT_PACKED
         FREENECT_DEPTH_10BIT_PACKED
+        FREENECT_DEPTH_REGISTERED
+        FREENECT_DEPTH_MM
 
     ctypedef enum freenect_led_options:
         FREENECT_LED_OFF "LED_OFF"
@@ -148,6 +150,8 @@ DEPTH_11BIT = FREENECT_DEPTH_11BIT
 DEPTH_10BIT = FREENECT_DEPTH_10BIT
 DEPTH_11BIT_PACKED = FREENECT_DEPTH_11BIT_PACKED
 DEPTH_10BIT_PACKED = FREENECT_DEPTH_10BIT_PACKED
+DEPTH_REGISTERED = FREENECT_DEPTH_REGISTERED
+DEPTH_MM = FREENECT_DEPTH_MM
 LED_OFF = FREENECT_LED_OFF
 LED_GREEN = FREENECT_LED_GREEN
 LED_RED = FREENECT_LED_RED
@@ -476,7 +480,7 @@ def sync_get_depth(index=0, format=DEPTH_11BIT):
     if out:
         error_open_device()
         return
-    if format == DEPTH_11BIT:
+    if format in [DEPTH_11BIT, DEPTH_10BIT, DEPTH_MM, DEPTH_REGISTERED]:
         dims[0], dims[1]  = 480, 640
         return PyArray_SimpleNewFromData(2, dims, npc.NPY_UINT16, data), timestamp
     else:
