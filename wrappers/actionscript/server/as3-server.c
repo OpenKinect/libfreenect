@@ -123,17 +123,29 @@ void sendDepth(){
 		depth = tmp_depth;
 	}
 	
-	for (i=0; i< depth_mode.width * depth_mode.height; i++) {
-		buf_depth[4 * i + 0] = 0x00;
-		buf_depth[4 * i + 1] = 0x00;
-		buf_depth[4 * i + 2] = 0x00;
-		buf_depth[4 * i + 3] = 0xFF;
+    for (i=0; i< depth_mode.width * depth_mode.height; i++) {
+		if(_depth_compression != 0) {
+			buf_depth[3 * i + 0] = 0x00;
+			buf_depth[3 * i + 1] = 0x00;
+			buf_depth[3 * i + 2] = 0x00;
+		} else {
+			buf_depth[4 * i + 0] = 0x00;
+			buf_depth[4 * i + 1] = 0x00;
+			buf_depth[4 * i + 2] = 0x00;
+			buf_depth[4 * i + 3] = 0xFF;
+		}
 		if(depth[i] < _max_depth && depth[i] > _min_depth){
 			unsigned char l =  0xFF - ((depth[i] - _min_depth) & 0xFF);
-			buf_depth[4 * i + 0] = l;
-			buf_depth[4 * i + 1] = l;
-			buf_depth[4 * i + 2] = l;
-			buf_depth[4 * i + 3] = 0xFF;
+			if(_depth_compression != 0) {
+				buf_depth[3 * i + 0] = l;
+				buf_depth[3 * i + 1] = l;
+				buf_depth[3 * i + 2] = l;
+			} else {
+				buf_depth[4 * i + 0] = l;
+				buf_depth[4 * i + 1] = l;
+				buf_depth[4 * i + 2] = l;
+				buf_depth[4 * i + 3] = 0xFF;
+			}
 		}
 	}
 	if(_depth_compression != 0) {

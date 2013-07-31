@@ -2,6 +2,7 @@
 from distutils.core import setup
 from distutils.extension import Extension
 import re
+import numpy as np
 
 
 def get_cython_version():
@@ -43,7 +44,8 @@ ext_modules = [Extension("freenect", ["freenect" + source_ext],
                                              '-I', '/usr/include/libusb-1.0/',
                                              '-I', '/usr/local/include/libusb-1.0',
                                              '-I', '/usr/local/include',
-                                             '-I', '../c_sync/'])]
+                                             '-I', '../c_sync/',
+                                             '-I', np.get_include()])]
 setup(name='freenect',
       cmdclass=cmdclass,
       ext_modules=ext_modules)

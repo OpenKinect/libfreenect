@@ -1,5 +1,4 @@
-#ifndef FREENECT_CV_H
-#define FREENECT_CV_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -12,6 +11,4 @@ extern "C" {
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

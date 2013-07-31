@@ -132,39 +132,37 @@ module Freenect
       end
     end
 
-    def set_depth_format(fmt)
-      l_fmt = fmt.is_a?(Numeric)? fmt : Freenect::DEPTH_FORMATS[fmt]
-      ret = ::FFI::Freenect.freenect_set_depth_format(self.device, l_fmt)
-      if (ret== 0)
-        @depth_format = fmt
-      else
-        raise DeviceError, "Error calling freenect_set_depth_format(self, #{fmt})"
-      end
+    def set_depth_mode(mode)
+      mode = Freenect.depth_mode(:medium, mode) unless mode.is_a?(Freenect::FrameMode)
+      raise ArgumentError, "Unkown depth mode #{mode}" if mode.nil?    
+      ret = ::FFI::Freenect.freenect_set_depth_mode(self.device, mode)
+      raise DeviceError, "Error calling freenect_set_depth_mode(self, #{mode}) returned #{ret}" unless ret == 0
     end
-
-    alias depth_format= set_depth_format
-
+    alias depth_mode= set_depth_mode
+    
     # returns the symbolic constant for the current depth format
-    def depth_format
-      (@depth_format.is_a?(Numeric))? Freenect::DEPTH_FORMATS[@depth_format] : @depth_format
+    def depth_mode
+      x = ::FFI::Freenect.freenect_get_current_depth_mode(self.device)
+      x = nil if x.height*x.width == 0 or x.framerate == 0
+      x.frame_mode_type = :depth unless x.nil?
+      x
     end
 
     # Sets the video format to one of the following accepted values:
     #
-    def set_video_format(fmt)
-      l_fmt = fmt.is_a?(Numeric)? fmt : Freenect::VIDEO_FORMATS[fmt]
-      ret = ::FFI::Freenect.freenect_set_video_format(self.device, l_fmt)
-      if (ret== 0)
-        @video_format = fmt
-      else
-        raise DeviceError, "Error calling freenect_set_video_format(self, #{fmt})"
-      end
+    def set_video_mode(mode)
+      mode = Freenect.video_mode(:medium, mode) unless mode.is_a?(Freenect::FrameMode)
+      raise ArgumentError, "Unkown video mode #{mode}" if mode.nil?    
+      ret = ::FFI::Freenect.freenect_set_video_mode(self.device, mode)
+      raise DeviceError, "Error calling freenect_set_video_mode(self, #{mode}) returned #{ret}" unless ret == 0
     end
+    alias video_mode= set_video_mode
 
-    alias video_format= set_video_format
-
-    def video_format
-      (@video_format.is_a?(Numeric))? ::Freenect::VIDEO_FORMATS[@video_format] : @video_format
+    def video_mode
+      x = ::FFI::Freenect.freenect_get_current_video_mode(self.device)
+      x = nil if x.height*x.width == 0 or x.framerate == 0
+      x.frame_mode_type = :video unless x.nil?
+      x
     end
 
     # Sets the led to one of the following accepted values:

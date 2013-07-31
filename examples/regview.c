@@ -363,17 +363,21 @@ int main(int argc, char **argv)
 	if (argc > 1)
 		user_device_number = atoi(argv[1]);
 
-	if (nr_devices < 1)
+	if (nr_devices < 1) {
+		freenect_shutdown(f_ctx);
 		return 1;
+	}
 
 	if (freenect_open_device(f_ctx, &f_dev, user_device_number) < 0) {
 		printf("Could not open device\n");
+		freenect_shutdown(f_ctx);
 		return 1;
 	}
 
 	res = pthread_create(&freenect_thread, NULL, freenect_threadfunc, NULL);
 	if (res) {
 		printf("pthread_create failed\n");
+		freenect_shutdown(f_ctx);
 		return 1;
 	}
 
