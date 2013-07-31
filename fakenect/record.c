@@ -73,7 +73,7 @@ FILE *open_dump(char type, double cur_time, uint32_t timestamp, int data_size, c
 	sprintf(fn, "%c-%f-%u.%s", type, cur_time, timestamp, extension);
 	fprintf(index_fp, "%s\n", fn);
 	sprintf(fn, "%s/%c-%f-%u.%s", out_dir, type, cur_time, timestamp, extension);
-	FILE* fp = fopen(fn, "w");
+	FILE* fp = fopen(fn, "wb");
 	if (!fp) {
 		printf("Error: Cannot open file [%s]\n", fn);
 		exit(1);
@@ -254,7 +254,7 @@ FILE *open_index(const char *fn)
                "use a different directory.\n");
         return 0;
     }
-    fp = fopen(fn, "w");
+    fp = fopen(fn, "wb");
     if (!fp) {
         printf("Error: Cannot open file [%s]\n", fn);
         return 0;
@@ -333,7 +333,11 @@ int main(int argc, char **argv)
 		if (rgb_stream) fclose(rgb_stream);
 		fclose(index_fp);
 	} else {
+#ifdef _WIN32
+		_mkdir(out_dir);
+#else
 		mkdir(out_dir, S_IRWXU | S_IRWXG | S_IRWXO);
+#endif
 		char *fn = malloc(strlen(out_dir) + 50);
 		sprintf(fn, "%s/INDEX.txt", out_dir);
         index_fp = open_index(fn);

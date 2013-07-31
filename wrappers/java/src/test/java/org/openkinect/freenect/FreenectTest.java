@@ -97,7 +97,7 @@ public class FreenectTest {
         });
         dev.startVideo(new VideoHandler() {
             @Override
-            public void onFrameReceived(VideoFormat format, ByteBuffer frame, int timestamp) {
+            public void onFrameReceived(FrameMode mode, ByteBuffer frame, int timestamp) {
             }
         });
         Thread.sleep(500);
@@ -117,13 +117,13 @@ public class FreenectTest {
             int frameCount = 0;
 
             @Override
-            public void onFrameReceived(DepthFormat format, ByteBuffer frame, int timestamp) {
+            public void onFrameReceived(FrameMode mode, ByteBuffer frame, int timestamp) {
                 frameCount++;
                 if (frameCount == 30) {
                     synchronized (lock) {
                         lock.notify();
                         System.out.format("Got %d depth frames in %4.2fs%n", frameCount,
-                                (((double) System.nanoTime() - start) / 1000000));
+                                (((double) System.nanoTime() - start) / 1000000000));
                     }
                 }
             }
@@ -143,13 +143,13 @@ public class FreenectTest {
             int frameCount = 0;
 
             @Override
-            public void onFrameReceived(VideoFormat format, ByteBuffer frame, int timestamp) {
+            public void onFrameReceived(FrameMode mode, ByteBuffer frame, int timestamp) {
                 frameCount++;
                 if (frameCount == 30) {
                     synchronized (lock) {
                         lock.notify();
                         System.out.format("Got %d video frames in %4.2fs%n", frameCount,
-                                (((double) System.nanoTime() - start) / 1000000));
+                                (((double) System.nanoTime() - start) / 1000000000));
                     }
                 }
             }

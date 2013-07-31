@@ -32,13 +32,14 @@
 #include "freenect_internal.h"
 #include "registration.h"
 #include "cameras.h"
+#include "flags.h"
 
 #define MAKE_RESERVED(res, fmt) (uint32_t)(((res & 0xff) << 8) | (((fmt & 0xff))))
 #define RESERVED_TO_RESOLUTION(reserved) (freenect_resolution)((reserved >> 8) & 0xff)
 #define RESERVED_TO_FORMAT(reserved) ((reserved) & 0xff)
 
 #define video_mode_count 12
-freenect_frame_mode supported_video_modes[video_mode_count] = {
+static freenect_frame_mode supported_video_modes[video_mode_count] = {
 	// reserved, resolution, format, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate, is_valid
 	{MAKE_RESERVED(FREENECT_RESOLUTION_HIGH,   FREENECT_VIDEO_RGB), FREENECT_RESOLUTION_HIGH, {FREENECT_VIDEO_RGB}, 1280*1024*3, 1280, 1024, 24, 0, 10, 1 },
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB), FREENECT_RESOLUTION_MEDIUM, {FREENECT_VIDEO_RGB}, 640*480*3, 640,  480, 24, 0, 30, 1 },
@@ -61,7 +62,7 @@ freenect_frame_mode supported_video_modes[video_mode_count] = {
 };
 
 #define depth_mode_count 6
-freenect_frame_mode supported_depth_modes[depth_mode_count] = {
+static freenect_frame_mode supported_depth_modes[depth_mode_count] = {
 	// reserved, resolution, format, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate, is_valid
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT}, 640*480*2, 640, 480, 11, 5, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT}, 640*480*2, 640, 480, 10, 6, 30, 1},
@@ -650,121 +651,6 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 		dev->video_cb(dev, dev->video.proc_buf, dev->video.timestamp);
 }
 
-typedef struct {
-	uint8_t magic[2];
-	uint16_t len;
-	uint16_t cmd;
-	uint16_t tag;
-} cam_hdr;
-
-static int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, int reply_len)
-{
-	freenect_context *ctx = dev->parent;
-	int res, actual_len;
-	uint8_t obuf[0x400];
-	uint8_t ibuf[0x200];
-	cam_hdr *chdr = (cam_hdr*)obuf;
-	cam_hdr *rhdr = (cam_hdr*)ibuf;
-
-	if (cmd_len & 1 || cmd_len > (0x400 - sizeof(*chdr))) {
-		FN_ERROR("send_cmd: Invalid command length (0x%x)\n", cmd_len);
-		return -1;
-	}
-
-	chdr->magic[0] = 0x47;
-	chdr->magic[1] = 0x4d;
-	chdr->cmd = fn_le16(cmd);
-	chdr->tag = fn_le16(dev->cam_tag);
-	chdr->len = fn_le16(cmd_len / 2);
-
-	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
-
-	res = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, cmd_len + sizeof(*chdr));
-	FN_SPEW("Control cmd=%04x tag=%04x len=%04x: %d\n", cmd, dev->cam_tag, cmd_len, res);
-	if (res < 0) {
-		FN_ERROR("send_cmd: Output control transfer failed (%d)\n", res);
-		return res;
-	}
-
-	do {
-		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
-	} while (actual_len == 0);
-	FN_SPEW("Control reply: %d\n", res);
-	if (actual_len < (int)sizeof(*rhdr)) {
-		FN_ERROR("send_cmd: Input control transfer failed (%d)\n", res);
-		return res;
-	}
-	actual_len -= sizeof(*rhdr);
-
-	if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
-		FN_ERROR("send_cmd: Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
-		return -1;
-	}
-	if (rhdr->cmd != chdr->cmd) {
-		FN_ERROR("send_cmd: Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
-		return -1;
-	}
-	if (rhdr->tag != chdr->tag) {
-		FN_ERROR("send_cmd: Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
-		return -1;
-	}
-	if (fn_le16(rhdr->len) != (actual_len/2)) {
-		FN_ERROR("send_cmd: Bad len %04x != %04x\n", fn_le16(rhdr->len), (int)(actual_len/2));
-		return -1;
-	}
-
-	if (actual_len > reply_len) {
-		FN_WARNING("send_cmd: Data buffer is %d bytes long, but got %d bytes\n", reply_len, actual_len);
-		memcpy(replybuf, ibuf+sizeof(*rhdr), reply_len);
-	} else {
-		memcpy(replybuf, ibuf+sizeof(*rhdr), actual_len);
-	}
-
-	dev->cam_tag++;
-
-	return actual_len;
-}
-
-static int write_register(freenect_device *dev, uint16_t reg, uint16_t data)
-{
-	freenect_context *ctx = dev->parent;
-	uint16_t reply[2];
-	uint16_t cmd[2];
-	int res;
-
-	cmd[0] = fn_le16(reg);
-	cmd[1] = fn_le16(data);
-
-	FN_DEBUG("Write Reg 0x%04x <= 0x%02x\n", reg, data);
-	res = send_cmd(dev, 0x03, cmd, 4, reply, 4);
-	if (res < 0)
-		return res;
-	if (res != 2) {
-		FN_WARNING("send_cmd returned %d [%04x %04x], 0000 expected\n", res, reply[0], reply[1]);
-	}
-	return 0;
-}
-
-// This function is here for completeness.  We don't actually use it for anything right now.
-static uint16_t read_register(freenect_device *dev, uint16_t reg)
-{
-	freenect_context *ctx = dev->parent;
-	uint16_t reply[2];
-	uint16_t cmd;
-	int res;
-
-	cmd = fn_le16(reg);
-
-	FN_DEBUG("Read Reg 0x%04x =>\n", reg);
-	res = send_cmd(dev, 0x02, &cmd, 2, reply, 4);
-	if (res < 0)
-		FN_ERROR("read_register: send_cmd() failed: %d\n", res);
-	if (res != 4)
-		FN_WARNING("send_cmd returned %d [%04x %04x], 0000 expected\n", res, reply[0], reply[1]);
-
-	return reply[1];
-}
-
 static int freenect_fetch_reg_info(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
@@ -783,56 +669,55 @@ static int freenect_fetch_reg_info(freenect_device *dev)
 		FN_ERROR("freenect_fetch_reg_info: send_cmd read %d bytes (expected 118)\n", res);
 		return -1;
 	}
-	freenect_reg_info *reg_info_ptr = (freenect_reg_info*)(&reply[2]);
-	freenect_reg_info *dev_reg_info = &(dev->registration.reg_info);
-	dev_reg_info->ax = fn_le32s(reg_info_ptr->ax);
-	dev_reg_info->bx = fn_le32s(reg_info_ptr->bx);
-	dev_reg_info->cx = fn_le32s(reg_info_ptr->cx);
-	dev_reg_info->dx = fn_le32s(reg_info_ptr->dx);
-	dev_reg_info->ay = fn_le32s(reg_info_ptr->ay);
-	dev_reg_info->by = fn_le32s(reg_info_ptr->by);
-	dev_reg_info->cy = fn_le32s(reg_info_ptr->cy);
-	dev_reg_info->dy = fn_le32s(reg_info_ptr->dy);
-	dev_reg_info->dx_start = fn_le32s(reg_info_ptr->dx_start);
-	dev_reg_info->dy_start = fn_le32s(reg_info_ptr->dy_start);
-	dev_reg_info->dx_beta_start = fn_le32s(reg_info_ptr->dx_beta_start);
-	dev_reg_info->dy_beta_start = fn_le32s(reg_info_ptr->dy_beta_start);
-	dev_reg_info->dx_beta_inc = fn_le32s(reg_info_ptr->dx_beta_inc);
-	dev_reg_info->dy_beta_inc = fn_le32s(reg_info_ptr->dy_beta_inc);
-	dev_reg_info->dxdx_start = fn_le32s(reg_info_ptr->dxdx_start);
-	dev_reg_info->dxdy_start = fn_le32s(reg_info_ptr->dxdy_start);
-	dev_reg_info->dydx_start = fn_le32s(reg_info_ptr->dydx_start);
-	dev_reg_info->dydy_start = fn_le32s(reg_info_ptr->dydy_start);
-	dev_reg_info->dxdxdx_start = fn_le32s(reg_info_ptr->dxdxdx_start);
-	dev_reg_info->dydxdx_start = fn_le32s(reg_info_ptr->dydxdx_start);
-	dev_reg_info->dxdxdy_start = fn_le32s(reg_info_ptr->dxdxdy_start);
-	dev_reg_info->dydxdy_start = fn_le32s(reg_info_ptr->dydxdy_start);
-	dev_reg_info->dydydx_start = fn_le32s(reg_info_ptr->dydydx_start);
-	dev_reg_info->dydydy_start = fn_le32s(reg_info_ptr->dydydy_start);
-	FN_SPEW("ax:                %d\n", dev_reg_info->ax);
-	FN_SPEW("bx:                %d\n", dev_reg_info->bx);
-	FN_SPEW("cx:                %d\n", dev_reg_info->cx);
-	FN_SPEW("dx:                %d\n", dev_reg_info->dx);
-	FN_SPEW("ay:                %d\n", dev_reg_info->ay);
-	FN_SPEW("by:                %d\n", dev_reg_info->by);
-	FN_SPEW("cy:                %d\n", dev_reg_info->cy);
-	FN_SPEW("dy:                %d\n", dev_reg_info->dy);
-	FN_SPEW("dx_start:          %d\n", dev_reg_info->dx_start);
-	FN_SPEW("dy_start:          %d\n", dev_reg_info->dy_start);
-	FN_SPEW("dx_beta_start:     %d\n", dev_reg_info->dx_beta_start);
-	FN_SPEW("dy_beta_start:     %d\n", dev_reg_info->dy_beta_start);
-	FN_SPEW("dx_beta_inc:       %d\n", dev_reg_info->dx_beta_inc);
-	FN_SPEW("dy_beta_inc:       %d\n", dev_reg_info->dy_beta_inc);
-	FN_SPEW("dxdx_start:        %d\n", dev_reg_info->dxdx_start);
-	FN_SPEW("dxdy_start:        %d\n", dev_reg_info->dxdy_start);
-	FN_SPEW("dydx_start:        %d\n", dev_reg_info->dydx_start);
-	FN_SPEW("dydy_start:        %d\n", dev_reg_info->dydy_start);
-	FN_SPEW("dxdxdx_start:      %d\n", dev_reg_info->dxdxdx_start);
-	FN_SPEW("dydxdx_start:      %d\n", dev_reg_info->dydxdx_start);
-	FN_SPEW("dxdxdy_start:      %d\n", dev_reg_info->dxdxdy_start);
-	FN_SPEW("dydxdy_start:      %d\n", dev_reg_info->dydxdy_start);
-	FN_SPEW("dydydx_start:      %d\n", dev_reg_info->dydydx_start);
-	FN_SPEW("dydydy_start:      %d\n", dev_reg_info->dydydy_start);
+	memcpy(&dev->registration.reg_info, reply + 2, sizeof(dev->registration.reg_info));
+	dev->registration.reg_info.ax            = fn_le32s(dev->registration.reg_info.ax);
+	dev->registration.reg_info.bx            = fn_le32s(dev->registration.reg_info.bx);
+	dev->registration.reg_info.cx            = fn_le32s(dev->registration.reg_info.cx);
+	dev->registration.reg_info.dx            = fn_le32s(dev->registration.reg_info.dx);
+	dev->registration.reg_info.ay            = fn_le32s(dev->registration.reg_info.ay);
+	dev->registration.reg_info.by            = fn_le32s(dev->registration.reg_info.by);
+	dev->registration.reg_info.cy            = fn_le32s(dev->registration.reg_info.cy);
+	dev->registration.reg_info.dy            = fn_le32s(dev->registration.reg_info.dy);
+	dev->registration.reg_info.dx_start      = fn_le32s(dev->registration.reg_info.dx_start);
+	dev->registration.reg_info.dy_start      = fn_le32s(dev->registration.reg_info.dy_start);
+	dev->registration.reg_info.dx_beta_start = fn_le32s(dev->registration.reg_info.dx_beta_start);
+	dev->registration.reg_info.dy_beta_start = fn_le32s(dev->registration.reg_info.dy_beta_start);
+	dev->registration.reg_info.dx_beta_inc   = fn_le32s(dev->registration.reg_info.dx_beta_inc);
+	dev->registration.reg_info.dy_beta_inc   = fn_le32s(dev->registration.reg_info.dy_beta_inc);
+	dev->registration.reg_info.dxdx_start    = fn_le32s(dev->registration.reg_info.dxdx_start);
+	dev->registration.reg_info.dxdy_start    = fn_le32s(dev->registration.reg_info.dxdy_start);
+	dev->registration.reg_info.dydx_start    = fn_le32s(dev->registration.reg_info.dydx_start);
+	dev->registration.reg_info.dydy_start    = fn_le32s(dev->registration.reg_info.dydy_start);
+	dev->registration.reg_info.dxdxdx_start  = fn_le32s(dev->registration.reg_info.dxdxdx_start);
+	dev->registration.reg_info.dydxdx_start  = fn_le32s(dev->registration.reg_info.dydxdx_start);
+	dev->registration.reg_info.dxdxdy_start  = fn_le32s(dev->registration.reg_info.dxdxdy_start);
+	dev->registration.reg_info.dydxdy_start  = fn_le32s(dev->registration.reg_info.dydxdy_start);
+	dev->registration.reg_info.dydydx_start  = fn_le32s(dev->registration.reg_info.dydydx_start);
+	dev->registration.reg_info.dydydy_start  = fn_le32s(dev->registration.reg_info.dydydy_start);
+	FN_SPEW("ax:                %d\n", dev->registration.reg_info.ax);
+	FN_SPEW("bx:                %d\n", dev->registration.reg_info.bx);
+	FN_SPEW("cx:                %d\n", dev->registration.reg_info.cx);
+	FN_SPEW("dx:                %d\n", dev->registration.reg_info.dx);
+	FN_SPEW("ay:                %d\n", dev->registration.reg_info.ay);
+	FN_SPEW("by:                %d\n", dev->registration.reg_info.by);
+	FN_SPEW("cy:                %d\n", dev->registration.reg_info.cy);
+	FN_SPEW("dy:                %d\n", dev->registration.reg_info.dy);
+	FN_SPEW("dx_start:          %d\n", dev->registration.reg_info.dx_start);
+	FN_SPEW("dy_start:          %d\n", dev->registration.reg_info.dy_start);
+	FN_SPEW("dx_beta_start:     %d\n", dev->registration.reg_info.dx_beta_start);
+	FN_SPEW("dy_beta_start:     %d\n", dev->registration.reg_info.dy_beta_start);
+	FN_SPEW("dx_beta_inc:       %d\n", dev->registration.reg_info.dx_beta_inc);
+	FN_SPEW("dy_beta_inc:       %d\n", dev->registration.reg_info.dy_beta_inc);
+	FN_SPEW("dxdx_start:        %d\n", dev->registration.reg_info.dxdx_start);
+	FN_SPEW("dxdy_start:        %d\n", dev->registration.reg_info.dxdy_start);
+	FN_SPEW("dydx_start:        %d\n", dev->registration.reg_info.dydx_start);
+	FN_SPEW("dydy_start:        %d\n", dev->registration.reg_info.dydy_start);
+	FN_SPEW("dxdxdx_start:      %d\n", dev->registration.reg_info.dxdxdx_start);
+	FN_SPEW("dydxdx_start:      %d\n", dev->registration.reg_info.dydxdx_start);
+	FN_SPEW("dxdxdy_start:      %d\n", dev->registration.reg_info.dxdxdy_start);
+	FN_SPEW("dydxdy_start:      %d\n", dev->registration.reg_info.dydxdy_start);
+	FN_SPEW("dydydx_start:      %d\n", dev->registration.reg_info.dydydx_start);
+	FN_SPEW("dydydy_start:      %d\n", dev->registration.reg_info.dydydy_start);
 	/*
 	// NOTE: Not assigned above
 	FN_SPEW("dx_center:         %d\n", dev_reg_info->dx_center);
@@ -861,10 +746,10 @@ static int freenect_fetch_reg_pad_info(freenect_device *dev)
 		FN_ERROR("freenect_fetch_reg_pad_info: send_cmd read %d bytes (expected 8)\n", res);
 		return -1;
 	}
-	freenect_reg_pad_info *pad_info_ptr = (freenect_reg_pad_info*)(&reply[2]);
-	dev->registration.reg_pad_info.start_lines    = fn_le16s(pad_info_ptr->start_lines);
-	dev->registration.reg_pad_info.end_lines      = fn_le16s(pad_info_ptr->end_lines);
-	dev->registration.reg_pad_info.cropping_lines = fn_le16s(pad_info_ptr->cropping_lines);
+	memcpy(&dev->registration.reg_pad_info, reply+2, sizeof(dev->registration.reg_pad_info));
+	dev->registration.reg_pad_info.start_lines    = fn_le16s(dev->registration.reg_pad_info.start_lines);
+	dev->registration.reg_pad_info.end_lines      = fn_le16s(dev->registration.reg_pad_info.end_lines);
+	dev->registration.reg_pad_info.cropping_lines = fn_le16s(dev->registration.reg_pad_info.cropping_lines);
 	FN_SPEW("start_lines:    %u\n",dev->registration.reg_pad_info.start_lines);
 	FN_SPEW("end_lines:      %u\n",dev->registration.reg_pad_info.end_lines);
 	FN_SPEW("cropping_lines: %u\n",dev->registration.reg_pad_info.cropping_lines);
@@ -888,7 +773,9 @@ static int freenect_fetch_reg_const_shift(freenect_device *dev)
 		FN_ERROR("freenect_fetch_reg_const_shift: send_cmd read %d bytes (expected 8)\n", res);
 		return -1;
 	}
-	uint16_t shift = fn_le16(*((uint16_t*)(reply+2)));
+	uint16_t shift;
+	memcpy(&shift, reply+2, sizeof(shift));
+	shift = fn_le16(shift);
 	dev->registration.const_shift = (double)shift;
 	FN_SPEW("const_shift: %f\n",dev->registration.const_shift);
 	return 0;
@@ -902,22 +789,38 @@ static int freenect_fetch_zero_plane_info(freenect_device *dev)
 	uint16_t cmd[5] = {0}; // Offset is the only field in this command, and it's 0
 
 	int res;
-	res = send_cmd(dev, 0x04, cmd, 10, reply, 322); //OPCODE_GET_FIXED_PARAMS = 4,
-	if (res != 322) {
-		FN_ERROR("freenect_fetch_zero_plane_info: send_cmd read %d bytes (expected 322)\n", res);
+	res = send_cmd(dev, 0x04, cmd, 10, reply, ctx->zero_plane_res); //OPCODE_GET_FIXED_PARAMS = 4,
+	if (res != ctx->zero_plane_res) {
+		FN_ERROR("freenect_fetch_zero_plane_info: send_cmd read %d bytes (expected %d)\n", res,ctx->zero_plane_res);
 		return -1;
 	}
-	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
-	FN_SPEW("dcmos_emitter_distance: %f\n", *((float*)(reply+94)));
-	FN_SPEW("dcmos_rcmos_distance:   %f\n", *((float*)(reply+98)));
-	FN_SPEW("reference_distance:     %f\n", *((float*)(reply+102)));
-	FN_SPEW("reference_pixel_size:   %f\n", *((float*)(reply+106)));
 
-	// The values are 32-bit floats in little-endian.  So:
-	dev->registration.zero_plane_info.dcmos_emitter_dist   = *((float*)(&fn_le32(*((uint32_t*)(reply+94)))));
-	dev->registration.zero_plane_info.dcmos_rcmos_dist     = *((float*)(&fn_le32(*((uint32_t*)(reply+98)))));
-	dev->registration.zero_plane_info.reference_distance   = *((float*)(&fn_le32(*((uint32_t*)(reply+102)))));
-	dev->registration.zero_plane_info.reference_pixel_size = *((float*)(&fn_le32(*((uint32_t*)(reply+106)))));
+	memcpy(&(dev->registration.zero_plane_info), reply + 94, sizeof(dev->registration.zero_plane_info));
+	union {
+		uint32_t ui;
+		float f;
+	} conversion_union;
+	conversion_union.f = dev->registration.zero_plane_info.dcmos_emitter_dist;
+	conversion_union.ui = fn_le32(conversion_union.ui);
+	dev->registration.zero_plane_info.dcmos_emitter_dist = conversion_union.f;
+
+	conversion_union.f = dev->registration.zero_plane_info.dcmos_rcmos_dist;
+	conversion_union.ui = fn_le32(conversion_union.ui);
+	dev->registration.zero_plane_info.dcmos_rcmos_dist = conversion_union.f;
+
+	conversion_union.f = dev->registration.zero_plane_info.reference_distance;
+	conversion_union.ui = fn_le32(conversion_union.ui);
+	dev->registration.zero_plane_info.reference_distance = conversion_union.f;
+
+	conversion_union.f = dev->registration.zero_plane_info.reference_pixel_size;
+	conversion_union.ui = fn_le32(conversion_union.ui);
+	dev->registration.zero_plane_info.reference_pixel_size = conversion_union.f;
+
+	// WTF is all this data?  it's way bigger than sizeof(XnFixedParams)...
+	FN_SPEW("dcmos_emitter_distance: %f\n", dev->registration.zero_plane_info.dcmos_emitter_dist);
+	FN_SPEW("dcmos_rcmos_distance:   %f\n", dev->registration.zero_plane_info.dcmos_rcmos_dist);
+	FN_SPEW("reference_distance:     %f\n", dev->registration.zero_plane_info.reference_distance);
+	FN_SPEW("reference_pixel_size:   %f\n", dev->registration.zero_plane_info.reference_pixel_size);
 
 	// FIXME: OpenNI seems to use a hardcoded value of 2.4 instead of 2.3 as reported by Kinect
 	dev->registration.zero_plane_info.dcmos_rcmos_dist = 2.4;
@@ -1190,7 +1093,7 @@ int freenect_get_video_mode_count()
 	return video_mode_count;
 }
 
-const freenect_frame_mode freenect_get_video_mode(int mode_num)
+freenect_frame_mode freenect_get_video_mode(int mode_num)
 {
 	if (mode_num >= 0 && mode_num < video_mode_count)
 		return supported_video_modes[mode_num];
@@ -1199,12 +1102,12 @@ const freenect_frame_mode freenect_get_video_mode(int mode_num)
 	return retval;
 }
 
-const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
+freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 {
 	return freenect_find_video_mode(dev->video_resolution, dev->video_format);
 }
 
-const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
+freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
 {
 	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
@@ -1253,7 +1156,7 @@ int freenect_get_depth_mode_count()
 	return depth_mode_count;
 }
 
-const freenect_frame_mode freenect_get_depth_mode(int mode_num)
+freenect_frame_mode freenect_get_depth_mode(int mode_num)
 {
 	if (mode_num >= 0 && mode_num < depth_mode_count)
 		return supported_depth_modes[mode_num];
@@ -1262,12 +1165,12 @@ const freenect_frame_mode freenect_get_depth_mode(int mode_num)
 	return retval;
 }
 
-const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
+freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
 {
 	return freenect_find_depth_mode(dev->depth_resolution, dev->depth_format);
 }
 
-const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
+freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt)
 {
 	uint32_t unique_id = MAKE_RESERVED(res, fmt);
 	int i;
@@ -1316,7 +1219,7 @@ int freenect_set_video_buffer(freenect_device *dev, void *buf)
 	return stream_setbuf(dev->parent, &dev->video, buf);
 }
 
-int freenect_camera_init(freenect_device *dev)
+FN_INTERNAL int freenect_camera_init(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	int res;
@@ -1340,7 +1243,7 @@ int freenect_camera_init(freenect_device *dev)
 	return 0;
 }
 
-int freenect_camera_teardown(freenect_device *dev)
+FN_INTERNAL int freenect_camera_teardown(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	int res = 0;

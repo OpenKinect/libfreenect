@@ -24,11 +24,10 @@
 * either License.
 */
 
-#ifndef LIBUSB_EMULATOR_INTERNAL_H
-#define LIBUSB_EMULATOR_INTERNAL_H
+#pragma once
 
 #include "libusbemu_threads.h"
-#include <usb.h>
+#include <lusb0_usb.h>
 #include <map>
 #include <cassert>
 
@@ -413,5 +412,3 @@ void libusbemu_clear_transfer(transfer_wrapper* wrapper)
 }
 
 } // end of 'namespace libusbemu'
-
-#endif//LIBUSB_EMULATOR_INTERNAL_H

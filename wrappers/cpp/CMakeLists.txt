@@ -25,13 +25,7 @@ else()
   find_package(OpenGL REQUIRED)
   find_package(GLUT REQUIRED)
 
-  include_directories(${OPENGL_INCLUDE_DIRS} ${GLUT_INCLUDE_DIRS} ${USB_INCLUDE_DIRS})
-
-  if (WIN32)
-    set(MATH_LIB "")
-  else(WIN32)
-    set(MATH_LIB "m")
-  endif()
+  include_directories(${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR} ${USB_INCLUDE_DIRS})
 
   target_link_libraries(cppview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
 endif()

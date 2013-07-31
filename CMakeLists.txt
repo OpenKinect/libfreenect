@@ -41,8 +41,8 @@ cmake_minimum_required(VERSION 2.6)
 PROJECT(libfreenect)
 
 set (PROJECT_VER_MAJOR 0)
-set (PROJECT_VER_MINOR 0)
-set (PROJECT_VER_PATCH 1)
+set (PROJECT_VER_MINOR 1)
+set (PROJECT_VER_PATCH 2)
 set (PROJECT_VER 
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 set (PROJECT_APIVER 
@@ -86,6 +86,12 @@ if(BUILD_AUDIO)
   add_definitions(-DBUILD_AUDIO)
 endif()
 
+if (WIN32)
+   set(MATH_LIB "")
+else(WIN32)
+  set(MATH_LIB "m")
+endif()
+
 ######################################################################################
 # CMake 
 ######################################################################################
@@ -112,7 +118,7 @@ include_directories(${LIBUSB_1_INCLUDE_DIRS})
 
 if(WIN32)
   include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows")
-  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu")
+  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu/libusb-1.0")
 endif()
 
 # Add library project

@@ -1,8 +1,8 @@
 /*
  * This file is part of the OpenKinect Project. http://www.openkinect.org
  *
- * Copyright (c) 2010 individual OpenKinect contributors. See the CONTRIB file
- * for details.
+ * Copyright (c) 2010-2011 individual OpenKinect contributors. See the CONTRIB
+ * file for details.
  *
  * This code is licensed to you under the terms of the Apache License, version
  * 2.0, or, at your option, the terms of the GNU General Public License,
@@ -23,8 +23,16 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
+ 
+#pragma once
 
-#ifndef _WINDOWS_STDBOOL_EMULATED_H_
-#define _WINDOWS_STDBOOL_EMULATED_H_
+#include "libfreenect.h"
 
-#endif//_WINDOWS_STDBOOL_EMULATED_H_
+
+int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, int reply_len);
+
+uint16_t read_register(freenect_device *dev, uint16_t reg);
+int write_register(freenect_device *dev, uint16_t reg, uint16_t data);
+
+uint16_t read_cmos_register(freenect_device *dev, uint16_t reg);
+int write_cmos_register(freenect_device *dev, uint16_t reg, uint16_t value);

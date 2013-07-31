@@ -80,16 +80,20 @@ int main(int argc, char** argv) {
 
 	int nr_devices = freenect_num_devices (f_ctx);
 	printf ("Number of devices found: %d\n", nr_devices);
-	if (nr_devices < 1)
+	if (nr_devices < 1) {
+		freenect_shutdown(f_ctx);
 		return 1;
+	}
 
 	int user_device_number = 0;
 	if (freenect_open_device(f_ctx, &f_dev, user_device_number) < 0) {
 		printf("Could not open device\n");
+		freenect_shutdown(f_ctx);
 		return 1;
 	}
 
 	capture state;
+	state.samples = 0;
 	state.logfiles[0] = fopen("channel1.wav", "wb");
 	state.logfiles[1] = fopen("channel2.wav", "wb");
 	state.logfiles[2] = fopen("channel3.wav", "wb");
@@ -135,5 +139,6 @@ int main(int argc, char** argv) {
 		fclose(state.logfiles[i]);
 	}
 
+	freenect_shutdown(f_ctx);
 	return 0;
 }

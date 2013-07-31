@@ -41,10 +41,10 @@
 #define DEPTH_SENSOR_X_RES 1280
 #define DEPTH_MIRROR_X 0
 
-#define DEPTH_MAX_METRIC_VALUE 10000
-#define DEPTH_MAX_RAW_VALUE 2048
-#define DEPTH_NO_RAW_VALUE 2047
-#define DEPTH_NO_MM_VALUE 0
+#define DEPTH_MAX_METRIC_VALUE FREENECT_DEPTH_MM_MAX_VALUE
+#define DEPTH_NO_MM_VALUE      FREENECT_DEPTH_MM_NO_VALUE
+#define DEPTH_MAX_RAW_VALUE    FREENECT_DEPTH_RAW_MAX_VALUE
+#define DEPTH_NO_RAW_VALUE     FREENECT_DEPTH_RAW_NO_VALUE
 
 #define DEPTH_X_OFFSET 1
 #define DEPTH_Y_OFFSET 1
@@ -74,7 +74,7 @@ static void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plan
 }
 
 // unrolled inner loop of the 11-bit unpacker
-inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
+static inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
 {
 	uint16_t baseMask = 0x7FF;
 
@@ -101,7 +101,7 @@ inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
 }
 
 // apply registration data to a single packed frame
-int freenect_apply_registration(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
+FN_INTERNAL int freenect_apply_registration(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
 {
 	freenect_registration* reg = &(dev->registration);
 	// set output buffer to zero using pointer-sized memory access (~ 30-40% faster than memset)
@@ -169,7 +169,7 @@ int freenect_apply_registration(freenect_device* dev, uint8_t* input_packed, uin
 }
 
 // Same as freenect_apply_registration, but don't bother aligning to the RGB image
-int freenect_apply_depth_to_mm(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
+FN_INTERNAL int freenect_apply_depth_to_mm(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
 {
 	freenect_registration* reg = &(dev->registration);
 	uint16_t unpack[8];
@@ -289,9 +289,9 @@ static void freenect_init_registration_table(int32_t (*registration_table)[2], f
 }
 
 // These are just constants.
-double parameter_coefficient = 4;
-double shift_scale = 10;
-double pixel_size_factor = 1;
+static double parameter_coefficient = 4;
+static double shift_scale = 10;
+static double pixel_size_factor = 1;
 
 /// convert raw shift value to metric depth (in mm)
 static uint16_t freenect_raw_to_mm(uint16_t raw, freenect_registration* reg)
@@ -319,7 +319,12 @@ void freenect_camera_to_world(freenect_device* dev, int cx, int cy, int wz, doub
 {
 	double ref_pix_size = dev->registration.zero_plane_info.reference_pixel_size;
 	double ref_distance = dev->registration.zero_plane_info.reference_distance;
-	double factor = ref_pix_size * wz / ref_distance;
+	// We multiply cx and cy by these factors because they come from a 640x480 image,
+	// but the zero plane pixel size is for a 1280x1024 image.
+	// However, the 640x480 image is produced by cropping the 1280x1024 image
+	// to 1280x960 and then scaling by .5, so aspect ratio is maintained, and
+	// we should simply multiply by two in each dimension.
+	double factor = 2 * ref_pix_size * wz / ref_distance;
 	*wx = (double)(cx - DEPTH_X_RES/2) * factor;
 	*wy = (double)(cy - DEPTH_Y_RES/2) * factor;
 }
@@ -327,7 +332,7 @@ void freenect_camera_to_world(freenect_device* dev, int cx, int cy, int wz, doub
 /// Allocate and fill registration tables
 /// This function should be called every time a new video (not depth!) mode is
 /// activated.
-int freenect_init_registration(freenect_device* dev)
+FN_INTERNAL int freenect_init_registration(freenect_device* dev)
 {
 	freenect_registration* reg = &(dev->registration);
 
