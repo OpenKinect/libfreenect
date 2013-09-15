@@ -35,6 +35,9 @@ struct proxynect_device {
 
         freenect_frame_mode depth_mode;
         int depth_mode_changed;
+
+        freenect_flag flags;
+        freenect_flag flags_changed; // bitmask
     } settings;
 };
 

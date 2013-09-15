@@ -131,7 +131,18 @@ int run()
             }
 	        device->settings.depth_mode_changed = 0;
 	    }
-        
+
+        if(device->settings.flags_changed) {
+            int i;
+            for(i=0; i<sizeof(int)*8; i++) {
+                int flag = 1<<i;
+                if(device->settings.flags_changed & flag) {
+                    device->settings.flags_changed &= ~flag;
+                    freenect_set_flag(dev, flag, (device->settings.flags & flag) ? FREENECT_ON : FREENECT_OFF);
+                }
+            }
+        }
+
 	    freenect_update_tilt_state(dev);
 	    device->raw_state = *freenect_get_tilt_state(dev);
 	    device->timestamp++;

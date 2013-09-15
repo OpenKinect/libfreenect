@@ -207,7 +207,7 @@ int freenect_process_events_timeout(freenect_context *ctx, struct timeval* timeo
 
         freenect_device *dev;
         int updated = 0;
-        for(dev = ctx->first; dev != NULL; dev = dev->next) {            
+        for(dev = ctx->first; dev != NULL; dev = dev->next) {
             if(dev->last_timestamp != dev->device->timestamp) {
                 updated = 1;
                 update_device(dev);
@@ -245,6 +245,18 @@ void freenect_free_device_attributes(struct freenect_device_attributes* attribut
 int freenect_supported_subdevices(void) {
     /* TODO: audio */
     return FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA;
+}
+
+freenect_device_flags freenect_enabled_subdevices(freenect_context *ctx) {
+    /* TODO: audio */
+    return FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA;
+}
+
+int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value) {
+    dev->device->settings.flags = (dev->device->settings.flags & ~flag)
+        | ((value == FREENECT_ON) ? flag : 0);
+    dev->device->settings.flags_changed |= flag;
+    return 0;
 }
 
 void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs) {
