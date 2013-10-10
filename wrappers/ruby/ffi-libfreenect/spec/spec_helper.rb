@@ -4,8 +4,8 @@ $LOAD_PATH.unshift(SPEC_DIR)
 $LOAD_PATH.unshift(File.join(SPEC_DIR, '..', 'lib'))
 
 require 'freenect'
-require 'spec'
-require 'spec/autorun'
+# require 'rspec'
+require 'rspec/core'
 
-Spec::Runner.configure do |config|
+RSpec.configure do |config|
 end

@@ -98,6 +98,8 @@ static int alloc_buffer_ring_depth(freenect_depth_format fmt, buffer_ring_t *buf
 		case FREENECT_DEPTH_10BIT:
 		case FREENECT_DEPTH_11BIT_PACKED:
 		case FREENECT_DEPTH_10BIT_PACKED:
+		case FREENECT_DEPTH_REGISTERED:
+		case FREENECT_DEPTH_MM:
 			sz = freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, fmt).bytes;
 			break;
 		default:

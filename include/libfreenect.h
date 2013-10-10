@@ -24,16 +24,31 @@
  * either License.
  */
 
-#ifndef LIBFREENECT_H
-#define LIBFREENECT_H
+#pragma once
 
 #include <stdint.h>
+
+/* We need struct timeval */
+#ifdef _WIN32
+#include <winsock.h>
+#else
+#include <sys/time.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #define FREENECT_COUNTS_PER_G 819 /**< Ticks per G for accelerometer as set per http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf */
+
+/// Maximum value that a uint16_t pixel will take on in the buffer of any of the FREENECT_DEPTH_MM or FREENECT_DEPTH_REGISTERED frame callbacks
+#define FREENECT_DEPTH_MM_MAX_VALUE 10000
+/// Value indicating that this pixel has no data, when using FREENECT_DEPTH_MM or FREENECT_DEPTH_REGISTERED depth modes
+#define FREENECT_DEPTH_MM_NO_VALUE 0
+/// Maximum value that a uint16_t pixel will take on in the buffer of any of the FREENECT_DEPTH_11BIT, FREENECT_DEPTH_10BIT, FREENECT_DEPTH_11BIT_PACKED, or FREENECT_DEPTH_10BIT_PACKED frame callbacks
+#define FREENECT_DEPTH_RAW_MAX_VALUE 2048
+/// Value indicating that this pixel has no data, when using FREENECT_DEPTH_11BIT, FREENECT_DEPTH_10BIT, FREENECT_DEPTH_11BIT_PACKED, or FREENECT_DEPTH_10BIT_PACKED
+#define FREENECT_DEPTH_RAW_NO_VALUE 2047
 
 /// Flags representing devices to open when freenect_open_device() is called.
 /// In particular, this allows libfreenect to grab only a subset of the devices
@@ -45,6 +60,15 @@ typedef enum {
 	FREENECT_DEVICE_CAMERA = 0x02,
 	FREENECT_DEVICE_AUDIO  = 0x04,
 } freenect_device_flags;
+
+/// A struct used in enumeration to give access to serial numbers, so you can
+/// open a particular device by serial rather than depending on index.  This
+/// is most useful if you have more than one Kinect.
+struct freenect_device_attributes;
+struct freenect_device_attributes {
+	struct freenect_device_attributes *next; /**< Next device in the linked list */
+	const char* camera_serial; /**< Serial number of this device's camera subdevice */
+};
 
 /// Enumeration of available resolutions.
 /// Not all available resolutions are actually supported for all video formats.
@@ -78,8 +102,26 @@ typedef enum {
 	FREENECT_DEPTH_11BIT_PACKED = 2, /**< 11 bit packed depth information */
 	FREENECT_DEPTH_10BIT_PACKED = 3, /**< 10 bit packed depth information */
 	FREENECT_DEPTH_REGISTERED   = 4, /**< processed depth data in mm, aligned to 640x480 RGB */
+	FREENECT_DEPTH_MM           = 5, /**< depth to each pixel in mm, but left unaligned to RGB image */
 	FREENECT_DEPTH_DUMMY        = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_depth_format;
+
+/// Enumeration of flags to toggle features with freenect_set_flag()
+typedef enum {
+	// values written to the CMOS register
+	FREENECT_AUTO_EXPOSURE      = 1 << 14,
+	FREENECT_AUTO_WHITE_BALANCE = 1 << 1,
+	FREENECT_RAW_COLOR          = 1 << 4,
+	// registers to be written with 0 or 1
+	FREENECT_MIRROR_DEPTH       = 0x0017,
+	FREENECT_MIRROR_VIDEO       = 0x0047,
+} freenect_flag;
+
+/// Possible values for setting each `freenect_flag`
+typedef enum {
+	FREENECT_OFF = 0,
+	FREENECT_ON  = 1,
+} freenect_flag_value;
 
 /// Structure to give information about the width, height, bitrate,
 /// framerate, and buffer size of a frame in a particular mode, as
@@ -215,13 +257,7 @@ struct _freenect_device;
 typedef struct _freenect_device freenect_device; /**< Holds device information. */
 
 // usb backend specific section
-#ifdef _WIN32
-  /* frees Windows users of the burden of specifying the path to <libusb-1.0/libusb.h> */
-  typedef void freenect_usb_context;
-#else
-  #include <libusb-1.0/libusb.h>
-  typedef libusb_context freenect_usb_context; /**< Holds libusb-1.0 specific information */
-#endif
+typedef void freenect_usb_context; /**< Holds libusb-1.0 context */
 //
 
 /// If Win32, export all functions for DLL usage
@@ -300,6 +336,18 @@ FREENECTAPI void freenect_set_log_callback(freenect_context *ctx, freenect_log_c
 FREENECTAPI int freenect_process_events(freenect_context *ctx);
 
 /**
+ * Calls the platform specific usb event processor until either an event occurs
+ * or the timeout parameter time has passed.  If a zero timeval is passed, this
+ * function will handle any already-pending events, then return immediately.
+ *
+ * @param ctx Context to process events for
+ * @param timeout Pointer to a timeval containing the maximum amount of time to block waiting for events, or zero for nonblocking mode
+ *
+ * @return 0 on success, other values on error, platform/library dependant
+ */
+FREENECTAPI int freenect_process_events_timeout(freenect_context *ctx, struct timeval* timeout);
+
+/**
  * Return the number of kinect devices currently connected to the
  * system
  *
@@ -308,6 +356,34 @@ FREENECTAPI int freenect_process_events(freenect_context *ctx);
  * @return Number of devices connected, < 0 on error
  */
 FREENECTAPI int freenect_num_devices(freenect_context *ctx);
+
+/**
+ * Scans for kinect devices and produces a linked list of their attributes
+ * (namely, serial numbers), returning the number of devices.
+ *
+ * @param ctx Context to scan for kinect devices with
+ * @param attribute_list Pointer to where this function will store the resultant linked list
+ *
+ * @return Number of devices connected, < 0 on error
+ */
+FREENECTAPI int freenect_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes** attribute_list);
+
+/**
+ * Free the linked list produced by freenect_list_device_attributes().
+ *
+ * @param attribute_list Linked list of attributes to free.
+ */
+FREENECTAPI void freenect_free_device_attributes(struct freenect_device_attributes* attribute_list);
+
+/**
+ * Answer which subdevices this library supports.  This is most useful for
+ * wrappers trying to determine whether the underlying library was built with
+ * audio support or not, so the wrapper can avoid calling functions that do not
+ * exist.
+ *
+ * @return Flags representing the subdevices that the library supports opening (see freenect_device_flags)
+ */
+FREENECTAPI int freenect_supported_subdevices(void);
 
 /**
  * Set which subdevices any subsequent calls to freenect_open_device()
@@ -322,6 +398,15 @@ FREENECTAPI int freenect_num_devices(freenect_context *ctx);
 FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs);
 
 /**
+ * Returns the devices that are enabled after calls to freenect_open_device()
+ * On newer kinects the motor and audio are automatically disabled for now
+ *
+ * @param ctx Context to set future subdevice selection for
+ * @return Flags representing the subdevices that were actually opened (see freenect_device_flags)
+ */
+FREENECTAPI freenect_device_flags freenect_enabled_subdevices(freenect_context *ctx);
+
+/**
  * Opens a kinect device via a context. Index specifies the index of
  * the device on the current state of the bus. Bus resets may cause
  * indexes to shift.
@@ -333,6 +418,19 @@ FREENECTAPI void freenect_select_subdevices(freenect_context *ctx, freenect_devi
  * @return 0 on success, < 0 on error
  */
 FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index);
+
+/**
+ * Opens a kinect device (via a context) associated with a particular camera
+ * subdevice serial number.  This function will fail if no device with a
+ * matching serial number is found.
+ *
+ * @param ctx Context to open device through
+ * @param dev Device structure to assign opened device to
+ * @param camera_serial Null-terminated ASCII string containing the serial number of the camera subdevice in the device to open
+ *
+ * @return 0 on success, < 0 on error
+ */
+FREENECTAPI int freenect_open_device_by_camera_serial(freenect_context *ctx, freenect_device **dev, const char* camera_serial);
 
 /**
  * Closes a device that is currently open
@@ -530,11 +628,11 @@ FREENECTAPI int freenect_get_video_mode_count();
  * Get the frame descriptor of the nth supported video mode for the
  * video camera.
  *
- * @param n Which of the supported modes to return information about
+ * @param mode_num Which of the supported modes to return information about
  *
  * @return A freenect_frame_mode describing the nth video mode
  */
-FREENECTAPI const freenect_frame_mode freenect_get_video_mode(int mode_num);
+FREENECTAPI freenect_frame_mode freenect_get_video_mode(int mode_num);
 
 /**
  * Get the frame descriptor of the current video mode for the specified
@@ -544,7 +642,7 @@ FREENECTAPI const freenect_frame_mode freenect_get_video_mode(int mode_num);
  *
  * @return A freenect_frame_mode describing the current video mode of the specified device
  */
-FREENECTAPI const freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev);
+FREENECTAPI freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev);
 
 /**
  * Convenience function to return a mode descriptor matching the
@@ -555,7 +653,7 @@ FREENECTAPI const freenect_frame_mode freenect_get_current_video_mode(freenect_d
  *
  * @return A freenect_frame_mode that matches the arguments specified, if such a valid mode exists; otherwise, an invalid freenect_frame_mode.
  */
-FREENECTAPI const freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt);
+FREENECTAPI freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt);
 
 /**
  * Sets the current video mode for the specified device.  If the
@@ -569,7 +667,7 @@ FREENECTAPI const freenect_frame_mode freenect_find_video_mode(freenect_resoluti
  *
  * @return 0 on success, < 0 if error
  */
-FREENECTAPI int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode);
+FREENECTAPI int freenect_set_video_mode(freenect_device* dev, freenect_frame_mode mode);
 
 /**
  * Get the number of depth camera modes supported by the driver.  This includes both RGB and IR modes.
@@ -582,11 +680,11 @@ FREENECTAPI int freenect_get_depth_mode_count();
  * Get the frame descriptor of the nth supported depth mode for the
  * depth camera.
  *
- * @param n Which of the supported modes to return information about
+ * @param mode_num Which of the supported modes to return information about
  *
  * @return A freenect_frame_mode describing the nth depth mode
  */
-FREENECTAPI const freenect_frame_mode freenect_get_depth_mode(int mode_num);
+FREENECTAPI freenect_frame_mode freenect_get_depth_mode(int mode_num);
 
 /**
  * Get the frame descriptor of the current depth mode for the specified
@@ -596,7 +694,7 @@ FREENECTAPI const freenect_frame_mode freenect_get_depth_mode(int mode_num);
  *
  * @return A freenect_frame_mode describing the current depth mode of the specified device
  */
-FREENECTAPI const freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev);
+FREENECTAPI freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev);
 
 /**
  * Convenience function to return a mode descriptor matching the
@@ -607,7 +705,7 @@ FREENECTAPI const freenect_frame_mode freenect_get_current_depth_mode(freenect_d
  *
  * @return A freenect_frame_mode that matches the arguments specified, if such a valid mode exists; otherwise, an invalid freenect_frame_mode.
  */
-FREENECTAPI const freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt);
+FREENECTAPI freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt);
 
 /**
  * Sets the current depth mode for the specified device.  The mode
@@ -621,33 +719,15 @@ FREENECTAPI const freenect_frame_mode freenect_find_depth_mode(freenect_resoluti
 FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode);
 
 /**
- * Initialize a registration data structure: get data from device, allocate and initialize tables
- *
- * @param dev Device to use
- * @param reg freenect_registration structure to fill
- *
- * @return 0 on success, < 0 on error
+ * Enables or disables the specified flag.
+ * 
+ * @param flag Feature to set
+ * @param value `FREENECT_OFF` or `FREENECT_ON`
+ * 
+ * @return 0 on success, < 0 if error
  */
-FREENECTAPI int freenect_init_registration(freenect_device* dev, freenect_registration* reg);
-
-/**
- * Apply registration data structure to a raw depth image
- *
- * @param reg       freenect_registration structure to use
- * @param input_raw buffer of raw 16-bit disparity values
- * @param output_mm result buffer with 16-bit values in mm
- *
- * @return 0 on success, < 0 on error
- */
-FREENECTAPI int freenect_apply_registration(freenect_registration* reg, uint8_t* input_packed, uint16_t* output_mm);
-
-FREENECTAPI freenect_reg_info freenect_get_reg_info(freenect_device* dev);
-FREENECTAPI freenect_reg_pad_info freenect_get_reg_pad_info(freenect_device* dev);
-FREENECTAPI freenect_zero_plane_info freenect_get_zero_plane_info(freenect_device* dev);
+FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value);
 
 #ifdef __cplusplus
 }
 #endif
-
-#endif //
-

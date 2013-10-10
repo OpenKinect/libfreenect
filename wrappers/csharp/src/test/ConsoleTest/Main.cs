@@ -63,10 +63,10 @@ namespace ConsoleTest
 				
 				// Try to set LED colors
 				Console.WriteLine(" - LED Testing");
-				string[] colors = Enum.GetNames(typeof(LED.ColorOption));
+				string[] colors = Enum.GetNames(typeof(LEDColor));
 				foreach(string color in colors)
 				{
-					var c = (LED.ColorOption)Enum.Parse(typeof(LED.ColorOption), color);
+					var c = (LEDColor)Enum.Parse(typeof(LEDColor), color);
 					Console.WriteLine("\t - Setting LED to Color: " + color);
 					k.LED.Color = c;
 					Thread.Sleep(3000);
@@ -92,6 +92,9 @@ namespace ConsoleTest
 			
 			// Shutdown the Kinect context
 			Kinect.Shutdown();
+
+			// Pause...
+			Console.ReadKey(true);
 		}
 	}
 }

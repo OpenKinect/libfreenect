@@ -1,7 +1,7 @@
 /*
  * This file is part of the OpenKinect Project. http://www.openkinect.org
  *
- * Copyright (c) 2010 individual OpenKinect contributors. See the CONTRIB file
+ * Copyright (c) 2011 individual OpenKinect contributors. See the CONTRIB file
  * for details.
  *
  * This code is licensed to you under the terms of the Apache License, version
@@ -69,36 +69,36 @@ freenect_device *f_dev;
 int freenect_angle = 0;
 int freenect_led;
 
-freenect_video_format requested_format = FREENECT_VIDEO_RGB;
-freenect_video_format current_format = FREENECT_VIDEO_RGB;
-
 pthread_cond_t gl_frame_cond = PTHREAD_COND_INITIALIZER;
 int got_rgb = 0;
 int got_depth = 0;
 
-void DrawGLScene()
+int frame = 0;
+int ftime = 0;
+double fps = 0;
+
+void idle()
 {
 	pthread_mutex_lock(&gl_backbuf_mutex);
 
 	// When using YUV_RGB mode, RGB frames only arrive at 15Hz, so we shouldn't force them to draw in lock-step.
 	// However, this is CPU/GPU intensive when we are receiving frames in lockstep.
-	if (current_format == FREENECT_VIDEO_YUV_RGB) {
-		while (!got_depth && !got_rgb) {
-			pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
-		}
-	} else {
-		while ((!got_depth || !got_rgb) && requested_format != current_format) {
-			pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
-		}
+	while (!got_depth && !got_rgb) {
+		pthread_cond_wait(&gl_frame_cond, &gl_backbuf_mutex);
 	}
 
-	if (requested_format != current_format) {
+	if (!got_depth || !got_rgb) {
 		pthread_mutex_unlock(&gl_backbuf_mutex);
 		return;
 	}
+	pthread_mutex_unlock(&gl_backbuf_mutex);
+	glutPostRedisplay();
+}
 
+void DrawGLScene() {
 	uint8_t *tmp;
 
+	pthread_mutex_lock(&gl_backbuf_mutex);
 	if (got_depth) {
 		tmp = depth_front;
 		depth_front = depth_mid;
@@ -111,14 +111,10 @@ void DrawGLScene()
 		rgb_mid = tmp;
 		got_rgb = 0;
 	}
-
 	pthread_mutex_unlock(&gl_backbuf_mutex);
 
 	glBindTexture(GL_TEXTURE_2D, gl_rgb_tex);
-	if (current_format == FREENECT_VIDEO_RGB || current_format == FREENECT_VIDEO_YUV_RGB)
-		glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
-	else
-		glTexImage2D(GL_TEXTURE_2D, 0, 1, 640, 480, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, rgb_front+640*4);
+	glTexImage2D(GL_TEXTURE_2D, 0, 3, 640, 480, 0, GL_RGB, GL_UNSIGNED_BYTE, rgb_front);
 
 	glBegin(GL_TRIANGLE_FAN);
 	glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
@@ -140,13 +136,21 @@ void DrawGLScene()
 	glEnd();
 
 	glutSwapBuffers();
+
+	frame++;
+	if (frame % 30 == 0) {
+		int ms = glutGet(GLUT_ELAPSED_TIME);
+		fps = 30.0/((ms-ftime)/1000.0);
+		ftime = ms;
+	}
 }
 
 void keyPressed(unsigned char key, int x, int y)
 {
-	if (key == 27) {
+	if (key == 27 || key == 'q') {
 		die = 1;
 		pthread_join(freenect_thread, NULL);
+		pthread_cond_signal(&gl_frame_cond);
 		glutDestroyWindow(window);
 		free(depth_mid);
 		free(depth_front);
@@ -156,78 +160,6 @@ void keyPressed(unsigned char key, int x, int y)
 		// Not pthread_exit because OSX leaves a thread lying around and doesn't exit
 		exit(0);
 	}
-	if (key == 'w') {
-		freenect_angle++;
-		if (freenect_angle > 30) {
-			freenect_angle = 30;
-		}
-	}
-	if (key == 's') {
-		freenect_angle = 0;
-	}
-	if (key == 'f') {
-		if (requested_format == FREENECT_VIDEO_IR_8BIT)
-			requested_format = FREENECT_VIDEO_RGB;
-		else if (requested_format == FREENECT_VIDEO_RGB)
-			requested_format = FREENECT_VIDEO_YUV_RGB;
-		else
-			requested_format = FREENECT_VIDEO_IR_8BIT;
-	}
-	if (key == 'x') {
-		freenect_angle--;
-		if (freenect_angle < -30) {
-			freenect_angle = -30;
-		}
-	}
-	if (key == 'e') {
-		static freenect_flag_value auto_exposure = FREENECT_ON;
-		freenect_set_flag(f_dev, FREENECT_AUTO_EXPOSURE, auto_exposure);
-		auto_exposure = !auto_exposure;
-	}
-	if (key == 'b') {
-		static freenect_flag_value white_balance = FREENECT_ON;
-		freenect_set_flag(f_dev, FREENECT_AUTO_WHITE_BALANCE, white_balance);
-		white_balance = !white_balance;
-	}
-	if (key == 'r') {
-		static freenect_flag_value raw_color = FREENECT_ON;
-		freenect_set_flag(f_dev, FREENECT_RAW_COLOR, raw_color);
-		raw_color = !raw_color;
-	}
-	if (key == 'm') {
-		static freenect_flag_value mirror = FREENECT_ON;
-		freenect_set_flag(f_dev, FREENECT_MIRROR_DEPTH, mirror);
-		freenect_set_flag(f_dev, FREENECT_MIRROR_VIDEO, mirror);
-		mirror = !mirror;
-	}
-	if (key == '1') {
-		freenect_set_led(f_dev,LED_GREEN);
-	}
-	if (key == '2') {
-		freenect_set_led(f_dev,LED_RED);
-	}
-	if (key == '3') {
-		freenect_set_led(f_dev,LED_YELLOW);
-	}
-	if (key == '4') {
-		freenect_set_led(f_dev,LED_BLINK_GREEN);
-	}
-	if (key == '5') {
-		// 5 is the same as 4
-		freenect_set_led(f_dev,LED_BLINK_GREEN);
-	}
-	if (key == '6') {
-		freenect_set_led(f_dev,LED_BLINK_RED_YELLOW);
-	}
-	if (key == '0') {
-		freenect_set_led(f_dev,LED_OFF);
-	}
-	if (key == 'c') {
-		freenect_get_reg_info(f_dev);
-		freenect_get_reg_pad_info(f_dev);
-		freenect_get_zero_plane_info(f_dev);
-	}
-	freenect_set_tilt_degs(f_dev,freenect_angle);
 }
 
 void ReSizeGLScene(int Width, int Height)
@@ -269,17 +201,16 @@ void InitGL(int Width, int Height)
 void *gl_threadfunc(void *arg)
 {
 	printf("GL thread\n");
-
 	glutInit(&g_argc, g_argv);
 
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_ALPHA | GLUT_DEPTH);
 	glutInitWindowSize(640, 480);
 	glutInitWindowPosition(0, 0);
 
-	window = glutCreateWindow("LibFreenect");
+	window = glutCreateWindow("libfreenect Registration viewer");
 
 	glutDisplayFunc(&DrawGLScene);
-	glutIdleFunc(&DrawGLScene);
+	glutIdleFunc(&idle);
 	glutReshapeFunc(&ReSizeGLScene);
 	glutKeyboardFunc(&keyPressed);
 
@@ -290,7 +221,7 @@ void *gl_threadfunc(void *arg)
 	return NULL;
 }
 
-uint16_t t_gamma[2048];
+uint16_t t_gamma[10000];
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
@@ -299,12 +230,11 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 
 	pthread_mutex_lock(&gl_backbuf_mutex);
 	for (i=0; i<640*480; i++) {
-		int pval = t_gamma[depth[i]];
+		//if (depth[i] >= 2048) continue;
+		int pval = t_gamma[depth[i]] / 4;
 		int lb = pval & 0xff;
 		depth_mid[4*i+3] = 128; // default alpha value
 		if (depth[i] ==  0) depth_mid[4*i+3] = 0; // remove anything without depth value
-		//if (i == 153920) printf("depth in mm: %d\n",depth[i]); // debugging output
-		//if (depth[i] > 700) depth_mid[4*i+3] = 0;
 		switch (pval>>8) {
 			case 0:
 				depth_mid[4*i+0] = 255;
@@ -366,46 +296,24 @@ void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 
 void *freenect_threadfunc(void *arg)
 {
-	int accelCount = 0;
-
-	freenect_set_tilt_degs(f_dev,freenect_angle);
-	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_video_callback(f_dev, rgb_cb);
-	freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, current_format));
+	freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
 	freenect_set_depth_mode(f_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_REGISTERED));
 	freenect_set_video_buffer(f_dev, rgb_back);
-
-	freenect_init_registration(f_dev,NULL);
 
 	freenect_start_depth(f_dev);
 	freenect_start_video(f_dev);
 
 	printf("'w'-tilt up, 's'-level, 'x'-tilt down, '0'-'6'-select LED mode, 'f'-video format\n");
-	printf("'e' - auto exposure, 'b' - white balance, 'r' - raw color, 'm' - mirror\n");
 
-	while (!die && freenect_process_events(f_ctx) >= 0) {
-		//Throttle the text output
-		if (accelCount++ >= 2000)
-		{
-			accelCount = 0;
-			freenect_raw_tilt_state* state;
-			freenect_update_tilt_state(f_dev);
-			state = freenect_get_tilt_state(f_dev);
-			double dx,dy,dz;
-			freenect_get_mks_accel(state, &dx, &dy, &dz);
-			printf("\r raw acceleration: %4d %4d %4d  mks acceleration: %4f %4f %4f", state->accelerometer_x, state->accelerometer_y, state->accelerometer_z, dx, dy, dz);
-			fflush(stdout);
-		}
-
-		if (requested_format != current_format) {
-			freenect_stop_video(f_dev);
-			freenect_set_video_mode(f_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, requested_format));
-			freenect_start_video(f_dev);
-			current_format = requested_format;
+	while (!die) {
+		int res = freenect_process_events(f_ctx);
+		if (res < 0 && res != -10) {
+			printf("\nError %d received from libusb - aborting.\n",res);
+			break;
 		}
 	}
-
 	printf("\nshutting down streams...\n");
 
 	freenect_stop_depth(f_dev);
@@ -431,7 +339,7 @@ int main(int argc, char **argv)
 	printf("Kinect camera test\n");
 
 	int i;
-	for (i=0; i<2048; i++) {
+	for (i=0; i<10000; i++) {
 		float v = i/2048.0;
 		v = powf(v, 3)* 6;
 		t_gamma[i] = v*6*256;
@@ -446,7 +354,7 @@ int main(int argc, char **argv)
 	}
 
 	freenect_set_log_level(f_ctx, FREENECT_LOG_DEBUG);
-	freenect_select_subdevices(f_ctx, (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA));
+	freenect_select_subdevices(f_ctx, (freenect_device_flags)(FREENECT_DEVICE_CAMERA));
 
 	int nr_devices = freenect_num_devices (f_ctx);
 	printf ("Number of devices found: %d\n", nr_devices);

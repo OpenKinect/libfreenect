@@ -67,7 +67,7 @@
     </Reference>
     <Reference Include="freenect, Version=1.0.4164.1010, Culture=neutral, PublicKeyToken=null">
       <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\..\bin\freenect.dll</HintPath>
+      <HintPath>..\..\..\..\bin\freenectdotnet.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>

@@ -24,8 +24,7 @@
  * either License.
  */
 
-#ifndef SERVER_JPEG_H
-#define SERVER_JPEG_H
+#pragma once
 
 #ifdef __cplusplus
 extern "C" {
@@ -39,6 +38,4 @@ int RGB_2_JPEG(unsigned char *buffer, unsigned char **compressed, long unsigned 
 
 #ifdef __cplusplus
 }
-#endif
-
 #endif

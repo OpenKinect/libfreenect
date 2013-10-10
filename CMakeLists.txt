@@ -41,8 +41,8 @@ cmake_minimum_required(VERSION 2.6)
 PROJECT(libfreenect)
 
 set (PROJECT_VER_MAJOR 0)
-set (PROJECT_VER_MINOR 0)
-set (PROJECT_VER_PATCH 1)
+set (PROJECT_VER_MINOR 1)
+set (PROJECT_VER_PATCH 2)
 set (PROJECT_VER 
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 set (PROJECT_APIVER 
@@ -86,6 +86,12 @@ if(BUILD_AUDIO)
   add_definitions(-DBUILD_AUDIO)
 endif()
 
+if (WIN32)
+   set(MATH_LIB "")
+else(WIN32)
+  set(MATH_LIB "m")
+endif()
+
 ######################################################################################
 # CMake 
 ######################################################################################
@@ -98,6 +104,10 @@ SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 if(CMAKE_C_FLAGS STREQUAL "")
   set(CMAKE_C_FLAGS "-O2")
 endif()
+SET(CMAKE_C_FLAGS_DEBUG "-g -DDEBUG=1")
+SET(CMAKE_C_FLAGS_RELEASE "-O2")
+SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
+
 add_definitions(-Wall)
 
 # Pretty much everyone is going to need the main includes
@@ -108,7 +118,7 @@ include_directories(${LIBUSB_1_INCLUDE_DIRS})
 
 if(WIN32)
   include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows")
-  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu")
+  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu/libusb-1.0")
 endif()
 
 # Add library project
@@ -182,6 +192,7 @@ IF ( BUILD_CPACK )
     INSTALL(FILES "include/libfreenect-audio.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   endif()
   INSTALL(FILES "include/libfreenect.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+  INSTALL(FILES "include/libfreenect-registration.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   INSTALL(FILES "APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "README.asciidoc" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")

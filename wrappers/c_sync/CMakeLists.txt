@@ -3,11 +3,11 @@
 ######################################################################################
 if (WIN32)
   set_source_files_properties(libfreenect_sync.c PROPERTIES LANGUAGE CXX)
-
   set(THREADS_USE_PTHREADS_WIN32 true)
-  find_package(Threads REQUIRED)
-  include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
 endif()
+
+find_package(Threads REQUIRED)
+include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
 
 add_library (freenect_sync SHARED libfreenect_sync.c)
 add_library (freenect_sync_static STATIC libfreenect_sync.c)
@@ -26,3 +26,4 @@ install (TARGETS freenect_sync_static
   DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}")
 install (FILES "libfreenect_sync.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+
