@@ -329,6 +329,35 @@ void freenect_camera_to_world(freenect_device* dev, int cx, int cy, int wz, doub
 	*wy = (double)(cy - DEPTH_Y_RES/2) * factor;
 }
 
+/// RGB -> depth mapping function (inverse of default FREENECT_DEPTH_REGISTERED mapping)
+void freenect_map_rgb_to_depth(freenect_device* dev, uint16_t* depth_mm, uint8_t* rgb_raw, uint8_t* rgb_registered)
+{
+	uint32_t target_offset = dev->registration.reg_pad_info.start_lines * DEPTH_Y_RES;
+	int x,y;
+
+	for (y = 0; y < DEPTH_Y_RES; y++) for (x = 0; x < DEPTH_X_RES; x++) {
+
+		uint32_t index = y * DEPTH_X_RES + x;
+		uint32_t cx,cy,cindex;
+
+		int wz = depth_mm[index];
+		//if (wz == 0) continue;
+
+		// coordinates in rgb image corresponding to x,y
+		cx = (dev->registration.registration_table[index][0] + dev->registration.depth_to_rgb_shift[wz]) / REG_X_VAL_SCALE; 
+		cy =  dev->registration.registration_table[index][1];
+
+		if (cx >= DEPTH_X_RES) continue;
+
+		cindex = (cy * DEPTH_X_RES + cx - target_offset) * 3;
+		index  = index*3;
+
+		rgb_registered[index+0] = rgb_raw[cindex+0];
+		rgb_registered[index+1] = rgb_raw[cindex+1];
+		rgb_registered[index+2] = rgb_raw[cindex+2];
+	}
+}
+
 /// Allocate and fill registration tables
 /// This function should be called every time a new video (not depth!) mode is
 /// activated.
