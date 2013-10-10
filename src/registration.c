@@ -341,9 +341,17 @@ void freenect_map_rgb_to_depth(freenect_device* dev, uint16_t* depth_mm, uint8_t
 		uint32_t cx,cy,cindex;
 
 		int wz = depth_mm[index];
-		//if (wz == 0) continue;
 
-		// coordinates in rgb image corresponding to x,y
+		// pixels without depth data are black
+		if (wz == 0) {
+			index = index*3;
+			rgb_registered[index+0] = 0;
+			rgb_registered[index+1] = 0;
+			rgb_registered[index+2] = 0;
+			continue;
+		}
+
+		// coordinates in rgb image corresponding to x,y in depth image
 		cx = (dev->registration.registration_table[index][0] + dev->registration.depth_to_rgb_shift[wz]) / REG_X_VAL_SCALE; 
 		cy =  dev->registration.registration_table[index][1];
 
