@@ -31,7 +31,7 @@
 #include <sstream>
 #include <map>
 #include <pthread.h>
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 namespace Freenect {
 	class Noncopyable {
