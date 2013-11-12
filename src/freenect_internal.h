@@ -212,6 +212,8 @@ struct _freenect_device {
 
 	freenect_depth_cb depth_cb;
 	freenect_video_cb video_cb;
+	freenect_chunk_cb depth_chunk_cb;
+	freenect_chunk_cb video_chunk_cb;
 	freenect_video_format video_format;
 	freenect_depth_format depth_format;
 	freenect_resolution video_resolution;
