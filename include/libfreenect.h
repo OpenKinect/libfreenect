@@ -385,6 +385,9 @@ FREENECTAPI void *freenect_get_user(freenect_device *dev);
 typedef void (*freenect_depth_cb)(freenect_device *dev, void *depth, uint32_t timestamp);
 /// Typedef for video image received event callbacks
 typedef void (*freenect_video_cb)(freenect_device *dev, void *video, uint32_t timestamp);
+/// Typedef for stream chunk processing callbacks
+typedef void (*freenect_chunk_cb)(void *buffer, void *pkt_data, int pkt_num, int datalen, void *user_data);
+
 
 /**
  * Set callback for depth information received event
@@ -401,6 +404,22 @@ FREENECTAPI void freenect_set_depth_callback(freenect_device *dev, freenect_dept
  * @param cb Function pointer for processing video information
  */
 FREENECTAPI void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb);
+
+/**
+ * Set callback for depth chunk processing
+ *
+ * @param dev Device to set callback for
+ * @param cb Function pointer for processing depth chunk
+ */
+FREENECTAPI void freenect_set_depth_chunk_callback(freenect_device *dev, freenect_chunk_cb cb);
+
+/**
+ * Set callback for video chunk processing
+ *
+ * @param dev Device to set callback for
+ * @param cb Function pointer for processing video chunk
+ */
+FREENECTAPI void freenect_set_video_chunk_callback(freenect_device *dev, freenect_chunk_cb cb);
 
 /**
  * Set the buffer to store depth information to. Size of buffer is
