@@ -406,15 +406,23 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		if (dev->usb_cam.dev) {
 			libusb_release_interface(dev->usb_cam.dev, 0);
 			libusb_close(dev->usb_cam.dev);
+		} else {
+			FN_ERROR("Failed to open camera subdevice or it is not disabled.");
 		}
+
 		if (dev->usb_motor.dev) {
 			libusb_release_interface(dev->usb_motor.dev, 0);
 			libusb_close(dev->usb_motor.dev);
+		} else {
+			FN_ERROR("Failed to open motor subddevice or it is not disabled.");
 		}
+
 #ifdef BUILD_AUDIO
 		if (dev->usb_audio.dev) {
 			libusb_release_interface(dev->usb_audio.dev, 0);
 			libusb_close(dev->usb_audio.dev);
+		} else {
+			FN_ERROR("Failed to open audio subdevice or it is not disabled.");
 		}
 #endif
 		return -1;
