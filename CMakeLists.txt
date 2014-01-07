@@ -40,6 +40,13 @@ cmake_minimum_required(VERSION 2.6)
 
 PROJECT(libfreenect)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
+
+# Find the host operating system and architecture
+include (FindOS)
+# Set up installation directories
+include (SetupDirectories)
+
 set (PROJECT_VER_MAJOR 0)
 set (PROJECT_VER_MINOR 2)
 set (PROJECT_VER_PATCH 0)
@@ -64,13 +71,6 @@ ENDIF(PROJECT_OS_LINUX)
 ######################################################################################
 # CMake Modules
 ######################################################################################
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
-
-# Find the host operating system and architecture
-include (FindOS)
-# Set up installation directories
-include (SetupDirectories)
 
 # Find packages needed to build library
 find_package(libusb-1.0 REQUIRED)
@@ -182,7 +182,7 @@ IF ( BUILD_CPACK )
   set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VER_PATCH})
   set(VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
 
-  set(CPACK_GENERATOR "DEB;RPM;")
+  set(CPACK_GENERATOR "DEB;RPM;TGZ")
   set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}-${CMAKE_SYSTEM_PROCESSOR}")
 
   include(CPack)
