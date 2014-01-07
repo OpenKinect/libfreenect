@@ -39,12 +39,19 @@ set(PYTHON_EXECUTABLE "python2")
 
 PROJECT(libfreenect)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
+
+# Find the host operating system and architecture
+include (FindOS)
+# Set up installation directories
+include (SetupDirectories)
+
 set (PROJECT_VER_MAJOR 0)
 set (PROJECT_VER_MINOR 4)
 set (PROJECT_VER_PATCH 1)
-set (PROJECT_VER 
+set (PROJECT_VER
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
-set (PROJECT_APIVER 
+set (PROJECT_APIVER
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
 
 OPTION(BUILD_AUDIO "Build audio support" OFF)
@@ -58,19 +65,14 @@ OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
 OPTION(BUILD_PYTHON "Build Python extension" OFF)
 OPTION(BUILD_OPENNI2_DRIVER "Build libfreenect driver for OpenNI2" OFF)
 IF(PROJECT_OS_LINUX)
-	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
+	OPTION(BUILD_CPACK_DEB "Build an DEB using CPack" OFF)
+	OPTION(BUILD_CPACK_RPM "Build an RPM using CPack" OFF)
+	OPTION(BUILD_CPACK_TGZ "Build an TGZ using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
 
 ######################################################################################
 # Dependencies and Definitions
 ######################################################################################
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
-
-# Find the host operating system and architecture
-include (FindOS)
-# Set up installation directories
-include (SetupDirectories)
 
 # Find packages needed to build library
 find_package(libusb-1.0 REQUIRED)
@@ -93,7 +95,7 @@ else(WIN32)
 endif()
 
 ######################################################################################
-# CMake 
+# CMake
 ######################################################################################
 
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
@@ -177,13 +179,17 @@ configure_file(
   "${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake"
   IMMEDIATE @ONLY)
 
+# --- cmake config file ---
+CONFIGURE_FILE(libfreenectConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/libfreenectConfig.cmake @ONLY)
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/libfreenectConfig.cmake DESTINATION share/${PROJECT_NAME})
+
 add_custom_target(uninstall
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake)
 
 # Create Debian/RPM Packages
 # after make, use "fakeroot cpack" in the build Dir to complete
 
-IF ( BUILD_CPACK )
+IF ( BUILD_CPACK_TGZ OR BUILD_CPACK_DEB OR BUILD_CPACK_RPM )
   set(CPACK_PACKAGE_DESCRIPTION "libfreenect for kinect")
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
   set(CPACK_PACKAGE_NAME "libfreenect-dev")
@@ -196,7 +202,16 @@ IF ( BUILD_CPACK )
   set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VER_PATCH})
   set(VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
 
-  set(CPACK_GENERATOR "DEB;RPM;")
+  set(CPACK_GENERATOR "")
+  if (BUILD_CPACK_TGZ)
+    list(APPEND CPACK_GENERATOR "TGZ")
+  endif()
+  if (BUILD_CPACK_RPM)
+    list(APPEND CPACK_GENERATOR "RPM")
+  endif()
+  if (BUILD_CPACK_DEB)
+    list(APPEND CPACK_GENERATOR "DEB")
+  endif()
   set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}-${CMAKE_SYSTEM_PROCESSOR}")
 
   include(CPack)
@@ -211,5 +226,5 @@ IF ( BUILD_CPACK )
   INSTALL(FILES "GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "README.md" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
 
-ENDIF ( BUILD_CPACK )
+ENDIF ( )
 
