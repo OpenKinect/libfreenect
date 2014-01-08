@@ -199,7 +199,7 @@ namespace Freenect {
 			DeviceMap::iterator it = m_devices.find(_index);
 			if (it != m_devices.end()) delete it->second;
 			ConcreteDevice * device = new ConcreteDevice(m_ctx, _index);
-			m_devices.insert(std::make_pair<int, FreenectDevice*>(_index, device));
+			m_devices.insert(std::make_pair<int, FreenectDevice*>((int)_index, device));
 			return *device;
 		}
 		void deleteDevice(int _index) {
