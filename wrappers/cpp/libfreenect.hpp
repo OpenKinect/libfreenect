@@ -31,7 +31,7 @@
 #include <sstream>
 #include <map>
 #include <pthread.h>
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 namespace Freenect {
 	class Noncopyable {
@@ -187,10 +187,10 @@ namespace Freenect {
 			if(pthread_create(&m_thread, NULL, pthread_callback, (void*)this) != 0) throw std::runtime_error("Cannot initialize freenect thread");
 		}
 		~Freenect() {
+			m_stop = true;
 			for(DeviceMap::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
 				delete it->second;
 			}
-			m_stop = true;
 			pthread_join(m_thread, NULL);
 			if(freenect_shutdown(m_ctx) < 0){} //FN_WARNING("Freenect did not shutdown in a clean fashion");
 		}
@@ -213,10 +213,8 @@ namespace Freenect {
 		}
 		// Do not call directly, thread runs here
 		void operator()() {
-			static timeval timeout = {0, 33333}; // 30 fps
 			while (!m_stop) {
-				// use of timeout prevents hang on exit (no more events)
-				int res = freenect_process_events_timeout(m_ctx, &timeout);
+				int res = freenect_process_events(m_ctx);
 				if (res < 0)
 				{
 					// libusb signals an error has occurred
