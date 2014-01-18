@@ -213,8 +213,10 @@ namespace Freenect {
 		}
 		// Do not call directly, thread runs here
 		void operator()() {
-			while(!m_stop) {
-				int res = freenect_process_events(m_ctx);
+			static timeval timeout = {0, 33333}; // 30 fps
+			while (!m_stop) {
+				// use of timeout prevents hang on exit (no more events)
+				int res = freenect_process_events_timeout(m_ctx, &timeout);
 				if (res < 0)
 				{
 					// libusb signals an error has occurred
@@ -235,8 +237,9 @@ namespace Freenect {
 			(*freenect)();
 			return NULL;
 		}
+	  protected:
+		freenect_context *m_ctx;	    
 	  private:
-		freenect_context *m_ctx;
 		volatile bool m_stop;
 		pthread_t m_thread;
 		DeviceMap m_devices;
