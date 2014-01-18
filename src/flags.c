@@ -32,12 +32,26 @@
 // freenect_set_flag is the only function exposed in libfreenect.h
 // The rest are available internally via #include flags.h
 
+FN_INTERNAL static int register_for_flag(int flag) {
+    switch(flag) {
+			case FREENECT_MIRROR_DEPTH:
+					return 0x17;
+			case FREENECT_MIRROR_VIDEO:
+					return 0x47;
+			default:
+					return -1;
+    }
+}
 
 int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value)
 {
-	if (flag == FREENECT_MIRROR_DEPTH || flag == FREENECT_MIRROR_VIDEO)
-		return write_register(dev, flag, value);
-	
+    if (flag >= (1 << 16)) {
+        int reg = register_for_flag(flag);
+        if (reg < 0)
+            return reg;
+        return write_register(dev, reg, value);
+    }
+
 	uint16_t reg = read_cmos_register(dev, 0x0106);
 	if (reg < 0)
 		return reg;

@@ -112,9 +112,9 @@ typedef enum {
 	FREENECT_AUTO_EXPOSURE      = 1 << 14,
 	FREENECT_AUTO_WHITE_BALANCE = 1 << 1,
 	FREENECT_RAW_COLOR          = 1 << 4,
-	// registers to be written with 0 or 1
-	FREENECT_MIRROR_DEPTH       = 0x0017,
-	FREENECT_MIRROR_VIDEO       = 0x0047,
+	// arbitrary bitfields to support flag combination
+	FREENECT_MIRROR_DEPTH       = 1 << 16,
+	FREENECT_MIRROR_VIDEO       = 1 << 17,
 } freenect_flag;
 
 /// Possible values for setting each `freenect_flag`

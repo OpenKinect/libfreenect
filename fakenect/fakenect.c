@@ -138,17 +138,18 @@ static int parse_line(char *type, double *cur_time, unsigned int *timestamp, uns
 		exit(1);
 	}
 	// Parse data from file name
+	int ret = 0;
 	*data_size = get_data_size(cur_fp);
 	sscanf(line, "%c-%lf-%u-%*s", type, cur_time, timestamp);
 	*data = malloc(*data_size);
 	if (fread(*data, *data_size, 1, cur_fp) != 1) {
 		printf("Error: Couldn't read entire file.\n");
-		return -1;
+		ret = -1;
 	}
 	fclose(cur_fp);
 	free(line);
 	free(file_path);
-	return 0;
+	return ret;
 }
 
 static void open_index()
