@@ -344,7 +344,7 @@ int main(int argc, char **argv)
 		index_fp = open_index(fn);
 		free(fn);
 		if (!index_fp) {
-			fclose(index_fp)
+			fclose(index_fp);
 			return 1;
 		}
 
