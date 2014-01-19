@@ -6,20 +6,11 @@
 #include "PS1080.h"
 
 
-#define SIZE(array) sizeof array / sizeof 0[array]
-
 struct RetrieveKey {
   template <typename T> typename T::first_type
   operator()(T pair) const {
     return pair.first;
   }
-};
-
-struct FreenectStreamFrameCookie {
-  int refCount;
-
-  FreenectStreamFrameCookie() :
-    refCount(1) { }
 };
 
 // "extension constructor" for OniVideoMode struct
@@ -56,10 +47,9 @@ namespace FreenectDriver {
 
   public:
     VideoStream(Freenect::FreenectDevice* device) :
-      device(device),
       frame_id(1),
-      mirroring(false),
-      cropping() { }
+      device(device),
+      mirroring(false) { }
     //~VideoStream() { stop();  }
 
     void buildFrame(void* data, uint32_t timestamp) {

@@ -14,11 +14,11 @@
 namespace FreenectDriver {
   class DepthStream : public VideoStream {
   public:
-    // from NUI library and converted to radians - please check
+    // from NUI library and converted to radians
     static const float DIAGONAL_FOV = 70 * (M_PI / 180);
     static const float HORIZONTAL_FOV = 58.5 * (M_PI / 180);
     static const float VERTICAL_FOV = 45.6 * (M_PI / 180);
-    // from DepthKinectStream.cpp - please check
+    // from DepthKinectStream.cpp
     static const int MAX_VALUE = 10000;
     static const unsigned long long GAIN_VAL = 42;
     static const unsigned long long CONST_SHIFT_VAL = 200;
@@ -46,7 +46,8 @@ namespace FreenectDriver {
       FreenectDepthModeMap supported_modes = getSupportedVideoModes();
       OniVideoMode* modes = new OniVideoMode[supported_modes.size()];
       std::transform(supported_modes.begin(), supported_modes.end(), modes, RetrieveKey());
-      return { sensor_type, SIZE(modes), modes }; // sensorType, numSupportedVideoModes, pSupportedVideoModes
+      OniSensorInfo sensors = { sensor_type, static_cast<int>(supported_modes.size()), modes };
+      return sensors;
     }
 
     OniImageRegistrationMode getImageRegistrationMode() const { return image_registration_mode; }

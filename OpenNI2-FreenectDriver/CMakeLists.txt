@@ -5,7 +5,7 @@
 file(GLOB SOURCES src/*.cpp)
 add_library(FreenectDriver SHARED ${SOURCES})
 
-set(CMAKE_CXX_FLAGS "-w") # todo
+set(CMAKE_CXX_FLAGS "-Wno-gnu-static-float-init -Wno-unused-function")
 
 set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib/OpenNI2-FreenectDriver)
 set_target_properties( FreenectDriver PROPERTIES
