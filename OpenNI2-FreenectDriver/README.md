@@ -9,9 +9,10 @@ OpenNI2-FreenectDriver is distributed under the Apache 2 license.
 Install
 -------
 1. Download and unpack [OpenNI](http://www.openni.org/openni-sdk/) 2.2.0.33 or higher.
-2. Build libfreenect with the OpenNI2 driver.
+2. Go to your build directory and build libfreenect with the OpenNI2 driver.
 
-        mkdir build && cd build
+        mkdir build
+        cd build
         cmake .. -DBUILD_OPENNI2_DRIVER=ON
         make
 
@@ -21,7 +22,7 @@ Install
         cp -L lib/OpenNI2-FreenectDriver/libFreenectDriver.{so,dylib} ${Repository}
 
 OpenNI2-FreenectDriver is built with a static libfreenect, so you do not need to include libfreenect when deploying.
-However, you will need to make sure target systems have libusb and all other libfreenect dependencies.
+However, you will need to make sure target systems have libusb and all other dependencies listed in `ldd libFreenectDriver.so`.
 
 __________________________________________________
 
