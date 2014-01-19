@@ -134,6 +134,10 @@ namespace Freenect {
 		freenect_resolution getDepthResolution() {
 			return m_depth_resolution;
 		}
+		int setFlag(freenect_flag flag, bool value)
+		{
+			return freenect_set_flag(m_dev, flag, value ? FREENECT_ON : FREENECT_OFF);
+		}
 		const freenect_device *getDevice() {
 			return m_dev;
 		}

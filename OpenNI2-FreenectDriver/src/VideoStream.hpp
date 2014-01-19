@@ -115,7 +115,6 @@ namespace FreenectDriver {
           return ONI_STATUS_OK;
 
         case ONI_STREAM_PROPERTY_CROPPING:            // OniCropping*
-          std::cout << "get cropping" << std::endl;
           if (*pDataSize != sizeof(OniCropping)) {
             printf("Unexptected size: %d != %lu\n", *pDataSize, sizeof(OniVideoMode));
             return ONI_STATUS_ERROR;

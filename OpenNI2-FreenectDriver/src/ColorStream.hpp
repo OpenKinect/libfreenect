@@ -22,6 +22,9 @@ namespace FreenectDriver {
     static FreenectVideoModeMap getSupportedVideoModes();
     OniStatus setVideoMode(OniVideoMode requested_mode);
     void populateFrame(void* data, OniFrame* frame) const;
+    
+    bool auto_white_balance;
+    bool auto_exposure;
 
   public:
     ColorStream(Freenect::FreenectDevice* pDevice);
@@ -40,31 +43,97 @@ namespace FreenectDriver {
       switch(propertyId) {
         default:
           return VideoStream::isPropertySupported(propertyId);
+          
         case ONI_STREAM_PROPERTY_HORIZONTAL_FOV:
         case ONI_STREAM_PROPERTY_VERTICAL_FOV:
+        case ONI_STREAM_PROPERTY_AUTO_WHITE_BALANCE:
+        case ONI_STREAM_PROPERTY_AUTO_EXPOSURE:
           return true;
       }
     }
 
-    OniStatus getProperty(int propertyId, void* data, int* pDataSize) {
-      switch (propertyId) {
+    OniStatus getProperty(int propertyId, void* data, int* pDataSize)
+    {
+      switch (propertyId)
+      {
         default:
           return VideoStream::getProperty(propertyId, data, pDataSize);
 
-        case ONI_STREAM_PROPERTY_HORIZONTAL_FOV:        // float (radians)
-          if (*pDataSize != sizeof(float)) {
+        case ONI_STREAM_PROPERTY_HORIZONTAL_FOV:     // float (radians)
+        {
+          if (*pDataSize != sizeof(float))
+          {
             printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(float));
             return ONI_STATUS_ERROR;
           }
           *(static_cast<float*>(data)) = HORIZONTAL_FOV;
           return ONI_STATUS_OK;
-        case ONI_STREAM_PROPERTY_VERTICAL_FOV:          // float (radians)
-          if (*pDataSize != sizeof(float)) {
+        }
+        case ONI_STREAM_PROPERTY_VERTICAL_FOV:       // float (radians)
+        {
+          if (*pDataSize != sizeof(float))
+          {
             printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(float));
             return ONI_STATUS_ERROR;
           }
           *(static_cast<float*>(data)) = VERTICAL_FOV;
           return ONI_STATUS_OK;
+        }
+        
+        // camera
+        case ONI_STREAM_PROPERTY_AUTO_WHITE_BALANCE: // OniBool
+        {
+          if (*pDataSize != sizeof(OniBool))
+          {
+            printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(OniBool));
+            return ONI_STATUS_ERROR;
+          }
+          *(static_cast<OniBool*>(data)) = auto_white_balance;
+          return ONI_STATUS_OK;
+        }
+        case ONI_STREAM_PROPERTY_AUTO_EXPOSURE:      // OniBool
+        {
+          if (*pDataSize != sizeof(OniBool))
+          {
+            printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(OniBool));
+            return ONI_STATUS_ERROR;
+          }
+          *(static_cast<OniBool*>(data)) = auto_exposure;
+          return ONI_STATUS_OK;
+        }
+      }
+    }
+    
+    OniStatus setProperty(int propertyId, const void* data, int dataSize)
+    {
+      switch (propertyId)
+      {
+        default:
+          return VideoStream::setProperty(propertyId, data, dataSize);
+      
+        // camera
+        case ONI_STREAM_PROPERTY_AUTO_WHITE_BALANCE: // OniBool
+        {
+          if (dataSize != sizeof(OniBool))
+          {
+            printf("Unexpected size: %d != %lu\n", dataSize, sizeof(OniBool));
+            return ONI_STATUS_ERROR;
+          }
+          auto_white_balance = *(static_cast<const OniBool*>(data));
+          int ret = device->setFlag(FREENECT_AUTO_WHITE_BALANCE, auto_white_balance);
+          return (ret == 0) ? ONI_STATUS_OK : ONI_STATUS_ERROR;
+        }
+        case ONI_STREAM_PROPERTY_AUTO_EXPOSURE:      // OniBool
+        {
+          if (dataSize != sizeof(OniBool))
+          {
+            printf("Unexpected size: %d != %lu\n", dataSize, sizeof(OniBool));
+            return ONI_STATUS_ERROR;
+          }
+          auto_exposure = *(static_cast<const OniBool*>(data));
+          int ret = device->setFlag(FREENECT_AUTO_WHITE_BALANCE, auto_exposure);
+          return (ret == 0) ? ONI_STATUS_OK : ONI_STATUS_ERROR;
+        }
       }
     }
   };
