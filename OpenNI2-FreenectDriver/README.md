@@ -9,7 +9,7 @@ OpenNI2-FreenectDriver is distributed under the Apache 2 license.
 Install
 -------
 1. Download and unpack [OpenNI](http://www.openni.org/openni-sdk/) 2.2.0.33 or higher.
-2. Go to your build directory and build libfreenect with the OpenNI2 driver.
+2. Go to the top libfreenect directory and build it with the OpenNI2 driver.
 
         mkdir build
         cd build

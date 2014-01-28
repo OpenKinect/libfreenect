@@ -14,7 +14,7 @@ EGIT_REPO_URI="git://github.com/OpenKinect/${PN}.git"
 LICENSE="Apache-2.0 GPL-2"
 SLOT="0"
 KEYWORDS=""
-IUSE="bindist +c_sync +cpp doc examples fakenect opencv python"
+IUSE="bindist +c_sync +cpp doc examples fakenect opencv openni2 python"
 
 COMMON_DEP="
 virtual/libusb:1
@@ -35,13 +35,14 @@ python? ( dev-python/cython )"
 
 src_configure() {
 	local mycmakeargs=(
-		$(cmake-utils_use_build bindist BUILD_REDIST_PACKAGE)
-		$(cmake-utils_use_build c_sync BUILD_C_SYNC)
-		$(cmake-utils_use_build cpp BUILD_CPP)
-		$(cmake-utils_use_build examples BUILD_EXAMPLES)
-		$(cmake-utils_use_build fakenect BUILD_FAKENECT)
-		$(cmake-utils_use_build opencv BUILD_CV)
-		$(cmake-utils_use_build python BUILD_PYTHON)
+		$(cmake-utils_use_build bindist  REDIST_PACKAGE)
+		$(cmake-utils_use_build c_sync   C_SYNC)
+		$(cmake-utils_use_build cpp      CPP)
+		$(cmake-utils_use_build examples EXAMPLES)
+		$(cmake-utils_use_build fakenect FAKENECT)
+		$(cmake-utils_use_build opencv   CV)
+		$(cmake-utils_use_build openni2  OPENNI2_DRIVER)
+		$(cmake-utils_use_build python   PYTHON)
 	)
 	cmake-utils_src_configure
 }
