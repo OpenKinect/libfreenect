@@ -600,7 +600,6 @@ FN_INTERNAL int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm)
 	free(strm->xfers);
 
 	FN_FLOOD("fnusb_stop_iso() freed buffers and stream\n");
-	memset(strm, 0, sizeof(*strm));
 	FN_FLOOD("fnusb_stop_iso() done\n");
 	return 0;
 }
