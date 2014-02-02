@@ -124,7 +124,7 @@ static int check_version_string(fnusb_dev* dev) {
 
 
 FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
-	freenect_context* ctx = dev->parent->parent;
+    freenect_context* ctx = dev->parent->parent;
 	/* Search for firmware file (audios.bin) in the following places:
 	 * $LIBFREENECT_FIRMWARE_PATH
 	 * .
@@ -138,7 +138,7 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
     char fw_filename[1024];
     sprintf(fw_filename, "/%s", filename);
     
-	int filenamelen = strlen(fw_filename);
+    int filenamelen = strlen(fw_filename);
 	int i;
 	int searchpathcount;
 	FILE* fw = NULL;
@@ -152,7 +152,7 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
 				if (!envpath)
 					continue;
 				int pathlen = strlen(envpath);
-				fwfile = malloc(pathlen + filenamelen + 1);
+				fwfile = (char *)malloc(pathlen + filenamelen + 1);
 				strcpy(fwfile, envpath);
 				strcat(fwfile, fw_filename);
 				needs_free = 1;
@@ -160,7 +160,7 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
 				break;
 			case 1:
 				//fwfile = "./audios.bin";
-				fwfile = malloc(2048);
+				fwfile = (char *)malloc(2048);
                 needs_free = 1;
                 sprintf(fwfile, ".%s", fw_filename);
 				break;
@@ -186,13 +186,13 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
 				break;
 			case 4:
 				//fwfile = "/usr/share/libfreenect/audios.bin";
-				fwfile = malloc(2048);
+				fwfile = (char *)malloc(2048);
                 needs_free = 1;
                 sprintf(fwfile, "/usr/share/libfreenect%s", fw_filename);
 				break;
 			case 5:
                 //fwfile = "./../Resources/audios.bin"; //default for OS X equivilant to: "./audios.bin";
-				fwfile = malloc(2048);
+				fwfile = (char *)malloc(2048);
                 needs_free = 1;
                 sprintf(fwfile, "./../Resources%s", fw_filename);
 				break;
@@ -219,7 +219,7 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
 		return -errno;
     }
     
-    unsigned char * fw_bytes = malloc(fw_num_bytes);
+    unsigned char * fw_bytes = (unsigned char *)malloc(fw_num_bytes);
     int numRead = fread(fw_bytes, 1, fw_num_bytes, fw);
     fw_num_bytes = numRead; // just in case
 
@@ -229,7 +229,7 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
     fw = NULL;
     
     return retVal;
-	}
+}
 
 FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_from_mem, unsigned int fw_size_in_btyes) {
     freenect_context* ctx = dev->parent->parent;
@@ -269,7 +269,7 @@ FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_f
 	FN_INFO("\tentry point  0x%08x\n", fwheader.entry_addr);
 
     
-	uint32_t addr = fwheader.base_addr;
+    uint32_t addr = fwheader.base_addr;
 	unsigned char page[0x4000];
     int readIndex = 0;
 	int total_bytes_sent = 0;
@@ -282,8 +282,8 @@ FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_f
             read = bytesLeft;
         }
         if (read <= 0) {
-			break;
-		}
+            break;
+        }
         
         memcpy(page, &readPtr[readIndex], read);
         readIndex += read;
