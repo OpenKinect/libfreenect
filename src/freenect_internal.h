@@ -53,6 +53,13 @@ struct _freenect_context {
 	freenect_device_flags enabled_subdevices;
 	freenect_device *first;
 	int zero_plane_res;
+    
+    //if you want to load firmware from memory rather than disk
+    unsigned char *     fn_fw_nui_ptr;
+    unsigned int        fn_fw_nui_size;
+
+    unsigned char *     fn_fw_k4w_ptr;
+    unsigned int        fn_fw_k4w_size;
 };
 
 #define LL_FATAL FREENECT_LOG_FATAL
@@ -133,7 +140,13 @@ static inline int32_t fn_le32s(int32_t s)
 #define PID_NUI_CAMERA 0x02ae
 #define PID_NUI_MOTOR 0x02b0
 #define PID_K4W_CAMERA 0x02bf
+
+// For K4W: first pid is what it starts out as,
+// second is how it appears with lastest firmware from SDK,
+// third is from beta SDK firmware ( which is what is unpacked by the fw script and doesn't support motor control )
 #define PID_K4W_AUDIO 0x02be
+#define PID_K4W_AUDIO_ALT_1 0x02c3
+#define PID_K4W_AUDIO_ALT_2 0x02bb
 
 typedef struct {
 	int running;
@@ -243,4 +256,7 @@ struct _freenect_device {
 	// Motor
 	fnusb_dev usb_motor;
 	freenect_raw_tilt_state raw_state;
+    
+    int device_does_motor_control_with_audio;
+    int motor_control_with_audio_enabled;
 };

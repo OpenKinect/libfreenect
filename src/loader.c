@@ -32,6 +32,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef BUILD_AUDIO
+
 static void dump_bl_cmd(freenect_context* ctx, bootloader_command cmd) {
 	int i;
 	for(i = 0; i < 24; i++)
@@ -120,28 +122,28 @@ static int check_version_string(fnusb_dev* dev) {
 	return res;
 }
 
-FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
-	freenect_context* ctx = dev->parent->parent;
-	bootloader_command bootcmd;
-	memset(&bootcmd, 0, sizeof(bootcmd));
-	bootcmd.magic = fn_le32(0x06022009);
 
-	int res;
-	int transferred;
-
+FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
+    freenect_context* ctx = dev->parent->parent;
 	/* Search for firmware file (audios.bin) in the following places:
 	 * $LIBFREENECT_FIRMWARE_PATH
 	 * .
 	 * ${HOME}/.libfreenect
 	 * /usr/local/share/libfreenect
 	 * /usr/share/libfreenect
+     * ./../Resources/ ( for OS X )
 	 */
-	const char* fw_filename = "/audios.bin";
-	int filenamelen = strlen(fw_filename);
+    
+    //need to add a forward slash
+    char fw_filename[1024];
+    sprintf(fw_filename, "/%s", filename);
+    
+    int filenamelen = strlen(fw_filename);
 	int i;
 	int searchpathcount;
 	FILE* fw = NULL;
-	for(i = 0, searchpathcount = 5; !fw && i < searchpathcount; i++) {
+    
+	for(i = 0, searchpathcount = 6; !fw && i < searchpathcount; i++) {
 		char* fwfile;
 		int needs_free = 0;
 		switch(i) {
@@ -150,14 +152,17 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 				if (!envpath)
 					continue;
 				int pathlen = strlen(envpath);
-				fwfile = malloc(pathlen + filenamelen + 1);
+				fwfile = (char *)malloc(pathlen + filenamelen + 1);
 				strcpy(fwfile, envpath);
 				strcat(fwfile, fw_filename);
 				needs_free = 1;
 				}
 				break;
 			case 1:
-				fwfile = "./audios.bin";
+				//fwfile = "./audios.bin";
+				fwfile = (char *)malloc(2048);
+                needs_free = 1;
+                sprintf(fwfile, ".%s", fw_filename);
 				break;
 			case 2: {
 				// Construct $HOME/.libfreenect/
@@ -175,10 +180,21 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 				}
 				break;
 			case 3:
-				fwfile = "/usr/local/share/libfreenect/audios.bin";
+				//fwfile = "/usr/local/share/libfreenect/audios.bin";
+                sprintf(fwfile, "/usr/local/share/libfreenect%s", fw_filename);
+
 				break;
 			case 4:
-				fwfile = "/usr/share/libfreenect/audios.bin";
+				//fwfile = "/usr/share/libfreenect/audios.bin";
+				fwfile = (char *)malloc(2048);
+                needs_free = 1;
+                sprintf(fwfile, "/usr/share/libfreenect%s", fw_filename);
+				break;
+			case 5:
+                //fwfile = "./../Resources/audios.bin"; //default for OS X equivilant to: "./audios.bin";
+				fwfile = (char *)malloc(2048);
+                needs_free = 1;
+                sprintf(fwfile, "./../Resources%s", fw_filename);
 				break;
 			default: break;
 		}
@@ -192,15 +208,50 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 		FN_ERROR("upload_firmware: failed to find firmware file.\n");
 		return -errno;
 	}
-	// Now we have an open firmware file handle.
+    
+    // get the number of bytes of the file
+    fseek(fw , 0, SEEK_END);
+    int fw_num_bytes = ftell(fw);
+    rewind(fw);
+    
+    if( fw_num_bytes <= 0 ){
+		FN_ERROR("upload_firmware: failed to find file with any data.\n");
+		return -errno;
+    }
+    
+    unsigned char * fw_bytes = (unsigned char *)malloc(fw_num_bytes);
+    int numRead = fread(fw_bytes, 1, fw_num_bytes, fw);
+    fw_num_bytes = numRead; // just in case
+
+    int retVal = upload_firmware_from_memory(dev, fw_bytes, fw_num_bytes);
+    
+    fclose(fw);
+    fw = NULL;
+    
+    return retVal;
+}
+
+FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_from_mem, unsigned int fw_size_in_btyes) {
+    freenect_context* ctx = dev->parent->parent;
+	bootloader_command bootcmd;
+	memset(&bootcmd, 0, sizeof(bootcmd));
+	bootcmd.magic = fn_le32(0x06022009);
+
+	int res;
+	int transferred;
+    
 	firmware_header fwheader;
 	int read = 0;
-	read = fread(&fwheader, 1, sizeof(firmware_header), fw);
-	if (read != sizeof(firmware_header)) {
+    int bytesLeft = fw_size_in_btyes;
+    unsigned char * readPtr = &fw_from_mem[0];
+    
+	if (fw_size_in_btyes < sizeof(firmware_header)) {
 		FN_ERROR("upload_firmware: firmware image too small, has no header?\n");
-		fclose(fw);
 		return -errno;
 	}
+    
+    memcpy(&fwheader, readPtr, sizeof(firmware_header));
+
 	// The file is serialized as little endian.
 	fwheader.magic = fn_le32(fwheader.magic);
 	fwheader.ver_major = fn_le16(fwheader.ver_major);
@@ -217,16 +268,27 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 	FN_INFO("\tsize         0x%08x\n", fwheader.size);
 	FN_INFO("\tentry point  0x%08x\n", fwheader.entry_addr);
 
-	rewind(fw);
-	uint32_t addr = fwheader.base_addr;
+    
+    uint32_t addr = fwheader.base_addr;
 	unsigned char page[0x4000];
+    int readIndex = 0;
 	int total_bytes_sent = 0;
 	do {
-		size_t block_size = (0x4000 > fwheader.size - total_bytes_sent) ? fwheader.size - total_bytes_sent : 0x4000;
-		read = fread(page, 1, block_size, fw);
-		if(read <= 0) {
-			break;
-		}
+
+		read = (0x4000 > fwheader.size - total_bytes_sent) ? fwheader.size - total_bytes_sent : 0x4000;
+        
+        // sanity check
+        if( read > bytesLeft ){
+            read = bytesLeft;
+        }
+        if (read <= 0) {
+            break;
+        }
+        
+        memcpy(page, &readPtr[readIndex], read);
+        readIndex += read;
+        bytesLeft -= read;
+        
 		bootcmd.tag = fn_le32(dev->parent->audio_tag);
 		bootcmd.bytes = fn_le32(read);
 		bootcmd.cmd = fn_le32(0x03);
@@ -237,7 +299,6 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 		res = fnusb_bulk(dev, 1, (unsigned char*)&bootcmd, sizeof(bootcmd), &transferred);
 		if(res != 0 || transferred != sizeof(bootcmd)) {
 			FN_ERROR("upload_firmware(): Error: res: %d\ttransferred: %d (expected %d)\n",res, transferred, (int)(sizeof(bootcmd)));
-			fclose(fw);
 			return -1;
 		}
 		int bytes_sent = 0;
@@ -246,7 +307,6 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 			res = fnusb_bulk(dev, 1, &page[bytes_sent], to_send, &transferred);
 			if(res != 0 || transferred != to_send) {
 				FN_ERROR("upload_firmware(): Error: res: %d\ttransferred: %d (expected %d)\n",res, transferred, to_send);
-				fclose(fw);
 				return -1;
 			}
 			bytes_sent += to_send;
@@ -256,8 +316,7 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev) {
 		addr += (uint32_t)read;
 		dev->parent->audio_tag++;
 	} while (read > 0);
-	fclose(fw);
-	fw = NULL;
+
 	if (total_bytes_sent != fwheader.size) {
 		FN_ERROR("upload_firmware: firmware image declared %d bytes, but file only contained %d bytes\n", fwheader.size, total_bytes_sent);
 		return -1;
@@ -359,3 +418,6 @@ FN_INTERNAL int upload_cemd_data(fnusb_dev* dev) {
 	FN_INFO("CEMD data uploaded successfully.\n");
 	return 0;
 }
+
+#endif
+

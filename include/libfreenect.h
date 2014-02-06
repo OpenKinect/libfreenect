@@ -669,6 +669,26 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
  */
 FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value);
 
+
+/**
+ * Allows the user to specify a pointer to the audio firmware in memory for the Xbox 360 Kinect
+ *
+ * @param ctx Context to open device through
+ * @param fw_ptr Pointer to audio firmware loaded in memory
+ * @param num_bytes The size of the firmware in bytes
+ */
+FREENECTAPI void freenect_set_fw_address_nui(freenect_context * ctx, unsigned char * fw_ptr, unsigned int num_bytes);
+
+/**
+ * Allows the user to specify a pointer to the audio firmware in memory for the K4W Kinect 
+ *
+ * @param ctx Context to open device through
+ * @param fw_ptr Pointer to audio firmware loaded in memory
+ * @param num_bytes The size of the firmware in bytes
+ */
+FREENECTAPI void freenect_set_fw_address_k4w(freenect_context * ctx, unsigned char * fw_ptr, unsigned int num_bytes);
+
+
 #ifdef __cplusplus
 }
 #endif
