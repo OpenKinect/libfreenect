@@ -31,13 +31,12 @@
 #include <libusb.h>
 #include "freenect_internal.h"
 #include "loader.h"
-
 #include "keep_alive.h"
-
 
 #ifdef _MSC_VER
 	# define sleep(x) Sleep((x)*1000) 
 #endif 
+
 
 FN_INTERNAL int fnusb_num_devices(fnusb_ctx *ctx)
 {
@@ -163,12 +162,10 @@ FN_INTERNAL int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* tim
 	return libusb_handle_events_timeout(ctx->ctx, timeout);
 }
 
-//there are a bunch of different PIDs to check for - this function makes it easier
-FN_INTERNAL int fn_is_pid_k4w_audio(int pid){
-    if( pid == PID_K4W_AUDIO || pid == PID_K4W_AUDIO_ALT_1 | pid == PID_K4W_AUDIO_ALT_2 ){
-        return 0;
-    }
-    return -1;
+// Returns 1 if `pid` identifies K4W audio, 0 otherwise
+FN_INTERNAL int fnusb_is_pid_k4w_audio(int pid)
+{
+	return (pid == PID_K4W_AUDIO || pid == PID_K4W_AUDIO_ALT_1 || pid == PID_K4W_AUDIO_ALT_2);
 }
 
 FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
@@ -217,11 +214,8 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					dev->usb_cam.dev = NULL;
 					break;
 				}
-				if(desc.idProduct == PID_K4W_CAMERA || desc.bcdDevice != fn_le32(267)){
-
-					freenect_device_flags requested_devices = ctx->enabled_subdevices; 
-
-					/* Not the old kinect so we only set up the camera*/ 
+				if (desc.idProduct == PID_K4W_CAMERA || desc.bcdDevice != fn_le32(267)) {
+					// Not the old kinect so we only set up the camera
 					ctx->enabled_subdevices = FREENECT_DEVICE_CAMERA;
 					ctx->zero_plane_res = 334;
                     dev->device_does_motor_control_with_audio = 1;
@@ -318,7 +312,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 #ifdef BUILD_AUDIO
 		// TODO: check that the firmware has already been loaded; if not, upload firmware.
 		// Search for the audio
-		if ((ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO) && !dev->usb_audio.dev && (desc.idProduct == PID_NUI_AUDIO || fn_is_pid_k4w_audio(desc.idProduct) != -1 )) {
+		if ((ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO) && !dev->usb_audio.dev && (desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct))) {
 			// If the index given by the user matches our audio index
             
 			if (nr_audio == index) {
@@ -395,7 +389,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 							if (r < 0)
 								continue;
 							// If this dev is a Kinect audio device, open device, read serial, and compare.
-							if (new_dev_desc.idVendor == VID_MICROSOFT && (new_dev_desc.idProduct == PID_NUI_AUDIO || fn_is_pid_k4w_audio(desc.idProduct) != -1) ){
+							if (new_dev_desc.idVendor == VID_MICROSOFT && (new_dev_desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct))) {
 								FN_SPEW("Matched VID/PID!\n");
 								libusb_device_handle* new_dev_handle;
 								// Open device
