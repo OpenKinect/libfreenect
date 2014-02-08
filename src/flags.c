@@ -53,7 +53,7 @@ int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_va
     }
 
 	uint16_t reg = read_cmos_register(dev, 0x0106);
-	if (reg < 0)
+	if (reg == -1)
 		return reg;
 	if (value == FREENECT_ON)
 		reg |= flag;
@@ -188,7 +188,7 @@ FN_INTERNAL uint16_t read_cmos_register(freenect_device *dev, uint16_t reg)
 	int res = send_cmd(dev, 0x95, cmdbuf, 6, replybuf, 6);
 	if (res < 0) {
 		FN_ERROR("read_cmos_register: send_cmd() returned %d\n", res);
-		return res;
+		return -1;
 	}
 	return replybuf[2];
 }
