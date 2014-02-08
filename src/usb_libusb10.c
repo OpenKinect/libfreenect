@@ -215,6 +215,8 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					break;
 				}
 				if (desc.idProduct == PID_K4W_CAMERA || desc.bcdDevice != fn_le32(267)) {
+					freenect_device_flags requested_devices = ctx->enabled_subdevices;
+					
 					// Not the old kinect so we only set up the camera
 					ctx->enabled_subdevices = FREENECT_DEVICE_CAMERA;
 					ctx->zero_plane_res = 334;
@@ -231,7 +233,8 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 #ifdef BUILD_AUDIO
                     //for newer devices we need to enable the audio device for motor control
 					//we only do this though if motor has been requested.
-                    if( (requested_devices & FREENECT_DEVICE_MOTOR) && (requested_devices & FREENECT_DEVICE_AUDIO) == 0 ){
+                    if ((requested_devices & FREENECT_DEVICE_MOTOR) && (requested_devices & FREENECT_DEVICE_AUDIO) == 0)
+                    {
                         ctx->enabled_subdevices = (freenect_device_flags)(ctx->enabled_subdevices | FREENECT_DEVICE_AUDIO);
                     }
 #endif
