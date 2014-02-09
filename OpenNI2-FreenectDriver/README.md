@@ -16,7 +16,7 @@ Install
         cmake .. -DBUILD_OPENNI2_DRIVER=ON
         make
 
-3. Copy the driver to your OpenNI2 driver repository.
+3. Copy the driver to your OpenNI2 driver repository. You must change `Repository` to match your project layout.
 
         Repository="/example/path/to/Samples/Bin/OpenNI2/Drivers/"
         cp -L lib/OpenNI2-FreenectDriver/libFreenectDriver.{so,dylib} ${Repository}
@@ -28,15 +28,25 @@ __________________________________________________
 
 Structure
 ---------
-This driver is modeled on TestDevice.cpp and Drivers/Kinect/. In the FreenectDriver namespace, it ties together the C++ interfaces of OpenNI2 and libfreenect using multiple inheritance.
+This driver is modeled on TestDevice.cpp and Drivers/Kinect/.
+In the FreenectDriver namespace, it ties together the C++ interfaces of OpenNI2 and libfreenect using multiple inheritance.
 
-Driver inherits publically from oni::driver::DriverBase and privately from Freenect::Freenect. A custom libfreenect.hpp allows protected access to the Freenect context, so that FreenectDriver can call the Freenect's C API. As a DriverBase, FreenectDriver manages devices and sets up device state callbacks.
+Driver inherits publically from oni::driver::DriverBase and privately from Freenect::Freenect.
+libfreenect.hpp allows protected access to the Freenect context, so that FreenectDriver can call the Freenect's C API.
+As a DriverBase, FreenectDriver manages devices and sets up device state callbacks.
 
-Device inherits publically from oni::driver::DeviceBase and Freenect::FreenectDevice. Because of this, it can be built by Freenect::Freenect::createDevice() and it can define Device's depth and video callbacks. Those callbacks trigger acquireFrame() in FreenectStream.
+Device inherits publically from oni::driver::DeviceBase and Freenect::FreenectDevice.
+Because of this, it can be built by Freenect::Freenect::createDevice() and it can define Device's depth and video callbacks.
+Those callbacks trigger acquireFrame() in FreenectStream.
 
-VideoStream is a virtual base class inheriting from oni::driver::StreamBase. It does generic frame setup in buildFrame() and then calls pure virtual populateFrame() to let derived classes finish the frame. It also provides the base skeleton for setting and getting properties, which cascades down the inheritance tree.
+VideoStream is a virtual base class inheriting from oni::driver::StreamBase.
+It does generic frame setup in buildFrame() and then calls pure virtual populateFrame() to let derived classes finish the frame.
+It also provides the base skeleton for setting and getting properties, which cascades down the inheritance tree.
 
-DepthStream and ColorStream are nearly identical in definition and implementation, both inheriting from VideoStream. They differ mostly in the formats they use to process data and the video modes they support. These two classes offer a system to store and report supported video modes. To implement a new mode, simply add it to getSupportedVideoModes() and modify populateFrame() if necessary.
+DepthStream and ColorStream are nearly identical in definition and implementation, both inheriting from VideoStream.
+They differ mostly in the formats they use to process data and the video modes they support.
+These two classes offer a system to store and report supported video modes.
+To implement a new mode, simply add it to getSupportedVideoModes() and modify populateFrame() as necessary.
 
 __________________________________________________
 
