@@ -98,10 +98,8 @@ static char *one_line(FILE *fp)
 {
 	int pos = 0;
 	char *out = NULL;
-	char c;
-	while ((c = fgetc(fp))) {
-		if (c == '\n' || c == EOF)
-			break;
+	for (int c = fgetc(fp); !(c == '\n' || c == EOF); c = fgetc(fp))
+	{
 		out = realloc(out, pos + 1);
 		out[pos++] = c;
 	}
