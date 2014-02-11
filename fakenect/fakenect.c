@@ -96,9 +96,10 @@ static double get_time()
 
 static char *one_line(FILE *fp)
 {
+	int c;
 	int pos = 0;
 	char *out = NULL;
-	for (int c = fgetc(fp); !(c == '\n' || c == EOF); c = fgetc(fp))
+	for (c = fgetc(fp); !(c == '\n' || c == EOF); c = fgetc(fp))
 	{
 		out = realloc(out, pos + 1);
 		out[pos++] = c;
