@@ -4,7 +4,7 @@ OpenNI2-FreenectDriver
 OpenNI2-FreenectDriver is a bridge to libfreenect implemented as an OpenNI2 driver.
 It allows OpenNI2 to use Kinect hardware on Linux and OSX.
 It was originally a [separate project](https://github.com/piedar/OpenNI2-FreenectDriver) but is now distributed with libfreenect.
-OpenNI2-FreenectDriver is distributed under the Apache 2 license.
+OpenNI2-FreenectDriver is distributed under the [Apache 2](https://github.com/OpenKinect/libfreenect/blob/master/APACHE20) license.
 
 Install
 -------
@@ -16,10 +16,13 @@ Install
         cmake .. -DBUILD_OPENNI2_DRIVER=ON
         make
 
-3. Copy the driver to your OpenNI2 driver repository. You must change `Repository` to match your project layout.
+3. Copy the driver to your OpenNI2 driver repository. You must first change `Repository` to match your project layout.
 
         Repository="/example/path/to/Samples/Bin/OpenNI2/Drivers/"
         cp -L lib/OpenNI2-FreenectDriver/libFreenectDriver.{so,dylib} ${Repository}
+        
+        # you could instead make a symlink to avoid copying after every build
+        # ln -s lib/OpenNI2-FreenectDriver/libFreenectDriver.{so,dylib} ${Repository}
 
 OpenNI2-FreenectDriver is built with a static libfreenect, so you do not need to include libfreenect when deploying.
 However, you will need to make sure target systems have libusb and all other dependencies listed in `ldd libFreenectDriver.so`.

@@ -2,7 +2,7 @@ libfreenect
 ===========
 
 libfreenect is a userspace driver for the Microsoft Kinect.
-It runs on \*nix, OSX, and Windows and supports
+It runs on Linux, OSX, and Windows and supports
 
 - RGB and Depth Images
 - Motors
@@ -12,7 +12,7 @@ It runs on \*nix, OSX, and Windows and supports
 Audio is a work in progress.
 
 
-# Build Guide
+# Build Instructions
 
 To build libfreenect, you'll need
 
@@ -25,14 +25,19 @@ For the examples, you'll need
 - glut     (included with OSX)
 - [pthreads-win32](http://sourceforge.net/projects/pthreads4w/) (Windows)
 
-## Fetch & Build
+
+## Fetch & Build <a name="fetch-build"></a>
 
     git clone https://github.com/OpenKinect/libfreenect
     cd libfreenect
     mkdir build
     cd build
     cmake ..
-    cmake --build . 
+    make
+    
+    # if you don't have `make` or don't want color output
+    # cmake --build .
+
 
 ## OSX
 
@@ -48,7 +53,9 @@ For a manual build, see [the wiki](http://openkinect.org/wiki/Getting_Started#Ma
 ### MacPorts
 
     sudo port install git-core cmake libusb libtool
-    # GOTO: Fetch & Build
+    
+Continue with [Fetch & Build](#fetch-build).
+
 
 ## Linux
 
@@ -67,7 +74,7 @@ Continue with this section for a manual build.
     # only if you are building the examples:
     sudo apt-get install libglut3-dev libxmu-dev libxi-dev
     
-    # GOTO: Fetch & Build
+Continue with [Fetch & Build](#fetch-build).
     
 There is also a [debian branch](https://github.com/OpenKinect/libfreenect/tree/debian) for packaging purposes.
 
@@ -83,7 +90,7 @@ There is a [libfreenect-git](https://aur.archlinux.org/packages/libfreenect-git/
 ## Windows
 
 The inf files in [platform/windows/](https://github.com/OpenKinect/libfreenect/tree/master/platform/windows) may be used for installing the device.
-Follow **Fetch & Build** or use Github and CMake GUI tools.
+Follow [Fetch & Build](#fetch-build) or use Github and CMake GUI tools.
 You may need to supply paths to CMake so it can find dependencies.
 For example:
 
@@ -152,19 +159,10 @@ of either License.
 
 # More Information
 
-Information about the OpenKinect project can be found at
+Information about the OpenKinect project can be found at http://www.openkinect.org
 
-http://www.openkinect.org
+For questions, support, and discussion, check out the google groups mailing list at http://groups.google.com/group/openkinect
 
-For questions, support, and discussion, check out the google groups
-mailing list at
+Or the IRC channel at \#openkinect on [Freenode](http://freenode.net/)
 
-http://groups.google.com/group/openkinect
-
-Or the IRC channel at
-
-\#openkinect on Freenode
-
-We are also on twitter at
-
-http://twitter.com/openkinect
+We are also on twitter at http://twitter.com/openkinect
