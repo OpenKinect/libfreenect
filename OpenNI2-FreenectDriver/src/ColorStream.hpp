@@ -7,8 +7,10 @@
 #include "VideoStream.hpp"
 
 
-namespace FreenectDriver {
-  class ColorStream : public VideoStream {
+namespace FreenectDriver
+{
+  class ColorStream : public VideoStream
+  {
   public:
     // from NUI library & converted to radians
     static const float DIAGONAL_FOV = 73.9 * (M_PI / 180);
@@ -30,7 +32,8 @@ namespace FreenectDriver {
     ColorStream(Freenect::FreenectDevice* pDevice);
     //~ColorStream() { }
 
-    static OniSensorInfo getSensorInfo() {
+    static OniSensorInfo getSensorInfo()
+    {
       FreenectVideoModeMap supported_modes = getSupportedVideoModes();
       OniVideoMode* modes = new OniVideoMode[supported_modes.size()];
       std::transform(supported_modes.begin(), supported_modes.end(), modes, RetrieveKey());
@@ -39,8 +42,10 @@ namespace FreenectDriver {
     }
 
     // from StreamBase
-    OniBool isPropertySupported(int propertyId) {
-      switch(propertyId) {
+    OniBool isPropertySupported(int propertyId)
+    {
+      switch(propertyId)
+      {
         default:
           return VideoStream::isPropertySupported(propertyId);
           
@@ -63,7 +68,7 @@ namespace FreenectDriver {
         {
           if (*pDataSize != sizeof(float))
           {
-            printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(float));
+            LogError("Unexpected size for ONI_STREAM_PROPERTY_HORIZONTAL_FOV");
             return ONI_STATUS_ERROR;
           }
           *(static_cast<float*>(data)) = HORIZONTAL_FOV;
@@ -73,7 +78,7 @@ namespace FreenectDriver {
         {
           if (*pDataSize != sizeof(float))
           {
-            printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(float));
+            LogError("Unexpected size for ONI_STREAM_PROPERTY_VERTICAL_FOV");
             return ONI_STATUS_ERROR;
           }
           *(static_cast<float*>(data)) = VERTICAL_FOV;
@@ -85,7 +90,7 @@ namespace FreenectDriver {
         {
           if (*pDataSize != sizeof(OniBool))
           {
-            printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(OniBool));
+            LogError("Unexpected size for ONI_STREAM_PROPERTY_AUTO_WHITE_BALANCE");
             return ONI_STATUS_ERROR;
           }
           *(static_cast<OniBool*>(data)) = auto_white_balance;
@@ -95,7 +100,7 @@ namespace FreenectDriver {
         {
           if (*pDataSize != sizeof(OniBool))
           {
-            printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(OniBool));
+            LogError("Unexpected size for ONI_STREAM_PROPERTY_AUTO_EXPOSURE");
             return ONI_STATUS_ERROR;
           }
           *(static_cast<OniBool*>(data)) = auto_exposure;
@@ -116,7 +121,7 @@ namespace FreenectDriver {
         {
           if (dataSize != sizeof(OniBool))
           {
-            printf("Unexpected size: %d != %lu\n", dataSize, sizeof(OniBool));
+            LogError("Unexpected size for ONI_STREAM_PROPERTY_AUTO_WHITE_BALANCE");
             return ONI_STATUS_ERROR;
           }
           auto_white_balance = *(static_cast<const OniBool*>(data));
@@ -127,7 +132,7 @@ namespace FreenectDriver {
         {
           if (dataSize != sizeof(OniBool))
           {
-            printf("Unexpected size: %d != %lu\n", dataSize, sizeof(OniBool));
+            LogError("Unexpected size for ONI_STREAM_PROPERTY_AUTO_EXPOSURE");
             return ONI_STATUS_ERROR;
           }
           auto_exposure = *(static_cast<const OniBool*>(data));

@@ -1,15 +1,18 @@
+#include <string>
 #include "ColorStream.hpp"
 
 using namespace FreenectDriver;
 
 
-ColorStream::ColorStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevice) {
+ColorStream::ColorStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevice)
+{
   video_mode = makeOniVideoMode(ONI_PIXEL_FORMAT_RGB888, 640, 480, 30);
   setVideoMode(video_mode);
 }
 
 // Add video modes here as you implement them
-ColorStream::FreenectVideoModeMap ColorStream::getSupportedVideoModes() {
+ColorStream::FreenectVideoModeMap ColorStream::getSupportedVideoModes()
+{
   FreenectVideoModeMap modes;
   //                    pixelFormat, resolutionX, resolutionY, fps    freenect_video_format, freenect_resolution
   modes[makeOniVideoMode(ONI_PIXEL_FORMAT_RGB888, 640, 480, 30)] = std::pair<freenect_video_format, freenect_resolution>(FREENECT_VIDEO_RGB, FREENECT_RESOLUTION_MEDIUM);
@@ -24,7 +27,8 @@ ColorStream::FreenectVideoModeMap ColorStream::getSupportedVideoModes() {
   */
 }
 
-OniStatus ColorStream::setVideoMode(OniVideoMode requested_mode) {
+OniStatus ColorStream::setVideoMode(OniVideoMode requested_mode)
+{
   FreenectVideoModeMap supported_video_modes = getSupportedVideoModes();
   FreenectVideoModeMap::const_iterator matched_mode_iter = supported_video_modes.find(requested_mode);
   if (matched_mode_iter == supported_video_modes.end())
@@ -34,31 +38,36 @@ OniStatus ColorStream::setVideoMode(OniVideoMode requested_mode) {
   freenect_resolution resolution = matched_mode_iter->second.second;
 
   try { device->setVideoFormat(format, resolution); }
-  catch (std::runtime_error e) {
-    printf("format-resolution combination not supported by libfreenect: %d-%d\n", format, resolution);
+  catch (std::runtime_error e)
+  {
+    LogError("Format " + format + std::string(" and resolution " + resolution) + " combination not supported by libfreenect");
     return ONI_STATUS_NOT_SUPPORTED;
   }
   video_mode = requested_mode;
   return ONI_STATUS_OK;
 }
 
-void ColorStream::populateFrame(void* data, OniFrame* frame) const {
+void ColorStream::populateFrame(void* data, OniFrame* frame) const
+{
   frame->sensorType = sensor_type;
   frame->stride = video_mode.resolutionX*3;
   frame->cropOriginX = frame->cropOriginY = 0;
   frame->croppingEnabled = FALSE;
 
   // copy stream buffer from freenect
-  switch (video_mode.pixelFormat) {
+  switch (video_mode.pixelFormat)
+  {
     default:
-      printf("pixelFormat %d not supported by populateFrame\n", video_mode.pixelFormat);
+      LogError(std::string("Pixel format " + video_mode.pixelFormat) + " not supported by populateFrame()");
       return;
 
     case ONI_PIXEL_FORMAT_RGB888:
       unsigned char* data_ptr = static_cast<unsigned char*>(data);
       unsigned char* frame_data = static_cast<unsigned char*>(frame->data);
-      if (mirroring) {
-        for (int i = 0; i < frame->dataSize; i += 3) {
+      if (mirroring)
+      {
+        for (int i = 0; i < frame->dataSize; i += 3)
+        {
           // find corresponding mirrored pixel
           unsigned int pixel = i / 3;
           unsigned int row = pixel / video_mode.resolutionX;
@@ -71,7 +80,9 @@ void ColorStream::populateFrame(void* data, OniFrame* frame) const {
         }
       }
       else
+      {
         std::copy(data_ptr, data_ptr+frame->dataSize, frame_data);
+      }
 
       return;
   }

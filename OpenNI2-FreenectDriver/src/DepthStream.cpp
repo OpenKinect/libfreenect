@@ -1,9 +1,11 @@
+#include <string>
 #include "DepthStream.hpp"
 
 using namespace FreenectDriver;
 
 
-DepthStream::DepthStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevice) {
+DepthStream::DepthStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevice)
+{
   video_mode = makeOniVideoMode(ONI_PIXEL_FORMAT_DEPTH_1_MM, 640, 480, 30);
   image_registration_mode = ONI_IMAGE_REGISTRATION_OFF;
   setVideoMode(video_mode);
@@ -12,7 +14,8 @@ DepthStream::DepthStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevic
 // Add video modes here as you implement them
 // Note: if image_registration_mode == ONI_IMAGE_REGISTRATION_DEPTH_TO_COLOR,
 // setVideoFormat() will try FREENECT_DEPTH_REGISTERED first then fall back on what is set here.
-DepthStream::FreenectDepthModeMap DepthStream::getSupportedVideoModes() {
+DepthStream::FreenectDepthModeMap DepthStream::getSupportedVideoModes()
+{
   FreenectDepthModeMap modes;
   //                      pixelFormat, resolutionX, resolutionY, fps
   modes[makeOniVideoMode(ONI_PIXEL_FORMAT_DEPTH_1_MM, 640, 480, 30)] = std::pair<freenect_depth_format, freenect_resolution>(FREENECT_DEPTH_MM, FREENECT_RESOLUTION_MEDIUM);
@@ -21,7 +24,8 @@ DepthStream::FreenectDepthModeMap DepthStream::getSupportedVideoModes() {
   return modes;
 }
 
-OniStatus DepthStream::setVideoMode(OniVideoMode requested_mode) {
+OniStatus DepthStream::setVideoMode(OniVideoMode requested_mode)
+{
   FreenectDepthModeMap supported_video_modes = getSupportedVideoModes();
   FreenectDepthModeMap::const_iterator matched_mode_iter = supported_video_modes.find(requested_mode);
   if (matched_mode_iter == supported_video_modes.end())
@@ -33,10 +37,12 @@ OniStatus DepthStream::setVideoMode(OniVideoMode requested_mode) {
     format = FREENECT_DEPTH_REGISTERED;
 
   try { device->setDepthFormat(format, resolution); }
-  catch (std::runtime_error e) {
-    printf("format-resolution combination not supported by libfreenect: %d-%d\n", format, resolution);
-    if (image_registration_mode == ONI_IMAGE_REGISTRATION_DEPTH_TO_COLOR) {
-      printf("could not use image registration format; disabling registration and falling back to format defined in getSupportedVideoModes()\n");
+  catch (std::runtime_error e)
+  {
+    LogError("Format " + format + std::string(" and resolution " + resolution) + " combination not supported by libfreenect");
+    if (image_registration_mode == ONI_IMAGE_REGISTRATION_DEPTH_TO_COLOR)
+    {
+      LogError("Could not enable image registration format; falling back to format defined in getSupportedVideoModes()");
       image_registration_mode = ONI_IMAGE_REGISTRATION_OFF;
       return setVideoMode(requested_mode);
     }
@@ -46,7 +52,8 @@ OniStatus DepthStream::setVideoMode(OniVideoMode requested_mode) {
   return ONI_STATUS_OK;
 }
 
-void DepthStream::populateFrame(void* data, OniFrame* frame) const {
+void DepthStream::populateFrame(void* data, OniFrame* frame) const
+{
   frame->sensorType = sensor_type;
   frame->stride = video_mode.resolutionX * sizeof(uint16_t);
 
@@ -69,11 +76,14 @@ void DepthStream::populateFrame(void* data, OniFrame* frame) const {
   unsigned short* target = static_cast<unsigned short*>(frame->data);
   const unsigned int skipWidth = video_mode.resolutionX - frame->width;
 
-  if (mirroring) {
+  if (mirroring)
+  {
     target += frame->width;
 
-    for (int y = 0; y < frame->height; y++) {
-      for (int x = 0; x < frame->width; x++) {
+    for (int y = 0; y < frame->height; y++)
+    {
+      for (int x = 0; x < frame->width; x++)
+      {
         unsigned short value = *(source++);
         *(target--) = value < DepthStream::MAX_VALUE ? value : 0;
       }
@@ -82,9 +92,12 @@ void DepthStream::populateFrame(void* data, OniFrame* frame) const {
       target += 2 * frame->width;
     }
   }
-  else {
-    for (int y = 0; y < frame->height; y++) {
-      for (int x = 0; x < frame->width; x++) {
+  else
+  {
+    for (int y = 0; y < frame->height; y++)
+    {
+      for (int x = 0; x < frame->width; x++)
+      {
         unsigned short value = *(source++);
         *(target++) = value < DepthStream::MAX_VALUE ? value : 0;
       }

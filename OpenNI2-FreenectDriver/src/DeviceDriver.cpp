@@ -15,7 +15,7 @@
 *  limitations under the License.
 */
 #include <map>
-#include <sstream>
+#include <string>
 #include "Driver/OniDriverAPI.h"
 #include "libfreenect.hpp"
 #include "DepthStream.hpp"
@@ -24,8 +24,10 @@
 
 static bool operator<(const OniDeviceInfo& left, const OniDeviceInfo& right) { return (strcmp(left.uri, right.uri) < 0); } // for std::map
 
-namespace FreenectDriver {
-  class Device : public oni::driver::DeviceBase, public Freenect::FreenectDevice {
+namespace FreenectDriver
+{
+  class Device : public oni::driver::DeviceBase, public Freenect::FreenectDevice
+  {
   private:
     ColorStream* color;
     DepthStream* depth;
@@ -42,7 +44,8 @@ namespace FreenectDriver {
     Device(freenect_context* fn_ctx, int index) : Freenect::FreenectDevice(fn_ctx, index),
       color(NULL),
       depth(NULL) { }
-    ~Device() {
+    ~Device()
+    {
       destroyStream(color);
       destroyStream(depth);
     }
@@ -51,7 +54,8 @@ namespace FreenectDriver {
 
     OniBool isImageRegistrationModeSupported(OniImageRegistrationMode mode) { return depth->isImageRegistrationModeSupported(mode); }
 
-    OniStatus getSensorInfoList(OniSensorInfo** pSensors, int* numSensors) {
+    OniStatus getSensorInfoList(OniSensorInfo** pSensors, int* numSensors)
+    {
       *numSensors = 2;
       OniSensorInfo * sensors = new OniSensorInfo[*numSensors];
       sensors[0] = depth->getSensorInfo();
@@ -60,10 +64,12 @@ namespace FreenectDriver {
       return ONI_STATUS_OK;
     }
 
-    oni::driver::StreamBase* createStream(OniSensorType sensorType) {
-      switch (sensorType) {
+    oni::driver::StreamBase* createStream(OniSensorType sensorType)
+    {
+      switch (sensorType)
+      {
         default:
-          //m_driverServices.errorLoggerAppend("FreenectDeviceNI: Can't create a stream of type %d", sensorType);
+          LogError("Cannot create a stream of type " + sensorType);
           return NULL;
         case ONI_SENSOR_COLOR:
           Freenect::FreenectDevice::startVideo();
@@ -79,16 +85,19 @@ namespace FreenectDriver {
       }
     }
 
-    void destroyStream(oni::driver::StreamBase* pStream) {
-      if (! pStream)
+    void destroyStream(oni::driver::StreamBase* pStream)
+    {
+      if (pStream == NULL)
         return;
 
-      if (pStream == color) {
+      if (pStream == color)
+      {
         Freenect::FreenectDevice::stopVideo();
         delete color;
         color = NULL;
       }
-      if (pStream == depth) {
+      if (pStream == depth)
+      {
         Freenect::FreenectDevice::stopDepth();
         delete depth;
         depth = NULL;
@@ -98,14 +107,15 @@ namespace FreenectDriver {
     // todo: fill out properties
     OniBool isPropertySupported(int propertyId)
     {
-      if(propertyId == ONI_DEVICE_PROPERTY_IMAGE_REGISTRATION)
+      if (propertyId == ONI_DEVICE_PROPERTY_IMAGE_REGISTRATION)
         return true;
       return false;
     }
 
     OniStatus getProperty(int propertyId, void* data, int* pDataSize)
     {
-      switch (propertyId) {
+      switch (propertyId)
+      {
         default:
         case ONI_DEVICE_PROPERTY_FIRMWARE_VERSION:        // string
         case ONI_DEVICE_PROPERTY_DRIVER_VERSION:          // OniVersion
@@ -125,17 +135,20 @@ namespace FreenectDriver {
           return ONI_STATUS_NOT_SUPPORTED;
 
         case ONI_DEVICE_PROPERTY_IMAGE_REGISTRATION:      // OniImageRegistrationMode
-          if (*pDataSize != sizeof(OniImageRegistrationMode)) {
-            printf("Unexpected size: %d != %lu\n", *pDataSize, sizeof(OniImageRegistrationMode));
+          if (*pDataSize != sizeof(OniImageRegistrationMode))
+          {
+            LogError("Unexpected size for ONI_DEVICE_PROPERTY_IMAGE_REGISTRATION");
             return ONI_STATUS_ERROR;
           }
           *(static_cast<OniImageRegistrationMode*>(data)) = depth->getImageRegistrationMode();
           return ONI_STATUS_OK;
       }
     }
+    
     OniStatus setProperty(int propertyId, const void* data, int dataSize)
     {
-      switch (propertyId) {
+      switch (propertyId)
+      {
         default:
         case ONI_DEVICE_PROPERTY_FIRMWARE_VERSION:        // By implementation
         case ONI_DEVICE_PROPERTY_DRIVER_VERSION:          // OniVersion
@@ -162,15 +175,16 @@ namespace FreenectDriver {
           return ONI_STATUS_NOT_SUPPORTED;
 
         case ONI_DEVICE_PROPERTY_IMAGE_REGISTRATION:      // OniImageRegistrationMode
-          if (dataSize != sizeof(OniImageRegistrationMode)) {
-            printf("Unexpected size: %d != %lu\n", dataSize, sizeof(OniImageRegistrationMode));
+          if (dataSize != sizeof(OniImageRegistrationMode))
+          {
+            LogError("Unexpected size for ONI_DEVICE_PROPERTY_IMAGE_REGISTRATION");
             return ONI_STATUS_ERROR;
           }
           return depth->setImageRegistrationMode(*(static_cast<const OniImageRegistrationMode*>(data)));
       }
     }
 
-    OniBool isCommandSupported(int commandId) //{ return (invoke(propertyId, NULL, sizeof(NULL)) != ONI_STATUS_NOT_SUPPORTED); }
+    OniBool isCommandSupported(int commandId)
     {
       switch (commandId)
       {
@@ -197,26 +211,30 @@ namespace FreenectDriver {
   };
 
 
-  class Driver : public oni::driver::DriverBase, private Freenect::Freenect {
+  class Driver : public oni::driver::DriverBase, private Freenect::Freenect
+  {
   private:
     std::map<OniDeviceInfo, oni::driver::DeviceBase*> devices;
 
   public:
-    Driver(OniDriverServices* pDriverServices) : DriverBase(pDriverServices) {
-      //freenect_set_log_level(m_ctx, FREENECT_LOG_NOTICE);
-      freenect_select_subdevices(m_ctx, FREENECT_DEVICE_CAMERA); // OpenNI2 doesn't use MOTOR
+    Driver(OniDriverServices* pDriverServices) : DriverBase(pDriverServices)
+    {
+      freenect_set_log_level(m_ctx, FREENECT_LOG_DEBUG);
+      freenect_select_subdevices(m_ctx, FREENECT_DEVICE_CAMERA); // OpenNI2 doesn't use MOTOR or AUDIO
+      DriverServices = &getServices();
     }
     ~Driver() { shutdown(); }
 
     // for DriverBase
 
-    OniStatus initialize(oni::driver::DeviceConnectedCallback connectedCallback, oni::driver::DeviceDisconnectedCallback disconnectedCallback, oni::driver::DeviceStateChangedCallback deviceStateChangedCallback, void* pCookie) {
+    OniStatus initialize(oni::driver::DeviceConnectedCallback connectedCallback, oni::driver::DeviceDisconnectedCallback disconnectedCallback, oni::driver::DeviceStateChangedCallback deviceStateChangedCallback, void* pCookie)
+    {
       DriverBase::initialize(connectedCallback, disconnectedCallback, deviceStateChangedCallback, pCookie);
-      for (int i = 0; i < Freenect::deviceCount(); ++i) {
-        std::ostringstream uri;
-        uri << "freenect://" << i;
+      for (int i = 0; i < Freenect::deviceCount(); i++)
+      {
+        std::string uri = "freenect://" + i;
         OniDeviceInfo info;
-        strncpy(info.uri, uri.str().c_str(), ONI_MAX_STR);
+        strncpy(info.uri, uri.c_str(), ONI_MAX_STR);
         strncpy(info.vendor, "Microsoft", ONI_MAX_STR);
         strncpy(info.name, "Kinect", ONI_MAX_STR);
         devices[info] = NULL;
@@ -226,12 +244,18 @@ namespace FreenectDriver {
       return ONI_STATUS_OK;
     }
 
-    oni::driver::DeviceBase* deviceOpen(const char* uri, const char* mode = NULL) {
-      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); ++iter) {
-        if (strcmp(iter->first.uri, uri) == 0) { // found
+    oni::driver::DeviceBase* deviceOpen(const char* uri, const char* mode = NULL)
+    {
+      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); iter++)
+      {
+        if (strcmp(iter->first.uri, uri) == 0) // found
+        {
           if (iter->second) // already open
+          {
             return iter->second;
-          else {
+          }
+          else 
+          {
             unsigned int id;
             std::istringstream is(iter->first.uri);
             is.seekg(strlen("freenect://"));
@@ -243,12 +267,14 @@ namespace FreenectDriver {
         }
       }
 
-      getServices().errorLoggerAppend("Could not find device '%s'", uri);
+      LogError("Could not find device " + *uri);
       return NULL;
     }
 
-    void deviceClose(oni::driver::DeviceBase* pDevice) {
-      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); ++iter) {
+    void deviceClose(oni::driver::DeviceBase* pDevice)
+    {
+      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); iter++)
+      {
         if (iter->second == pDevice) {
           iter->second = NULL;
           unsigned int id;
@@ -260,10 +286,11 @@ namespace FreenectDriver {
         }
       }
 
-      getServices().errorLoggerAppend("Could not close unrecognized device");
+      LogError("Could not close unrecognized device");
     }
 
-    OniStatus tryDevice(const char* uri) {
+    OniStatus tryDevice(const char* uri)
+    {
       oni::driver::DeviceBase* device = deviceOpen(uri);
       if (! device)
         return ONI_STATUS_ERROR;
@@ -271,8 +298,9 @@ namespace FreenectDriver {
       return ONI_STATUS_OK;
     }
 
-    void shutdown() {
-      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); ++iter)
+    void shutdown()
+    {
+      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); iter++)
         deviceClose(iter->second);
     }
 
