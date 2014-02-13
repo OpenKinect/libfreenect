@@ -303,9 +303,10 @@ int main(int argc, char **argv)
 
 		char *index_fn = malloc(strlen(out_dir) + 50);
 		sprintf(index_fn, "%s-index.txt", out_dir);
-        index_fp = open_index(index_fn);
-        if (!index_fp) return 1;
+		index_fp = open_index(index_fn);
 		free(index_fn);
+		if (!index_fp)
+			return 1;
 
 		depth_name = malloc(strlen(out_dir) + 50);
 		rgb_name = malloc(strlen(out_dir) + 50);
@@ -340,9 +341,13 @@ int main(int argc, char **argv)
 #endif
 		char *fn = malloc(strlen(out_dir) + 50);
 		sprintf(fn, "%s/INDEX.txt", out_dir);
-        index_fp = open_index(fn);
-        if (!index_fp) return 1;
+		index_fp = open_index(fn);
 		free(fn);
+		if (!index_fp) {
+			fclose(index_fp);
+			return 1;
+		}
+
 		init();
 		fclose(index_fp);
 	}

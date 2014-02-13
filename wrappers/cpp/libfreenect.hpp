@@ -31,7 +31,7 @@
 #include <sstream>
 #include <map>
 #include <pthread.h>
-#include <libusb-1.0/libusb.h>
+#include <libusb.h>
 
 namespace Freenect {
 	class Noncopyable {
@@ -134,13 +134,17 @@ namespace Freenect {
 		freenect_resolution getDepthResolution() {
 			return m_depth_resolution;
 		}
+		int setFlag(freenect_flag flag, bool value)
+		{
+			return freenect_set_flag(m_dev, flag, value ? FREENECT_ON : FREENECT_OFF);
+		}
 		const freenect_device *getDevice() {
 			return m_dev;
 		}
 		// Do not call directly even in child
-		virtual void VideoCallback(void *video, uint32_t timestamp) = 0;
+		virtual void VideoCallback(void *video, uint32_t timestamp) { }
 		// Do not call directly even in child
-		virtual void DepthCallback(void *depth, uint32_t timestamp) = 0;
+		virtual void DepthCallback(void *depth, uint32_t timestamp) { }
 	  protected:
 		int getVideoBufferSize(){
 			switch(m_video_format) {
@@ -187,10 +191,10 @@ namespace Freenect {
 			if(pthread_create(&m_thread, NULL, pthread_callback, (void*)this) != 0) throw std::runtime_error("Cannot initialize freenect thread");
 		}
 		~Freenect() {
+			m_stop = true;
 			for(DeviceMap::iterator it = m_devices.begin() ; it != m_devices.end() ; ++it) {
 				delete it->second;
 			}
-			m_stop = true;
 			pthread_join(m_thread, NULL);
 			if(freenect_shutdown(m_ctx) < 0){} //FN_WARNING("Freenect did not shutdown in a clean fashion");
 		}
@@ -199,7 +203,7 @@ namespace Freenect {
 			DeviceMap::iterator it = m_devices.find(_index);
 			if (it != m_devices.end()) delete it->second;
 			ConcreteDevice * device = new ConcreteDevice(m_ctx, _index);
-			m_devices.insert(std::make_pair<int, FreenectDevice*>(_index, device));
+			m_devices[_index] = device;
 			return *device;
 		}
 		void deleteDevice(int _index) {
@@ -213,7 +217,7 @@ namespace Freenect {
 		}
 		// Do not call directly, thread runs here
 		void operator()() {
-			while(!m_stop) {
+			while (!m_stop) {
 				int res = freenect_process_events(m_ctx);
 				if (res < 0)
 				{
@@ -235,8 +239,9 @@ namespace Freenect {
 			(*freenect)();
 			return NULL;
 		}
+	  protected:
+		freenect_context *m_ctx;	    
 	  private:
-		freenect_context *m_ctx;
 		volatile bool m_stop;
 		pthread_t m_thread;
 		DeviceMap m_devices;

@@ -29,6 +29,7 @@
 #include <stdint.h>
 #include "usb_libusb10.h"
 
+
 typedef struct {
 	uint32_t magic;
 	uint32_t tag;
@@ -64,5 +65,7 @@ typedef struct {
 	uint32_t status;
 } bootloader_status_code;
 
-int upload_firmware(fnusb_dev* dev);
+int upload_firmware(fnusb_dev* dev, char * fw_filename);
+int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_from_mem, unsigned int fw_size_in_bytes);
+
 int upload_cemd_data(fnusb_dev* dev);

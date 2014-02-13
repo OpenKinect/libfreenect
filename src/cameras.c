@@ -84,7 +84,7 @@ struct pkt_hdr {
 	uint32_t timestamp;
 };
 
-static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *pkt, int len)
+static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *pkt, int len, freenect_chunk_cb cb, void *user_data)
 {
 	if (len < 12)
 		return 0;
@@ -194,9 +194,13 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 		}
 	}
 
-	// copy data
+	// copy or chunk process the data
 	uint8_t *dbuf = strm->raw_buf + strm->pkt_num * strm->pkt_size;
-	memcpy(dbuf, data, datalen);
+	if(cb){
+		cb(strm->raw_buf,data,strm->pkt_num,datalen,user_data);
+	}else{
+		memcpy(dbuf, data, datalen);
+	}
 
 	strm->pkt_num++;
 	strm->seq++;
@@ -374,7 +378,7 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (!dev->depth.running)
 		return;
 
-	int got_frame_size = stream_process(ctx, &dev->depth, pkt, len);
+	int got_frame_size = stream_process(ctx, &dev->depth, pkt, len,dev->depth_chunk_cb,dev->user_data);
 
 	if (!got_frame_size)
 		return;
@@ -614,7 +618,7 @@ static void video_process(freenect_device *dev, uint8_t *pkt, int len)
 	if (!dev->video.running)
 		return;
 
-	int got_frame_size = stream_process(ctx, &dev->video, pkt, len);
+	int got_frame_size = stream_process(ctx, &dev->video, pkt, len,dev->video_chunk_cb,dev->user_data);
 
 	if (!got_frame_size)
 		return;
@@ -1086,6 +1090,17 @@ void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb)
 void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb)
 {
 	dev->video_cb = cb;
+}
+
+
+void freenect_set_depth_chunk_callback(freenect_device *dev, freenect_chunk_cb cb)
+{
+	dev->depth_chunk_cb = cb;
+}
+
+void freenect_set_video_chunk_callback(freenect_device *dev, freenect_chunk_cb cb)
+{
+	dev->video_chunk_cb = cb;
 }
 
 int freenect_get_video_mode_count()

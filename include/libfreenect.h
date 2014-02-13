@@ -112,9 +112,9 @@ typedef enum {
 	FREENECT_AUTO_EXPOSURE      = 1 << 14,
 	FREENECT_AUTO_WHITE_BALANCE = 1 << 1,
 	FREENECT_RAW_COLOR          = 1 << 4,
-	// registers to be written with 0 or 1
-	FREENECT_MIRROR_DEPTH       = 0x0017,
-	FREENECT_MIRROR_VIDEO       = 0x0047,
+	// arbitrary bitfields to support flag combination
+	FREENECT_MIRROR_DEPTH       = 1 << 16,
+	FREENECT_MIRROR_VIDEO       = 1 << 17,
 } freenect_flag;
 
 /// Possible values for setting each `freenect_flag`
@@ -385,6 +385,9 @@ FREENECTAPI void *freenect_get_user(freenect_device *dev);
 typedef void (*freenect_depth_cb)(freenect_device *dev, void *depth, uint32_t timestamp);
 /// Typedef for video image received event callbacks
 typedef void (*freenect_video_cb)(freenect_device *dev, void *video, uint32_t timestamp);
+/// Typedef for stream chunk processing callbacks
+typedef void (*freenect_chunk_cb)(void *buffer, void *pkt_data, int pkt_num, int datalen, void *user_data);
+
 
 /**
  * Set callback for depth information received event
@@ -401,6 +404,22 @@ FREENECTAPI void freenect_set_depth_callback(freenect_device *dev, freenect_dept
  * @param cb Function pointer for processing video information
  */
 FREENECTAPI void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb);
+
+/**
+ * Set callback for depth chunk processing
+ *
+ * @param dev Device to set callback for
+ * @param cb Function pointer for processing depth chunk
+ */
+FREENECTAPI void freenect_set_depth_chunk_callback(freenect_device *dev, freenect_chunk_cb cb);
+
+/**
+ * Set callback for video chunk processing
+ *
+ * @param dev Device to set callback for
+ * @param cb Function pointer for processing video chunk
+ */
+FREENECTAPI void freenect_set_video_chunk_callback(freenect_device *dev, freenect_chunk_cb cb);
 
 /**
  * Set the buffer to store depth information to. Size of buffer is
@@ -649,6 +668,26 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
  * @return 0 on success, < 0 if error
  */
 FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value);
+
+
+/**
+ * Allows the user to specify a pointer to the audio firmware in memory for the Xbox 360 Kinect
+ *
+ * @param ctx Context to open device through
+ * @param fw_ptr Pointer to audio firmware loaded in memory
+ * @param num_bytes The size of the firmware in bytes
+ */
+FREENECTAPI void freenect_set_fw_address_nui(freenect_context * ctx, unsigned char * fw_ptr, unsigned int num_bytes);
+
+/**
+ * Allows the user to specify a pointer to the audio firmware in memory for the K4W Kinect 
+ *
+ * @param ctx Context to open device through
+ * @param fw_ptr Pointer to audio firmware loaded in memory
+ * @param num_bytes The size of the firmware in bytes
+ */
+FREENECTAPI void freenect_set_fw_address_k4w(freenect_context * ctx, unsigned char * fw_ptr, unsigned int num_bytes);
+
 
 #ifdef __cplusplus
 }

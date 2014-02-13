@@ -37,13 +37,13 @@ namespace freenect
 	/// </summary>
 	public enum VideoFormat : int
 	{
-		RGB 				= 0,
-		Bayer 				= 1,
-		Infrared8Bit 		= 2,
-		Infrared10Bit 		= 3,
+		RGB                 = 0,
+		Bayer               = 1,
+		Infrared8Bit        = 2,
+		Infrared10Bit       = 3,
 		InfraredPacked10Bit = 4,
-		YUVRGB 				= 5,
-		YUVRaw 				= 6
+		YUVRGB              = 5,
+		YUVRaw              = 6
 	}
 	
 	/// <summary>
@@ -51,10 +51,12 @@ namespace freenect
 	/// </summary>
 	public enum DepthFormat : int
 	{
-		Depth11Bit 			= 0,
-		Depth10Bit 			= 1,
-		DepthPacked11Bit 	= 2,
-		DepthPacked10Bit 	= 3
+		Depth11Bit 			 = 0,
+		Depth10Bit 			 = 1,
+		DepthPacked11Bit = 2,
+		DepthPacked10Bit = 3,
+		DepthRegistered  = 4,
+		DepthMM          = 5
 	}
 	
 	/// <summary>
@@ -66,9 +68,9 @@ namespace freenect
 	/// </summary>
 	public enum Resolution : int
 	{
-		Low 	= 0,
-		Medium 	= 1,
-		High 	= 2
+		Low    = 0,
+		Medium = 1,
+		High   = 2
 	}
 	
 	/// <summary>
@@ -76,13 +78,13 @@ namespace freenect
 	/// </summary>
 	public enum LEDColor : int
 	{
-		None    		= 0,
-		Green  			= 1,
-		Red    			= 2,
-		Yellow 			= 3,
-		BlinkYellow 	= 4,
-		BlinkGreen 		= 5,
-		BlinkRedYellow	= 6
+		None    		   = 0,
+		Green  			   = 1,
+		Red    			   = 2,
+		Yellow 	       = 3,
+		BlinkYellow    = 4,
+		BlinkGreen     = 5,
+		BlinkRedYellow = 6
 	}
 	
 	/// <summary>
@@ -90,9 +92,9 @@ namespace freenect
 	/// </summary>
 	public enum MotorTiltStatus : int
 	{
-		Stopped 	= 0x00,
-	 	AtLimit 	= 0x01,
-		Moving 		= 0x04
+		Stopped = 0x00,
+	 	AtLimit = 0x01,
+		Moving  = 0x04
 	}
 	
 	/// <summary>

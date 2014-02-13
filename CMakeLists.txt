@@ -30,9 +30,8 @@
 # CMake directives
 ######################################################################################
 
-#Require 2.6 or higher. 
-
 cmake_minimum_required(VERSION 2.6)
+set(PYTHON_EXECUTABLE "python2")
 
 ######################################################################################
 # Project declaration and options
@@ -41,8 +40,8 @@ cmake_minimum_required(VERSION 2.6)
 PROJECT(libfreenect)
 
 set (PROJECT_VER_MAJOR 0)
-set (PROJECT_VER_MINOR 1)
-set (PROJECT_VER_PATCH 2)
+set (PROJECT_VER_MINOR 3)
+set (PROJECT_VER_PATCH 0)
 set (PROJECT_VER 
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 set (PROJECT_APIVER 
@@ -57,6 +56,7 @@ OPTION(BUILD_CPP "Build C++ Library (currently header only)" ON)
 OPTION(BUILD_CV "Build OpenCV wrapper" OFF)
 OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
 OPTION(BUILD_PYTHON "Build Python extension" OFF)
+OPTION(BUILD_OPENNI2_DRIVER "Build libfreenect driver for OpenNI2" OFF)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
@@ -151,6 +151,10 @@ ENDIF()
 
 IF(BUILD_PYTHON)
   add_subdirectory (wrappers/python)
+ENDIF()
+
+IF(BUILD_OPENNI2_DRIVER)
+  add_subdirectory(OpenNI2-FreenectDriver)
 ENDIF()
 
 ######################################################################################
