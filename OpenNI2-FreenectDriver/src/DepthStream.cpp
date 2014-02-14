@@ -39,7 +39,7 @@ OniStatus DepthStream::setVideoMode(OniVideoMode requested_mode)
   try { device->setDepthFormat(format, resolution); }
   catch (std::runtime_error e)
   {
-    LogError("Format " + format + std::string(" and resolution " + resolution) + " combination not supported by libfreenect");
+    LogError("Format " + to_string(format) + " and resolution " + to_string(resolution) + " combination not supported by libfreenect");
     if (image_registration_mode == ONI_IMAGE_REGISTRATION_DEPTH_TO_COLOR)
     {
       LogError("Could not enable image registration format; falling back to format defined in getSupportedVideoModes()");

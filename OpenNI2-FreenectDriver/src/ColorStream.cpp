@@ -40,7 +40,7 @@ OniStatus ColorStream::setVideoMode(OniVideoMode requested_mode)
   try { device->setVideoFormat(format, resolution); }
   catch (std::runtime_error e)
   {
-    LogError("Format " + format + std::string(" and resolution " + resolution) + " combination not supported by libfreenect");
+    LogError("Format " + to_string(format) + " and resolution " + to_string(resolution) + " combination not supported by libfreenect");
     return ONI_STATUS_NOT_SUPPORTED;
   }
   video_mode = requested_mode;
@@ -58,7 +58,7 @@ void ColorStream::populateFrame(void* data, OniFrame* frame) const
   switch (video_mode.pixelFormat)
   {
     default:
-      LogError(std::string("Pixel format " + video_mode.pixelFormat) + " not supported by populateFrame()");
+      LogError("Pixel format " + to_string(video_mode.pixelFormat) + " not supported by populateFrame()");
       return;
 
     case ONI_PIXEL_FORMAT_RGB888:

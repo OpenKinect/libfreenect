@@ -69,7 +69,7 @@ namespace FreenectDriver
       switch (sensorType)
       {
         default:
-          LogError("Cannot create a stream of type " + sensorType);
+          LogError("Cannot create a stream of type " + to_string(sensorType));
           return NULL;
         case ONI_SENSOR_COLOR:
           Freenect::FreenectDevice::startVideo();
@@ -232,7 +232,10 @@ namespace FreenectDriver
       DriverBase::initialize(connectedCallback, disconnectedCallback, deviceStateChangedCallback, pCookie);
       for (int i = 0; i < Freenect::deviceCount(); i++)
       {
-        std::string uri = "freenect://" + i;
+        std::string uri = "freenect://" + to_string(i);
+        
+        WriteMessage("Found device " + uri);
+        
         OniDeviceInfo info;
         strncpy(info.uri, uri.c_str(), ONI_MAX_STR);
         strncpy(info.vendor, "Microsoft", ONI_MAX_STR);
@@ -256,6 +259,8 @@ namespace FreenectDriver
           }
           else 
           {
+            WriteMessage("Opening device " + std::string(uri));
+            
             unsigned int id;
             std::istringstream is(iter->first.uri);
             is.seekg(strlen("freenect://"));
@@ -267,22 +272,29 @@ namespace FreenectDriver
         }
       }
 
-      LogError("Could not find device " + *uri);
+      LogError("Could not find device " + std::string(uri));
       return NULL;
     }
 
     void deviceClose(oni::driver::DeviceBase* pDevice)
     {
-      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); iter++)
+      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end();)
       {
-        if (iter->second == pDevice) {
-          iter->second = NULL;
+        if (iter->second == pDevice)
+        {
+          WriteMessage("Closing device " + std::string(iter->first.uri));
+          
           unsigned int id;
-          std::istringstream is(iter->first.uri);
+          std::istringstream is(std::string(iter->first.uri));
           is.seekg(strlen("freenect://"));
           is >> id;
+          devices.erase(iter++);
           deleteDevice(id);
           return;
+        }
+        else
+        {
+          iter++;
         }
       }
 

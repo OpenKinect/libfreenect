@@ -1,5 +1,6 @@
 #pragma once
 
+#include <iostream>
 #include "libfreenect.hpp"
 #include "Driver/OniDriverAPI.h"
 #include "PS1080.h"
@@ -33,11 +34,26 @@ static bool operator<(const OniVideoMode& left, const OniVideoMode& right) { ret
 
 namespace FreenectDriver
 {
-  // DriverServices is set in DeviceDriver.cpp so all files can call LogError()
+  template < typename T > std::string to_string(const T& n)
+  {
+    std::ostringstream oss;
+    oss << n;
+    return oss.str();
+  }
+  
+  static void WriteMessage(std::string info)
+  {
+    std::cout << "OpenNI2-FreenectDriver: " << info << std::endl;
+  }
+  
+  // DriverServices is set in DeviceDriver.cpp so all files can call errorLoggerAppend()
   static oni::driver::DriverServices* DriverServices;
   static void LogError(std::string error)
   {
-    if (DriverServices)
+    // errorLoggerAppend() doesn't seem to go anywhere, so call WriteMessage also
+    WriteMessage("(ERROR) " + error);
+    
+    if (DriverServices != NULL)
       DriverServices->errorLoggerAppend(std::string("OpenNI2-FreenectDriver: " + error).c_str());
   }
   
@@ -52,7 +68,7 @@ namespace FreenectDriver
   protected:
     static const OniSensorType sensor_type;
     Freenect::FreenectDevice* device;
-    bool running; // acquireFrame() does something iff true
+    bool running; // buildFrame() does something iff true
     OniVideoMode video_mode;
     OniCropping cropping;
     bool mirroring;
@@ -189,7 +205,6 @@ namespace FreenectDriver
             return ONI_STATUS_ERROR;
           }
           cropping = *(static_cast<const OniCropping*>(data));
-
           raisePropertyChanged(propertyId, data, dataSize);
           return ONI_STATUS_OK;
 
