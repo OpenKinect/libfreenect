@@ -28,6 +28,7 @@ RDEPEND="${COMMON_DEP}"
 DEPEND= "${COMMON_DEP}
          dev-util/cmake
          virtual/pkgconfig
+         audio? ( dev-lang/python-2* )
          doc? ( app-doc/doxygen )
          python? ( dev-python/cython )"
 
@@ -49,10 +50,6 @@ src_configure() {
 
 src_install() {
     cmake-utils_src_install
-    # Rename record example so it does not collide with xawtv
-    if use examples; then
-        mv "${D}"/usr/bin/record "${D}"/usr/bin/frecord || die
-    fi
     
     # udev rules
     insinto /lib/udev/rules.d/

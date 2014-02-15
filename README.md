@@ -16,8 +16,9 @@ Audio is a work in progress.
 
 To build libfreenect, you'll need
 
-- [libusb](http://libusb.info/) >= 1.0.13
-- [CMake](http://www.cmake.org/) >= 2.6
+- [libusb](http://libusb.info) >= 1.0.13
+- [CMake](http://cmake.org) >= 2.6
+- [python](http://python.org) == 2.* (only if BUILD_AUDIO or BUILD_PYTHON)
 
 For the examples, you'll need
 
@@ -26,13 +27,13 @@ For the examples, you'll need
 - [pthreads-win32](http://sourceforge.net/projects/pthreads4w/) (Windows)
 
 
-## Fetch & Build <a name="fetch-build"></a>
+## <a name="fetch-build"></a>Fetch & Build
 
     git clone https://github.com/OpenKinect/libfreenect
     cd libfreenect
     mkdir build
     cd build
-    cmake ..
+    cmake -L ..
     make
     
     # if you don't have `make` or don't want color output
