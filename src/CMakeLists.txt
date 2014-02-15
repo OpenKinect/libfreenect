@@ -48,10 +48,10 @@ target_link_libraries (freenect ${LIBUSB_1_LIBRARIES})
 target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
 
 # Install the header files
-install (FILES "../include/libfreenect.h" "../include/libfreenect-registration.h"
+install (FILES "../include/libfreenect.h" "../include/libfreenect_registration.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 if(BUILD_AUDIO)
-  install (FILES "../include/libfreenect-audio.h"
+  install (FILES "../include/libfreenect_audio.h"
     DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 endif()
 

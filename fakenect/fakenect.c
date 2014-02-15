@@ -23,7 +23,7 @@
  * either License.
  */
 
-#include <libfreenect.h>
+#include "libfreenect.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>

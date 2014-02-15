@@ -23,22 +23,21 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
-
 #pragma once
 
 #include <stdint.h>
 
 #include "libfreenect.h"
-#include "libfreenect-registration.h"
+#include "libfreenect_registration.h"
 
 #ifdef BUILD_AUDIO
-#include "libfreenect-audio.h"
+  #include "libfreenect_audio.h"
 #endif
 
 #ifdef __ELF__
-#define FN_INTERNAL	__attribute__ ((visibility ("hidden")))
+  #define FN_INTERNAL	__attribute__ ((visibility ("hidden")))
 #else
-#define FN_INTERNAL
+  #define FN_INTERNAL
 #endif
 
 

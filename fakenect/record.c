@@ -23,9 +23,9 @@
  * either License.
  */
 
+#include "libfreenect.h"
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <libfreenect.h>
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
