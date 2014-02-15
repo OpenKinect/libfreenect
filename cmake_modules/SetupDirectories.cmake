@@ -10,6 +10,7 @@ MESSAGE (STATUS "${PROJECT_NAME} will be installed to ${CMAKE_INSTALL_PREFIX}")
 # Installation prefix for include files
 STRING (TOLOWER ${PROJECT_NAME} projectNameLower)
 SET (PROJECT_INCLUDE_INSTALL_DIR "include/${projectNameLower}")
+SET (PROJECT_MANPAGE_INSTALL_DIR "share/man")
 
 IF (PROJECT_PROC_64BIT)
     SET (LIB_SUFFIX "64" CACHE STRING "Suffix for library installation directory")
