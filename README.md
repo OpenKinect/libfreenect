@@ -85,7 +85,8 @@ There is a live ebuild for your convenience in [platform/linux/portage/dev-libs/
 
 ### Arch Linux
 
-There is a [libfreenect-git](https://aur.archlinux.org/packages/libfreenect-git/) PKGBUILD in the AUR.
+There is a [libfreenect](https://aur.archlinux.org/packages/libfreenect) PKGBUILD in the AUR.
+Alternately, the [libfreenect-git](https://aur.archlinux.org/packages/libfreenect-git) PKGBUILD builds the very latest.
 
 
 ## Windows
