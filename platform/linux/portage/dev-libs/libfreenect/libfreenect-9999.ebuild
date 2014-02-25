@@ -66,8 +66,8 @@ src_install() {
 }
 
 pkg_postinst() {
-    if use bindist; then
-        ewarn "You have enabled the bindist USE flag. Resulting binaries may not be legal to re-distribute."
+    if ! use bindist; then
+        ewarn "The bindist USE flag is disabled. Resulting binaries may not be legal to re-distribute."
     fi
     elog "Make sure your user is in the 'video' group"
     elog "Just run 'gpasswd -a <USER> video', then have <USER> re-login."
