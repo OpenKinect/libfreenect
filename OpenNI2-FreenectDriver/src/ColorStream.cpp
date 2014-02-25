@@ -50,8 +50,9 @@ OniStatus ColorStream::setVideoMode(OniVideoMode requested_mode)
 void ColorStream::populateFrame(void* data, OniFrame* frame) const
 {
   frame->sensorType = sensor_type;
-  frame->stride = video_mode.resolutionX*3;
-  frame->cropOriginX = frame->cropOriginY = 0;
+  frame->stride = video_mode.resolutionX * 3;
+  frame->cropOriginX = 0;
+  frame->cropOriginY = 0;
   frame->croppingEnabled = FALSE;
 
   // copy stream buffer from freenect
@@ -64,26 +65,7 @@ void ColorStream::populateFrame(void* data, OniFrame* frame) const
     case ONI_PIXEL_FORMAT_RGB888:
       unsigned char* data_ptr = static_cast<unsigned char*>(data);
       unsigned char* frame_data = static_cast<unsigned char*>(frame->data);
-      if (mirroring)
-      {
-        for (int i = 0; i < frame->dataSize; i += 3)
-        {
-          // find corresponding mirrored pixel
-          unsigned int pixel = i / 3;
-          unsigned int row = pixel / video_mode.resolutionX;
-          unsigned int col = video_mode.resolutionX - (pixel % video_mode.resolutionX);
-          unsigned int target = 3 * (row * video_mode.resolutionX + col);
-          // copy it to this pixel
-          frame_data[i] = data_ptr[target];
-          frame_data[i+1] = data_ptr[target+1];
-          frame_data[i+2] = data_ptr[target+2];
-        }
-      }
-      else
-      {
-        std::copy(data_ptr, data_ptr+frame->dataSize, frame_data);
-      }
-
+      std::copy(data_ptr, data_ptr + frame->dataSize, frame_data);
       return;
   }
 }
