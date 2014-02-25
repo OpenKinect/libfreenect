@@ -1048,7 +1048,6 @@ int freenect_stop_depth(freenect_device *dev)
 		return -1;
 
 	dev->depth.running = 0;
-	freenect_destroy_registration(&(dev->registration));
 	write_register(dev, 0x06, 0x00); // stop depth stream
 
 	res = fnusb_stop_iso(&dev->usb_cam, &dev->depth_isoc);
@@ -1057,6 +1056,7 @@ int freenect_stop_depth(freenect_device *dev)
 		return res;
 	}
 
+	freenect_destroy_registration(&(dev->registration));
 	stream_freebufs(ctx, &dev->depth);
 	return 0;
 }
