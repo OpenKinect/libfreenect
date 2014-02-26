@@ -72,12 +72,10 @@ namespace FreenectDriver
           LogError("Cannot create a stream of type " + to_string(sensorType));
           return NULL;
         case ONI_SENSOR_COLOR:
-          Freenect::FreenectDevice::startVideo();
           if (! color)
             color = new ColorStream(this);
           return color;
         case ONI_SENSOR_DEPTH:
-          Freenect::FreenectDevice::startDepth();
           if (! depth)
             depth = new DepthStream(this);
           return depth;
