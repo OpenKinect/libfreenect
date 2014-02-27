@@ -22,8 +22,6 @@
 #include "ColorStream.hpp"
 
 
-static bool operator<(const OniDeviceInfo& left, const OniDeviceInfo& right) { return (strcmp(left.uri, right.uri) < 0); } // for std::map
-
 namespace FreenectDriver
 {
   class Device : public oni::driver::DeviceBase, public Freenect::FreenectDevice
@@ -217,6 +215,8 @@ namespace FreenectDriver
   public:
     Driver(OniDriverServices* pDriverServices) : DriverBase(pDriverServices)
     {
+      WriteMessage("Using libfreenect v" + to_string(PROJECT_VER));
+
       freenect_set_log_level(m_ctx, FREENECT_LOG_DEBUG);
       freenect_select_subdevices(m_ctx, FREENECT_DEVICE_CAMERA); // OpenNI2 doesn't use MOTOR or AUDIO
       DriverServices = &getServices();

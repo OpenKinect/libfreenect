@@ -1,62 +1,12 @@
 #pragma once
 
-#include <iostream>
 #include "libfreenect.hpp"
-#include "Driver/OniDriverAPI.h"
 #include "PS1080.h"
+#include "Utility.hpp"
 
-
-struct RetrieveKey
-{
-  template <typename T> typename T::first_type
-  operator()(T pair) const {
-    return pair.first;
-  }
-};
-
-// "extension constructor" for OniVideoMode struct
-static OniVideoMode makeOniVideoMode(OniPixelFormat pixel_format, int resolution_x, int resolution_y, int frames_per_second)
-{
-  OniVideoMode mode;
-  mode.pixelFormat = pixel_format;
-  mode.resolutionX = resolution_x;
-  mode.resolutionY = resolution_y;
-  mode.fps = frames_per_second;
-  return mode;
-}
-
-static bool operator==(const OniVideoMode& left, const OniVideoMode& right)
-{
-  return (left.pixelFormat == right.pixelFormat && left.resolutionX == right.resolutionX
-          && left.resolutionY == right.resolutionY && left.fps == right.fps);
-}
-static bool operator<(const OniVideoMode& left, const OniVideoMode& right) { return (left.resolutionX*left.resolutionY < right.resolutionX*right.resolutionY); }
 
 namespace FreenectDriver
 {
-  template < typename T > std::string to_string(const T& n)
-  {
-    std::ostringstream oss;
-    oss << n;
-    return oss.str();
-  }
-  
-  static void WriteMessage(std::string info)
-  {
-    std::cout << "OpenNI2-FreenectDriver: " << info << std::endl;
-  }
-  
-  // DriverServices is set in DeviceDriver.cpp so all files can call errorLoggerAppend()
-  static oni::driver::DriverServices* DriverServices;
-  static void LogError(std::string error)
-  {
-    // errorLoggerAppend() doesn't seem to go anywhere, so call WriteMessage also
-    WriteMessage("(ERROR) " + error);
-    
-    if (DriverServices != NULL)
-      DriverServices->errorLoggerAppend(std::string("OpenNI2-FreenectDriver: " + error).c_str());
-  }
-  
   class VideoStream : public oni::driver::StreamBase
   {
   private:
@@ -77,7 +27,12 @@ namespace FreenectDriver
     VideoStream(Freenect::FreenectDevice* device) :
       frame_id(1),
       device(device),
-      mirroring(false) { }
+      mirroring(false)
+      {
+        // joy of structs
+        memset(&cropping, 0, sizeof(cropping));
+        memset(&video_mode, 0, sizeof(video_mode));
+      }
     //~VideoStream() { stop();  }
 
     void buildFrame(void* data, uint32_t timestamp)

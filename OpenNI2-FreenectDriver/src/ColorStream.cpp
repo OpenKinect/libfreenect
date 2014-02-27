@@ -53,7 +53,7 @@ void ColorStream::populateFrame(void* data, OniFrame* frame) const
   frame->stride = video_mode.resolutionX * 3;
   frame->cropOriginX = 0;
   frame->cropOriginY = 0;
-  frame->croppingEnabled = FALSE;
+  frame->croppingEnabled = false;
 
   // copy stream buffer from freenect
   switch (video_mode.pixelFormat)
@@ -63,9 +63,9 @@ void ColorStream::populateFrame(void* data, OniFrame* frame) const
       return;
 
     case ONI_PIXEL_FORMAT_RGB888:
-      unsigned char* data_ptr = static_cast<unsigned char*>(data);
-      unsigned char* frame_data = static_cast<unsigned char*>(frame->data);
-      std::copy(data_ptr, data_ptr + frame->dataSize, frame_data);
+      uint8_t* source = static_cast<uint8_t*>(data);
+      uint8_t* target = static_cast<uint8_t*>(frame->data);
+      std::copy(source, source + frame->dataSize, target);
       return;
   }
 }

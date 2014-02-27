@@ -48,7 +48,7 @@ namespace FreenectDriver
     {
       FreenectDepthModeMap supported_modes = getSupportedVideoModes();
       OniVideoMode* modes = new OniVideoMode[supported_modes.size()];
-      std::transform(supported_modes.begin(), supported_modes.end(), modes, RetrieveKey());
+      std::transform(supported_modes.begin(), supported_modes.end(), modes, ExtractKey());
       OniSensorInfo sensors = { sensor_type, static_cast<int>(supported_modes.size()), modes };
       return sensors;
     }
