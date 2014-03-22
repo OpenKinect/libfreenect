@@ -3,8 +3,6 @@ INSTALL(FILES libfreenect.hpp
 
 IF(BUILD_EXAMPLES)
 
-set(CMAKE_C_FLAGS "-Wall")
-
 if (WIN32)
   set(THREADS_USE_PTHREADS_WIN32 true)
   find_package(Threads REQUIRED)

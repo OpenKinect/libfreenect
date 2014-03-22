@@ -129,7 +129,12 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 	// handle lost packets
 	if (strm->seq != hdr->seq) {
 		uint8_t lost = hdr->seq - strm->seq;
+		strm->lost_pkts += lost;
 		FN_LOG(l_info, "[Stream %02x] Lost %d packets\n", strm->flag, lost);
+
+		FN_DEBUG("[Stream %02x] Lost %d total packets in %d frames (%f lppf)\n",
+			strm->flag, strm->lost_pkts, strm->valid_frames, (float)strm->lost_pkts / strm->valid_frames);
+
 		if (lost > 5 || strm->variable_length) {
 			FN_LOG(l_notice, "[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
 			strm->synced = 0;
@@ -219,6 +224,7 @@ static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *p
 		strm->timestamp = strm->last_timestamp;
 		strm->valid_frames++;
 	}
+
 	return got_frame_size;
 }
 

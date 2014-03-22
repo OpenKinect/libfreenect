@@ -159,6 +159,7 @@ typedef struct {
 	int frame_size;
 	int last_pkt_size;
 	int valid_pkts;
+	uint lost_pkts;
 	int valid_frames;
 	int variable_length;
 	uint32_t last_timestamp;

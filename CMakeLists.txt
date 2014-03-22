@@ -100,15 +100,18 @@ SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 
-# let CFLAGS env override this
-if(CMAKE_C_FLAGS STREQUAL "")
-  set(CMAKE_C_FLAGS "-O2")
-endif()
-SET(CMAKE_C_FLAGS_DEBUG "-g -DDEBUG=1")
-SET(CMAKE_C_FLAGS_RELEASE "-O2")
-SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
+if    (MSVC)
+  set(C_FLAGS_WARNING "-W4")
+else  ()
+  set(C_FLAGS_WARNING "-Wall")
+endif (MSVC)
 
-add_definitions(-Wall)
+# These defaults can be overriden by environment CFLAGS
+set(CMAKE_C_FLAGS "-O2 ${C_FLAGS_WARNING} ${CMAKE_C_FLAGS}")
+# Configurations
+SET(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS} -g -DDEBUG=1")
+SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS}")
+SET(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELEASE} -g")
 
 # Pretty much everyone is going to need the main includes
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)

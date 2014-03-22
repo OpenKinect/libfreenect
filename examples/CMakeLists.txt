@@ -2,8 +2,6 @@
 # Packages needed for examples
 ######################################################################################
 
-set(CMAKE_C_FLAGS "-Wall")
-
 if (WIN32)
   set_source_files_properties(glview.c PROPERTIES LANGUAGE CXX)
   set_source_files_properties(regview.c PROPERTIES LANGUAGE CXX)
