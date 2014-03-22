@@ -2,24 +2,25 @@
 # Packages needed for examples
 ######################################################################################
 
-if (WIN32)
-  set_source_files_properties(glview.c PROPERTIES LANGUAGE CXX)
-  set_source_files_properties(regview.c PROPERTIES LANGUAGE CXX)
-  set_source_files_properties(glpclview.c PROPERTIES LANGUAGE CXX)
-  set_source_files_properties(hiview.c PROPERTIES LANGUAGE CXX)
-  set_source_files_properties(tiltdemo.c PROPERTIES LANGUAGE CXX)
-  set_source_files_properties(chunkview.c PROPERTIES LANGUAGE CXX)
+# todo: use these throughout
+file(GLOB SRC_STANDARD chunkview.c glview.c hiview.c regview.c)
+file(GLOB SRC_AUDIO    micview.c wavrecord.c)
+file(GLOB SRC_SYNC     glpclview.c regtest.c tiltdemo.c)
+set (SRC_ALL ${SRC_STANDARD} ${SRC_AUDIO} ${SRC_SYNC})
 
+if (WIN32)
   set(THREADS_USE_PTHREADS_WIN32 true)
   find_package(Threads REQUIRED)
-
   include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
+
+  set_source_file_properties(${SRC_ALL} PROPERTIES LANGUAGE CXX)
 endif()
 
 add_executable(freenect-glview glview.c)
 add_executable(freenect-regview regview.c)
 add_executable(freenect-hiview hiview.c)
 add_executable(freenect-chunkview chunkview.c)
+
 if(BUILD_AUDIO)
   add_executable(freenect-wavrecord wavrecord.c)
   add_executable(freenect-micview micview.c)
@@ -29,6 +30,9 @@ if (BUILD_C_SYNC)
   add_executable(freenect-glpclview glpclview.c)
   add_executable(freenect-tiltdemo tiltdemo.c)
   add_executable(freenect-regtest regtest.c)
+
+  add_dependencies(freenect-glpclview freenect-tiltdemo freenect-regtest
+    freenect_sync)
 endif()
 
 # We need to include libfreenect_sync.h for glpclview
