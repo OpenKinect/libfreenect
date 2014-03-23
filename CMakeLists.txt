@@ -62,7 +62,7 @@ IF(PROJECT_OS_LINUX)
 ENDIF(PROJECT_OS_LINUX)
 
 ######################################################################################
-# CMake Modules
+# Dependencies and Definitions
 ######################################################################################
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
@@ -106,12 +106,21 @@ else  ()
   set(C_FLAGS_WARNING "-Wall")
 endif (MSVC)
 
-# These defaults can be overriden by environment CFLAGS
-set(CMAKE_C_FLAGS "-O2 ${C_FLAGS_WARNING} ${CMAKE_C_FLAGS}")
-# Configurations
+set(C_CXX_FLAGS_DEFAULT "${C_FLAGS_WARNING} -O2")
+
+# These defaults can be overriden by -DCMAKE_C_FLAGS=""
+set(CMAKE_C_FLAGS "${C_CXX_FLAGS_DEFAULT} ${CMAKE_C_FLAGS}")
+# C Configurations
 SET(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS} -g -DDEBUG=1")
 SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS}")
 SET(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELEASE} -g")
+
+# These defaults can be overriden by -DCMAKE_CXX_FLAGS=""
+set(CMAKE_CXX_FLAGS "${C_CXX_FLAGS_DEFAULT} ${CMAKE_CXX_FLAGS}")
+# C++ Configurations
+SET(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS} -g -DDEBUG=1")
+SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS}")
+SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
 # Pretty much everyone is going to need the main includes
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -127,7 +136,6 @@ endif()
 # Add library project
 add_subdirectory (src)
 
-# Add examples
 IF(BUILD_EXAMPLES)
   add_subdirectory (examples)
 ENDIF()
