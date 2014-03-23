@@ -8,6 +8,7 @@ ColorStream::ColorStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevic
 {
   video_mode = makeOniVideoMode(ONI_PIXEL_FORMAT_RGB888, 640, 480, 30);
   setVideoMode(video_mode);
+  pDevice->startVideo();
 }
 
 // Add video modes here as you implement them

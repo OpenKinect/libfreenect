@@ -9,6 +9,7 @@ DepthStream::DepthStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevic
   video_mode = makeOniVideoMode(ONI_PIXEL_FORMAT_DEPTH_1_MM, 640, 480, 30);
   image_registration_mode = ONI_IMAGE_REGISTRATION_OFF;
   setVideoMode(video_mode);
+  pDevice->startDepth();
 }
 
 // Add video modes here as you implement them

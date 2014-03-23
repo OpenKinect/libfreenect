@@ -101,11 +101,12 @@ namespace Freenect {
 		}
 		void setVideoFormat(freenect_video_format requested_format, freenect_resolution requested_resolution = FREENECT_RESOLUTION_MEDIUM) {
 			if (requested_format != m_video_format || requested_resolution != m_video_resolution) {
-				freenect_stop_video(m_dev);
+				bool wasRunning = (freenect_stop_video(m_dev) >= 0);
 				freenect_frame_mode mode = freenect_find_video_mode(requested_resolution, requested_format);
 				if (!mode.is_valid) throw std::runtime_error("Cannot set video format: invalid mode");
 				if (freenect_set_video_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set video format");
-				freenect_start_video(m_dev);
+				if (wasRunning)
+					freenect_start_video(m_dev);
 				m_video_format = requested_format;
 				m_video_resolution = requested_resolution;
 			}
@@ -118,11 +119,12 @@ namespace Freenect {
 		}
 		void setDepthFormat(freenect_depth_format requested_format, freenect_resolution requested_resolution = FREENECT_RESOLUTION_MEDIUM) {
 			if (requested_format != m_depth_format || requested_resolution != m_depth_resolution) {
-				freenect_stop_depth(m_dev);
+				bool wasRunning = (freenect_stop_depth(m_dev) >= 0);
 				freenect_frame_mode mode = freenect_find_depth_mode(requested_resolution, requested_format);
 				if (!mode.is_valid) throw std::runtime_error("Cannot set depth format: invalid mode");
 				if (freenect_set_depth_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set depth format");
-				freenect_start_depth(m_dev);
+				if (wasRunning)
+					freenect_start_depth(m_dev);
 				m_depth_format = requested_format;
 				m_depth_resolution = requested_resolution;
 			}
