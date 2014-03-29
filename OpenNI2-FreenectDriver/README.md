@@ -19,10 +19,10 @@ Install
 3. Copy the driver to your OpenNI2 driver repository. You must first change `Repository` to match your project layout.
 
         Repository="/example/path/to/Samples/Bin/OpenNI2/Drivers/"
-        cp -L lib/OpenNI2-FreenectDriver/libFreenectDriver.{so,dylib} ${Repository}
+        cp -L lib/OpenNI2/Drivers/libFreenectDriver.{so,dylib} ${Repository}
         
         # you could instead make a symlink to avoid copying after every build
-        # ln -s lib/OpenNI2-FreenectDriver/libFreenectDriver.{so,dylib} ${Repository}
+        # ln -s lib/OpenNI2/Drivers/libFreenectDriver.{so,dylib} ${Repository}
 
 OpenNI2-FreenectDriver is built with a static libfreenect, so you do not need to include libfreenect when deploying.
 However, you will need to make sure target systems have libusb and all other dependencies listed in `ldd libFreenectDriver.so`.
