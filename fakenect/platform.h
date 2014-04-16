@@ -26,6 +26,7 @@
 
 #include <math.h>
 #ifdef _WIN32
+	#include <direct.h>
 	#include <windows.h>
 	#define snprintf _snprintf
 	#define popen _popen
