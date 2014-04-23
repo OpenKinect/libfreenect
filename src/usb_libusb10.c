@@ -168,6 +168,43 @@ FN_INTERNAL int fnusb_is_pid_k4w_audio(int pid)
 	return (pid == PID_K4W_AUDIO || pid == PID_K4W_AUDIO_ALT_1 || pid == PID_K4W_AUDIO_ALT_2);
 }
 
+// fnusb_find_connected_audio_device uses new libusb features. we use guards to make sure its backwards compatible with older versions of libusb
+#if defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000102)
+FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * camera, libusb_device ** deviceList, int cnt){
+    
+    int cameraBusNo = libusb_get_bus_number(camera);
+    libusb_device * cameraParent = libusb_get_parent(camera);
+    
+    if( cameraBusNo < 0 ) return NULL;
+    if( cnt <= 0 ) return  NULL;
+    
+    int i = 0;
+    struct libusb_device_descriptor desc;
+
+	for (i = 0; i < cnt; i++) {
+		int r = libusb_get_device_descriptor (deviceList[i], &desc);
+		if (r < 0) continue;
+		if (desc.idVendor != VID_MICROSOFT) continue;
+        
+        //make sure its some type of Kinect audio device
+        if( (desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct) ) ){
+            
+            int audioBusNo = libusb_get_bus_number(deviceList[i]);
+            if( audioBusNo == cameraBusNo ){
+                //we have a match!
+                //lets double check
+                libusb_device * audioParent = libusb_get_parent(deviceList[i]);
+                if( cameraParent == audioParent ){
+                    return deviceList[i];
+                }
+            }
+        }
+    }
+
+    return NULL;
+}
+#endif
+
 FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	freenect_context *ctx = dev->parent;
@@ -214,14 +251,44 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					dev->usb_cam.dev = NULL;
 					break;
 				}
-				if (desc.idProduct == PID_K4W_CAMERA || desc.bcdDevice != fn_le32(267)) {
+				if(desc.idProduct == PID_K4W_CAMERA || desc.bcdDevice != fn_le32(267)){
+
 					freenect_device_flags requested_devices = ctx->enabled_subdevices;
+                    
+        
+					/* Not the 1414 kinect so remove the motor flag, this should preserve the audio flag if set */
+					ctx->enabled_subdevices = (freenect_device_flags)(ctx->enabled_subdevices & ~FREENECT_DEVICE_MOTOR);
 					
-					// Not the old kinect so we only set up the camera
-					ctx->enabled_subdevices = FREENECT_DEVICE_CAMERA;
 					ctx->zero_plane_res = 334;
                     dev->device_does_motor_control_with_audio = 1;
 
+                    //lets also set the LED for non 1414 devices.
+                    //this keeps the camera alive for some systems which get freezes.
+                    //this code replaces keep_alive.c. As keep_alive.c didn't know which hub the connected audio device was on.
+                    //fnusb_find_connected_audio_device needs libusb 1.0.18 or later though.
+                    
+#if defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000102)
+                    libusb_device * audioDevice = fnusb_find_connected_audio_device(devs[i], devs, cnt);
+                    if( audioDevice != NULL ){
+                        
+                        libusb_device_handle * audioHandle = NULL;
+                        res = libusb_open(audioDevice, &audioHandle);
+                        
+                        if( res != 0 ){
+           					FN_ERROR("Failed to set the LED of K4W or 1473 device: %d\n", res);
+                        }else{
+                        	res = libusb_claim_interface(audioHandle, 0);
+                            if( res != 0 ){
+                                FN_ERROR("Unable to claim interface %d\n", res);
+                            }else{
+                                fnusb_set_led_alt(audioHandle, ctx, LED_GREEN);
+                                libusb_release_interface(audioHandle, 0);
+                            }
+                            libusb_close(audioHandle);
+                        }
+                    }
+#else 
+                    //Legacy: For older versions of libusb we use this approach which doesn't do well when multiple K4W or 1473 devices are attached to the system.
                     //lets also set the LED ON
                     //this keeps the camera alive for some systems which get freezes
                     if( desc.idProduct == PID_K4W_CAMERA ){
@@ -229,12 +296,13 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
                     }else{
                         freenect_extra_keep_alive(PID_NUI_AUDIO);
                     }
+#endif 
+
                     
 #ifdef BUILD_AUDIO
                     //for newer devices we need to enable the audio device for motor control
 					//we only do this though if motor has been requested.
-                    if ((requested_devices & FREENECT_DEVICE_MOTOR) && (requested_devices & FREENECT_DEVICE_AUDIO) == 0)
-                    {
+                    if( (requested_devices & FREENECT_DEVICE_MOTOR) && (requested_devices & FREENECT_DEVICE_AUDIO) == 0 ){
                         ctx->enabled_subdevices = (freenect_device_flags)(ctx->enabled_subdevices | FREENECT_DEVICE_AUDIO);
                     }
 #endif
