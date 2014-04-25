@@ -39,6 +39,11 @@ For the examples, you'll need
     # if you don't have `make` or don't want color output
     # cmake --build .
 
+You can also specify a build with debug symbols:
+
+    cmake -L .. -DCMAKE_BUILD_TYPE=debug
+    # or with optimizations
+    # cmake -L .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 ## OSX
 

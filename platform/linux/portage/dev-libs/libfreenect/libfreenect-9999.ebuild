@@ -56,7 +56,7 @@ src_install() {
     doins "${S}"/platform/linux/udev/51-kinect.rules
 
     # documentation
-    dodoc HACKING README.md
+    dodoc README.md
     if use doc; then
         cd doc
         doxygen || ewarn "doxygen failed"
