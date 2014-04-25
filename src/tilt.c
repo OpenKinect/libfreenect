@@ -243,11 +243,9 @@ int freenect_set_tilt_degs(freenect_device *dev, double angle)
 	return ret;
 }
 
-#ifdef BUILD_AUDIO
-int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
-{
-	freenect_context *ctx = dev->parent;
 
+FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context * ctx, freenect_led_options state)
+{
     typedef enum {
         LED_ALT_OFF = 1,
         LED_ALT_BLINK_GREEN = 2,
@@ -283,12 +281,19 @@ int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
 	unsigned char buffer[20];
 	memcpy(buffer, &cmd, 20);
     
-	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 20, &transferred, 0);
+	res = libusb_bulk_transfer(dev, 0x01, buffer, 20, &transferred, 0);
 	if (res != 0) {
-		FN_WARNING("freenect_set_led_alt(): libusb_bulk_transfer failed: %d (transferred = %d)\n", res, transferred);
+		FN_WARNING("fnusb_set_led_alt(): libusb_bulk_transfer failed: %d (transferred = %d)\n", res, transferred);
 		return res;
 	}
-	return get_reply(dev->usb_audio.dev, ctx);
+	return get_reply(dev, ctx);
+}
+
+#ifdef BUILD_AUDIO
+int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
+{
+	freenect_context *ctx = dev->parent;
+    return fnusb_set_led_alt(dev->usb_audio.dev, ctx, state);
 }
 #endif
 

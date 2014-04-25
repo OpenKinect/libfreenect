@@ -45,6 +45,9 @@ typedef void (*fnusb_iso_cb)(freenect_device *dev, uint8_t *buf, int len);
 
 #include "usb_libusb10.h"
 
+//needed to set the led state for non 1414 devices - replaces keep_alive.c
+FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context * ctx, freenect_led_options state);
+
 struct _freenect_context {
 	freenect_loglevel log_level;
 	freenect_log_cb log_cb;
