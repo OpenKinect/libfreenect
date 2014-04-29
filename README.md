@@ -117,6 +117,15 @@ Wrappers are not guaranteed to be API stable or up to date.
 - actionscript
 - Java (JNA)
 
+## Python
+
+    cd wrappers/python
+    # if you have cython and want to rebuild the binding
+    # cython freenect.pyx
+    python2 setup.py build_ext --inplace
+
+For example, start with [demo_cv_async.py](https://gihub.com/OpenKinect/libfreenect/tree/master/wrappers/python/devmo_cv_async.py).
+
 
 # Maintainers
 
