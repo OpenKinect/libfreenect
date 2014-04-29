@@ -24,16 +24,13 @@
  */
 
 #include "libfreenect.h"
+#include "platform.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include <unistd.h>
-#include <time.h>
 #include <assert.h>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 #define GRAVITY 9.80665
 
@@ -45,7 +42,7 @@ static freenect_depth_cb cur_depth_cb = NULL;
 static freenect_video_cb cur_rgb_cb = NULL;
 static char *input_path = NULL;
 static FILE *index_fp = NULL;
-static freenect_raw_tilt_state state = {};
+static freenect_raw_tilt_state state = { 0 };
 static int already_warned = 0;
 static double playback_prev_time = 0.;
 static double record_prev_time = 0.;
@@ -54,45 +51,6 @@ static void *rgb_buffer = NULL;
 static int depth_running = 0;
 static int rgb_running = 0;
 static void *user_ptr = NULL;
-
-static void sleep_highres(double tm)
-{
-#ifdef _WIN32
-	int msec = floor(tm * 1000);
-	if (msec > 0) {
-		Sleep(msec);
-	}
-#else
-	int sec = floor(tm);
-	int usec = (tm - sec) * 1000000;
-	if (tm > 0) {
-		sleep(sec);
-		usleep(usec);
-	}
-#endif
-}
-
-static double get_time()
-{
-#ifdef _WIN32
-	SYSTEMTIME st;
-	GetSystemTime(&st);
-	FILETIME ft;
-	SystemTimeToFileTime(&st, &ft);
-	ULARGE_INTEGER li;
-	li.LowPart = ft.dwLowDateTime;
-	li.HighPart = ft.dwHighDateTime;
-	// FILETIME is given as a 64-bit value for the number of 100-nanosecond
-	// intervals that have passed since Jan 1, 1601 (UTC).  The difference between that
-	// epoch and the POSIX epoch (Jan 1, 1970) is 116444736000000000 such ticks.
-	uint64_t total_usecs = (li.QuadPart - 116444736000000000L) / 10L;
-	return (total_usecs / 1000000.);
-#else
-	struct timeval cur;
-	gettimeofday(&cur, NULL);
-	return cur.tv_sec + cur.tv_usec / 1000000.;
-#endif
-}
 
 static char *one_line(FILE *fp)
 {

@@ -585,7 +585,7 @@ FN_INTERNAL int fnusb_close_subdevices(freenect_device *dev)
 	return 0;
 }
 
-static void iso_callback(struct libusb_transfer *xfer)
+static void LIBUSB_CALL iso_callback(struct libusb_transfer *xfer)
 {
 	int i;
 	fnusb_isoc_stream *strm = (fnusb_isoc_stream*)xfer->user_data;

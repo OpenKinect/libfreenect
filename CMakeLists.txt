@@ -87,7 +87,7 @@ if(BUILD_AUDIO)
 endif()
 
 if (WIN32)
-   set(MATH_LIB "")
+  set(MATH_LIB "")
 else(WIN32)
   set(MATH_LIB "m")
 endif()
@@ -130,7 +130,6 @@ include_directories(${LIBUSB_1_INCLUDE_DIRS})
 
 if(WIN32)
   include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows")
-  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu/libusb-1.0")
 endif()
 
 # Add library project

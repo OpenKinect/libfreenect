@@ -833,7 +833,7 @@ static int freenect_fetch_zero_plane_info(freenect_device *dev)
 	FN_SPEW("reference_pixel_size:   %f\n", dev->registration.zero_plane_info.reference_pixel_size);
 
 	// FIXME: OpenNI seems to use a hardcoded value of 2.4 instead of 2.3 as reported by Kinect
-	dev->registration.zero_plane_info.dcmos_rcmos_dist = 2.4;
+	dev->registration.zero_plane_info.dcmos_rcmos_dist = 2.4f;
 
 	return 0;
 }

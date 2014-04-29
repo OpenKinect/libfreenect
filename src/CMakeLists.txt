@@ -7,7 +7,6 @@ include_directories (${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
 LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c keep_alive.c)
 IF(WIN32)
-  LIST(APPEND SRC ../platform/windows/libusb10emu/libusb-1.0/libusbemu.cpp ../platform/windows/libusb10emu/libusb-1.0/failguard.cpp)
   set_source_files_properties(${SRC} PROPERTIES LANGUAGE CXX)
 ENDIF(WIN32)
 

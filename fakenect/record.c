@@ -24,13 +24,13 @@
  */
 
 #include "libfreenect.h"
+#include "platform.h"
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdio.h>
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
-#include <sys/time.h>
 
 char *out_dir=0;
 volatile sig_atomic_t running = 1;
@@ -47,13 +47,6 @@ char *rgb_name = 0;
 
 FILE *depth_stream=0;
 FILE *rgb_stream=0;
-
-double get_time()
-{
-	struct timeval cur;
-	gettimeofday(&cur, NULL);
-	return cur.tv_sec + cur.tv_usec / 1000000.;
-}
 
 void dump_depth(FILE *fp, void *data, int data_size)
 {
@@ -140,20 +133,21 @@ void dump_ffmpeg_24(FILE *stream, uint32_t timestamp, void *data,
 void dump_ffmpeg_pad16(FILE *stream, uint32_t timestamp, void *data,
 					   int data_size)
 {
-	unsigned int z=0;
-	void *end = data + data_size;
-	while (data < end) {
-		z = *(unsigned short*)data;
+	unsigned int z = 0;
+	uint16_t* data_ptr = (uint16_t*)data;
+	uint16_t* end = data_ptr + data_size;
+	while (data_ptr < end) {
+		z = *data_ptr;
 		fwrite(((char*)(&z)), 3, 1, stream);
-		data += 2;
+		data_ptr += 2;
 	}
 }
 
 void snapshot_accel(freenect_device *dev)
 {
+	freenect_raw_tilt_state* state;
 	if (!last_timestamp)
 		return;
-	freenect_raw_tilt_state* state;
 	freenect_update_tilt_state(dev);
 	state = freenect_get_tilt_state(dev);
 	dump('a', last_timestamp, state, sizeof *state);
