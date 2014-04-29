@@ -74,7 +74,7 @@ int got_rgb = 0;
 int got_depth = 0;
 
 int frame = 0;
-int ftime = 0;
+int my_ftime = 0;
 double fps = 0;
 
 void idle()
@@ -140,8 +140,8 @@ void DrawGLScene() {
 	frame++;
 	if (frame % 30 == 0) {
 		int ms = glutGet(GLUT_ELAPSED_TIME);
-		fps = 30.0/((ms-ftime)/1000.0);
-		ftime = ms;
+		fps = 30.0/((ms - my_ftime)/1000.0);
+		my_ftime = ms;
 	}
 }
 
