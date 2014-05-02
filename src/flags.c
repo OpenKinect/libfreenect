@@ -55,14 +55,16 @@ int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_va
         return write_register(dev, reg, value);
     }
 
-	uint16_t reg = read_cmos_register(dev, 0x0106);
-	if (reg == UINT16_MAX)
+	uint16_t cmos_value = read_cmos_register(dev, 0x0106);
+	if (cmos_value == UINT16_MAX)
+	{
 		return -1;
+	}
 	if (value == FREENECT_ON)
-		reg |= flag;
+		cmos_value |= flag;
 	else
-		reg &= ~flag;
-	return write_cmos_register(dev, 0x0106, reg);
+		cmos_value &= ~flag;
+	return write_cmos_register(dev, 0x0106, cmos_value);
 }
 
 typedef struct {
@@ -145,11 +147,10 @@ FN_INTERNAL int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsig
 FN_INTERNAL uint16_t read_register(freenect_device *dev, uint16_t reg)
 {
 	freenect_context *ctx = dev->parent;
-	
+
 	uint16_t reply[2];
 	uint16_t cmd = fn_le16(reg);
-	
-	FN_DEBUG("read_register: 0x%04x =>\n", reg);
+
 	int res = send_cmd(dev, 0x02, &cmd, 2, reply, 4);
 	if (res < 0)
 	{
@@ -159,6 +160,7 @@ FN_INTERNAL uint16_t read_register(freenect_device *dev, uint16_t reg)
 	if (res != 4)
 		FN_WARNING("read_register: send_cmd() returned %d [%04x %04x], 0000 expected\n", res, reply[0], reply[1]);
 
+	FN_DEBUG("read_register: 0x%04x => 0x%04x\n", reg, reply[1]);
 	return reply[1];
 }
 
@@ -180,7 +182,7 @@ FN_INTERNAL int write_register(freenect_device *dev, uint16_t reg, uint16_t data
 	}
 	if (res != 2)
 		FN_WARNING("write_register: send_cmd() returned %d [%04x %04x], 0000 expected\n", res, reply[0], reply[1]);
-	
+
 	return 0;
 }
 
@@ -190,18 +192,19 @@ FN_INTERNAL uint16_t read_cmos_register(freenect_device *dev, uint16_t reg)
 	freenect_context *ctx = dev->parent;
 	uint16_t replybuf[0x200];
 	uint16_t cmdbuf[3];
-	
+
 	cmdbuf[0] = 1;
 	cmdbuf[1] = reg & 0x7fff;
 	cmdbuf[2] = 0;
-	
-	FN_DEBUG("read_cmos_register: 0x%04x =>\n", reg);
+
 	int res = send_cmd(dev, 0x95, cmdbuf, 6, replybuf, 6);
 	if (res < 0)
 	{
 		FN_ERROR("read_cmos_register: send_cmd() returned %d\n", res);
 		return UINT16_MAX;
 	}
+
+	FN_DEBUG("read_cmos_register: 0x%04x => 0x%04x\n", reg, replybuf[2]);
 	return replybuf[2];
 }
 
@@ -210,11 +213,11 @@ FN_INTERNAL int write_cmos_register(freenect_device *dev, uint16_t reg, uint16_t
 	freenect_context *ctx = dev->parent;
 	uint16_t replybuf[0x200];
 	uint16_t cmdbuf[3];
-	
+
 	cmdbuf[0] = 1;
 	cmdbuf[1] = reg | 0x8000;
 	cmdbuf[2] = value;
-	
+
 	FN_DEBUG("write_cmos_register: 0x%04x <= 0x%02x\n", reg, value);
 	int res = send_cmd(dev, 0x95, cmdbuf, 6, replybuf, 6);
 	if (res < 0)
