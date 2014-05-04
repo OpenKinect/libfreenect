@@ -35,15 +35,24 @@ For the examples, you'll need
     cd build
     cmake -L ..
     make
-    
+
     # if you don't have `make` or don't want color output
     # cmake --build .
 
-You can also specify a build with debug symbols:
+For some newer Kinect models, audio must be enabled for tilt and LED control:
+
+    cmake -L .. -DBUILD_AUDIO=ON
+
+You can specify a build with debug symbols:
 
     cmake -L .. -DCMAKE_BUILD_TYPE=debug
     # or with optimizations
     # cmake -L .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+
+You can build .deb, .rpm, and/or .tgz packages with `cpack`:
+
+    cmake .. -L -DBUILD_CPACK_DEB=ON -DBUILD_CPACK_RPM=ON -DBUILD_CPACK_TGZ=ON
+    cpack
 
 ## OSX
 
@@ -55,11 +64,11 @@ For a manual build, see [the wiki](http://openkinect.org/wiki/Getting_Started#Ma
     brew install libfreenect
     # or get the very latest:
     # brew install --HEAD libfreenect
-    
+
 ### MacPorts
 
     sudo port install git-core cmake libusb libtool
-    
+
 Continue with [Fetch & Build](#fetch-build).
 
 
@@ -76,12 +85,12 @@ Continue with this section for a manual build.
     sudo apt-get install git-core cmake pkg-config build-essential libusb-1.0-0-dev
     sudo adduser $USER video
     sudo adduser $USER plugdev # necessary?
-    
+
     # only if you are building the examples:
     sudo apt-get install libglut3-dev libxmu-dev libxi-dev
-    
+
 Continue with [Fetch & Build](#fetch-build).
-    
+
 There is also a [debian branch](https://github.com/OpenKinect/libfreenect/tree/debian) for packaging purposes.
 
 ### Gentoo Linux
@@ -127,6 +136,15 @@ Wrappers are not guaranteed to be API stable or up to date.
 For example, start with [demo_cv_async.py](https://gihub.com/OpenKinect/libfreenect/tree/master/wrappers/python/devmo_cv_async.py).
 
 
+# Code Contributions
+
+In order of importance:
+
+- Make sure to sign commits: `git commit -s`
+- Use a [feature branch](https://www.atlassian.com/git/workflows#!workflow-feature-branch) in your own fork and target master with pull requests
+- Tab indentation, no trailing whitespace
+
+
 # Maintainers
 
 Ongoing Development and Maintenance by the OpenKinect Community
@@ -158,16 +176,16 @@ http://www.apache.org/licenses/LICENSE-2.0
 http://www.gnu.org/licenses/gpl-2.0.txt
 
 If you redistribute this file in source form, modified or unmodified,
-you may: 
+you may:
 
 - Leave this header intact and distribute it under the same terms,
   accompanying it with the APACHE20 and GPL2 files, or
 - Delete the Apache 2.0 clause and accompany it with the GPL2 file, or
-- Delete the GPL v2 clause and accompany it with the APACHE20 file 
+- Delete the GPL v2 clause and accompany it with the APACHE20 file
 
 In all cases you must keep the copyright notice intact and include a
 copy of the CONTRIB file.
- 
+
 Binary distributions must follow the binary distribution requirements
 of either License.
 ```

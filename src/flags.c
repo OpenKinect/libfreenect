@@ -218,7 +218,7 @@ FN_INTERNAL int write_cmos_register(freenect_device *dev, uint16_t reg, uint16_t
 	cmdbuf[1] = reg | 0x8000;
 	cmdbuf[2] = value;
 
-	FN_DEBUG("write_cmos_register: 0x%04x <= 0x%02x\n", reg, value);
+	FN_DEBUG("write_cmos_register: 0x%04x <= 0x%04x\n", reg, value);
 	int res = send_cmd(dev, 0x95, cmdbuf, 6, replybuf, 6);
 	if (res < 0)
 		FN_ERROR("write_cmos_register: send_cmd() returned %d\n", res);
