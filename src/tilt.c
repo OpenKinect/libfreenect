@@ -281,7 +281,7 @@ FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context *
 	unsigned char buffer[20];
 	memcpy(buffer, &cmd, 20);
     
-	res = libusb_bulk_transfer(dev, 0x01, buffer, 20, &transferred, 0);
+	res = libusb_bulk_transfer(dev, 0x01, buffer, 20, &transferred, 100);
 	if (res != 0) {
 		FN_WARNING("fnusb_set_led_alt(): libusb_bulk_transfer failed: %d (transferred = %d)\n", res, transferred);
 		return res;
