@@ -277,6 +277,14 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
                         if( res != 0 ){
            					FN_ERROR("Failed to set the LED of K4W or 1473 device: %d\n", res);
                         }else{
+                        
+                            //we need to do this as it is possible that the device was not closed properly in a previous session
+                            //if we don't do this and the device wasn't closed properly - it can cause infinite hangs on LED and TILT functions
+                            libusb_reset_device(audioHandle);
+                            libusb_close(audioHandle);
+                            
+                            res = libusb_open(audioDevice, &audioHandle);
+                            if( res == 0 ){
                         	res = libusb_claim_interface(audioHandle, 0);
                             if( res != 0 ){
                                 FN_ERROR("Unable to claim interface %d\n", res);
@@ -286,6 +294,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
                             }
                             libusb_close(audioHandle);
                         }
+                    }
                     }
 #else 
                     //Legacy: For older versions of libusb we use this approach which doesn't do well when multiple K4W or 1473 devices are attached to the system.
