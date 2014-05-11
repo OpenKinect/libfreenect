@@ -8,8 +8,7 @@ It runs on Linux, OSX, and Windows and supports
 - Motors
 - Accelerometer
 - LED
-
-Audio is a work in progress.
+- Audio
 
 
 # Build Instructions
@@ -18,7 +17,7 @@ To build libfreenect, you'll need
 
 - [libusb](http://libusb.info) >= 1.0.18
 - [CMake](http://cmake.org) >= 2.6
-- [python](http://python.org) == 2.* (only if BUILD_AUDIO or BUILD_PYTHON)
+- [python](http://python.org) == 2.* (only if BUILD_PYTHON=ON or BUILD_REDIST_PACKAGE=OFF)
 
 For the examples, you'll need
 
@@ -26,6 +25,12 @@ For the examples, you'll need
 - glut     (included with OSX)
 - [pthreads-win32](http://sourceforge.net/projects/pthreads4w/) (Windows)
 
+For audio support, you must have firmware to upload to the Kinect.
+If you specify a non-redistributable package, firmware will be downloaded automatically:
+
+    cmake -L .. -DBUILD_REDIST_PACKAGE=OFF
+
+Note that the downloaded firmware may not be legal to redistribute!
 
 ## <a name="fetch-build"></a>Fetch & Build
 
@@ -38,10 +43,6 @@ For the examples, you'll need
 
     # if you don't have `make` or don't want color output
     # cmake --build .
-
-For some newer Kinect models, audio must be enabled for tilt and LED control:
-
-    cmake -L .. -DBUILD_AUDIO=ON
 
 You can specify a build with debug symbols:
 

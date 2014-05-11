@@ -97,7 +97,6 @@ freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev)
 	return &dev->raw_state;
 }
 
-#ifdef BUILD_AUDIO
 int update_tilt_state_alt(freenect_device *dev){
 	freenect_context *ctx = dev->parent;
 
@@ -150,18 +149,15 @@ int update_tilt_state_alt(freenect_device *dev){
 	// Units still to be worked out.
 	return get_reply(dev->usb_audio.dev, ctx);
 }
-#endif 
 
 int freenect_update_tilt_state(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	
-    #ifdef BUILD_AUDIO
     //if we have motor control via audio and fw is uploaded - call the alt function
     if( dev->motor_control_with_audio_enabled ){
         return update_tilt_state_alt(dev);
     }
-    #endif
     
     if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
 		return 0;
@@ -188,7 +184,6 @@ int freenect_update_tilt_state(freenect_device *dev)
 	return ret;
 }
 
-#ifdef BUILD_AUDIO
 int freenect_set_tilt_degs_alt(freenect_device *dev, int tilt_degrees)
 {
 	freenect_context *ctx = dev->parent;
@@ -217,18 +212,15 @@ int freenect_set_tilt_degs_alt(freenect_device *dev, int tilt_degrees)
     
 	return get_reply(dev->usb_audio.dev, ctx);
 }
-#endif
 
 int freenect_set_tilt_degs(freenect_device *dev, double angle)
 {
 	freenect_context *ctx = dev->parent;
     
-    #ifdef BUILD_AUDIO
     //if we have motor control via audio and fw is uploaded - call the alt function
     if( dev->motor_control_with_audio_enabled ){
         return freenect_set_tilt_degs_alt(dev, angle);
     }
-    #endif
     
 	if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
 		return 0;
@@ -289,24 +281,20 @@ FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context *
 	return get_reply(dev, ctx);
 }
 
-#ifdef BUILD_AUDIO
 int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
 {
 	freenect_context *ctx = dev->parent;
     return fnusb_set_led_alt(dev->usb_audio.dev, ctx, state);
 }
-#endif
 
 int freenect_set_led(freenect_device *dev, freenect_led_options option)
 {
 	freenect_context *ctx = dev->parent;
 
     //if we have motor control via audio and fw is uploaded - call the alt function
-    #ifdef BUILD_AUDIO
     if( dev->motor_control_with_audio_enabled ){
         return freenect_set_led_alt(dev, option);
     }
-    #endif
     
 	if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
 		return 0;

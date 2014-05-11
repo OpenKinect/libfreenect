@@ -263,10 +263,8 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 	dev->usb_cam.dev = NULL;
 	dev->usb_motor.parent = dev;
 	dev->usb_motor.dev = NULL;
-#ifdef BUILD_AUDIO
 	dev->usb_audio.parent = dev;
 	dev->usb_audio.dev = NULL;
-#endif
 
 	libusb_device **devs; // pointer to pointer of device, used to retrieve a list of devices
 	ssize_t cnt = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
@@ -274,9 +272,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		return -1;
 
 	int i = 0, nr_cam = 0, nr_mot = 0;
-#ifdef BUILD_AUDIO
 	int nr_audio = 0;
-#endif
 	int res;
 	struct libusb_device_descriptor desc;
 
@@ -348,15 +344,12 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 							}
 						}
 					}
-
-#ifdef BUILD_AUDIO
 					// for newer devices we need to enable the audio device for motor control
 					// we only do this though if motor has been requested.
 					if ((requested_devices & FREENECT_DEVICE_MOTOR) && (requested_devices & FREENECT_DEVICE_AUDIO) == 0)
 					{
 						ctx->enabled_subdevices = (freenect_device_flags)(ctx->enabled_subdevices | FREENECT_DEVICE_AUDIO);
 					}
-#endif
 				}
 				else
 				{
@@ -445,7 +438,6 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			}
 		}
 
-#ifdef BUILD_AUDIO
 		// Search for the audio
 		if ((ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO) && !dev->usb_audio.dev && (desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct)))
 		{
@@ -608,7 +600,6 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 				nr_audio++;
 			}
 		}
-#endif
 	}
 
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
@@ -616,10 +607,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 	// Check that each subdevice is either opened or not enabled.
 	if ((dev->usb_cam.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA))
 		&& (dev->usb_motor.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
-#ifdef BUILD_AUDIO
-		&& (dev->usb_audio.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO))
-#endif
-		)
+		&& (dev->usb_audio.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO)))
 	{
 		return 0;
 	}
@@ -645,7 +633,6 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			FN_ERROR("Failed to open motor subddevice or it is not disabled.");
 		}
 
-#ifdef BUILD_AUDIO
 		if (dev->usb_audio.dev)
 		{
 			libusb_release_interface(dev->usb_audio.dev, 0);
@@ -655,7 +642,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		{
 			FN_ERROR("Failed to open audio subdevice or it is not disabled.");
 		}
-#endif
+
 		return -1;
 	}
 }
@@ -675,13 +662,11 @@ FN_INTERNAL int fnusb_close_subdevices(freenect_device *dev)
 		libusb_close(dev->usb_motor.dev);
 		dev->usb_motor.dev = NULL;
 	}
-#ifdef BUILD_AUDIO
 	if (dev->usb_audio.dev) {
 		libusb_release_interface(dev->usb_audio.dev, 0);
 		libusb_close(dev->usb_audio.dev);
 		dev->usb_audio.dev = NULL;
 	}
-#endif
 	return 0;
 }
 
@@ -840,7 +825,6 @@ FN_INTERNAL int fnusb_control(fnusb_dev *dev, uint8_t bmRequestType, uint8_t bRe
 	return libusb_control_transfer(dev->dev, bmRequestType, bRequest, wValue, wIndex, data, wLength, 0);
 }
 
-#ifdef BUILD_AUDIO
 FN_INTERNAL int fnusb_bulk(fnusb_dev *dev, uint8_t endpoint, uint8_t *data, int len, int *transferred) {
 	*transferred = 0;
 	return libusb_bulk_transfer(dev->dev, endpoint, data, len, transferred, 0);
@@ -858,4 +842,3 @@ FN_INTERNAL int fnusb_num_interfaces(fnusb_dev *dev) {
 	libusb_free_config_descriptor(config);
 	return retval;
 }
-#endif

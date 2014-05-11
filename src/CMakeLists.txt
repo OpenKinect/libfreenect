@@ -10,20 +10,19 @@ IF(WIN32)
   set_source_files_properties(${SRC} PROPERTIES LANGUAGE CXX)
 ENDIF(WIN32)
 
-IF(BUILD_AUDIO)
-  include(FindPythonInterp)
-  LIST(APPEND SRC audio.c loader.c)
-  IF(BUILD_REDIST_PACKAGE)
-    # If this build is intended for a redistributable package, we can't include audios.bin, so we should include fwfetcher.py
-    # and the package should run "python fwfetcher.py $INSTALL_PREFIX/share" as a postinst hook
-    install (FILES "fwfetcher.py" DESTINATION "${CMAKE_INSTALL_PREFIX}/share")
-  ELSE(BUILD_REDIST_PACKAGE)
-    # If the install is local only, we can just run fwfetcher.py and install the audios.bin firmware to the system folder
-    add_custom_target(firmware ALL
-        COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py" "../audios.bin"
-        DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py")
-    install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/libfreenect")
-  ENDIF()
+# Audio
+include(FindPythonInterp)
+LIST(APPEND SRC audio.c loader.c)
+IF(BUILD_REDIST_PACKAGE)
+  # If this build is intended for a redistributable package, we can't include audios.bin, so we should include fwfetcher.py
+  # and the package should run "python fwfetcher.py $INSTALL_PREFIX/share" as a postinst hook
+  install (FILES "fwfetcher.py" DESTINATION "${CMAKE_INSTALL_PREFIX}/share")
+ELSE(BUILD_REDIST_PACKAGE)
+  # If the install is local only, we can just run fwfetcher.py and install the audios.bin firmware to the system folder
+  add_custom_target(firmware ALL
+      COMMAND ${PYTHON_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py" "../audios.bin"
+      DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py")
+  install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/libfreenect")
 ENDIF()
 
 add_library (freenect SHARED ${SRC})
@@ -45,12 +44,8 @@ target_link_libraries (freenect ${LIBUSB_1_LIBRARIES})
 target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
 
 # Install the header files
-install (FILES "../include/libfreenect.h" "../include/libfreenect_registration.h"
+install (FILES "../include/libfreenect.h" "../include/libfreenect_registration.h" "../include/libfreenect_audio.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
-if(BUILD_AUDIO)
-  install (FILES "../include/libfreenect_audio.h"
-    DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
-endif()
 
 IF(UNIX AND NOT APPLE)
   # Produce a pkg-config file for linking against the shared lib

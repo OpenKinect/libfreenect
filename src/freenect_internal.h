@@ -29,10 +29,7 @@
 
 #include "libfreenect.h"
 #include "libfreenect_registration.h"
-
-#ifdef BUILD_AUDIO
-  #include "libfreenect_audio.h"
-#endif
+#include "libfreenect_audio.h"
 
 #ifdef __ELF__
   #define FN_INTERNAL	__attribute__ ((visibility ("hidden")))
@@ -174,7 +171,6 @@ typedef struct {
 	void *proc_buf;
 } packet_stream;
 
-#ifdef BUILD_AUDIO
 typedef struct {
 	int running;
 
@@ -214,8 +210,6 @@ typedef struct {
 	freenect_sample_51 samples[6];  // Audio samples - 6 samples per transfer
 } audio_out_block;
 
-#endif
-
 struct _freenect_device {
 	freenect_context *parent;
 	freenect_device *next;
@@ -244,7 +238,6 @@ struct _freenect_device {
 	// Registration
 	freenect_registration registration;
 
-#ifdef BUILD_AUDIO
 	// Audio
 	fnusb_dev usb_audio;
 	fnusb_isoc_stream audio_out_isoc;
@@ -255,7 +248,7 @@ struct _freenect_device {
 
 	audio_stream audio;
 	uint32_t audio_tag;
-#endif
+
 	// Motor
 	fnusb_dev usb_motor;
 	freenect_raw_tilt_state raw_state;
