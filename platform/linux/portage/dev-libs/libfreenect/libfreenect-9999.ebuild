@@ -4,7 +4,7 @@
 
 EAPI="5"
 
-inherit cmake-utils git-2 multilib
+inherit cmake-utils git-2 multilib python
 
 
 DESCRIPTION="Core library for accessing the Microsoft Kinect."
@@ -16,6 +16,8 @@ SLOT="0"
 KEYWORDS=""
 IUSE="audio bindist +c_sync +cpp doc examples fakenect opencv openni2 python"
 
+PYTHON_DEPEND="audio? 2"
+
 COMMON_DEP="virtual/libusb:1
             examples? ( media-libs/freeglut
                         virtual/opengl
@@ -25,10 +27,9 @@ COMMON_DEP="virtual/libusb:1
             python? ( dev-python/numpy )"
 
 RDEPEND="${COMMON_DEP}"
-DEPEND= "${COMMON_DEP}
+DEPEND="${COMMON_DEP}
          dev-util/cmake
          virtual/pkgconfig
-         audio? ( dev-lang/python-2* )
          doc? ( app-doc/doxygen )
          python? ( dev-python/cython )"
 
