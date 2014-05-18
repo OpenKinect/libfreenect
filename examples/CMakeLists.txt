@@ -12,8 +12,7 @@ if (WIN32)
   set(THREADS_USE_PTHREADS_WIN32 true)
   find_package(Threads REQUIRED)
   include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
-
-  set_source_file_properties(${SRC_ALL} PROPERTIES LANGUAGE CXX)
+  set_source_files_properties(${SRC_ALL} PROPERTIES LANGUAGE CXX)
 endif()
 
 add_executable(freenect-glview glview.c)
