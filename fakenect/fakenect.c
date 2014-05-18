@@ -203,6 +203,11 @@ int freenect_process_events(freenect_context *ctx)
 	return 0;
 }
 
+int freenect_process_events_timeout(freenect_context *ctx, struct timeval *timeout)
+{
+	return freenect_process_events(ctx);
+}
+
 double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
 {
 	// NOTE: This is duped from tilt.c, this is the only function we need from there
