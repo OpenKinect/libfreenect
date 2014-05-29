@@ -60,6 +60,8 @@
 #define VIDEO_PKTBUF 1920
 #endif
 
+#define K4W_AND_1473_SERIAL_NO "0000000000000000"
+
 typedef struct {
 	libusb_context *ctx;
 	int should_free_ctx;

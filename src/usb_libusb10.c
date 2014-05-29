@@ -110,7 +110,43 @@ FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_dev
 
 			*camera_prev_next = new_dev_attrs;
 			// Copy string with serial number
-			new_dev_attrs->camera_serial = strdup((char*)string_desc);
+			if (strncmp((const char*)string_desc, K4W_AND_1473_SERIAL_NO, 16) == 0){
+				printf("\n k4w detected\n");
+				int j;
+				struct libusb_device_descriptor audio_desc;
+				for (j=0; j< count; j++) {
+					int result = libusb_get_device_descriptor (devs[j], &audio_desc);
+					if (result < 0)
+						continue;
+					
+					if (audio_desc.idVendor == VID_MICROSOFT && audio_desc.idProduct == PID_K4W_AUDIO) {
+						// Verify that a serial number exists to query.  If not, don't touch the device.
+						if (audio_desc.iSerialNumber == 0) {
+							continue;
+						}
+						int audio_bus_num = libusb_get_bus_number(libusb_get_parent(devs[j]));
+						int audio_port_num = libusb_get_port_number(libusb_get_parent(devs[j]));
+						if (libusb_get_bus_number(libusb_get_parent(devs[i])) == audio_bus_num && 
+							libusb_get_port_number(libusb_get_parent(devs[i])) == audio_port_num && 
+							audio_bus_num != 0 && audio_port_num != 0) {
+							int result_audio;
+							libusb_device_handle *this_audio_device;
+							result_audio = libusb_open(devs[j], &this_audio_device);
+							if (result_audio != 0) {
+								continue;
+							}
+							result_audio = libusb_get_string_descriptor_ascii(this_device, audio_desc.iSerialNumber, string_desc, 256);
+							if (result_audio < 0) {
+								continue;
+							}
+							libusb_close(this_audio_device);
+						}
+					}
+				}
+				new_dev_attrs->camera_serial = strdup((char*)string_desc);
+			} else {
+				new_dev_attrs->camera_serial = strdup((char*)string_desc);
+			}
 			camera_prev_next = &(new_dev_attrs->next);
 			// Increment number of cameras found
 			num_cams++;
