@@ -109,9 +109,11 @@ FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_dev
 			memset(new_dev_attrs, 0, sizeof(*new_dev_attrs));
 
 			*camera_prev_next = new_dev_attrs;
+
 			// Copy string with serial number
-			if (strncmp((const char*)string_desc, K4W_AND_1473_SERIAL_NO, 16) == 0){
-				printf("\n k4w detected\n");
+
+			// Fallback for kinect 4 windows and 1473 to the audio serial
+			if (strncmp((const char*)string_desc, K4W_AND_1473_SERIAL_NO, 16) == 0) {
 				int j;
 				struct libusb_device_descriptor audio_desc;
 				for (j=0; j< count; j++) {
@@ -129,6 +131,7 @@ FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_dev
 						if (libusb_get_bus_number(libusb_get_parent(devs[i])) == audio_bus_num && 
 							libusb_get_port_number(libusb_get_parent(devs[i])) == audio_port_num && 
 							audio_bus_num != 0 && audio_port_num != 0) {
+							
 							int result_audio;
 							libusb_device_handle *this_audio_device;
 							result_audio = libusb_open(devs[j], &this_audio_device);
@@ -143,10 +146,9 @@ FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_dev
 						}
 					}
 				}
-				new_dev_attrs->camera_serial = strdup((char*)string_desc);
-			} else {
-				new_dev_attrs->camera_serial = strdup((char*)string_desc);
-			}
+			} 
+
+			new_dev_attrs->camera_serial = strdup((char*)string_desc);
 			camera_prev_next = &(new_dev_attrs->next);
 			// Increment number of cameras found
 			num_cams++;
