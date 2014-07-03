@@ -32,18 +32,14 @@
 #include "libfreenect.h"
 
 #include <pthread.h>
+#include <math.h>
 
 #if defined(__APPLE__)
 #include <GLUT/glut.h>
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
 #else
 #include <GL/glut.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
 #endif
 
-#include <math.h>
 
 pthread_t freenect_thread;
 volatile int die = 0;
