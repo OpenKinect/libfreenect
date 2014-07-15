@@ -16,7 +16,7 @@ Audio is a work in progress.
 
 To build libfreenect, you'll need
 
-- [libusb](http://libusb.info) >= 1.0.13
+- [libusb](http://libusb.info) >= 1.0.18
 - [CMake](http://cmake.org) >= 2.6
 - [python](http://python.org) == 2.* (only if BUILD_AUDIO or BUILD_PYTHON)
 

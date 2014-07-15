@@ -31,7 +31,6 @@
 #include <libusb.h>
 #include "freenect_internal.h"
 #include "loader.h"
-#include "keep_alive.h"
 
 #ifdef _MSC_VER
 	# define sleep(x) Sleep((x)*1000) 
@@ -168,8 +167,6 @@ FN_INTERNAL int fnusb_is_pid_k4w_audio(int pid)
 	return (pid == PID_K4W_AUDIO || pid == PID_K4W_AUDIO_ALT_1 || pid == PID_K4W_AUDIO_ALT_2);
 }
 
-// fnusb_find_connected_audio_device uses new libusb features. we use guards to make sure its backwards compatible with older versions of libusb
-#if defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000102)
 FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * camera, libusb_device ** deviceList, int cnt){
     
     int cameraBusNo = libusb_get_bus_number(camera);
@@ -203,7 +200,6 @@ FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * ca
 
     return NULL;
 }
-#endif
 
 FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 {
@@ -266,10 +262,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
                     dev->device_does_motor_control_with_audio = 1;
 
 					// set the LED for non 1414 devices to keep the camera alive for some systems which get freezes
-					// this code replaces keep_alive.c, which didn't know which hub the connected audio device was on
-					// fnusb_find_connected_audio_device needs libusb 1.0.18 or later
 
-#if defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000102)
 					libusb_device * audioDevice = fnusb_find_connected_audio_device(devs[i], devs, cnt);
 					if (audioDevice != NULL)
 					{
@@ -304,11 +297,6 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 							}
 						}
 					}
-#else 
-					// Legacy: for older versions of libusb we use this approach which doesn't do well when multiple K4W or 1473 devices are attached to the system.
-					// also set the LED ON to keep the camera alive for some systems which get freezes
-					freenect_extra_keep_alive((desc.idProduct == PID_K4W_CAMERA) ? PID_K4W_AUDIO : PID_NUI_AUDIO);
-#endif 
 
 #ifdef BUILD_AUDIO
 					// for newer devices we need to enable the audio device for motor control

@@ -45,7 +45,7 @@ typedef void (*fnusb_iso_cb)(freenect_device *dev, uint8_t *buf, int len);
 
 #include "usb_libusb10.h"
 
-//needed to set the led state for non 1414 devices - replaces keep_alive.c
+// needed to set the led state for non 1414 devices
 FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context * ctx, freenect_led_options state);
 
 struct _freenect_context {
@@ -56,7 +56,7 @@ struct _freenect_context {
 	freenect_device *first;
 	int zero_plane_res;
     
-    //if you want to load firmware from memory rather than disk
+    // if you want to load firmware from memory rather than disk
     unsigned char *     fn_fw_nui_ptr;
     unsigned int        fn_fw_nui_size;
 
