@@ -28,6 +28,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <assert.h>
+#include "libfreenect_registration.h"
 #include "libfreenect_sync.h"
 
 typedef struct buffer_ring {
@@ -398,6 +399,13 @@ int freenect_sync_set_tilt_degs(int angle, int index) {
 int freenect_sync_set_led(freenect_led_options led, int index) {
 	if (runloop_enter(index)) return -1;
 	freenect_set_led(kinects[index]->dev, led);
+	runloop_exit();
+	return 0;
+}
+
+int freenect_sync_camera_to_world(int cx, int cy, int wz, double* wx, double* wy, int index) {
+	if (runloop_enter(index)) return -1;
+	freenect_camera_to_world(kinects[index]->dev, cx, cy, wz, wx, wy);
 	runloop_exit();
 	return 0;
 }
