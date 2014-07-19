@@ -64,10 +64,10 @@ typedef enum {
 /// A struct used in enumeration to give access to serial numbers, so you can
 /// open a particular device by serial rather than depending on index.  This
 /// is most useful if you have more than one Kinect.
-struct freenect_device_attributes;
-struct freenect_device_attributes {
-	struct freenect_device_attributes *next; /**< Next device in the linked list */
-	const char* camera_serial; /**< Serial number of this device's camera subdevice */
+struct freenect_device_attributes
+{
+	struct freenect_device_attributes *next; // Next device in the linked list
+	const char* camera_serial;               // Serial number of camera or audio subdevice
 };
 
 /// Enumeration of available resolutions.

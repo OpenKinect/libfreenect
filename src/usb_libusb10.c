@@ -60,58 +60,149 @@ FN_INTERNAL int fnusb_num_devices(fnusb_ctx *ctx)
 	return nr;
 }
 
+// Returns 1 if `pid` identifies K4W audio, 0 otherwise
+FN_INTERNAL int fnusb_is_pid_k4w_audio(int pid)
+{
+	return (pid == PID_K4W_AUDIO || pid == PID_K4W_AUDIO_ALT_1 || pid == PID_K4W_AUDIO_ALT_2);
+}
+
+FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * camera, libusb_device ** deviceList, int cnt)
+{
+	if (cnt <= 0) return NULL;
+
+	int cameraBusNo = libusb_get_bus_number(camera);
+	if (cameraBusNo < 0) return NULL;
+	libusb_device * cameraParent = libusb_get_parent(camera);
+
+	int i = 0;
+	for (i = 0; i < cnt; i++)
+	{
+		struct libusb_device_descriptor desc;
+		int res = libusb_get_device_descriptor (deviceList[i], &desc);
+		if (res < 0)
+		{
+			continue;
+		}
+
+		if (desc.idVendor == VID_MICROSOFT)
+		{
+			// make sure its some type of Kinect audio device
+			if ((desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct)))
+			{
+				int audioBusNo = libusb_get_bus_number(deviceList[i]);
+				if (audioBusNo == cameraBusNo)
+				{
+					// we have a match!
+					// let's double check
+					libusb_device * audioParent = libusb_get_parent(deviceList[i]);
+					if (cameraParent == audioParent)
+					{
+						return deviceList[i];
+					}
+				}
+			}
+		}
+	}
+
+	return NULL;
+}
+
 FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_device_attributes** attribute_list)
 {
+	// todo: figure out how to log without freenect_context
+
 	*attribute_list = NULL; // initialize some return value in case the user is careless.
-	libusb_device **devs;
-	//pointer to pointer of device, used to retrieve a list of devices
+	libusb_device **devs;   // pointer to pointer of device, used to retrieve a list of devices
 	ssize_t count = libusb_get_device_list (ctx->ctx, &devs);
 	if (count < 0)
+	{
 		return -1;
+	}
 
-	struct freenect_device_attributes** camera_prev_next = attribute_list;
+	struct freenect_device_attributes** next_attr = attribute_list;
 
 	// Pass over the list.  For each camera seen, if we already have a camera
 	// for the newest_camera device, allocate a new one and append it to the list,
-	// incrementing num_devs.  Likewise for each audio device.
-	struct libusb_device_descriptor desc;
+	// incrementing num_cams.
 	int num_cams = 0;
 	int i;
-	for (i = 0; i < count; i++) {
-		int r = libusb_get_device_descriptor (devs[i], &desc);
-		if (r < 0)
+	for (i = 0; i < count; i++)
+	{
+		libusb_device* camera_device = devs[i];
+
+		struct libusb_device_descriptor desc;
+		int res = libusb_get_device_descriptor (camera_device, &desc);
+		if (res < 0)
+		{
 			continue;
-		if (desc.idVendor == VID_MICROSOFT && (desc.idProduct == PID_NUI_CAMERA || desc.idProduct == PID_K4W_CAMERA)) {
+		}
+
+		if (desc.idVendor == VID_MICROSOFT && (desc.idProduct == PID_NUI_CAMERA || desc.idProduct == PID_K4W_CAMERA))
+		{
 			// Verify that a serial number exists to query.  If not, don't touch the device.
-			if (desc.iSerialNumber == 0) {
+			if (desc.iSerialNumber == 0)
+			{
 				continue;
 			}
 
-			// Open device.
-			int res;
-			libusb_device_handle *this_device;
-			res = libusb_open(devs[i], &this_device);
-			unsigned char string_desc[256]; // String descriptors are at most 256 bytes.
-			if (res != 0) {
+			libusb_device_handle *camera_handle;
+			res = libusb_open(camera_device, &camera_handle);
+			if (res != 0)
+			{
 				continue;
 			}
 
 			// Read string descriptor referring to serial number.
-			res = libusb_get_string_descriptor_ascii(this_device, desc.iSerialNumber, string_desc, 256);
-			libusb_close(this_device);
-			if (res < 0) {
+			unsigned char serial[256]; // String descriptors are at most 256 bytes.
+			res = libusb_get_string_descriptor_ascii(camera_handle, desc.iSerialNumber, serial, 256);
+			libusb_close(camera_handle);
+			if (res < 0)
+			{
 				continue;
 			}
 
-			// Add item to linked list.
-			struct freenect_device_attributes* new_dev_attrs = (struct freenect_device_attributes*)malloc(sizeof(struct freenect_device_attributes));
-			memset(new_dev_attrs, 0, sizeof(*new_dev_attrs));
+			// K4W and 1473 don't provide a camera serial; use audio serial instead.
+			const char* const K4W_1473_SERIAL = "0000000000000000";
+			if (strncmp((const char*)serial, K4W_1473_SERIAL, 16) != 0)
+			{
+				libusb_device* audio_device = fnusb_find_connected_audio_device(camera_device, devs, count);
 
-			*camera_prev_next = new_dev_attrs;
-			// Copy string with serial number
-			new_dev_attrs->camera_serial = strdup((char*)string_desc);
-			camera_prev_next = &(new_dev_attrs->next);
-			// Increment number of cameras found
+				if (audio_device != NULL)
+				{
+					struct libusb_device_descriptor audio_desc;
+					res = libusb_get_device_descriptor(audio_device, &audio_desc);
+					if (res != 0)
+					{
+						//FN_ERROR("Failed to get audio serial descriptors of K4W or 1473 device: %d\n", res);
+					}
+					else
+					{
+						libusb_device_handle * audio_handle = NULL;
+						res = libusb_open(audio_device, &audio_handle);
+						if (res != 0)
+						{
+							//FN_ERROR("Failed to open audio device for serial of K4W or 1473 device: %d\n", res);
+						}
+						else
+						{
+							res = libusb_get_string_descriptor_ascii(audio_handle, audio_desc.iSerialNumber, serial, 256);
+							libusb_close(audio_handle);
+							if (res != 0)
+							{
+								//FN_ERROR("Failed to get audio serial of K4W or 1473 device: %d\n", res);
+							}
+						}
+					}
+				}
+			}
+
+			// Add item to linked list.
+			struct freenect_device_attributes* current_attr = (struct freenect_device_attributes*)malloc(sizeof(struct freenect_device_attributes));
+			memset(current_attr, 0, sizeof(*current_attr));
+
+			current_attr->camera_serial = strdup((char*)serial);
+			*next_attr = current_attr;
+			next_attr = &(current_attr->next);
 			num_cams++;
 		}
 	}
@@ -159,46 +250,6 @@ FN_INTERNAL int fnusb_process_events(fnusb_ctx *ctx)
 FN_INTERNAL int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* timeout)
 {
 	return libusb_handle_events_timeout(ctx->ctx, timeout);
-}
-
-// Returns 1 if `pid` identifies K4W audio, 0 otherwise
-FN_INTERNAL int fnusb_is_pid_k4w_audio(int pid)
-{
-	return (pid == PID_K4W_AUDIO || pid == PID_K4W_AUDIO_ALT_1 || pid == PID_K4W_AUDIO_ALT_2);
-}
-
-FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * camera, libusb_device ** deviceList, int cnt){
-    
-    int cameraBusNo = libusb_get_bus_number(camera);
-    libusb_device * cameraParent = libusb_get_parent(camera);
-    
-    if( cameraBusNo < 0 ) return NULL;
-    if( cnt <= 0 ) return  NULL;
-    
-    int i = 0;
-    struct libusb_device_descriptor desc;
-
-	for (i = 0; i < cnt; i++) {
-		int r = libusb_get_device_descriptor (deviceList[i], &desc);
-		if (r < 0) continue;
-		if (desc.idVendor != VID_MICROSOFT) continue;
-        
-        //make sure its some type of Kinect audio device
-        if( (desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct) ) ){
-            
-            int audioBusNo = libusb_get_bus_number(deviceList[i]);
-            if( audioBusNo == cameraBusNo ){
-                //we have a match!
-                //lets double check
-                libusb_device * audioParent = libusb_get_parent(deviceList[i]);
-                if( cameraParent == audioParent ){
-                    return deviceList[i];
-                }
-            }
-        }
-    }
-
-    return NULL;
 }
 
 FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
