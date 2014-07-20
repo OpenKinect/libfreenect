@@ -14,9 +14,9 @@ EGIT_REPO_URI="git://github.com/OpenKinect/${PN}.git"
 LICENSE="Apache-2.0 GPL-2"
 SLOT="0"
 KEYWORDS=""
-IUSE="audio bindist +c_sync +cpp doc examples fakenect opencv openni2 python"
+IUSE="bindist +c_sync +cpp doc examples fakenect opencv openni2 python"
 
-PYTHON_DEPEND="audio? 2"
+PYTHON_DEPEND="!bindist? 2"
 
 COMMON_DEP="virtual/libusb:1
             examples? ( media-libs/freeglut
@@ -36,7 +36,6 @@ DEPEND="${COMMON_DEP}
 
 src_configure() {
     local mycmakeargs=(
-        $(cmake-utils_use_build audio    AUDIO)
         $(cmake-utils_use_build bindist  REDIST_PACKAGE)
         $(cmake-utils_use_build c_sync   C_SYNC)
         $(cmake-utils_use_build cpp      CPP)
