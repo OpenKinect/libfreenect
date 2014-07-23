@@ -163,7 +163,7 @@ FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_dev
 
 			// K4W and 1473 don't provide a camera serial; use audio serial instead.
 			const char* const K4W_1473_SERIAL = "0000000000000000";
-			if (strncmp((const char*)serial, K4W_1473_SERIAL, 16) != 0)
+			if (strncmp((const char*)serial, K4W_1473_SERIAL, 16) == 0)
 			{
 				libusb_device* audio_device = fnusb_find_connected_audio_device(camera_device, devs, count);
 
