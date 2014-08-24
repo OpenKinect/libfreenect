@@ -13,6 +13,7 @@ endif()
 include_directories(.)
 
 add_executable(freenect-cppview cppview.cpp)
+add_executable(freenect-cpp_pcview cpp_pc_view.cpp)
 
 # Mac just has everything already
 if(APPLE)
@@ -26,9 +27,13 @@ else()
   include_directories(${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR} ${USB_INCLUDE_DIRS})
 
   target_link_libraries(freenect-cppview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+  target_link_libraries(freenect-cpp_pcview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT})
 endif()
 
 install (TARGETS freenect-cppview
+  DESTINATION bin)
+
+install (TARGETS freenect-cpp_pcview
   DESTINATION bin)
 
 ENDIF()
