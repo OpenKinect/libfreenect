@@ -219,6 +219,11 @@ freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev)
 	return &state;
 }
 
+freenect_tilt_status_code freenect_get_tilt_status(freenect_raw_tilt_state *state)
+{
+    return state->tilt_status;
+}
+
 void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z)
 {
 	//the documentation for the accelerometer (http://www.kionix.com/Product%20Sheets/KXSD9%20Product%20Brief.pdf)
@@ -261,6 +266,21 @@ freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_v
     return out;
 }
 
+int freenect_get_video_mode_count()
+{
+    return 1;
+}
+
+freenect_frame_mode freenect_get_video_mode(int mode_num)
+{
+    return freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB);
+}
+
+freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
+{
+    return freenect_get_video_mode(0);
+}
+
 freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt) {
     assert(FREENECT_RESOLUTION_MEDIUM == res);
     assert(FREENECT_DEPTH_11BIT == fmt);
@@ -268,6 +288,21 @@ freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_d
     // To update this line run the "record" program, look at the top output
     freenect_frame_mode out = {256, 1, {0}, 614400, 640, 480, 11, 5, 30, 1};
     return out;
+}
+
+int freenect_get_depth_mode_count()
+{
+    return 1;
+}
+
+freenect_frame_mode freenect_get_depth_mode(int mode_num)
+{
+    return freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT);
+}
+
+freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
+{
+    return freenect_get_depth_mode(0);
 }
 
 int freenect_num_devices(freenect_context *ctx)
@@ -283,10 +318,21 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 	return 0;
 }
 
+int freenect_open_device_by_camera_serial(freenect_context *ctx, freenect_device **dev, const char* camera_serial)
+{
+    *dev = fake_dev;
+    return 0;
+}
+
 int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 {
 	*ctx = fake_ctx;
 	return 0;
+}
+
+int freenect_supported_subdevices(void)
+{
+    return FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA;
 }
 
 void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs) {
