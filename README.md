@@ -134,7 +134,7 @@ Wrappers are not guaranteed to be API stable or up to date.
     # cython freenect.pyx
     python2 setup.py build_ext --inplace
 
-For example, start with [demo_cv_async.py](https://gihub.com/OpenKinect/libfreenect/tree/master/wrappers/python/devmo_cv_async.py).
+For example, start with [demo_cv_async.py](https://github.com/OpenKinect/libfreenect/tree/master/wrappers/python/demo_cv_async.py).
 
 
 # Code Contributions
