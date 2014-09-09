@@ -5,14 +5,13 @@
 include_directories (${CMAKE_CURRENT_SOURCE_DIR})
 
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
-LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c)
+LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c audio.c loader.c)
 IF(WIN32)
   set_source_files_properties(${SRC} PROPERTIES LANGUAGE CXX)
 ENDIF(WIN32)
 
-# Audio
+# Audio Firmware
 include(FindPythonInterp)
-LIST(APPEND SRC audio.c loader.c)
 IF(BUILD_REDIST_PACKAGE)
   # If this build is intended for a redistributable package, we can't include audios.bin, so we should include fwfetcher.py
   # and the package should run "python fwfetcher.py $INSTALL_PREFIX/share" as a postinst hook
