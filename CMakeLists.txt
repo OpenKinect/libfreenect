@@ -188,7 +188,7 @@ IF ( BUILD_CPACK_TGZ OR BUILD_CPACK_DEB OR BUILD_CPACK_RPM )
   set(CPACK_PACKAGE_DESCRIPTION "libfreenect for kinect")
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
   set(CPACK_PACKAGE_NAME "libfreenect-dev")
-  set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0.0-dev")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0-0-dev")
 
   set(CPACK_PACKAGE_CONTACT "OpenKinect <openkinect@googlegroups.com>")
   #set(CPACK_PACKAGE_VENDOR "")
