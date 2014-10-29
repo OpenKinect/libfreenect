@@ -22,12 +22,12 @@ namespace FreenectDriver
     static const float VERTICAL_FOV = 45.6 * (M_PI / 180);
     // from DepthKinectStream.cpp
     static const int MAX_VALUE = 10000;
-    static const unsigned long long GAIN_VAL = 42;
-    static const unsigned long long CONST_SHIFT_VAL = 200;
-    static const unsigned long long MAX_SHIFT_VAL = 2047;
-    static const unsigned long long PARAM_COEFF_VAL = 4;
-    static const unsigned long long SHIFT_SCALE_VAL = 10;
-    static const unsigned long long ZERO_PLANE_DISTANCE_VAL = 120;
+    static const int GAIN_VAL = 42;
+    static const int CONST_SHIFT_VAL = 200;
+    static const int MAX_SHIFT_VAL = 2047;
+    static const int PARAM_COEFF_VAL = 4;
+    static const int SHIFT_SCALE_VAL = 10;
+    static const int ZERO_PLANE_DISTANCE_VAL = 120;
     static const double ZERO_PLANE_PIXEL_SIZE_VAL = 0.10520000010728836;
     static const double EMITTER_DCMOS_DISTANCE_VAL = 7.5;
 
@@ -121,62 +121,62 @@ namespace FreenectDriver
           return ONI_STATUS_OK;
 
         case XN_STREAM_PROPERTY_PIXEL_REGISTRATION:     // XnPixelRegistration (get only)
-        case XN_STREAM_PROPERTY_WHITE_BALANCE_ENABLED:  // unsigned long long
-        case XN_STREAM_PROPERTY_HOLE_FILTER:            // unsigned long long
+        case XN_STREAM_PROPERTY_WHITE_BALANCE_ENABLED:  // int
+        case XN_STREAM_PROPERTY_HOLE_FILTER:            // int
         case XN_STREAM_PROPERTY_REGISTRATION_TYPE:      // XnProcessingType
         case XN_STREAM_PROPERTY_AGC_BIN:                // XnDepthAGCBin*
-        case XN_STREAM_PROPERTY_PIXEL_SIZE_FACTOR:      // unsigned long long
+        case XN_STREAM_PROPERTY_PIXEL_SIZE_FACTOR:      // int
         case XN_STREAM_PROPERTY_DCMOS_RCMOS_DISTANCE:   // double
-        case XN_STREAM_PROPERTY_CLOSE_RANGE:            // unsigned long long
+        case XN_STREAM_PROPERTY_CLOSE_RANGE:            // int
           return ONI_STATUS_NOT_SUPPORTED;
 
-        case XN_STREAM_PROPERTY_GAIN:                   // unsigned long long
-          if (*pDataSize != sizeof(unsigned long long))
+        case XN_STREAM_PROPERTY_GAIN:                   // int
+          if (*pDataSize != sizeof(int))
           {
             LogError("Unexpected size for XN_STREAM_PROPERTY_GAIN");
             return ONI_STATUS_ERROR;
           }
-          *(static_cast<unsigned long long*>(data)) = GAIN_VAL;
+          *(static_cast<int*>(data)) = GAIN_VAL;
           return ONI_STATUS_OK;
-        case XN_STREAM_PROPERTY_CONST_SHIFT:            // unsigned long long
-          if (*pDataSize != sizeof(unsigned long long))
+        case XN_STREAM_PROPERTY_CONST_SHIFT:            // int
+          if (*pDataSize != sizeof(int))
           {
             LogError("Unexpected size for XN_STREAM_PROPERTY_CONST_SHIFT");
             return ONI_STATUS_ERROR;
           }
-          *(static_cast<unsigned long long*>(data)) = CONST_SHIFT_VAL;
+          *(static_cast<int*>(data)) = CONST_SHIFT_VAL;
           return ONI_STATUS_OK;
-        case XN_STREAM_PROPERTY_MAX_SHIFT:              // unsigned long long
-          if (*pDataSize != sizeof(unsigned long long))
+        case XN_STREAM_PROPERTY_MAX_SHIFT:              // int
+          if (*pDataSize != sizeof(int))
           {
             LogError("Unexpected size for XN_STREAM_PROPERTY_MAX_SHIFT");
             return ONI_STATUS_ERROR;
           }
-          *(static_cast<unsigned long long*>(data)) = MAX_SHIFT_VAL;
+          *(static_cast<int*>(data)) = MAX_SHIFT_VAL;
           return ONI_STATUS_OK;
-        case XN_STREAM_PROPERTY_PARAM_COEFF:            // unsigned long long
-          if (*pDataSize != sizeof(unsigned long long))
+        case XN_STREAM_PROPERTY_PARAM_COEFF:            // int
+          if (*pDataSize != sizeof(int))
           {
             LogError("Unexpected size for XN_STREAM_PROPERTY_PARAM_COEFF");
             return ONI_STATUS_ERROR;
           }
-          *(static_cast<unsigned long long*>(data)) = PARAM_COEFF_VAL;
+          *(static_cast<int*>(data)) = PARAM_COEFF_VAL;
           return ONI_STATUS_OK;
-        case XN_STREAM_PROPERTY_SHIFT_SCALE:            // unsigned long long
-          if (*pDataSize != sizeof(unsigned long long))
+        case XN_STREAM_PROPERTY_SHIFT_SCALE:            // int
+          if (*pDataSize != sizeof(int))
           {
             LogError("Unexpected size for XN_STREAM_PROPERTY_SHIFT_SCALE");
             return ONI_STATUS_ERROR;
           }
-          *(static_cast<unsigned long long*>(data)) = SHIFT_SCALE_VAL;
+          *(static_cast<int*>(data)) = SHIFT_SCALE_VAL;
           return ONI_STATUS_OK;
-        case XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE:    // unsigned long long
-          if (*pDataSize != sizeof(unsigned long long))
+        case XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE:    // int
+          if (*pDataSize != sizeof(int))
           {
             LogError("Unexpected size for XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE");
             return ONI_STATUS_ERROR;
           }
-          *(static_cast<unsigned long long*>(data)) = ZERO_PLANE_DISTANCE_VAL;
+          *(static_cast<int*>(data)) = ZERO_PLANE_DISTANCE_VAL;
           return ONI_STATUS_OK;
         case XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE:  // double
           if (*pDataSize != sizeof(double))
