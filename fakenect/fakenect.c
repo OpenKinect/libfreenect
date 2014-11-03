@@ -23,17 +23,14 @@
  * either License.
  */
 
-#include <libfreenect.h>
+#include "libfreenect.h"
+#include "platform.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include <unistd.h>
-#include <time.h>
 #include <assert.h>
-#ifdef _WIN32
-#include <windows.h>
-#endif
 
 #define GRAVITY 9.80665
 
@@ -45,7 +42,7 @@ static freenect_depth_cb cur_depth_cb = NULL;
 static freenect_video_cb cur_rgb_cb = NULL;
 static char *input_path = NULL;
 static FILE *index_fp = NULL;
-static freenect_raw_tilt_state state = {};
+static freenect_raw_tilt_state state = { 0 };
 static int already_warned = 0;
 static double playback_prev_time = 0.;
 static double record_prev_time = 0.;
@@ -54,45 +51,6 @@ static void *rgb_buffer = NULL;
 static int depth_running = 0;
 static int rgb_running = 0;
 static void *user_ptr = NULL;
-
-static void sleep_highres(double tm)
-{
-#ifdef _WIN32
-	int msec = floor(tm * 1000);
-	if (msec > 0) {
-		Sleep(msec);
-	}
-#else
-	int sec = floor(tm);
-	int usec = (tm - sec) * 1000000;
-	if (tm > 0) {
-		sleep(sec);
-		usleep(usec);
-	}
-#endif
-}
-
-static double get_time()
-{
-#ifdef _WIN32
-	SYSTEMTIME st;
-	GetSystemTime(&st);
-	FILETIME ft;
-	SystemTimeToFileTime(&st, &ft);
-	ULARGE_INTEGER li;
-	li.LowPart = ft.dwLowDateTime;
-	li.HighPart = ft.dwHighDateTime;
-	// FILETIME is given as a 64-bit value for the number of 100-nanosecond
-	// intervals that have passed since Jan 1, 1601 (UTC).  The difference between that
-	// epoch and the POSIX epoch (Jan 1, 1970) is 116444736000000000 such ticks.
-	uint64_t total_usecs = (li.QuadPart - 116444736000000000L) / 10L;
-	return (total_usecs / 1000000.);
-#else
-	struct timeval cur;
-	gettimeofday(&cur, NULL);
-	return cur.tv_sec + cur.tv_usec / 1000000.;
-#endif
-}
 
 static char *one_line(FILE *fp)
 {
@@ -245,6 +203,11 @@ int freenect_process_events(freenect_context *ctx)
 	return 0;
 }
 
+int freenect_process_events_timeout(freenect_context *ctx, struct timeval *timeout)
+{
+	return freenect_process_events(ctx);
+}
+
 double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
 {
 	// NOTE: This is duped from tilt.c, this is the only function we need from there
@@ -254,6 +217,11 @@ double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
 freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev)
 {
 	return &state;
+}
+
+freenect_tilt_status_code freenect_get_tilt_status(freenect_raw_tilt_state *state)
+{
+    return state->tilt_status;
 }
 
 void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y, double* z)
@@ -298,6 +266,21 @@ freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_v
     return out;
 }
 
+int freenect_get_video_mode_count()
+{
+    return 1;
+}
+
+freenect_frame_mode freenect_get_video_mode(int mode_num)
+{
+    return freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB);
+}
+
+freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
+{
+    return freenect_get_video_mode(0);
+}
+
 freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt) {
     assert(FREENECT_RESOLUTION_MEDIUM == res);
     assert(FREENECT_DEPTH_11BIT == fmt);
@@ -305,6 +288,21 @@ freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_d
     // To update this line run the "record" program, look at the top output
     freenect_frame_mode out = {256, 1, {0}, 614400, 640, 480, 11, 5, 30, 1};
     return out;
+}
+
+int freenect_get_depth_mode_count()
+{
+    return 1;
+}
+
+freenect_frame_mode freenect_get_depth_mode(int mode_num)
+{
+    return freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT);
+}
+
+freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
+{
+    return freenect_get_depth_mode(0);
 }
 
 int freenect_num_devices(freenect_context *ctx)
@@ -320,10 +318,21 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 	return 0;
 }
 
+int freenect_open_device_by_camera_serial(freenect_context *ctx, freenect_device **dev, const char* camera_serial)
+{
+    *dev = fake_dev;
+    return 0;
+}
+
 int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 {
 	*ctx = fake_ctx;
 	return 0;
+}
+
+int freenect_supported_subdevices(void)
+{
+    return FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA;
 }
 
 void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs) {

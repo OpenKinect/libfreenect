@@ -9,6 +9,7 @@ DepthStream::DepthStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevic
   video_mode = makeOniVideoMode(ONI_PIXEL_FORMAT_DEPTH_1_MM, 640, 480, 30);
   image_registration_mode = ONI_IMAGE_REGISTRATION_OFF;
   setVideoMode(video_mode);
+  pDevice->startDepth();
 }
 
 // Add video modes here as you implement them
@@ -39,7 +40,7 @@ OniStatus DepthStream::setVideoMode(OniVideoMode requested_mode)
   try { device->setDepthFormat(format, resolution); }
   catch (std::runtime_error e)
   {
-    LogError("Format " + format + std::string(" and resolution " + resolution) + " combination not supported by libfreenect");
+    LogError("Format " + to_string(format) + " and resolution " + to_string(resolution) + " combination not supported by libfreenect");
     if (image_registration_mode == ONI_IMAGE_REGISTRATION_DEPTH_TO_COLOR)
     {
       LogError("Could not enable image registration format; falling back to format defined in getSupportedVideoModes()");
@@ -57,23 +58,26 @@ void DepthStream::populateFrame(void* data, OniFrame* frame) const
   frame->sensorType = sensor_type;
   frame->stride = video_mode.resolutionX * sizeof(uint16_t);
 
-  if (cropping.enabled) {
+  if (cropping.enabled)
+  {
     frame->height = cropping.height;
     frame->width = cropping.width;
     frame->cropOriginX = cropping.originX;
     frame->cropOriginY = cropping.originY;
     frame->croppingEnabled = true;
   }
-  else {
-    frame->cropOriginX = frame->cropOriginY = 0;
+  else
+  {
+    frame->cropOriginX = 0;
+    frame->cropOriginY = 0;
     frame->croppingEnabled = false;
   }
 
 
   // copy stream buffer from freenect
 
-  unsigned short* source = static_cast<unsigned short*>(data) + frame->cropOriginX + frame->cropOriginY * video_mode.resolutionX;
-  unsigned short* target = static_cast<unsigned short*>(frame->data);
+  uint16_t* source = static_cast<uint16_t*>(data) + frame->cropOriginX + frame->cropOriginY * video_mode.resolutionX;
+  uint16_t* target = static_cast<uint16_t*>(frame->data);
   const unsigned int skipWidth = video_mode.resolutionX - frame->width;
 
   if (mirroring)
@@ -84,8 +88,7 @@ void DepthStream::populateFrame(void* data, OniFrame* frame) const
     {
       for (int x = 0; x < frame->width; x++)
       {
-        unsigned short value = *(source++);
-        *(target--) = value < DepthStream::MAX_VALUE ? value : 0;
+        *target-- = *source++;
       }
 
       source += skipWidth;
@@ -98,8 +101,7 @@ void DepthStream::populateFrame(void* data, OniFrame* frame) const
     {
       for (int x = 0; x < frame->width; x++)
       {
-        unsigned short value = *(source++);
-        *(target++) = value < DepthStream::MAX_VALUE ? value : 0;
+        *target++ = *source++;
       }
 
       source += skipWidth;

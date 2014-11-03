@@ -36,7 +36,7 @@ namespace FreenectDriver
     {
       FreenectVideoModeMap supported_modes = getSupportedVideoModes();
       OniVideoMode* modes = new OniVideoMode[supported_modes.size()];
-      std::transform(supported_modes.begin(), supported_modes.end(), modes, RetrieveKey());
+      std::transform(supported_modes.begin(), supported_modes.end(), modes, ExtractKey());
       OniSensorInfo sensors = { sensor_type, static_cast<int>(supported_modes.size()), modes };
       return sensors;
     }
@@ -137,6 +137,17 @@ namespace FreenectDriver
           }
           auto_exposure = *(static_cast<const OniBool*>(data));
           int ret = device->setFlag(FREENECT_AUTO_WHITE_BALANCE, auto_exposure);
+          return (ret == 0) ? ONI_STATUS_OK : ONI_STATUS_ERROR;
+        }
+        case ONI_STREAM_PROPERTY_MIRRORING:          // OniBool
+        {
+          if (dataSize != sizeof(OniBool))
+          {
+            LogError("Unexpected size for ONI_STREAM_PROPERTY_MIRRORING");
+            return ONI_STATUS_ERROR;
+          }
+          mirroring = *(static_cast<const OniBool*>(data));
+          int ret = device->setFlag(FREENECT_MIRROR_VIDEO, mirroring);
           return (ret == 0) ? ONI_STATUS_OK : ONI_STATUS_ERROR;
         }
       }

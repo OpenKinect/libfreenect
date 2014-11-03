@@ -30,18 +30,13 @@
 #include "libfreenect_sync.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #if defined(__APPLE__)
 #include <GLUT/glut.h>
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
 #else
 #include <GL/glut.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
 #endif
-#include <stdlib.h>
-#include <math.h>
 
 int window;
 GLuint gl_rgb_tex;

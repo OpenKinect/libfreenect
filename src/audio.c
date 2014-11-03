@@ -24,13 +24,12 @@
  * either License.
  */
 #include "libfreenect.h"
-#include "libfreenect-audio.h"
+#include "libfreenect_audio.h"
 #include "freenect_internal.h"
 
 #include <string.h>
 #include <stdlib.h>
 
-#ifdef BUILD_AUDIO
 
 static void prepare_iso_out_data(freenect_device* dev, uint8_t* buffer) {
 	audio_stream* stream = &dev->audio;
@@ -239,5 +238,3 @@ int freenect_stop_audio(freenect_device* dev) {
 
 	return ret;
 }
-
-#endif 

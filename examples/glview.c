@@ -35,12 +35,8 @@
 
 #if defined(__APPLE__)
 #include <GLUT/glut.h>
-#include <OpenGL/gl.h>
-#include <OpenGL/glu.h>
 #else
 #include <GL/glut.h>
-#include <GL/gl.h>
-#include <GL/glu.h>
 #endif
 
 #include <math.h>
@@ -217,23 +213,23 @@ void keyPressed(unsigned char key, int x, int y)
 	if (key == 'e') {
 		static freenect_flag_value auto_exposure = FREENECT_ON;
 		freenect_set_flag(f_dev, FREENECT_AUTO_EXPOSURE, auto_exposure);
-		auto_exposure = !auto_exposure;
+		auto_exposure = auto_exposure ? FREENECT_OFF : FREENECT_ON;
 	}
 	if (key == 'b') {
 		static freenect_flag_value white_balance = FREENECT_ON;
 		freenect_set_flag(f_dev, FREENECT_AUTO_WHITE_BALANCE, white_balance);
-		white_balance = !white_balance;
+		white_balance = white_balance ? FREENECT_OFF : FREENECT_ON;
 	}
 	if (key == 'r') {
 		static freenect_flag_value raw_color = FREENECT_ON;
 		freenect_set_flag(f_dev, FREENECT_RAW_COLOR, raw_color);
-		raw_color = !raw_color;
+		raw_color = raw_color ? FREENECT_OFF : FREENECT_ON;
 	}
 	if (key == 'm') {
 		static freenect_flag_value mirror = FREENECT_ON;
 		freenect_set_flag(f_dev, FREENECT_MIRROR_DEPTH, mirror);
 		freenect_set_flag(f_dev, FREENECT_MIRROR_VIDEO, mirror);
-		mirror = !mirror;
+		mirror = mirror ? FREENECT_OFF : FREENECT_ON;
 	}
 	if (key == '1') {
 		freenect_set_led(f_dev,LED_GREEN);

@@ -39,16 +39,22 @@ set(PYTHON_EXECUTABLE "python2")
 
 PROJECT(libfreenect)
 
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
+
+# Find the host operating system and architecture
+include (FindOS)
+# Set up installation directories
+include (SetupDirectories)
+
 set (PROJECT_VER_MAJOR 0)
-set (PROJECT_VER_MINOR 3)
+set (PROJECT_VER_MINOR 5)
 set (PROJECT_VER_PATCH 0)
-set (PROJECT_VER 
+set (PROJECT_VER
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
-set (PROJECT_APIVER 
+set (PROJECT_APIVER
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
 
-OPTION(BUILD_AUDIO "Build audio support" OFF)
-OPTION(BUILD_REDIST_PACKAGE "Build libfreenect in a legally-redistributable manner (only affects audio)" OFF)
+OPTION(BUILD_REDIST_PACKAGE "Build libfreenect in a legally-redistributable manner (only affects audio)" ON)
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
 OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
@@ -58,19 +64,14 @@ OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
 OPTION(BUILD_PYTHON "Build Python extension" OFF)
 OPTION(BUILD_OPENNI2_DRIVER "Build libfreenect driver for OpenNI2" OFF)
 IF(PROJECT_OS_LINUX)
-	OPTION(BUILD_CPACK "Build an RPM or DEB using CPack" OFF)
+	OPTION(BUILD_CPACK_DEB "Build an DEB using CPack" OFF)
+	OPTION(BUILD_CPACK_RPM "Build an RPM using CPack" OFF)
+	OPTION(BUILD_CPACK_TGZ "Build an TGZ using CPack" OFF)
 ENDIF(PROJECT_OS_LINUX)
 
 ######################################################################################
-# CMake Modules
+# Dependencies and Definitions
 ######################################################################################
-
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules/")
-
-# Find the host operating system and architecture
-include (FindOS)
-# Set up installation directories
-include (SetupDirectories)
 
 # Find packages needed to build library
 find_package(libusb-1.0 REQUIRED)
@@ -82,33 +83,41 @@ if(BIG_ENDIAN)
   add_definitions(-DFN_BIGENDIAN)
 endif()
 
-if(BUILD_AUDIO)
-  add_definitions(-DBUILD_AUDIO)
-endif()
-
 if (WIN32)
-   set(MATH_LIB "")
+  set(MATH_LIB "")
 else(WIN32)
   set(MATH_LIB "m")
 endif()
 
 ######################################################################################
-# CMake 
+# CMake
 ######################################################################################
 
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
 SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 
-# let CFLAGS env override this
-if(CMAKE_C_FLAGS STREQUAL "")
-  set(CMAKE_C_FLAGS "-O2")
-endif()
-SET(CMAKE_C_FLAGS_DEBUG "-g -DDEBUG=1")
-SET(CMAKE_C_FLAGS_RELEASE "-O2")
-SET(CMAKE_C_FLAGS_RELWITHDEBINFO "-O2 -g")
+if    (MSVC)
+  set(C_FLAGS_WARNING "-W4")
+else  ()
+  set(C_FLAGS_WARNING "-Wall")
+endif (MSVC)
 
-add_definitions(-Wall)
+set(C_CXX_FLAGS_DEFAULT "${C_FLAGS_WARNING} -O2")
+
+# These defaults can be overriden by -DCMAKE_C_FLAGS=""
+set(CMAKE_C_FLAGS "${C_CXX_FLAGS_DEFAULT} ${CMAKE_C_FLAGS}")
+# C Configurations
+SET(CMAKE_C_FLAGS_DEBUG   "${CMAKE_C_FLAGS} -g -DDEBUG=1")
+SET(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS}")
+SET(CMAKE_C_FLAGS_RELWITHDEBINFO "${CMAKE_C_FLAGS_RELEASE} -g")
+
+# These defaults can be overriden by -DCMAKE_CXX_FLAGS=""
+set(CMAKE_CXX_FLAGS "${C_CXX_FLAGS_DEFAULT} ${CMAKE_CXX_FLAGS}")
+# C++ Configurations
+SET(CMAKE_CXX_FLAGS_DEBUG   "${CMAKE_CXX_FLAGS} -g -DDEBUG=1")
+SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS}")
+SET(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${CMAKE_CXX_FLAGS_RELEASE} -g")
 
 # Pretty much everyone is going to need the main includes
 include_directories (${CMAKE_CURRENT_SOURCE_DIR}/include)
@@ -118,13 +127,11 @@ include_directories(${LIBUSB_1_INCLUDE_DIRS})
 
 if(WIN32)
   include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows")
-  include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows/libusb10emu/libusb-1.0")
 endif()
 
 # Add library project
 add_subdirectory (src)
 
-# Add examples
 IF(BUILD_EXAMPLES)
   add_subdirectory (examples)
 ENDIF()
@@ -167,17 +174,21 @@ configure_file(
   "${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake"
   IMMEDIATE @ONLY)
 
+# --- cmake config file ---
+CONFIGURE_FILE(libfreenectConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/libfreenectConfig.cmake @ONLY)
+INSTALL(FILES ${CMAKE_CURRENT_BINARY_DIR}/libfreenectConfig.cmake DESTINATION share/${PROJECT_NAME})
+
 add_custom_target(uninstall
   COMMAND ${CMAKE_COMMAND} -P ${CMAKE_CURRENT_BINARY_DIR}/UninstallTarget.cmake)
 
 # Create Debian/RPM Packages
 # after make, use "fakeroot cpack" in the build Dir to complete
 
-IF ( BUILD_CPACK )
+IF ( BUILD_CPACK_TGZ OR BUILD_CPACK_DEB OR BUILD_CPACK_RPM )
   set(CPACK_PACKAGE_DESCRIPTION "libfreenect for kinect")
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
   set(CPACK_PACKAGE_NAME "libfreenect-dev")
-  set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0.0-dev")
+  set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0-0-dev")
 
   set(CPACK_PACKAGE_CONTACT "OpenKinect <openkinect@googlegroups.com>")
   #set(CPACK_PACKAGE_VENDOR "")
@@ -186,20 +197,27 @@ IF ( BUILD_CPACK )
   set(CPACK_PACKAGE_VERSION_PATCH ${PROJECT_VER_PATCH})
   set(VERSION "${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}.${CPACK_PACKAGE_VERSION_PATCH}")
 
-  set(CPACK_GENERATOR "DEB;RPM;")
+  set(CPACK_GENERATOR "")
+  if (BUILD_CPACK_TGZ)
+    list(APPEND CPACK_GENERATOR "TGZ")
+  endif()
+  if (BUILD_CPACK_RPM)
+    list(APPEND CPACK_GENERATOR "RPM")
+  endif()
+  if (BUILD_CPACK_DEB)
+    list(APPEND CPACK_GENERATOR "DEB")
+  endif()
   set(CPACK_PACKAGE_FILE_NAME "${CPACK_PACKAGE_NAME}-${CPACK_PACKAGE_VERSION_MAJOR}.${CPACK_PACKAGE_VERSION_MINOR}-${CMAKE_SYSTEM_PROCESSOR}")
 
   include(CPack)
 
   INSTALL(FILES "${CMAKE_BINARY_DIR}/lib/libfreenect.a" DESTINATION ${PROJECT_LIBRARY_INSTALL_DIR})
-  if (BUILD_AUDIO)
-    INSTALL(FILES "include/libfreenect-audio.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
-  endif()
   INSTALL(FILES "include/libfreenect.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
-  INSTALL(FILES "include/libfreenect-registration.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+  INSTALL(FILES "include/libfreenect_registration.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+  INSTALL(FILES "include/libfreenect_audio.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   INSTALL(FILES "APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
-  INSTALL(FILES "README.asciidoc" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
+  INSTALL(FILES "README.md" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
 
-ENDIF ( BUILD_CPACK )
+ENDIF ( )
 

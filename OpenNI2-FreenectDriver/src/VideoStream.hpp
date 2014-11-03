@@ -1,46 +1,12 @@
 #pragma once
 
 #include "libfreenect.hpp"
-#include "Driver/OniDriverAPI.h"
 #include "PS1080.h"
+#include "Utility.hpp"
 
-
-struct RetrieveKey
-{
-  template <typename T> typename T::first_type
-  operator()(T pair) const {
-    return pair.first;
-  }
-};
-
-// "extension constructor" for OniVideoMode struct
-static OniVideoMode makeOniVideoMode(OniPixelFormat pixel_format, int resolution_x, int resolution_y, int frames_per_second)
-{
-  OniVideoMode mode;
-  mode.pixelFormat = pixel_format;
-  mode.resolutionX = resolution_x;
-  mode.resolutionY = resolution_y;
-  mode.fps = frames_per_second;
-  return mode;
-}
-
-static bool operator==(const OniVideoMode& left, const OniVideoMode& right)
-{
-  return (left.pixelFormat == right.pixelFormat && left.resolutionX == right.resolutionX
-          && left.resolutionY == right.resolutionY && left.fps == right.fps);
-}
-static bool operator<(const OniVideoMode& left, const OniVideoMode& right) { return (left.resolutionX*left.resolutionY < right.resolutionX*right.resolutionY); }
 
 namespace FreenectDriver
 {
-  // DriverServices is set in DeviceDriver.cpp so all files can call LogError()
-  static oni::driver::DriverServices* DriverServices;
-  static void LogError(std::string error)
-  {
-    if (DriverServices)
-      DriverServices->errorLoggerAppend(std::string("OpenNI2-FreenectDriver: " + error).c_str());
-  }
-  
   class VideoStream : public oni::driver::StreamBase
   {
   private:
@@ -52,7 +18,7 @@ namespace FreenectDriver
   protected:
     static const OniSensorType sensor_type;
     Freenect::FreenectDevice* device;
-    bool running; // acquireFrame() does something iff true
+    bool running; // buildFrame() does something iff true
     OniVideoMode video_mode;
     OniCropping cropping;
     bool mirroring;
@@ -61,7 +27,12 @@ namespace FreenectDriver
     VideoStream(Freenect::FreenectDevice* device) :
       frame_id(1),
       device(device),
-      mirroring(false) { }
+      mirroring(false)
+      {
+        // joy of structs
+        memset(&cropping, 0, sizeof(cropping));
+        memset(&video_mode, 0, sizeof(video_mode));
+      }
     //~VideoStream() { stop();  }
 
     void buildFrame(void* data, uint32_t timestamp)
@@ -189,7 +160,6 @@ namespace FreenectDriver
             return ONI_STATUS_ERROR;
           }
           cropping = *(static_cast<const OniCropping*>(data));
-
           raisePropertyChanged(propertyId, data, dataSize);
           return ONI_STATUS_OK;
 

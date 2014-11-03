@@ -32,7 +32,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#ifdef BUILD_AUDIO
 
 static void dump_bl_cmd(freenect_context* ctx, bootloader_command cmd) {
 	int i;
@@ -418,6 +417,3 @@ FN_INTERNAL int upload_cemd_data(fnusb_dev* dev) {
 	FN_INFO("CEMD data uploaded successfully.\n");
 	return 0;
 }
-
-#endif
-

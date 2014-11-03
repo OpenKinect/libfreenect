@@ -62,7 +62,7 @@ int get_reply(libusb_device_handle* dev, freenect_context *ctx){
 	memset(buffer, 0, 512);
 	int transferred = 0;
 	int res = 0;
-	res = libusb_bulk_transfer(dev, 0x81, buffer, 512, &transferred, 0);
+	res = libusb_bulk_transfer(dev, 0x81, buffer, 512, &transferred, 100);
 	if (res != 0) {
 		FN_ERROR("get_reply(): libusb_bulk_transfer failed: %d (transferred = %d)\n", res, transferred);
 	} else if (transferred != 12) {
@@ -97,7 +97,6 @@ freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev)
 	return &dev->raw_state;
 }
 
-#ifdef BUILD_AUDIO
 int update_tilt_state_alt(freenect_device *dev){
 	freenect_context *ctx = dev->parent;
 
@@ -112,12 +111,12 @@ int update_tilt_state_alt(freenect_device *dev){
 	unsigned char buffer[256];
 	memcpy(buffer, &cmd, 16);
     
-	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 16, &transferred, 0);
+	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 16, &transferred, 250);
 	if (res != 0) {
 		return res;
 	}
     
-	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x81, buffer, 256, &transferred, 0); // 104 bytes
+	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x81, buffer, 256, &transferred, 250); // 104 bytes
 	if (res != 0) {
 		return res;
 	} else {
@@ -150,18 +149,15 @@ int update_tilt_state_alt(freenect_device *dev){
 	// Units still to be worked out.
 	return get_reply(dev->usb_audio.dev, ctx);
 }
-#endif 
 
 int freenect_update_tilt_state(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 	
-    #ifdef BUILD_AUDIO
     //if we have motor control via audio and fw is uploaded - call the alt function
     if( dev->motor_control_with_audio_enabled ){
         return update_tilt_state_alt(dev);
     }
-    #endif
     
     if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
 		return 0;
@@ -188,7 +184,6 @@ int freenect_update_tilt_state(freenect_device *dev)
 	return ret;
 }
 
-#ifdef BUILD_AUDIO
 int freenect_set_tilt_degs_alt(freenect_device *dev, int tilt_degrees)
 {
 	freenect_context *ctx = dev->parent;
@@ -209,7 +204,7 @@ int freenect_set_tilt_degs_alt(freenect_device *dev, int tilt_degrees)
 	unsigned char buffer[20];
 	memcpy(buffer, &cmd, 20);
 
-	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 20, &transferred, 0);
+	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 20, &transferred, 250);
 	if (res != 0) {
 		FN_ERROR("freenect_set_tilt_alt(): libusb_bulk_transfer failed: %d (transferred = %d)\n", res, transferred);
 		return res;
@@ -217,18 +212,15 @@ int freenect_set_tilt_degs_alt(freenect_device *dev, int tilt_degrees)
     
 	return get_reply(dev->usb_audio.dev, ctx);
 }
-#endif
 
 int freenect_set_tilt_degs(freenect_device *dev, double angle)
 {
 	freenect_context *ctx = dev->parent;
     
-    #ifdef BUILD_AUDIO
     //if we have motor control via audio and fw is uploaded - call the alt function
     if( dev->motor_control_with_audio_enabled ){
         return freenect_set_tilt_degs_alt(dev, angle);
     }
-    #endif
     
 	if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
 		return 0;
@@ -239,15 +231,13 @@ int freenect_set_tilt_degs(freenect_device *dev, double angle)
 	angle = (angle<MIN_TILT_ANGLE) ? MIN_TILT_ANGLE : ((angle>MAX_TILT_ANGLE) ? MAX_TILT_ANGLE : angle);
 	angle = angle * 2;
 
-	ret = fnusb_control(&dev->usb_motor, 0x40, 0x31, (uint16_t)angle, 0x0, empty, 0x0);
+	ret = fnusb_control(&dev->usb_motor, 0x40, 0x31, (int16_t)angle, 0x0, empty, 0x0);
 	return ret;
 }
 
-#ifdef BUILD_AUDIO
-int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
-{
-	freenect_context *ctx = dev->parent;
 
+FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context * ctx, freenect_led_options state)
+{
     typedef enum {
         LED_ALT_OFF = 1,
         LED_ALT_BLINK_GREEN = 2,
@@ -283,25 +273,28 @@ int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
 	unsigned char buffer[20];
 	memcpy(buffer, &cmd, 20);
     
-	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 20, &transferred, 0);
+	res = libusb_bulk_transfer(dev, 0x01, buffer, 20, &transferred, 100);
 	if (res != 0) {
-		FN_WARNING("freenect_set_led_alt(): libusb_bulk_transfer failed: %d (transferred = %d)\n", res, transferred);
+		FN_WARNING("fnusb_set_led_alt(): libusb_bulk_transfer failed: %d (transferred = %d)\n", res, transferred);
 		return res;
 	}
-	return get_reply(dev->usb_audio.dev, ctx);
+	return get_reply(dev, ctx);
 }
-#endif
+
+int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
+{
+	freenect_context *ctx = dev->parent;
+    return fnusb_set_led_alt(dev->usb_audio.dev, ctx, state);
+}
 
 int freenect_set_led(freenect_device *dev, freenect_led_options option)
 {
 	freenect_context *ctx = dev->parent;
 
     //if we have motor control via audio and fw is uploaded - call the alt function
-    #ifdef BUILD_AUDIO
     if( dev->motor_control_with_audio_enabled ){
         return freenect_set_led_alt(dev, option);
     }
-    #endif
     
 	if(!(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
 		return 0;

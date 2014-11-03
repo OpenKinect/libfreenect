@@ -23,10 +23,9 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
-
 #pragma once
 
-#include <libfreenect.h>
+#include "libfreenect.h"
 #include <stdexcept>
 #include <sstream>
 #include <map>
@@ -68,8 +67,8 @@ namespace Freenect {
 		{
 			if(freenect_open_device(_ctx, &m_dev, _index) < 0) throw std::runtime_error("Cannot open Kinect");
 			freenect_set_user(m_dev, this);
-			freenect_set_video_mode(m_dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
-			freenect_set_depth_mode(m_dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT));
+			setVideoFormat(FREENECT_VIDEO_RGB,   FREENECT_RESOLUTION_MEDIUM);
+			setDepthFormat(FREENECT_DEPTH_11BIT, FREENECT_RESOLUTION_MEDIUM);
 			freenect_set_depth_callback(m_dev, freenect_depth_callback);
 			freenect_set_video_callback(m_dev, freenect_video_callback);
 		}
@@ -102,11 +101,12 @@ namespace Freenect {
 		}
 		void setVideoFormat(freenect_video_format requested_format, freenect_resolution requested_resolution = FREENECT_RESOLUTION_MEDIUM) {
 			if (requested_format != m_video_format || requested_resolution != m_video_resolution) {
-				freenect_stop_video(m_dev);
+				bool wasRunning = (freenect_stop_video(m_dev) >= 0);
 				freenect_frame_mode mode = freenect_find_video_mode(requested_resolution, requested_format);
 				if (!mode.is_valid) throw std::runtime_error("Cannot set video format: invalid mode");
 				if (freenect_set_video_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set video format");
-				freenect_start_video(m_dev);
+				if (wasRunning)
+					freenect_start_video(m_dev);
 				m_video_format = requested_format;
 				m_video_resolution = requested_resolution;
 			}
@@ -119,11 +119,12 @@ namespace Freenect {
 		}
 		void setDepthFormat(freenect_depth_format requested_format, freenect_resolution requested_resolution = FREENECT_RESOLUTION_MEDIUM) {
 			if (requested_format != m_depth_format || requested_resolution != m_depth_resolution) {
-				freenect_stop_depth(m_dev);
+				bool wasRunning = (freenect_stop_depth(m_dev) >= 0);
 				freenect_frame_mode mode = freenect_find_depth_mode(requested_resolution, requested_format);
 				if (!mode.is_valid) throw std::runtime_error("Cannot set depth format: invalid mode");
 				if (freenect_set_depth_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set depth format");
-				freenect_start_depth(m_dev);
+				if (wasRunning)
+					freenect_start_depth(m_dev);
 				m_depth_format = requested_format;
 				m_depth_resolution = requested_resolution;
 			}
@@ -218,7 +219,8 @@ namespace Freenect {
 		// Do not call directly, thread runs here
 		void operator()() {
 			while (!m_stop) {
-				int res = freenect_process_events(m_ctx);
+				static timeval timeout = { 1, 0 };
+				int res = freenect_process_events_timeout(m_ctx, &timeout);
 				if (res < 0)
 				{
 					// libusb signals an error has occurred

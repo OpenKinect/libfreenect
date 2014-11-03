@@ -4,7 +4,7 @@
 
 EAPI="5"
 
-inherit cmake-utils git-2 multilib
+inherit cmake-utils git-2 multilib python
 
 
 DESCRIPTION="Core library for accessing the Microsoft Kinect."
@@ -14,7 +14,9 @@ EGIT_REPO_URI="git://github.com/OpenKinect/${PN}.git"
 LICENSE="Apache-2.0 GPL-2"
 SLOT="0"
 KEYWORDS=""
-IUSE="audio bindist +c_sync +cpp doc examples fakenect opencv openni2 python"
+IUSE="bindist +c_sync +cpp doc examples fakenect opencv openni2 python"
+
+PYTHON_DEPEND="!bindist? 2"
 
 COMMON_DEP="virtual/libusb:1
             examples? ( media-libs/freeglut
@@ -25,7 +27,7 @@ COMMON_DEP="virtual/libusb:1
             python? ( dev-python/numpy )"
 
 RDEPEND="${COMMON_DEP}"
-DEPEND= "${COMMON_DEP}
+DEPEND="${COMMON_DEP}
          dev-util/cmake
          virtual/pkgconfig
          doc? ( app-doc/doxygen )
@@ -34,7 +36,6 @@ DEPEND= "${COMMON_DEP}
 
 src_configure() {
     local mycmakeargs=(
-        $(cmake-utils_use_build audio    AUDIO)
         $(cmake-utils_use_build bindist  REDIST_PACKAGE)
         $(cmake-utils_use_build c_sync   C_SYNC)
         $(cmake-utils_use_build cpp      CPP)
@@ -49,17 +50,13 @@ src_configure() {
 
 src_install() {
     cmake-utils_src_install
-    # Rename record example so it does not collide with xawtv
-    if use examples; then
-        mv "${D}"/usr/bin/record "${D}"/usr/bin/frecord || die
-    fi
     
     # udev rules
     insinto /lib/udev/rules.d/
     doins "${S}"/platform/linux/udev/51-kinect.rules
 
     # documentation
-    dodoc HACKING README.asciidoc
+    dodoc README.md
     if use doc; then
         cd doc
         doxygen || ewarn "doxygen failed"
@@ -69,8 +66,8 @@ src_install() {
 }
 
 pkg_postinst() {
-    if use bindist; then
-        ewarn "You have enabled the bindist USE flag. Resulting binaries may not be legal to re-distribute."
+    if ! use bindist; then
+        ewarn "The bindist USE flag is disabled. Resulting binaries may not be legal to re-distribute."
     fi
     elog "Make sure your user is in the 'video' group"
     elog "Just run 'gpasswd -a <USER> video', then have <USER> re-login."

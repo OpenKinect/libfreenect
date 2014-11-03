@@ -22,8 +22,6 @@
 #include "ColorStream.hpp"
 
 
-static bool operator<(const OniDeviceInfo& left, const OniDeviceInfo& right) { return (strcmp(left.uri, right.uri) < 0); } // for std::map
-
 namespace FreenectDriver
 {
   class Device : public oni::driver::DeviceBase, public Freenect::FreenectDevice
@@ -69,15 +67,13 @@ namespace FreenectDriver
       switch (sensorType)
       {
         default:
-          LogError("Cannot create a stream of type " + sensorType);
+          LogError("Cannot create a stream of type " + to_string(sensorType));
           return NULL;
         case ONI_SENSOR_COLOR:
-          Freenect::FreenectDevice::startVideo();
           if (! color)
             color = new ColorStream(this);
           return color;
         case ONI_SENSOR_DEPTH:
-          Freenect::FreenectDevice::startDepth();
           if (! depth)
             depth = new DepthStream(this);
           return depth;
@@ -214,11 +210,26 @@ namespace FreenectDriver
   class Driver : public oni::driver::DriverBase, private Freenect::Freenect
   {
   private:
-    std::map<OniDeviceInfo, oni::driver::DeviceBase*> devices;
+    typedef std::map<OniDeviceInfo, oni::driver::DeviceBase*> OniDeviceMap;
+    OniDeviceMap devices;
+
+    static std::string devid_to_uri(int id) {
+      return "freenect://" + to_string(id);
+    }
+
+    static int uri_to_devid(const std::string uri) {
+      int id;
+      std::istringstream is(uri);
+      is.seekg(strlen("freenect://"));
+      is >> id;
+      return id;
+    }
 
   public:
     Driver(OniDriverServices* pDriverServices) : DriverBase(pDriverServices)
     {
+      WriteMessage("Using libfreenect v" + to_string(PROJECT_VER));
+
       freenect_set_log_level(m_ctx, FREENECT_LOG_DEBUG);
       freenect_select_subdevices(m_ctx, FREENECT_DEVICE_CAMERA); // OpenNI2 doesn't use MOTOR or AUDIO
       DriverServices = &getServices();
@@ -232,7 +243,10 @@ namespace FreenectDriver
       DriverBase::initialize(connectedCallback, disconnectedCallback, deviceStateChangedCallback, pCookie);
       for (int i = 0; i < Freenect::deviceCount(); i++)
       {
-        std::string uri = "freenect://" + i;
+        std::string uri = devid_to_uri(i);
+
+        WriteMessage("Found device " + uri);
+        
         OniDeviceInfo info;
         strncpy(info.uri, uri.c_str(), ONI_MAX_STR);
         strncpy(info.vendor, "Microsoft", ONI_MAX_STR);
@@ -246,7 +260,7 @@ namespace FreenectDriver
 
     oni::driver::DeviceBase* deviceOpen(const char* uri, const char* mode = NULL)
     {
-      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); iter++)
+      for (OniDeviceMap::iterator iter = devices.begin(); iter != devices.end(); iter++)
       {
         if (strcmp(iter->first.uri, uri) == 0) // found
         {
@@ -256,10 +270,8 @@ namespace FreenectDriver
           }
           else 
           {
-            unsigned int id;
-            std::istringstream is(iter->first.uri);
-            is.seekg(strlen("freenect://"));
-            is >> id;
+            WriteMessage("Opening device " + std::string(uri));
+            int id = uri_to_devid(iter->first.uri);
             Device* device = &createDevice<Device>(id);
             iter->second = device;
             return device;
@@ -267,20 +279,19 @@ namespace FreenectDriver
         }
       }
 
-      LogError("Could not find device " + *uri);
+      LogError("Could not find device " + std::string(uri));
       return NULL;
     }
 
     void deviceClose(oni::driver::DeviceBase* pDevice)
     {
-      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); iter++)
+      for (OniDeviceMap::iterator iter = devices.begin(); iter != devices.end(); iter++)
       {
-        if (iter->second == pDevice) {
-          iter->second = NULL;
-          unsigned int id;
-          std::istringstream is(iter->first.uri);
-          is.seekg(strlen("freenect://"));
-          is >> id;
+        if (iter->second == pDevice)
+        {
+          WriteMessage("Closing device " + std::string(iter->first.uri));
+          int id = uri_to_devid(iter->first.uri);
+          devices.erase(iter);
           deleteDevice(id);
           return;
         }
@@ -300,8 +311,14 @@ namespace FreenectDriver
 
     void shutdown()
     {
-      for (std::map<OniDeviceInfo, oni::driver::DeviceBase*>::iterator iter = devices.begin(); iter != devices.end(); iter++)
-        deviceClose(iter->second);
+      for (OniDeviceMap::iterator iter = devices.begin(); iter != devices.end(); iter++)
+      {
+        WriteMessage("Closing device " + std::string(iter->first.uri));
+        int id = uri_to_devid(iter->first.uri);
+        deleteDevice(id);
+      }
+
+      devices.clear();
     }
 
 

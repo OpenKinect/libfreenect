@@ -8,6 +8,7 @@ ColorStream::ColorStream(Freenect::FreenectDevice* pDevice) : VideoStream(pDevic
 {
   video_mode = makeOniVideoMode(ONI_PIXEL_FORMAT_RGB888, 640, 480, 30);
   setVideoMode(video_mode);
+  pDevice->startVideo();
 }
 
 // Add video modes here as you implement them
@@ -40,7 +41,7 @@ OniStatus ColorStream::setVideoMode(OniVideoMode requested_mode)
   try { device->setVideoFormat(format, resolution); }
   catch (std::runtime_error e)
   {
-    LogError("Format " + format + std::string(" and resolution " + resolution) + " combination not supported by libfreenect");
+    LogError("Format " + to_string(format) + " and resolution " + to_string(resolution) + " combination not supported by libfreenect");
     return ONI_STATUS_NOT_SUPPORTED;
   }
   video_mode = requested_mode;
@@ -50,40 +51,22 @@ OniStatus ColorStream::setVideoMode(OniVideoMode requested_mode)
 void ColorStream::populateFrame(void* data, OniFrame* frame) const
 {
   frame->sensorType = sensor_type;
-  frame->stride = video_mode.resolutionX*3;
-  frame->cropOriginX = frame->cropOriginY = 0;
-  frame->croppingEnabled = FALSE;
+  frame->stride = video_mode.resolutionX * 3;
+  frame->cropOriginX = 0;
+  frame->cropOriginY = 0;
+  frame->croppingEnabled = false;
 
   // copy stream buffer from freenect
   switch (video_mode.pixelFormat)
   {
     default:
-      LogError(std::string("Pixel format " + video_mode.pixelFormat) + " not supported by populateFrame()");
+      LogError("Pixel format " + to_string(video_mode.pixelFormat) + " not supported by populateFrame()");
       return;
 
     case ONI_PIXEL_FORMAT_RGB888:
-      unsigned char* data_ptr = static_cast<unsigned char*>(data);
-      unsigned char* frame_data = static_cast<unsigned char*>(frame->data);
-      if (mirroring)
-      {
-        for (int i = 0; i < frame->dataSize; i += 3)
-        {
-          // find corresponding mirrored pixel
-          unsigned int pixel = i / 3;
-          unsigned int row = pixel / video_mode.resolutionX;
-          unsigned int col = video_mode.resolutionX - (pixel % video_mode.resolutionX);
-          unsigned int target = 3 * (row * video_mode.resolutionX + col);
-          // copy it to this pixel
-          frame_data[i] = data_ptr[target];
-          frame_data[i+1] = data_ptr[target+1];
-          frame_data[i+2] = data_ptr[target+2];
-        }
-      }
-      else
-      {
-        std::copy(data_ptr, data_ptr+frame->dataSize, frame_data);
-      }
-
+      uint8_t* source = static_cast<uint8_t*>(data);
+      uint8_t* target = static_cast<uint8_t*>(frame->data);
+      std::copy(source, source + frame->dataSize, target);
       return;
   }
 }

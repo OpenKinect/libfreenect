@@ -23,17 +23,32 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
-
 #pragma once
 
-#include <libfreenect.h>
+#include "libfreenect.h"
 #include <stdint.h>
+
+
+/// If Win32, export all functions for DLL usage
+#ifndef _WIN32
+  #define FREENECTAPI_SYNC /**< DLLExport information for windows, set to nothing on other platforms */
+#else
+  /**< DLLExport information for windows, set to nothing on other platforms */
+  #ifdef __cplusplus
+    #define FREENECTAPI_SYNC extern "C" __declspec(dllexport)
+  #else
+    // this is required when building from a Win32 port of gcc without being
+    // forced to compile all of the library files (.c) with g++...
+    #define FREENECTAPI_SYNC __declspec(dllexport)
+  #endif
+#endif
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt);
+FREENECTAPI_SYNC int freenect_sync_get_video_with_res(void **video, uint32_t *timestamp, int index,
+        freenect_resolution res, freenect_video_format fmt);
 /*  Synchronous video function, starts the runloop if it isn't running
 
     The returned buffer is valid until this function is called again, after which the buffer must not
@@ -43,14 +58,21 @@ int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freene
         video: Populated with a pointer to a video buffer with a size of the requested type
         timestamp: Populated with the associated timestamp
         index: Device index (0 is the first)
+        res: Valid resolution
         fmt: Valid format
 
     Returns:
         Nonzero on error.
 */
 
+int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt);
+/*  Does the exact same as above, but with a default resolution,
+    so backwards compatibilty is maintained.
+    The Resolution is kept at the default FREENECT_RESOLUTION_MEDIUM
+*/
 
-int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freenect_depth_format fmt);
+FREENECTAPI_SYNC int freenect_sync_get_depth_with_res(void **depth, uint32_t *timestamp, int index,
+        freenect_resolution res, freenect_depth_format fmt);
 /*  Synchronous depth function, starts the runloop if it isn't running
 
     The returned buffer is valid until this function is called again, after which the buffer must not
@@ -60,13 +82,20 @@ int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freene
         depth: Populated with a pointer to a depth buffer with a size of the requested type
         timestamp: Populated with the associated timestamp
         index: Device index (0 is the first)
+        res: Valid resolution
         fmt: Valid format
 
     Returns:
         Nonzero on error.
 */
 
-int freenect_sync_set_tilt_degs(int angle, int index);
+int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freenect_depth_format fmt);
+/*  Again, a wrapper function to keep backward compatibility.
+    The Resolution is kept at the default FREENECT_RESOLUTION_MEDIUM
+
+*/
+
+FREENECTAPI_SYNC int freenect_sync_set_tilt_degs(int angle, int index);
 /*  Tilt function, starts the runloop if it isn't running
 
     Args:
@@ -77,7 +106,7 @@ int freenect_sync_set_tilt_degs(int angle, int index);
         Nonzero on error.
 */
 
-int freenect_sync_get_tilt_state(freenect_raw_tilt_state **state, int index);
+FREENECTAPI_SYNC int freenect_sync_get_tilt_state(freenect_raw_tilt_state **state, int index);
 /*  Tilt state function, starts the runloop if it isn't running
 
     Args:
@@ -88,7 +117,7 @@ int freenect_sync_get_tilt_state(freenect_raw_tilt_state **state, int index);
         Nonzero on error.
 */
 
-int freenect_sync_set_led(freenect_led_options led, int index);
+FREENECTAPI_SYNC int freenect_sync_set_led(freenect_led_options led, int index);
 /*  Led function, starts the runloop if it isn't running
 
     Args:
@@ -99,8 +128,13 @@ int freenect_sync_set_led(freenect_led_options led, int index);
         Nonzero on error.
 */
 
+FREENECTAPI_SYNC int freenect_sync_camera_to_world(int cx, int cy, int wz, double* wx, double* wy, int index);
+/*  Camera to world mapping, starts the runloop if it isn't running
 
-void freenect_sync_stop(void);
+    Wraps libfreenect_registration.h function of same name.
+*/
+
+FREENECTAPI_SYNC void freenect_sync_stop(void);
 #ifdef __cplusplus
 }
 #endif
