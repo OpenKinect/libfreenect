@@ -1,3 +1,11 @@
+libfreenect (1:0.5.1) unstable; urgency=low
+
+  * Version bump
+  * Headers are installed to ${PREFIX}/usr/include/libfreenect/
+  * OpenNI2 driver is installed by default
+
+-- Benn Snyder <benn.snyder@gmail.com>  Sun, 09 Nov 2014 12:00:28 -0700
+
 libfreenect (1:0.3.0-0ubuntu1~saucy) saucy; urgency=low
 
   * OpenNI2-FreenectDriver is now part of libfreenect #358
