@@ -17,6 +17,7 @@
 #include <map>
 #include <string>
 #include "Driver/OniDriverAPI.h"
+#include "freenect_internal.h"
 #include "libfreenect.hpp"
 #include "DepthStream.hpp"
 #include "ColorStream.hpp"
@@ -254,6 +255,18 @@ namespace FreenectDriver
         devices[info] = NULL;
         deviceConnected(&info);
         deviceStateChanged(&info, 0);
+
+        freenect_device* dev;
+        if (freenect_open_device(m_ctx, &dev, i) == 0)
+        {
+          info.usbVendorId = dev->usb_cam.VID;
+          info.usbProductId = dev->usb_cam.PID;
+          freenect_close_device(dev);
+        }
+        else
+        {
+          WriteMessage("Unable to open device to query VID/PID");
+        }
       }
       return ONI_STATUS_OK;
     }

@@ -17,6 +17,7 @@ set_target_properties(FreenectDriver PROPERTIES
 add_definitions(-DPROJECT_VER="${PROJECT_VER}")
 
 include_directories(extern/OpenNI-Linux-x64-2.2.0.33/Include)
+include_directories(${PROJECT_SOURCE_DIR}/src)
 include_directories(${PROJECT_SOURCE_DIR}/wrappers/cpp)
 
 target_link_libraries(FreenectDriver freenectstatic ${MATH_LIB})
