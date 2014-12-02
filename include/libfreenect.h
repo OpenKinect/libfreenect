@@ -115,6 +115,7 @@ typedef enum {
 	// arbitrary bitfields to support flag combination
 	FREENECT_MIRROR_DEPTH       = 1 << 16,
 	FREENECT_MIRROR_VIDEO       = 1 << 17,
+	FREENECT_NEAR_MODE          = 1 << 18, // K4W only
 } freenect_flag;
 
 /// Possible values for setting each `freenect_flag`

@@ -27,6 +27,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <windows.h>
 
 // MinGW defines _SSIZE_T_DEFINED in sys/types.h when it defines ssize_t to be a long.
 // Redefining it causes an error.
@@ -35,3 +36,16 @@
 #define _SSIZE_T_DEFINED
 typedef long ssize_t;
 #endif // _SSIZE_T_DEFINED
+
+
+void usleep(__int64 usec)
+{
+	// Convert to 100 nanosecond interval, negative for relative time.
+	LARGE_INTEGER ft;
+	ft.QuadPart = -(10 * usec);
+
+	HANDLE timer = CreateWaitableTimer(NULL, TRUE, NULL);
+	SetWaitableTimer(timer, &ft, 0, NULL, NULL, 0);
+	WaitForSingleObject(timer, INFINITE);
+	CloseHandle(timer);
+}

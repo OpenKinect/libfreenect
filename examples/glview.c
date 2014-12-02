@@ -231,6 +231,11 @@ void keyPressed(unsigned char key, int x, int y)
 		freenect_set_flag(f_dev, FREENECT_MIRROR_VIDEO, mirror);
 		mirror = mirror ? FREENECT_OFF : FREENECT_ON;
 	}
+	if (key == 'n') {
+		static freenect_flag_value near = FREENECT_ON;
+		freenect_set_flag(f_dev, FREENECT_NEAR_MODE, near);
+		near = near ? FREENECT_OFF : FREENECT_ON;
+	}
 	if (key == '1') {
 		freenect_set_led(f_dev,LED_GREEN);
 	}
@@ -416,7 +421,7 @@ void *freenect_threadfunc(void *arg)
 
 	printf("'w' - tilt up, 's' - level, 'x' - tilt down, '0'-'6' - select LED mode \n");
 	printf("'f' - change video format, 'm' - mirror video, 'o' - rotate video with accelerometer \n");
-	printf("'e' - auto exposure, 'b' - white balance, 'r' - raw color \n");
+	printf("'e' - auto exposure, 'b' - white balance, 'r' - raw color, 'n' - near mode (K4W only) \n");
 
 	while (!die && freenect_process_events(f_ctx) >= 0) {
 		//Throttle the text output

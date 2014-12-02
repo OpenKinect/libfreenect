@@ -291,6 +291,9 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			// If the index given by the user matches our camera index
 			if (nr_cam == index)
 			{
+				dev->usb_cam.VID = desc.idVendor;
+				dev->usb_cam.PID = desc.idProduct;
+
 				res = libusb_open (devs[i], &dev->usb_cam.dev);
 				if (res < 0 || !dev->usb_cam.dev)
 				{
@@ -416,6 +419,9 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			// If the index given by the user matches our camera index
 			if (nr_mot == index)
 			{
+				dev->usb_motor.VID = desc.idVendor;
+				dev->usb_motor.PID = desc.idProduct;
+
 				res = libusb_open (devs[i], &dev->usb_motor.dev);
 				if (res < 0 || !dev->usb_motor.dev)
 				{
@@ -444,6 +450,9 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			// If the index given by the user matches our audio index
 			if (nr_audio == index)
 			{
+				dev->usb_audio.VID = desc.idVendor;
+				dev->usb_audio.PID = desc.idProduct;
+
 				res = libusb_open (devs[i], &dev->usb_audio.dev);
 				if (res < 0 || !dev->usb_audio.dev)
 				{

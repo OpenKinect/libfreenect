@@ -253,6 +253,6 @@ struct _freenect_device {
 	fnusb_dev usb_motor;
 	freenect_raw_tilt_state raw_state;
     
-    int device_does_motor_control_with_audio;
-    int motor_control_with_audio_enabled;
+	int device_does_motor_control_with_audio;
+	int motor_control_with_audio_enabled;
 };

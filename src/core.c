@@ -188,7 +188,7 @@ FREENECTAPI int freenect_open_device_by_camera_serial(freenect_context *ctx, fre
 	int count = fnusb_list_device_attributes(&ctx->usb, &attrlist);
 	if (count < 0) {
 		FN_ERROR("freenect_open_device_by_camera_serial: Couldn't enumerate serial numbers\n");
-		return -1;
+		return count;
 	}
 	int index = 0;
 	for(item = attrlist ; item != NULL; item = item->next , index++) {

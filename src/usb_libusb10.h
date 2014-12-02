@@ -31,15 +31,7 @@
 
 #if defined(__APPLE__)
 /*
-  From Github Issue 22 by Roefer -
-  https://github.com/OpenKinect/libfreenect/issues/#issue/22
-
-  The current implementation still does not reach 30 Hz on MacOS. This
-  is due to bad scheduling of USB transfers in libusb (Ed Note: libusb
-  1.0.8). A fix can be found at
-  http://www.informatik.uni-bremen.de/~roefer/libusb/libusb-osx-kinect.diff
-
-  (Ed Note: patch applies to libusb repo at 7da756e09fd)
+  https://github.com/OpenKinect/libfreenect/issues/22 (@Roefer)
 
   In camera.c, I use PKTS_PER_XFER = 128, NUM_XFERS = 4. There are a
   few rules: PKTS_PER_XFER * NUM_XFERS <= 1000, PKTS_PER_XFER % 8 == 0.
@@ -69,6 +61,8 @@ typedef struct {
 	freenect_device *parent; //so we can go up from the libusb userdata
 	libusb_device_handle *dev;
 	int device_dead; // set to 1 when the underlying libusb_device_handle vanishes (ie, Kinect was unplugged)
+	int VID;
+	int PID;
 } fnusb_dev;
 
 typedef struct {

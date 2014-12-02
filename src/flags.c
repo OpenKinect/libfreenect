@@ -25,6 +25,7 @@
  */
 
 #include <string.h> // for memcpy
+#include <unistd.h> // for usleep
 #include "freenect_internal.h"
 #include "flags.h"
 
@@ -47,6 +48,34 @@ FN_INTERNAL int register_for_flag(int flag)
 
 int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value)
 {
+	freenect_context *ctx = dev->parent;
+
+	if (flag == FREENECT_NEAR_MODE)
+	{
+		if (dev->usb_cam.PID != PID_K4W_CAMERA)
+		{
+			FN_WARNING("Near mode is only supported by K4W");
+			return -1;
+		}
+
+		if (value == FREENECT_ON)
+		{
+			int ret = write_register(dev, 0x0015, 0x0007);
+			if (ret < 0)
+				return ret;
+			usleep(100000);
+			return write_register(dev, 0x02EF, 0x0000);
+		}
+		else
+		{
+			int ret = write_register(dev, 0x0015, 0x001E);
+			if (ret < 0)
+				return ret;
+			usleep(100000);
+			return write_register(dev, 0x02EF, 0x0190);
+		}
+	}
+
     if (flag >= (1 << 16))
     {
         int reg = register_for_flag(flag);
