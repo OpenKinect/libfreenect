@@ -21,6 +21,9 @@
 #include "DepthStream.hpp"
 #include "ColorStream.hpp"
 
+#include <libusb.h>
+#include "../../src/freenect_internal.h"
+
 
 namespace FreenectDriver
 {
@@ -246,14 +249,35 @@ namespace FreenectDriver
         std::string uri = devid_to_uri(i);
 
         WriteMessage("Found device " + uri);
-        
-        OniDeviceInfo info;
-        strncpy(info.uri, uri.c_str(), ONI_MAX_STR);
-        strncpy(info.vendor, "Microsoft", ONI_MAX_STR);
-        strncpy(info.name, "Kinect", ONI_MAX_STR);
-        devices[info] = NULL;
-        deviceConnected(&info);
-        deviceStateChanged(&info, 0);
+
+        freenect_device* dev;
+        int e;
+
+        if (!(e = freenect_open_device(m_ctx, &dev, i)))
+        {
+          struct libusb_device_descriptor desc;
+
+          if (!(e = libusb_get_device_descriptor (libusb_get_device(dev->usb_cam.dev), &desc)))
+          {
+            OniDeviceInfo info;
+
+            info.usbVendorId = desc.idVendor;
+            info.usbProductId = desc.idProduct;
+            strncpy(info.uri, uri.c_str(), ONI_MAX_STR);
+            strncpy(info.vendor, "Microsoft", ONI_MAX_STR);
+            strncpy(info.name, "Kinect", ONI_MAX_STR);
+
+            if (!(e = freenect_close_device(dev)))
+            {
+              devices[info] = NULL;
+              deviceConnected(&info);
+              deviceStateChanged(&info, 0);
+            }
+            else WriteMessage("Unable to close query of device " + uri + " error:"+ to_string(e));
+          }
+          else WriteMessage("Unable to query usb device " + uri + " error:"+  to_string(e));
+        }
+        else WriteMessage("Unable to query device " + uri + " error:" + to_string(e));
       }
       return ONI_STATUS_OK;
     }
