@@ -256,8 +256,8 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	freenect_context *ctx = dev->parent;
 
-    dev->device_does_motor_control_with_audio = 0;
-    dev->motor_control_with_audio_enabled = 0;
+	dev->device_does_motor_control_with_audio = 0;
+	dev->motor_control_with_audio_enabled = 0;
     
 	dev->usb_cam.parent = dev;
 	dev->usb_cam.dev = NULL;
@@ -761,10 +761,22 @@ static void LIBUSB_CALL iso_callback(struct libusb_transfer *xfer)
 	}
 }
 
-FN_INTERNAL int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, int ep, int xfers, int pkts, int len)
+FN_INTERNAL int fnusb_get_max_iso_packet_size(fnusb_dev *dev, unsigned char endpoint, int default_size)
 {
 	freenect_context *ctx = dev->parent->parent;
-	int ret, i;
+
+	int size = libusb_get_max_iso_packet_size(libusb_get_device(dev->dev), endpoint);
+	if (size <= 0)
+	{
+		FN_WARNING("libusb_get_max_iso_packet_size() returned %d; using default %d\n", size, default_size);
+		size = default_size;
+	}
+	return size;
+}
+
+FN_INTERNAL int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_iso_cb cb, unsigned char endpoint, int xfers, int pkts, int len)
+{
+	freenect_context *ctx = dev->parent->parent;
 
 	strm->parent = dev;
 	strm->cb = cb;
@@ -776,27 +788,36 @@ FN_INTERNAL int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_i
 	strm->dead = 0;
 	strm->dead_xfers = 0;
 
+	int i;
 	uint8_t *bufp = strm->buffer;
 
-	for (i=0; i<xfers; i++) {
-		FN_SPEW("Creating EP %02x transfer #%d\n", ep, i);
+	for (i = 0; i < xfers; i++)
+	{
+		FN_SPEW("Creating endpoint %02x transfer #%d\n", endpoint, i);
+
 		strm->xfers[i] = libusb_alloc_transfer(pkts);
-
-		libusb_fill_iso_transfer(strm->xfers[i], dev->dev, ep, bufp, pkts * len, pkts, iso_callback, strm, 0);
-
-		libusb_set_iso_packet_lengths(strm->xfers[i], len);
-
-		ret = libusb_submit_transfer(strm->xfers[i]);
-		if (ret < 0) {
-			FN_WARNING("Failed to submit isochronous transfer %d: %d\n", i, ret);
+		if (strm->xfers[i] == NULL)
+		{
+			FN_WARNING("Failed to allocate transfer\n");
 			strm->dead_xfers++;
+		}
+		else
+		{
+			libusb_fill_iso_transfer(strm->xfers[i], dev->dev, endpoint, bufp, pkts * len, pkts, iso_callback, strm, 0);
+			libusb_set_iso_packet_lengths(strm->xfers[i], len);
+
+			int ret = libusb_submit_transfer(strm->xfers[i]);
+			if (ret < 0)
+			{
+				FN_WARNING("Failed to submit isochronous transfer %d: %d\n", i, ret);
+				strm->dead_xfers++;
+			}
 		}
 
 		bufp += pkts*len;
 	}
 
 	return 0;
-
 }
 
 FN_INTERNAL int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm)
