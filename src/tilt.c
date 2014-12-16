@@ -235,33 +235,30 @@ int freenect_set_tilt_degs(freenect_device *dev, double angle)
 	return ret;
 }
 
-
 FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context * ctx, freenect_led_options state)
 {
-    typedef enum {
-        LED_ALT_OFF = 1,
-        LED_ALT_BLINK_GREEN = 2,
-        LED_ALT_SOLID_GREEN = 3,
-        LED_ALT_SOLID_RED = 4,
-    }led_alt_state;
+	enum
+	{
+			LED_ALT_OFF = 1,
+			LED_ALT_BLINK_GREEN = 2,
+			LED_ALT_SOLID_GREEN = 3,
+			LED_ALT_SOLID_RED = 4,
+	};
 
-	int transferred = 0;
-	int res = 0;
-    
-    //The LED states are different between K4W/1473 and older 1414 
-    if( state == LED_GREEN ){
-        state = (freenect_led_options)LED_ALT_SOLID_GREEN;
-    }else if( state == LED_RED ){
-        state = (freenect_led_options)LED_ALT_SOLID_RED;
-    }else if( state == LED_YELLOW ){
-        state = (freenect_led_options)LED_ALT_SOLID_GREEN;
-    }else if( state == LED_OFF ){
-        state = (freenect_led_options)LED_ALT_OFF;
-    }else if( state == LED_BLINK_GREEN ){
-        state = (freenect_led_options)LED_ALT_BLINK_GREEN;
-    }else{
-        state = LED_GREEN;
-    }
+	//The LED states are different between K4W/1473 and older 1414
+	if( state == LED_GREEN ){
+			state = (freenect_led_options)LED_ALT_SOLID_GREEN;
+	}else if( state == LED_RED ){
+			state = (freenect_led_options)LED_ALT_SOLID_RED;
+	}else if( state == LED_YELLOW ){
+			state = (freenect_led_options)LED_ALT_SOLID_GREEN;
+	}else if( state == LED_OFF ){
+			state = (freenect_led_options)LED_ALT_OFF;
+	}else if( state == LED_BLINK_GREEN ){
+			state = (freenect_led_options)LED_ALT_BLINK_GREEN;
+	}else{
+			state = LED_GREEN;
+	}
     
 	fn_alt_motor_command cmd;
 	cmd.magic = fn_le32(0x06022009);
@@ -272,8 +269,9 @@ FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context *
     
 	unsigned char buffer[20];
 	memcpy(buffer, &cmd, 20);
-    
-	res = libusb_bulk_transfer(dev, 0x01, buffer, 20, &transferred, 100);
+
+	int transferred = 0;
+	int res = libusb_bulk_transfer(dev, 0x01, buffer, 20, &transferred, 100);
 	if (res != 0) {
 		FN_WARNING("fnusb_set_led_alt(): libusb_bulk_transfer failed: %d (transferred = %d)\n", res, transferred);
 		return res;
