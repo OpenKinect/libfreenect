@@ -75,6 +75,7 @@ Continue with [Fetch & Build](#fetch-build).
 
 ## Linux
 
+Remember to install the [udev rules](https://github.com/OpenKinect/libfreenect/tree/master/platform/linux/udev).
 For a manual build, see [the wiki](http://openkinect.org/wiki/Getting_Started#Manual_Build_on_Linux).
 
 ### Ubuntu/Debian/Mint
@@ -83,12 +84,10 @@ The version packaged in Ubuntu may be very old.
 To install newer packaged builds, see [the wiki](http://openkinect.org/wiki/Getting_Started#Ubuntu.2FDebian).
 Continue with this section for a manual build.
 
-    sudo apt-get install git-core cmake pkg-config build-essential libusb-1.0-0-dev
-    sudo adduser $USER video
-    sudo adduser $USER plugdev # necessary?
+    sudo apt-get install git cmake build-essential libusb-1.0-0-dev
 
     # only if you are building the examples:
-    sudo apt-get install libglut3-dev libxmu-dev libxi-dev
+    sudo apt-get install freeglut3-dev libxmu-dev libxi-dev
 
 Continue with [Fetch & Build](#fetch-build).
 
