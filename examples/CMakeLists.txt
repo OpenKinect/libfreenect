@@ -3,7 +3,7 @@
 ######################################################################################
 
 # todo: use these throughout
-file(GLOB SRC_STANDARD chunkview.c glview.c hiview.c regview.c)
+file(GLOB SRC_STANDARD chunkview.c glview.c hiview.c regview.c camtest.c)
 file(GLOB SRC_AUDIO    micview.c wavrecord.c)
 file(GLOB SRC_SYNC     glpclview.c regtest.c tiltdemo.c)
 set (SRC_ALL ${SRC_STANDARD} ${SRC_AUDIO} ${SRC_SYNC})
@@ -21,6 +21,7 @@ add_executable(freenect-hiview hiview.c)
 add_executable(freenect-chunkview chunkview.c)
 add_executable(freenect-wavrecord wavrecord.c)
 add_executable(freenect-micview micview.c)
+add_executable(freenect-camtest camtest.c)
 
 if (BUILD_C_SYNC)
   add_executable(freenect-glpclview glpclview.c)
@@ -43,12 +44,12 @@ if(APPLE)
   target_link_libraries(freenect-chunkview freenect)
   target_link_libraries(freenect-wavrecord freenect)
   target_link_libraries(freenect-micview freenect)
+  target_link_libraries(freenect-camtest freenect)
   if (BUILD_C_SYNC)
     target_link_libraries(freenect-glpclview freenect_sync)
     target_link_libraries(freenect-tiltdemo freenect_sync)
     target_link_libraries(freenect-regtest freenect_sync)
   endif()
-# Linux, not so much
 else()
 
   find_package(Threads REQUIRED)
@@ -63,9 +64,9 @@ else()
   target_link_libraries(freenect-chunkview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   target_link_libraries(freenect-wavrecord freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
   target_link_libraries(freenect-micview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+  target_link_libraries(freenect-camtest freenect)
   if (BUILD_C_SYNC)
-    target_link_libraries(freenect-glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY}
- ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+    target_link_libraries(freenect-glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
     target_link_libraries(freenect-tiltdemo freenect_sync ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
     target_link_libraries(freenect-regtest freenect_sync ${CMAKE_THREAD_LIBS_INIT})
   endif()
