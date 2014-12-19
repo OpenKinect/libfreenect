@@ -180,10 +180,10 @@ int main(int argc, char** argv) {
 
 	state.max_samples = 256 * 60;
 	state.current_idx = 0;
-	state.buffers[0] = malloc(state.max_samples * sizeof(int32_t));
-	state.buffers[1] = malloc(state.max_samples * sizeof(int32_t));
-	state.buffers[2] = malloc(state.max_samples * sizeof(int32_t));
-	state.buffers[3] = malloc(state.max_samples * sizeof(int32_t));
+	state.buffers[0] = (int32_t*)malloc(state.max_samples * sizeof(int32_t));
+	state.buffers[1] = (int32_t*)malloc(state.max_samples * sizeof(int32_t));
+	state.buffers[2] = (int32_t*)malloc(state.max_samples * sizeof(int32_t));
+	state.buffers[3] = (int32_t*)malloc(state.max_samples * sizeof(int32_t));
 	memset(state.buffers[0], 0, state.max_samples * sizeof(int32_t));
 	memset(state.buffers[1], 0, state.max_samples * sizeof(int32_t));
 	memset(state.buffers[2], 0, state.max_samples * sizeof(int32_t));

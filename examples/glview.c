@@ -39,6 +39,7 @@
 #include <GL/glut.h>
 #endif
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 
 pthread_t freenect_thread;
@@ -232,9 +233,9 @@ void keyPressed(unsigned char key, int x, int y)
 		mirror = mirror ? FREENECT_OFF : FREENECT_ON;
 	}
 	if (key == 'n') {
-		static freenect_flag_value near = FREENECT_ON;
-		freenect_set_flag(f_dev, FREENECT_NEAR_MODE, near);
-		near = near ? FREENECT_OFF : FREENECT_ON;
+		static freenect_flag_value near_mode = FREENECT_ON;
+		freenect_set_flag(f_dev, FREENECT_NEAR_MODE, near_mode);
+		near_mode = near_mode ? FREENECT_OFF : FREENECT_ON;
 	}
 	if (key == '1') {
 		freenect_set_led(f_dev,LED_GREEN);

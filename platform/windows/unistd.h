@@ -38,7 +38,7 @@ typedef long ssize_t;
 #endif // _SSIZE_T_DEFINED
 
 
-void usleep(__int64 usec)
+static void usleep(__int64 usec)
 {
 	// Convert to 100 nanosecond interval, negative for relative time.
 	LARGE_INTEGER ft;

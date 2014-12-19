@@ -29,6 +29,10 @@
 #include <string.h>
 #include "libfreenect.h"
 
+#ifndef SIGQUIT // win32 compat
+	#define SIGQUIT SIGTERM
+#endif
+
 
 void depth_cb(freenect_device* dev, void* data, uint32_t timestamp)
 {
@@ -47,7 +51,6 @@ void signalHandler(int signal)
 	 || signal == SIGTERM
 	 || signal == SIGQUIT)
 	{
-		printf(" %s; shutting down\n", sys_siglist[signal]);
 		running = false;
 	}
 }
@@ -75,7 +78,7 @@ int main(int argc, char** argv)
 		return ret;
 	if (num_devices == 0)
 	{
-		printf("No devices found!\n");
+		printf("No device found!\n");
 		freenect_shutdown(fn_ctx);
 		return 1;
 	}
@@ -127,11 +130,15 @@ int main(int argc, char** argv)
 
 	}
 
+	printf("Shutting down\n");
+
 	// Stop everything and shutdown.
 	freenect_stop_depth(fn_dev);
 	freenect_stop_video(fn_dev);
 	freenect_close_device(fn_dev);
 	freenect_shutdown(fn_ctx);
+
+	printf("Done!\n");
 
 	return 0;
 }
