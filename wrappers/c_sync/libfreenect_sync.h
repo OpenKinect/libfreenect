@@ -65,7 +65,7 @@ FREENECTAPI_SYNC int freenect_sync_get_video_with_res(void **video, uint32_t *ti
         Nonzero on error.
 */
 
-int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt);
+FREENECTAPI_SYNC int freenect_sync_get_video(void **video, uint32_t *timestamp, int index, freenect_video_format fmt);
 /*  Does the exact same as above, but with a default resolution,
     so backwards compatibilty is maintained.
     The Resolution is kept at the default FREENECT_RESOLUTION_MEDIUM
@@ -89,7 +89,7 @@ FREENECTAPI_SYNC int freenect_sync_get_depth_with_res(void **depth, uint32_t *ti
         Nonzero on error.
 */
 
-int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freenect_depth_format fmt);
+FREENECTAPI_SYNC int freenect_sync_get_depth(void **depth, uint32_t *timestamp, int index, freenect_depth_format fmt);
 /*  Again, a wrapper function to keep backward compatibility.
     The Resolution is kept at the default FREENECT_RESOLUTION_MEDIUM
 
