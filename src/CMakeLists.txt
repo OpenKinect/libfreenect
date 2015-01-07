@@ -2,13 +2,8 @@
 # Build for main library
 ######################################################################################
 
-include_directories (${CMAKE_CURRENT_SOURCE_DIR})
-
+include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 include_directories(${LIBUSB_1_INCLUDE_DIRS})
-LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c audio.c loader.c)
-IF(WIN32)
-  set_source_files_properties(${SRC} PROPERTIES LANGUAGE CXX)
-ENDIF(WIN32)
 
 # Audio Firmware
 include(FindPythonInterp)
@@ -23,6 +18,8 @@ ELSE(BUILD_REDIST_PACKAGE)
       DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/fwfetcher.py")
   install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/libfreenect")
 ENDIF()
+
+LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c audio.c loader.c)
 
 add_library (freenect SHARED ${SRC})
 set_target_properties ( freenect PROPERTIES
