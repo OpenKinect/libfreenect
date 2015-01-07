@@ -14,10 +14,16 @@ def get_cython_version():
         ImportError: Can't load cython or find version
     """
     import Cython.Compiler.Main
-    match = re.search('^([0-9]+)\.([0-9]+)',
-                      Cython.Compiler.Main.Version.version)
+
     try:
-        return map(int, match.groups())
+        # old way, fails for me
+        version = Cython.Compiler.Main.Version.version
+    except AttributeError:
+        version = Cython.Compiler.Main.version
+
+    match = re.search('^([0-9]+)\.([0-9]+)', version)
+    try:
+        return [int(g) for g in match.groups()]
     except AttributeError:
         raise ImportError
 
