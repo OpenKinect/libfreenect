@@ -13,13 +13,11 @@ install(TARGETS freenect-camtest freenect-wavrecord
 # All viewers need pthreads and GLUT.
 set(THREADS_USE_PTHREADS_WIN32 true)
 find_package(Threads)
-include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
-
 find_package(OpenGL)
 find_package(GLUT)
 
 if (Threads_FOUND AND OPENGL_FOUND AND GLUT_FOUND)
-  include_directories(${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
+  include_directories(${THREADS_PTHREADS_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
 
   add_executable(freenect-glview glview.c)
   add_executable(freenect-regview regview.c)
@@ -41,7 +39,7 @@ endif ()
 if (BUILD_C_SYNC)
   find_package(Threads REQUIRED)
   include_directories(../wrappers/c_sync/)
-  include_directories(${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
+  include_directories(${THREADS_PTHREADS_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
 
   add_executable(freenect-regtest regtest.c)
   add_executable(freenect-tiltdemo tiltdemo.c)
