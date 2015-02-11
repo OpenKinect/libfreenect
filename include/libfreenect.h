@@ -670,6 +670,24 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
  */
 FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value);
 
+/**
+ * Returns the brightness of the IR projector
+ *
+ * @param dev Device to get IR brightness
+ *
+ * @return IR brightness, UINT16_MAX if error
+ */
+FREENECTAPI uint16_t freenect_get_ir_brightness(freenect_device *dev);
+
+/**
+ * Sets the brightness of the IR projector
+ *
+ * @param dev Device to set IR brightness
+ * @param brighness Brightness value in range 1 - 50
+ *
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_set_ir_brightness(freenect_device *dev, uint16_t brightness);
 
 /**
  * Allows the user to specify a pointer to the audio firmware in memory for the Xbox 360 Kinect

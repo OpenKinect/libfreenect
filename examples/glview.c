@@ -237,6 +237,16 @@ void keyPressed(unsigned char key, int x, int y)
 		freenect_set_flag(f_dev, FREENECT_NEAR_MODE, near_mode);
 		near_mode = near_mode ? FREENECT_OFF : FREENECT_ON;
 	}
+
+	if (key == '+') {
+		uint16_t brightness = freenect_get_ir_brightness(f_dev) + 2;
+		freenect_set_ir_brightness(f_dev, brightness);
+	}
+	if (key == '-') {
+		uint16_t brightness = freenect_get_ir_brightness(f_dev) - 2;
+		freenect_set_ir_brightness(f_dev, brightness);
+	}
+
 	if (key == '1') {
 		freenect_set_led(f_dev,LED_GREEN);
 	}
@@ -259,6 +269,7 @@ void keyPressed(unsigned char key, int x, int y)
 	if (key == '0') {
 		freenect_set_led(f_dev,LED_OFF);
 	}
+
 	if (key == 'o') {
 	    if (camera_rotate) {
 	        camera_rotate = 0;
@@ -420,7 +431,7 @@ void *freenect_threadfunc(void *arg)
 	freenect_start_depth(f_dev);
 	freenect_start_video(f_dev);
 
-	printf("'w' - tilt up, 's' - level, 'x' - tilt down, '0'-'6' - select LED mode \n");
+	printf("'w' - tilt up, 's' - level, 'x' - tilt down, '0'-'6' - select LED mode, '+' & '-' - change IR intensity \n");
 	printf("'f' - change video format, 'm' - mirror video, 'o' - rotate video with accelerometer \n");
 	printf("'e' - auto exposure, 'b' - white balance, 'r' - raw color, 'n' - near mode (K4W only) \n");
 

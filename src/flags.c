@@ -30,9 +30,6 @@
 #include "flags.h"
 
 
-// freenect_set_flag is the only function exposed in libfreenect.h
-// The rest are available internally via #include flags.h
-
 FN_INTERNAL int register_for_flag(int flag)
 {
     switch(flag)
@@ -94,6 +91,41 @@ int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_va
 	else
 		cmos_value &= ~flag;
 	return write_cmos_register(dev, 0x0106, cmos_value);
+}
+
+uint16_t freenect_get_ir_brightness(freenect_device *dev)
+{
+	freenect_context *ctx = dev->parent;
+
+	const uint16_t brightness = read_register(dev, 0x15);
+	if (brightness == UINT16_MAX)
+	{
+		FN_WARNING("Failed to get IR brightness!");
+	}
+
+	return brightness;
+}
+
+int freenect_set_ir_brightness(freenect_device *dev, uint16_t brightness)
+{
+	freenect_context *ctx = dev->parent;
+
+	if (brightness < 1)
+	{
+		brightness = 1;
+	}
+	if (brightness > 50)
+	{
+		brightness = 50;
+	}
+
+	const int ret = write_register(dev, 0x15, brightness);
+	if (ret < 0)
+	{
+		FN_WARNING("Failed to set IR brightness");
+	}
+
+	return ret;
 }
 
 typedef struct {
