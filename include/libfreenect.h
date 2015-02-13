@@ -675,9 +675,9 @@ FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, free
  *
  * @param dev Device to get IR brightness
  *
- * @return IR brightness, UINT16_MAX if error
+ * @return IR brightness value in the range 1 - 50, < 0 if error
  */
-FREENECTAPI uint16_t freenect_get_ir_brightness(freenect_device *dev);
+FREENECTAPI int freenect_get_ir_brightness(freenect_device *dev);
 
 /**
  * Sets the brightness of the IR projector

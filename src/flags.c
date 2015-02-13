@@ -93,7 +93,7 @@ int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_va
 	return write_cmos_register(dev, 0x0106, cmos_value);
 }
 
-uint16_t freenect_get_ir_brightness(freenect_device *dev)
+int freenect_get_ir_brightness(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 
@@ -101,6 +101,7 @@ uint16_t freenect_get_ir_brightness(freenect_device *dev)
 	if (brightness == UINT16_MAX)
 	{
 		FN_WARNING("Failed to get IR brightness!");
+		return -1;
 	}
 
 	return brightness;
