@@ -105,12 +105,22 @@ Alternately, the [libfreenect-git](https://aur.archlinux.org/packages/libfreenec
 
 ## Windows
 
-The inf files in [platform/windows/](https://github.com/OpenKinect/libfreenect/tree/master/platform/windows) may be used for installing the device.
+As of February 2015, libusb still [does not support](https://github.com/libusb/libusb/issues/46) isochronous transfers on Windows.
+This support may be patched in by performing these steps or their GUI equivalent.
+
+    git clone https://github.com/libusb/libusb.git
+    cd libusb
+    git remote add jblake https://github.com/JoshBlake/libusbx.git
+    git fetch jblake
+    git cherry-pick c5b0af4 1c74211
+    MSBuild.exe msvc/libusb_2013.sln
+
+Use [Zadig](http://zadig.akeo.ie/) to install the libusbK driver for each device you wish to use.
 Follow [Fetch & Build](#fetch-build) or use Github and CMake GUI tools.
-You may need to supply paths to CMake so it can find dependencies.
+Remember to supply paths to CMake so it can find dependencies.
 For example:
 
-    cmake .. -DLIBUSB_1_INCLUDE_DIR="C:\path\to\libusb\include" -DLIBUSB_1_LIBRARY="C:\path\to\libusb\libusb.lib"
+    cmake .. -DLIBUSB_1_INCLUDE_DIR="C:\path\to\patched\libusb\include" -DLIBUSB_1_LIBRARY="C:\path\to\patched\libusb\libusb.lib"
 
 
 # Wrappers
