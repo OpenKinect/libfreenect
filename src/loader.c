@@ -180,8 +180,9 @@ FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
 				break;
 			case 3:
 				//fwfile = "/usr/local/share/libfreenect/audios.bin";
+				fwfile = (char *)malloc(2048);
+                needs_free = 1;
                 sprintf(fwfile, "/usr/local/share/libfreenect%s", fw_filename);
-
 				break;
 			case 4:
 				//fwfile = "/usr/share/libfreenect/audios.bin";
