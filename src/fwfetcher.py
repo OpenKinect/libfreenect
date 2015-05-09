@@ -531,11 +531,11 @@ def getFileOrURL(filename, url):
 	return retval
 
 def extractPirsFromZip(systemupdate):
-	print "Extracting $Systemupdate/FFFE07DF00000001 from system update file..."
+	print "Extracting $SystemUpdate/FFFE07DF00000001 from system update file..."
 	updatefile = StringIO.StringIO(systemupdate)
 	z = zipfile.ZipFile(updatefile)
 	#print z.namelist()
-	pirs = z.open("$Systemupdate/FFFE07DF00000001").read()
+	pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
 	print "done."
 	return pirs
 
