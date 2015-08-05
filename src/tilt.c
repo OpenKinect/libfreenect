@@ -97,8 +97,15 @@ freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev)
 	return &dev->raw_state;
 }
 
-int update_tilt_state_alt(freenect_device *dev){
+int update_tilt_state_alt(freenect_device *dev)
+{
 	freenect_context *ctx = dev->parent;
+
+	if (dev->usb_audio.dev == NULL)
+	{
+		FN_WARNING("Motor control failed: audio device missing");
+		return -1;
+	}
 
 	int transferred = 0;
 	int res = 0;
@@ -112,39 +119,34 @@ int update_tilt_state_alt(freenect_device *dev){
 	memcpy(buffer, &cmd, 16);
     
 	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 16, &transferred, 250);
-	if (res != 0) {
+	if (res != 0)
+	{
 		return res;
 	}
     
 	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x81, buffer, 256, &transferred, 250); // 104 bytes
-	if (res != 0) {
+	if (res != 0)
+	{
 		return res;
-	} else {
-//		int i;
-//		for(i = 0 ; i < transferred ; i += 4) {
-//			int32_t j;
-//			memcpy(&j, buffer + i, 4);
-//			printf("\t%d\n", j);
-//		}
-//		printf("\n");
-		struct {
-			int32_t x;
-			int32_t y;
-			int32_t z;
-            int32_t tilt;
-		} accel_and_tilt;
-        
-		memcpy(&accel_and_tilt, buffer + 16, sizeof(accel_and_tilt));
-		//printf("\tX: %d  Y: %d  Z:%d - tilt is %d\n", accel_and_tilt.x, accel_and_tilt.y, accel_and_tilt.z, accel_and_tilt.tilt);
-        
-    	dev->raw_state.accelerometer_x  = (int16_t)accel_and_tilt.x;
-        dev->raw_state.accelerometer_y  = (int16_t)accel_and_tilt.y;
-        dev->raw_state.accelerometer_z  = (int16_t)accel_and_tilt.z;
-        
-        //this is multiplied by 2 as the older 1414 device reports angles doubled and freenect takes this into account
-        dev->raw_state.tilt_angle       = (int8_t)accel_and_tilt.tilt * 2;
-
 	}
+
+	struct {
+		int32_t x;
+		int32_t y;
+		int32_t z;
+		int32_t tilt;
+	} accel_and_tilt;
+
+	memcpy(&accel_and_tilt, buffer + 16, sizeof(accel_and_tilt));
+	FN_SPEW("Accelerometer state: X == %d \t Y == %d \t Z == %d \t Tilt == %d\n", accel_and_tilt.x, accel_and_tilt.y, accel_and_tilt.z, accel_and_tilt.tilt);
+
+	dev->raw_state.accelerometer_x  = (int16_t)accel_and_tilt.x;
+	dev->raw_state.accelerometer_y  = (int16_t)accel_and_tilt.y;
+	dev->raw_state.accelerometer_z  = (int16_t)accel_and_tilt.z;
+
+	// this is multiplied by 2 as the older 1414 device reports angles doubled and freenect takes this into account
+	dev->raw_state.tilt_angle       = (int8_t)accel_and_tilt.tilt * 2;
+
 	// Reply: skip four uint32_t, then you have three int32_t that give you acceleration in that direction, it seems.
 	// Units still to be worked out.
 	return get_reply(dev->usb_audio.dev, ctx);
@@ -192,7 +194,13 @@ int freenect_set_tilt_degs_alt(freenect_device *dev, int tilt_degrees)
 		FN_WARNING("set_tilt(): degrees %d out of safe range [-31, 31]\n", tilt_degrees);
 		return -1;
 	}
-    
+
+	if (dev->usb_audio.dev == NULL)
+	{
+		FN_WARNING("Motor control failed: audio device missing");
+		return -1;
+	}
+
 	fn_alt_motor_command cmd;
 	cmd.magic = fn_le32(0x06022009);
 	cmd.tag = fn_le32(tag_seq++);
@@ -282,7 +290,14 @@ FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context *
 int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
 {
 	freenect_context *ctx = dev->parent;
-    return fnusb_set_led_alt(dev->usb_audio.dev, ctx, state);
+
+	if (dev->usb_audio.dev == NULL)
+	{
+		FN_WARNING("Motor control failed: audio device missing");
+		return -1;
+	}
+
+	return fnusb_set_led_alt(dev->usb_audio.dev, ctx, state);
 }
 
 int freenect_set_led(freenect_device *dev, freenect_led_options option)

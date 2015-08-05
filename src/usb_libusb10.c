@@ -252,6 +252,53 @@ FN_INTERNAL int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* tim
 	return libusb_handle_events_timeout(ctx->ctx, timeout);
 }
 
+int fnusb_claim_camera(freenect_device* dev)
+{
+	freenect_context *ctx = dev->parent;
+
+	int ret = 0;
+
+#ifndef _WIN32 // todo: necessary?
+	// Detach an existing kernel driver for the device
+	ret = libusb_kernel_driver_active(dev->usb_cam.dev, 0);
+	if (ret == 1)
+	{
+		ret = libusb_detach_kernel_driver(dev->usb_cam.dev, 0);
+		if (ret < 0)
+		{
+			FN_ERROR("Failed to detach camera kernel driver: %s\n", libusb_error_name(ret));
+			libusb_close(dev->usb_cam.dev);
+			dev->usb_cam.dev = NULL;
+			return ret;
+		}
+	}
+#endif
+
+	ret = libusb_claim_interface(dev->usb_cam.dev, 0);
+	if (ret < 0)
+	{
+		FN_ERROR("Failed to claim camera interface: %s\n", libusb_error_name(ret));
+		libusb_close(dev->usb_cam.dev);
+		dev->usb_cam.dev = NULL;
+		return ret;
+	}
+
+	if (dev->usb_cam.PID == PID_K4W_CAMERA)
+	{
+		ret = libusb_set_interface_alt_setting(dev->usb_cam.dev, 0, 1);
+		if (ret != 0)
+		{
+			FN_ERROR("Failed to set alternate interface #1 for K4W: %s\n", libusb_error_name(ret));
+			libusb_close(dev->usb_cam.dev);
+			dev->usb_cam.dev = NULL;
+			return ret;
+		}
+	}
+
+	return ret;
+}
+
+
 FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	freenect_context *ctx = dev->parent;
@@ -301,6 +348,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					dev->usb_cam.dev = NULL;
 					break;
 				}
+
 				if (desc.idProduct == PID_K4W_CAMERA || desc.bcdDevice != fn_le32(267))
 				{
 					freenect_device_flags requested_devices = ctx->enabled_subdevices;
@@ -309,7 +357,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					ctx->enabled_subdevices = (freenect_device_flags)(ctx->enabled_subdevices & ~FREENECT_DEVICE_MOTOR);
 					
 					ctx->zero_plane_res = 334;
-                    dev->device_does_motor_control_with_audio = 1;
+					dev->device_does_motor_control_with_audio = 1;
 
 					// set the LED for non 1414 devices to keep the camera alive for some systems which get freezes
 
@@ -360,39 +408,10 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					ctx->zero_plane_res = 322;
 				}
 
-#ifndef _WIN32
-				// Detach an existing kernel driver for the device
-				res = libusb_kernel_driver_active(dev->usb_cam.dev, 0);
-				if (res == 1)
-				{
-					res = libusb_detach_kernel_driver(dev->usb_cam.dev, 0);
-					if (res < 0)
-					{
-						FN_ERROR("Could not detach kernel driver for camera: %d\n", res);
-						libusb_close(dev->usb_cam.dev);
-						dev->usb_cam.dev = NULL;
-						break;
-					}
-				}
-#endif
-				res = libusb_claim_interface (dev->usb_cam.dev, 0);
+				res = fnusb_claim_camera(dev);
 				if (res < 0)
 				{
-					FN_ERROR("Could not claim interface on camera: %d\n", res);
-					libusb_close(dev->usb_cam.dev);
-					dev->usb_cam.dev = NULL;
 					break;
-				}
-				if (desc.idProduct == PID_K4W_CAMERA)
-				{
-					res = libusb_set_interface_alt_setting(dev->usb_cam.dev, 0, 1);
-					if (res != 0)
-					{
-						FN_ERROR("Failed to set alternate interface #1 for K4W: %d\n", res);
-						libusb_close(dev->usb_cam.dev);
-						dev->usb_cam.dev = NULL;
-						break;
-					}
 				}
 			}
 			else
@@ -460,6 +479,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					dev->usb_audio.dev = NULL;
 					break;
 				}
+
 				res = libusb_claim_interface (dev->usb_audio.dev, 0);
 				if (res < 0)
 				{
@@ -569,7 +589,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 									// Save the device handle.
 									dev->usb_audio.dev = new_dev_handle;
 
-                                    // Verify that we've actually found a device running the right firmware.
+									// Verify that we've actually found a device running the right firmware.
 									num_interfaces = fnusb_num_interfaces(&dev->usb_audio);
 
 									if (num_interfaces >= 2)
@@ -585,7 +605,9 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 										dev->usb_audio.dev = NULL;
 										libusb_close(new_dev_handle);
 										continue;
-									}									break;
+									}
+
+									break;
 								}
 								else
 								{
@@ -613,47 +635,46 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 
 	libusb_free_device_list (devs, 1);  // free the list, unref the devices in it
 
-	// Check that each subdevice is either opened or not enabled.
 	if ((dev->usb_cam.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA))
-		&& (dev->usb_motor.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
-		&& (dev->usb_audio.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO)))
+   && (dev->usb_motor.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR)))
+		//&& (dev->usb_audio.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO)))
 	{
+		// Each requested subdevice is open.
+		// Except audio, which may fail if firmware is missing (or because it hates us).
 		return 0;
+	}
+
+	if (dev->usb_cam.dev != NULL)
+	{
+		libusb_release_interface(dev->usb_cam.dev, 0);
+		libusb_close(dev->usb_cam.dev);
 	}
 	else
 	{
-		if (dev->usb_cam.dev)
-		{
-			libusb_release_interface(dev->usb_cam.dev, 0);
-			libusb_close(dev->usb_cam.dev);
-		}
-		else
-		{
-			FN_ERROR("Failed to open camera subdevice or it is not disabled.");
-		}
-
-		if (dev->usb_motor.dev)
-		{
-			libusb_release_interface(dev->usb_motor.dev, 0);
-			libusb_close(dev->usb_motor.dev);
-		}
-		else
-		{
-			FN_ERROR("Failed to open motor subddevice or it is not disabled.");
-		}
-
-		if (dev->usb_audio.dev)
-		{
-			libusb_release_interface(dev->usb_audio.dev, 0);
-			libusb_close(dev->usb_audio.dev);
-		}
-		else
-		{
-			FN_ERROR("Failed to open audio subdevice or it is not disabled.");
-		}
-
-		return -1;
+		FN_ERROR("Failed to open camera subdevice or it is not disabled.");
 	}
+
+	if (dev->usb_motor.dev != NULL)
+	{
+		libusb_release_interface(dev->usb_motor.dev, 0);
+		libusb_close(dev->usb_motor.dev);
+	}
+	else
+	{
+		FN_ERROR("Failed to open motor subddevice or it is not disabled.");
+	}
+
+	if (dev->usb_audio.dev != NULL)
+	{
+		libusb_release_interface(dev->usb_audio.dev, 0);
+		libusb_close(dev->usb_audio.dev);
+	}
+	else
+	{
+		FN_ERROR("Failed to open audio subdevice or it is not disabled.");
+	}
+
+	return -1;
 }
 
 FN_INTERNAL int fnusb_close_subdevices(freenect_device *dev)
