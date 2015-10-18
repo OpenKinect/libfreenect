@@ -210,55 +210,52 @@ namespace FreenectDriver
     
     void notifyAllProperties()
     {
-      
       double nDouble;
-	    int size = sizeof(nDouble);
-            
-	    getProperty(XN_STREAM_PROPERTY_EMITTER_DCMOS_DISTANCE, &nDouble, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_EMITTER_DCMOS_DISTANCE, &nDouble, size);
+      int size = sizeof(nDouble);
 
+      getProperty(XN_STREAM_PROPERTY_EMITTER_DCMOS_DISTANCE, &nDouble, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_EMITTER_DCMOS_DISTANCE, &nDouble, size);
 
-	    unsigned long long nUll;
-	    size = sizeof(nUll);
-	    getProperty(XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE, &nUll, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE, &nUll, size);
+      unsigned long long nUll;
+      size = sizeof(nUll);
+      getProperty(XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE, &nUll, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_ZERO_PLANE_PIXEL_SIZE, &nUll, size);
 
-	    getProperty(XN_STREAM_PROPERTY_GAIN, &nUll, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_GAIN, &nUll, size);
-	    
-	    getProperty(XN_STREAM_PROPERTY_CONST_SHIFT, &nUll, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_CONST_SHIFT, &nUll, size);
-	  
-	    getProperty(XN_STREAM_PROPERTY_MAX_SHIFT, &nUll, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_MAX_SHIFT, &nUll, size);
-	    
-	    getProperty(XN_STREAM_PROPERTY_SHIFT_SCALE, &nUll, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_SHIFT_SCALE, &nUll, size);
-	      
-	    getProperty(XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE, &nUll, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE, &nUll, size);
-	    
-	    getProperty(XN_STREAM_PROPERTY_PARAM_COEFF, &nUll, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_PARAM_COEFF, &nUll, size);
-	    
-	    int nInt;
-	    size = sizeof(nInt);
+      getProperty(XN_STREAM_PROPERTY_GAIN, &nUll, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_GAIN, &nUll, size);
 
+      getProperty(XN_STREAM_PROPERTY_CONST_SHIFT, &nUll, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_CONST_SHIFT, &nUll, size);
 
-	    getProperty(ONI_STREAM_PROPERTY_MAX_VALUE, &nInt, &size);
-	    raisePropertyChanged(ONI_STREAM_PROPERTY_MAX_VALUE, &nInt, size);
+      getProperty(XN_STREAM_PROPERTY_MAX_SHIFT, &nUll, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_MAX_SHIFT, &nUll, size);
 
-	    unsigned short nBuff[10001];
-	    size = sizeof(S2D);
-	    getProperty(XN_STREAM_PROPERTY_S2D_TABLE, nBuff, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_S2D_TABLE, nBuff, size);
-	
-	    size = sizeof(D2S);
-	    getProperty(XN_STREAM_PROPERTY_D2S_TABLE, nBuff, &size);
-	    raisePropertyChanged(XN_STREAM_PROPERTY_D2S_TABLE, nBuff, size);
-	    VideoStream::notifyAllProperties();
+      getProperty(XN_STREAM_PROPERTY_SHIFT_SCALE, &nUll, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_SHIFT_SCALE, &nUll, size);
+
+      getProperty(XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE, &nUll, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_ZERO_PLANE_DISTANCE, &nUll, size);
+
+      getProperty(XN_STREAM_PROPERTY_PARAM_COEFF, &nUll, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_PARAM_COEFF, &nUll, size);
+
+      int nInt;
+      size = sizeof(nInt);
+
+      getProperty(ONI_STREAM_PROPERTY_MAX_VALUE, &nInt, &size);
+      raisePropertyChanged(ONI_STREAM_PROPERTY_MAX_VALUE, &nInt, size);
+
+      unsigned short nBuff[10001];
+      size = sizeof(S2D);
+      getProperty(XN_STREAM_PROPERTY_S2D_TABLE, nBuff, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_S2D_TABLE, nBuff, size);
+
+      size = sizeof(D2S);
+      getProperty(XN_STREAM_PROPERTY_D2S_TABLE, nBuff, &size);
+      raisePropertyChanged(XN_STREAM_PROPERTY_D2S_TABLE, nBuff, size);
+
+      VideoStream::notifyAllProperties();
     }
-
 
   };
 }
