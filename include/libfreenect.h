@@ -671,7 +671,7 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
 FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value);
 
 /**
- * Returns the brightness of the IR projector
+ * Returns the brightness of the IR sensor.
  *
  * @param dev Device to get IR brightness
  *
@@ -680,7 +680,8 @@ FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, free
 FREENECTAPI int freenect_get_ir_brightness(freenect_device *dev);
 
 /**
- * Sets the brightness of the IR projector
+ * Sets the brightness of the IR sensor.
+ * Note that this does not change the intensity of the IR projector.
  *
  * @param dev Device to set IR brightness
  * @param brighness Brightness value in range 1 - 50
