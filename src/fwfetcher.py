@@ -3,8 +3,8 @@
 from __future__ import absolute_import, division, print_function
 
 import hashlib
+import io
 import os
-import StringIO
 import struct
 import sys
 import time
@@ -115,8 +115,8 @@ def strip_blanks(instring):
        @return stripped version of instring
     """
 
-    rstr = instring.rstrip("\0 \t\n\r\v\f\377")
-    return rstr.lstrip(" \t\n\r\v\f\377")
+    rstr = instring.rstrip(b"\0 \t\n\r\v\f\377")
+    return rstr.lstrip(b" \t\n\r\v\f\377")
 
 ###############################################################################
 
@@ -282,7 +282,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
 
     for i in range(0x1000 * firstclust // 64):
         cur = contents[i * 64:(i + 1) * 64]
-        if ord(cur[40]) == 0:
+        if ord(cur[40:41]) == 0:
             # if filename length is zero, we're done
             break
         (outname, namelen, clustsize1, val1, clustsize2, val2, startclust,
@@ -341,7 +341,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
                 print("Starting: advertized", hex(adstart), file=txtfile)
 
             # block reading algorithm originally from wxPirs
-            buf = ""
+            buf = b""
             while filelen > 0:
                 realstart = adstart + get_cluster(startclust, offset)
                 infile.seek(realstart)
@@ -350,7 +350,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
                 adstart += 0x1000
                 filelen -= 0x1000
             with open(outname, "wb") as outfile:
-                print(buf, end=' ', file=outfile)
+                outfile.write(buf)
 
         do_utime(outname, dati2, dati1)
 
@@ -457,21 +457,21 @@ def write_common_part(infile, txtfile, png2stop, start):
         numempty = 0
         for i in range(len(buf) // 24):
             entry = buf[i * 24: i * 24 + 24]
-            if entry.count("\0") < 24:
+            if entry.count(b"\0") < 24:
                 if numempty > 0:
                     print("\nEmpty entries:", numempty, file=txtfile)
                     numempty = 0
                 print("Hash (hex):", end=' ', file=txtfile)
                 for j in range(20):
-                    print(hex(ord(entry[j])), end=' ', file=txtfile)
+                    print(hex(ord(entry[j:j + 1])), end=' ', file=txtfile)
                 (j, ) = struct.unpack(">L", entry[20:24])
                 print("\nEntry id:", hex(j), file=txtfile)
             else:
                 numempty += 1
 
         print("\nTrailing data (hex):", end=' ', file=txtfile)
-        for i in buf[len(buf) - (len(buf) % 24):]:
-            print(hex(ord(i)), end=' ', file=txtfile)
+        for i in range(len(buf) - (len(buf) % 24), len(buf)):
+            print(hex(ord(buf[i:i + 1])), end=' ', file=txtfile)
         print(file=txtfile)
 
         txtfile.close()
@@ -496,13 +496,13 @@ def handle_live_pirs(infile, fsize):
     if txtfile is not None:
         print("Certificate (hex):", end=' ', file=txtfile)
         cert = infile.read(0x100)
-        for i in cert:
-            print(hex(ord(i)), end=' ', file=txtfile)
+        for i in range(len(cert)):
+            print(hex(ord(cert[i:i + 1])), end=' ', file=txtfile)
 
         print("\n\nData (hex):", end=' ', file=txtfile)
         data = infile.read(0x228)
-        for i in data:
-            print(hex(ord(i)), end=' ', file=txtfile)
+        for i in range(len(data)):
+            print(hex(ord(data[i:i + 1])), end=' ', file=txtfile)
         print(file=txtfile)
 
     # BEGIN wxPirs
@@ -524,7 +524,7 @@ def getFileOrURL(filename, url):
     # If so, return its contents.  If not, download it, save it, and return its
     # contents.
     try:
-        with open(filename) as f:
+        with open(filename, 'rb') as f:
             print("Found", filename, "cached on disk, using local copy")
             retval = f.read()
         return retval
@@ -551,7 +551,7 @@ def getFileOrURL(filename, url):
 def extractPirsFromZip(systemupdate):
     print("Extracting $SystemUpdate/FFFE07DF00000001 from system update "
           "file...")
-    updatefile = StringIO.StringIO(systemupdate)
+    updatefile = io.BytesIO(systemupdate)
     with zipfile.ZipFile(updatefile) as z:
         # print(z.namelist())
         pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
@@ -569,11 +569,11 @@ if __name__ == "__main__":
 
         lang = ["English", "Japanese", "German", "French", "Spanish",
                 "Italian", "Korean", "Chinese", "Portuguese"]
-        sio = StringIO.StringIO(pirs)
+        bio = io.BytesIO(pirs)
         basename = "FFFE07DF00000001"
-        sio.name = basename
+        bio.name = basename
         pwd = os.getcwd()
-        handle_live_pirs(sio, len(pirs) - 4)
+        handle_live_pirs(bio, len(pirs) - 4)
 
         os.chdir(pwd)
         print("Moving audios.bin to current folder")
