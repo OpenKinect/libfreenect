@@ -503,71 +503,71 @@ def handle_live_pirs(infile, fsize):
 # End of code taken from extract360.py.
 
 def getFileOrURL(filename, url):
-	# Check if a file named filename exists on disk.
-	# If so, return its contents.  If not, download it, save it, and return its contents.
-	try:
-		f = open(filename)
-		print "Found", filename, "cached on disk, using local copy"
-		retval = f.read()
-		return retval
-	except IOError, e:
-		pass
-	print "Downloading", filename, "from", url
-	req = Request(url)
-	try:
-		response = urlopen(req)
-	except URLError, e:
-		if hasattr(e, 'reason'):
-			print "Failed to reach download server.  Reason:", e.reason
-		elif hasattr(e, 'code'):
-			print "The server couldn't fulfill the request.  Error code:", e.code
-	print "Reading response..."
-	retval = response.read()
-	# Save downloaded file to disk
-	f = open(filename, "wb")
-	f.write(retval)
-	f.close()
-	print "done, saved to", filename
-	return retval
+    # Check if a file named filename exists on disk.
+    # If so, return its contents.  If not, download it, save it, and return its contents.
+    try:
+        f = open(filename)
+        print "Found", filename, "cached on disk, using local copy"
+        retval = f.read()
+        return retval
+    except IOError, e:
+        pass
+    print "Downloading", filename, "from", url
+    req = Request(url)
+    try:
+        response = urlopen(req)
+    except URLError, e:
+        if hasattr(e, 'reason'):
+            print "Failed to reach download server.  Reason:", e.reason
+        elif hasattr(e, 'code'):
+            print "The server couldn't fulfill the request.  Error code:", e.code
+    print "Reading response..."
+    retval = response.read()
+    # Save downloaded file to disk
+    f = open(filename, "wb")
+    f.write(retval)
+    f.close()
+    print "done, saved to", filename
+    return retval
 
 def extractPirsFromZip(systemupdate):
-	print "Extracting $SystemUpdate/FFFE07DF00000001 from system update file..."
-	updatefile = StringIO.StringIO(systemupdate)
-	z = zipfile.ZipFile(updatefile)
-	#print z.namelist()
-	pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
-	print "done."
-	return pirs
+    print "Extracting $SystemUpdate/FFFE07DF00000001 from system update file..."
+    updatefile = StringIO.StringIO(systemupdate)
+    z = zipfile.ZipFile(updatefile)
+    #print z.namelist()
+    pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
+    print "done."
+    return pirs
 
 if __name__ == "__main__":
-	target = "audios.bin"
-	if len(sys.argv) == 2:
-		target = sys.argv[1]
-	if not os.path.isfile(target):
-		fw = getFileOrURL("SystemUpdate.zip", "http://www.xbox.com/system-update-usb")
-		pirs = extractPirsFromZip(fw)
+    target = "audios.bin"
+    if len(sys.argv) == 2:
+        target = sys.argv[1]
+    if not os.path.isfile(target):
+        fw = getFileOrURL("SystemUpdate.zip", "http://www.xbox.com/system-update-usb")
+        pirs = extractPirsFromZip(fw)
 
-		lang = ["English", "Japanese", "German", "French", "Spanish", "Italian",
-				            "Korean", "Chinese", "Portuguese"]
-		sio = StringIO.StringIO(pirs)
-		basename = "FFFE07DF00000001"
-		sio.name = basename
-		pwd = os.getcwd()
-		handle_live_pirs(sio, len(pirs)-4)
+        lang = ["English", "Japanese", "German", "French", "Spanish", "Italian",
+                "Korean", "Chinese", "Portuguese"]
+        sio = StringIO.StringIO(pirs)
+        basename = "FFFE07DF00000001"
+        sio.name = basename
+        pwd = os.getcwd()
+        handle_live_pirs(sio, len(pirs)-4)
 
-		os.chdir(pwd)
-		print "Moving audios.bin to current folder"
-		os.rename(os.path.join(basename + ".dir", "audios.bin"), target)
+        os.chdir(pwd)
+        print "Moving audios.bin to current folder"
+        os.rename(os.path.join(basename + ".dir", "audios.bin"), target)
 
-		print "Cleaning up"
-		os.unlink(basename + ".txt")
-		for root, dirs, files in os.walk(basename + ".dir"):
-			for name in files:
-				os.remove(os.path.join(root, name))
-			for name in dirs:
-				os.rmdir(os.path.join(root, name))
-			os.rmdir(root)
-		os.unlink("SystemUpdate.zip")
-		print "Done!"
-	else:
-		print "Already have audios.bin"
+        print "Cleaning up"
+        os.unlink(basename + ".txt")
+        for root, dirs, files in os.walk(basename + ".dir"):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+            os.rmdir(root)
+        os.unlink("SystemUpdate.zip")
+        print "Done!"
+    else:
+        print "Already have audios.bin"
