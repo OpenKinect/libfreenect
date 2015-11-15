@@ -197,7 +197,7 @@ def do_utime(targetname, atime, mtime):
         # Using utime() on directories is not allowed on Win32 according to
         # msdn.microsoft.com
         os.utime(targetname,
-            (time.mktime(mstime(atime)), time.mktime(mstime(mtime))))
+                 (time.mktime(mstime(atime)), time.mktime(mstime(mtime))))
 
 ###############################################################################
 
@@ -246,7 +246,7 @@ def get_cluster(startclust, offset):
 ###############################################################################
 
 def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
-        offset):
+                   offset):
     """Fill the directory structure with the files contained in the archive.
 
        @param infile pointer to the archive
@@ -262,9 +262,9 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
 
     # dictionary which holds the directory structure,
     # patch 0xFFFF is the 'root' directory.
-    paths = {0xFFFF:""}
+    paths = {0xFFFF: ""}
 
-    oldpathind = 0xFFFF # initial path, speed up file/dir creation
+    oldpathind = 0xFFFF  # initial path, speed up file/dir creation
 
     for i in xrange(0x1000 * firstclust // 64):
         cur = contents[i * 64:(i + 1) * 64]
@@ -286,7 +286,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
         if nlen < 1 or nlen > 40:
             print "Filename length (%i) out of range, skipping file." % nlen
             continue
-        outname = outname[0:nlen] # strip trailing 0x00 from filename
+        outname = outname[0:nlen]  # strip trailing 0x00 from filename
 
         if txtfile != None:
             if namelen & 0x80 == 0x80:
@@ -312,7 +312,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
         if pathind != oldpathind:
             # working directory changed
             for _ in xrange(paths[oldpathind].count("/")):
-                os.chdir("..") # go back to root directory
+                os.chdir("..")  # go back to root directory
             os.chdir(paths[pathind])
             oldpathind = pathind
         if namelen & 0x80 == 0x80:
@@ -358,8 +358,9 @@ def write_common_part(infile, txtfile, png2stop, start):
     """
 
     infile.seek(0x32C)
-    mhash = infile.read(20) # xbox180 : SHA1 hash of 0x0344-0xB000,
-                            # CON : 0x0344 - 0xA000 (i.e. png2stop)
+    # xbox180 : SHA1 hash of 0x0344-0xB000,
+    # CON : 0x0344 - 0xA000 (i.e. png2stop)
+    mhash = infile.read(20)
     (mentry_id, content_type) = struct.unpack(">LL", infile.read(8))
 
     if txtfile != None:
@@ -488,14 +489,14 @@ def handle_live_pirs(infile, fsize):
             print >> txtfile, hex(ord(i)),
         print >> txtfile
 
-    ### BEGIN wxPirs ###
-    infile.seek(0xC032) # originally 4 bytes at 0xC030
+    # BEGIN wxPirs
+    infile.seek(0xC032)  # originally 4 bytes at 0xC030
     (pathind, ) = struct.unpack(">H", infile.read(2))
     if pathind == 0xFFFF:
-        start  = 0xC000
+        start = 0xC000
     else:
-        start  = 0xD000
-    ### END wxPirs ###
+        start = 0xD000
+    # END wxPirs
     write_common_part(infile, txtfile, 0xB000, start)
 
 ###############################################################################
@@ -535,7 +536,7 @@ def extractPirsFromZip(systemupdate):
     print "Extracting $SystemUpdate/FFFE07DF00000001 from system update file..."
     updatefile = StringIO.StringIO(systemupdate)
     z = zipfile.ZipFile(updatefile)
-    #print z.namelist()
+    # print z.namelist()
     pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
     print "done."
     return pirs
@@ -555,7 +556,7 @@ if __name__ == "__main__":
         basename = "FFFE07DF00000001"
         sio.name = basename
         pwd = os.getcwd()
-        handle_live_pirs(sio, len(pirs)-4)
+        handle_live_pirs(sio, len(pirs) - 4)
 
         os.chdir(pwd)
         print "Moving audios.bin to current folder"
