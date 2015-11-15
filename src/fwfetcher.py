@@ -89,9 +89,9 @@ def do_mkdir(dirname):
 
     try:
         os.mkdir(dirname)
-    except OSError, (errno):
-        if errno == 17:
-            pass # directory already exists
+    except OSError as e:
+        if e.errno == 17:
+            pass  # directory already exists
 
 ###############################################################################
 
@@ -518,13 +518,13 @@ def getFileOrURL(filename, url):
         print("Found", filename, "cached on disk, using local copy")
         retval = f.read()
         return retval
-    except IOError, e:
+    except IOError:
         pass
     print("Downloading", filename, "from", url)
     req = Request(url)
     try:
         response = urlopen(req)
-    except URLError, e:
+    except URLError as e:
         if hasattr(e, 'reason'):
             print("Failed to reach download server.  Reason:", e.reason)
         elif hasattr(e, 'code'):
