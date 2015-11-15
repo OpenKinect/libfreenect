@@ -297,7 +297,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
             continue
         outname = outname[0:nlen]  # strip trailing 0x00 from filename
 
-        if txtfile != None:
+        if txtfile is not None:
             if namelen & 0x80 == 0x80:
                 print("Directory", end=' ', file=txtfile)
             else:
@@ -332,7 +332,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
             # this is a file
             # space between files is set to 0x00
             adstart = startclust * 0x1000 + start
-            if txtfile != None:
+            if txtfile is not None:
                 print("Starting: advertized", hex(adstart), file=txtfile)
 
             # block reading algorithm originally from wxPirs
@@ -372,7 +372,7 @@ def write_common_part(infile, txtfile, png2stop, start):
     mhash = infile.read(20)
     (mentry_id, content_type) = struct.unpack(">LL", infile.read(8))
 
-    if txtfile != None:
+    if txtfile is not None:
         print("\nMaster SHA1 hash :",
               check_sha1(mhash, mentry_id, infile, 0x0344, png2stop),
               file=txtfile)
@@ -415,7 +415,7 @@ def write_common_part(infile, txtfile, png2stop, start):
               file=txtfile)
     infile.seek(0x1710)
     (val1, png1len, png2len) = struct.unpack(">HLL", infile.read(10))
-    if txtfile != None:
+    if txtfile is not None:
         print("Value:", val1, file=txtfile)
 
     if png1len > 0:
@@ -446,7 +446,7 @@ def write_common_part(infile, txtfile, png2stop, start):
     fill_directory(infile, txtfile, buf, firstclust, makedir, start, offset)
 
     # table of SHA1 hashes of payload
-    if txtfile != None:
+    if txtfile is not None:
         print(file=txtfile)
         infile.seek(png2stop)
         buf = infile.read(start - png2stop)
@@ -489,7 +489,7 @@ def handle_live_pirs(infile, fsize):
         return
 
     txtfile = open_info_file(infile)
-    if txtfile != None:
+    if txtfile is not None:
         print("Certificate (hex):", end=' ', file=txtfile)
         cert = infile.read(0x100)
         for i in cert:
