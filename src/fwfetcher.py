@@ -27,6 +27,12 @@ import zipfile
    Note that it dumps UTF-16 characters in text strings as-is.
 """
 
+
+# Minor compatibility shim
+if sys.version_info[0] < 3:
+    input = raw_input
+    range = xrange
+
 ###############################################################################
 
 def check_size(fsize, minsize):
@@ -54,7 +60,7 @@ def nice_open_file(filename):
 
     if os.path.isfile(filename):
         print(filename, "already exists, overwrite? (y/n)", end=' ')
-        answer = raw_input("")
+        answer = input("")
         return len(answer) > 0 and answer[0] in ["Y", "y"]
     else:
         return True
@@ -73,7 +79,7 @@ def nice_open_dir(dirname):
     if os.path.isdir(dirname):
         print(dirname, "already exists, ok to overwrite files in it? (y/n)",
               end=' ')
-        answer = raw_input("")
+        answer = input("")
         return len(answer) > 0 and answer[0] in ["Y", "y"]
     else:
         return True
@@ -161,7 +167,7 @@ def dump_info(infile, txtfile, what):
     """
 
     print("\n", what, ":", file=txtfile)
-    for i in xrange(9):
+    for i in range(9):
         info = strip_blanks(infile.read(0x100))
         if len(info) > 0:
             print(lang[i], ":", info, file=txtfile)
@@ -269,7 +275,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
 
     oldpathind = 0xFFFF  # initial path, speed up file/dir creation
 
-    for i in xrange(0x1000 * firstclust // 64):
+    for i in range(0x1000 * firstclust // 64):
         cur = contents[i * 64:(i + 1) * 64]
         if ord(cur[40]) == 0:
             # if filename length is zero, we're done
@@ -314,7 +320,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
 
         if pathind != oldpathind:
             # working directory changed
-            for _ in xrange(paths[oldpathind].count("/")):
+            for _ in range(paths[oldpathind].count("/")):
                 os.chdir("..")  # go back to root directory
             os.chdir(paths[pathind])
             oldpathind = pathind
@@ -345,7 +351,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
         do_utime(outname, dati2, dati1)
 
     # pop directory
-    for _ in xrange(paths[oldpathind].count("/")):
+    for _ in range(paths[oldpathind].count("/")):
         os.chdir("..")
 
 ###############################################################################
@@ -445,14 +451,14 @@ def write_common_part(infile, txtfile, png2stop, start):
         infile.seek(png2stop)
         buf = infile.read(start - png2stop)
         numempty = 0
-        for i in xrange(len(buf) // 24):
+        for i in range(len(buf) // 24):
             entry = buf[i * 24: i * 24 + 24]
             if entry.count("\0") < 24:
                 if numempty > 0:
                     print("\nEmpty entries:", numempty, file=txtfile)
                     numempty = 0
                 print("Hash (hex):", end=' ', file=txtfile)
-                for j in xrange(20):
+                for j in range(20):
                     print(hex(ord(entry[j])), end=' ', file=txtfile)
                 (j, ) = struct.unpack(">L", entry[20:24])
                 print("\nEntry id:", hex(j), file=txtfile)
