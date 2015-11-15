@@ -9,12 +9,12 @@ find_program(CYTHON_EXECUTABLE cython)
 
 # Figure out installation path
 execute_process(COMMAND
-  ${PYTHON_EXECUTABLE} -c "from distutils.sysconfig import get_python_lib; print get_python_lib(prefix='${CMAKE_INSTALL_PREFIX}')"
+  ${PYTHON_EXECUTABLE} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(prefix='${CMAKE_INSTALL_PREFIX}'))"
   OUTPUT_VARIABLE PYTHON_SITE_PACKAGES OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # Figure out numpy include path
 execute_process(COMMAND
-  ${PYTHON_EXECUTABLE} -c "import numpy; print numpy.get_include()"
+  ${PYTHON_EXECUTABLE} -c "import numpy; print(numpy.get_include())"
   OUTPUT_VARIABLE NUMPY_INCLUDE_PATH OUTPUT_STRIP_TRAILING_WHITESPACE)
 
 # How to Cython the .pyx file
