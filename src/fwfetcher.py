@@ -154,9 +154,8 @@ def dump_png(infile, pnglen, maxlen, pngid):
         if nice_open_file(outname):
             buf = infile.read(pnglen)
             print("Writing PNG file", outname)
-            outfile = open(outname, "wb")
-            print(buf, end=' ', file=outfile)
-            outfile.close()
+            with open(outname, "wb") as outfile:
+                print(buf, end=' ', file=outfile)
     else:
         print("PNG image %s too large (%i instead of maximal %i bytes), "
               "file not written." % (pngid, pnglen, maxlen))
@@ -350,9 +349,8 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
                 startclust += 1
                 adstart += 0x1000
                 filelen -= 0x1000
-            outfile = open(outname, "wb")
-            print(buf, end=' ', file=outfile)
-            outfile.close()
+            with open(outname, "wb") as outfile:
+                print(buf, end=' ', file=outfile)
 
         do_utime(outname, dati2, dati1)
 
@@ -526,9 +524,9 @@ def getFileOrURL(filename, url):
     # If so, return its contents.  If not, download it, save it, and return its
     # contents.
     try:
-        f = open(filename)
-        print("Found", filename, "cached on disk, using local copy")
-        retval = f.read()
+        with open(filename) as f:
+            print("Found", filename, "cached on disk, using local copy")
+            retval = f.read()
         return retval
     except IOError:
         pass
@@ -545,9 +543,8 @@ def getFileOrURL(filename, url):
     print("Reading response...")
     retval = response.read()
     # Save downloaded file to disk
-    f = open(filename, "wb")
-    f.write(retval)
-    f.close()
+    with open(filename, "wb") as f:
+        f.write(retval)
     print("done, saved to", filename)
     return retval
 
@@ -555,9 +552,9 @@ def extractPirsFromZip(systemupdate):
     print("Extracting $SystemUpdate/FFFE07DF00000001 from system update "
           "file...")
     updatefile = StringIO.StringIO(systemupdate)
-    z = zipfile.ZipFile(updatefile)
-    # print(z.namelist())
-    pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
+    with zipfile.ZipFile(updatefile) as z:
+        # print(z.namelist())
+        pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
     print("done.")
     return pirs
 
