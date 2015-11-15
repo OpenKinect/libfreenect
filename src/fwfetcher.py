@@ -2,7 +2,6 @@
 
 from __future__ import absolute_import, division, print_function
 
-from urllib2 import Request, urlopen, URLError
 import hashlib
 import os
 import StringIO
@@ -10,6 +9,13 @@ import struct
 import sys
 import time
 import zipfile
+
+try:
+    # Python 3
+    from urllib.request import Request, URLError, urlopen
+except ImportError:
+    # Python 2
+    from urllib2 import Request, URLError, urlopen
 
 # fwfetcher.py - a program to extract the Kinect audio firmware from an Xbox360
 # system update.  This program includes substantial portions of extract360.py,
