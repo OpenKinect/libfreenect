@@ -1,6 +1,6 @@
 #!/usr/bin/env python2
 
-from __future__ import print_function
+from __future__ import absolute_import, division, print_function
 
 from urllib2 import Request, urlopen, URLError
 import hashlib
@@ -175,8 +175,8 @@ def mstime(intime):
        @return the time tuple
     """
 
-    num_d = (intime & 0xFFFF0000L) >> 16
-    num_t = intime & 0x0000FFFFL
+    num_d = (intime & 0xFFFF0000) >> 16
+    num_t = intime & 0x0000FFFF
     # format below is : year, month, day, hour, minute, second,
     #                   weekday (Monday), yearday (unused), DST flag (guess)
     return ((num_d >> 9) + 1980, (num_d >> 5) & 0x0F, num_d & 0x1F,
