@@ -25,7 +25,7 @@ import zipfile
    Note that it dumps UTF-16 characters in text strings as-is.
 """
 
-################################################################################
+###############################################################################
 
 def check_size(fsize, minsize):
     """Ensure that the filesize is at least minsize bytes.
@@ -40,7 +40,7 @@ def check_size(fsize, minsize):
             (fsize, minsize)
     return fsize >= minsize
 
-################################################################################
+###############################################################################
 
 def nice_open_file(filename):
     """Checks if the output file with the given name already exists,
@@ -57,7 +57,7 @@ def nice_open_file(filename):
     else:
         return True
 
-################################################################################
+###############################################################################
 
 def nice_open_dir(dirname):
     """Checks if the output directory with the given name already exists,
@@ -75,7 +75,7 @@ def nice_open_dir(dirname):
     else:
         return True
 
-################################################################################
+###############################################################################
 
 def do_mkdir(dirname):
     """Version of os.mkdir() which does not throw an exception if the directory
@@ -90,7 +90,7 @@ def do_mkdir(dirname):
         if errno == 17:
             pass # directory already exists
 
-################################################################################
+###############################################################################
 
 def strip_blanks(instring):
     """Strip the leading and trailing blanks from the input string.
@@ -103,7 +103,7 @@ def strip_blanks(instring):
     rstr = instring.rstrip("\0 \t\n\r\v\f\377")
     return rstr.lstrip(" \t\n\r\v\f\377")
 
-################################################################################
+###############################################################################
 
 def open_info_file(infile):
     """Open the informational text file.
@@ -122,7 +122,7 @@ def open_info_file(infile):
     else:
         return None
 
-################################################################################
+###############################################################################
 
 def dump_png(infile, pnglen, maxlen, pngid):
     """Dump the embedded PNG file from the archive file to an output file.
@@ -146,7 +146,7 @@ def dump_png(infile, pnglen, maxlen, pngid):
         print "PNG image %s too large (%i instead of maximal %i bytes), " \
             "file not written." % (pngid, pnglen, maxlen)
 
-################################################################################
+###############################################################################
 
 def dump_info(infile, txtfile, what):
     """Dumps the 9 information strings from the input file.
@@ -163,7 +163,7 @@ def dump_info(infile, txtfile, what):
         if len(info) > 0:
             print >> txtfile, lang[i], ":", info
 
-################################################################################
+###############################################################################
 
 def mstime(intime):
     """Convert the time given in Microsoft format to a normal time tuple.
@@ -180,7 +180,7 @@ def mstime(intime):
             (num_t & 0xFFFF) >> 11, (num_t >> 5) & 0x3F, (num_t & 0x1F) * 2,
             0, 0, -1)
 
-################################################################################
+###############################################################################
 
 def do_utime(targetname, atime, mtime):
     """Set the access and update date/time of the target.
@@ -199,7 +199,7 @@ def do_utime(targetname, atime, mtime):
         os.utime(targetname,
             (time.mktime(mstime(atime)), time.mktime(mstime(mtime))))
 
-################################################################################
+###############################################################################
 
 def check_sha1(sha1, entry, infile, start, end):
     """Check the SHA1 value of the specified range of the input file.
@@ -231,7 +231,7 @@ def check_sha1(sha1, entry, infile, start, end):
         return ret + "wrong (should be " + hexdig + " actual " + \
             found_sha1.hexdigest() + ")"
 
-################################################################################
+###############################################################################
 
 def get_cluster(startclust, offset):
     """get the real starting cluster"""
@@ -243,7 +243,7 @@ def get_cluster(startclust, offset):
     # END wxPirs
     return rst
 
-################################################################################
+###############################################################################
 
 def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
         offset):
@@ -345,7 +345,7 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
     for _ in xrange(paths[oldpathind].count("/")):
         os.chdir("..")
 
-################################################################################
+###############################################################################
 
 def write_common_part(infile, txtfile, png2stop, start):
     """Writes out the common part of PIRS/LIVE and CON files.
@@ -459,7 +459,7 @@ def write_common_part(infile, txtfile, png2stop, start):
 
         txtfile.close()
 
-################################################################################
+###############################################################################
 
 def handle_live_pirs(infile, fsize):
     """LIVE and PIRS files are archive files.
@@ -498,13 +498,14 @@ def handle_live_pirs(infile, fsize):
     ### END wxPirs ###
     write_common_part(infile, txtfile, 0xB000, start)
 
-################################################################################
+###############################################################################
 
 # End of code taken from extract360.py.
 
 def getFileOrURL(filename, url):
     # Check if a file named filename exists on disk.
-    # If so, return its contents.  If not, download it, save it, and return its contents.
+    # If so, return its contents.  If not, download it, save it, and return its
+    # contents.
     try:
         f = open(filename)
         print "Found", filename, "cached on disk, using local copy"
@@ -544,11 +545,12 @@ if __name__ == "__main__":
     if len(sys.argv) == 2:
         target = sys.argv[1]
     if not os.path.isfile(target):
-        fw = getFileOrURL("SystemUpdate.zip", "http://www.xbox.com/system-update-usb")
+        fw = getFileOrURL("SystemUpdate.zip",
+                          "http://www.xbox.com/system-update-usb")
         pirs = extractPirsFromZip(fw)
 
-        lang = ["English", "Japanese", "German", "French", "Spanish", "Italian",
-                "Korean", "Chinese", "Portuguese"]
+        lang = ["English", "Japanese", "German", "French", "Spanish",
+                "Italian", "Korean", "Chinese", "Portuguese"]
         sio = StringIO.StringIO(pirs)
         basename = "FFFE07DF00000001"
         sio.name = basename
