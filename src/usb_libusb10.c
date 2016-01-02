@@ -252,7 +252,7 @@ FN_INTERNAL int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* tim
 	return libusb_handle_events_timeout(ctx->ctx, timeout);
 }
 
-int fnusb_claim_camera(freenect_device* dev)
+FN_INTERNAL int fnusb_claim_camera(freenect_device* dev)
 {
 	freenect_context *ctx = dev->parent;
 
