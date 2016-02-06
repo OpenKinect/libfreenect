@@ -31,7 +31,6 @@
 ######################################################################################
 
 cmake_minimum_required(VERSION 2.6)
-set(PYTHON_EXECUTABLE "python2")
 
 ######################################################################################
 # Project declaration and options
@@ -61,7 +60,9 @@ OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
 OPTION(BUILD_CPP "Build C++ Library (currently header only)" ON)
 OPTION(BUILD_CV "Build OpenCV wrapper" OFF)
 OPTION(BUILD_AS3_SERVER "Build the Actionscript 3 Server Example" OFF)
-OPTION(BUILD_PYTHON "Build Python extension" OFF)
+OPTION(BUILD_PYTHON "Build Python extensions" OFF)
+OPTION(BUILD_PYTHON2 "Build Python 2 extension" OFF)
+OPTION(BUILD_PYTHON3 "Build Python 3 extension" OFF)
 OPTION(BUILD_OPENNI2_DRIVER "Build libfreenect driver for OpenNI2" OFF)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK_DEB "Build an DEB using CPack" OFF)
@@ -157,6 +158,10 @@ IF(BUILD_AS3_SERVER)
 ENDIF()
 
 IF(BUILD_PYTHON)
+  set(BUILD_PYTHON2 ON)
+  set(BUILD_PYTHON3 ON)
+ENDIF()
+IF(BUILD_PYTHON2 OR BUILD_PYTHON3)
   add_subdirectory (wrappers/python)
 ENDIF()
 

@@ -1,13 +1,21 @@
 #!/usr/bin/env python2
 
-from urllib2 import Request, urlopen, URLError
+from __future__ import absolute_import, division, print_function
+
 import hashlib
+import io
 import os
-import StringIO
 import struct
 import sys
 import time
 import zipfile
+
+try:
+    # Python 3
+    from urllib.request import Request, URLError, urlopen
+except ImportError:
+    # Python 2
+    from urllib2 import Request, URLError, urlopen
 
 # fwfetcher.py - a program to extract the Kinect audio firmware from an Xbox360
 # system update.  This program includes substantial portions of extract360.py,
@@ -25,7 +33,13 @@ import zipfile
    Note that it dumps UTF-16 characters in text strings as-is.
 """
 
-################################################################################
+
+# Minor compatibility shim
+if sys.version_info[0] < 3:
+    input = raw_input
+    range = xrange
+
+###############################################################################
 
 def check_size(fsize, minsize):
     """Ensure that the filesize is at least minsize bytes.
@@ -36,11 +50,11 @@ def check_size(fsize, minsize):
     """
 
     if fsize < minsize:
-        print "Input file too small: %i instead of at least %i bytes." % \
-            (fsize, minsize)
+        print("Input file too small: %i instead of at least %i bytes." % (
+            fsize, minsize))
     return fsize >= minsize
 
-################################################################################
+###############################################################################
 
 def nice_open_file(filename):
     """Checks if the output file with the given name already exists,
@@ -51,13 +65,13 @@ def nice_open_file(filename):
     """
 
     if os.path.isfile(filename):
-        print filename, "already exists, overwrite? (y/n)",
-        answer = raw_input("")
+        print(filename, "already exists, overwrite? (y/n)", end=' ')
+        answer = input("")
         return len(answer) > 0 and answer[0] in ["Y", "y"]
     else:
         return True
 
-################################################################################
+###############################################################################
 
 def nice_open_dir(dirname):
     """Checks if the output directory with the given name already exists,
@@ -69,13 +83,14 @@ def nice_open_dir(dirname):
     """
 
     if os.path.isdir(dirname):
-        print dirname, "already exists, ok to overwrite files in it? (y/n)",
-        answer = raw_input("")
+        print(dirname, "already exists, ok to overwrite files in it? (y/n)",
+              end=' ')
+        answer = input("")
         return len(answer) > 0 and answer[0] in ["Y", "y"]
     else:
         return True
 
-################################################################################
+###############################################################################
 
 def do_mkdir(dirname):
     """Version of os.mkdir() which does not throw an exception if the directory
@@ -86,11 +101,11 @@ def do_mkdir(dirname):
 
     try:
         os.mkdir(dirname)
-    except OSError, (errno):
-        if errno == 17:
-            pass # directory already exists
+    except OSError as e:
+        if e.errno == 17:
+            pass  # directory already exists
 
-################################################################################
+###############################################################################
 
 def strip_blanks(instring):
     """Strip the leading and trailing blanks from the input string.
@@ -100,10 +115,10 @@ def strip_blanks(instring):
        @return stripped version of instring
     """
 
-    rstr = instring.rstrip("\0 \t\n\r\v\f\377")
-    return rstr.lstrip(" \t\n\r\v\f\377")
+    rstr = instring.rstrip(b"\0 \t\n\r\v\f\377")
+    return rstr.lstrip(b" \t\n\r\v\f\377")
 
-################################################################################
+###############################################################################
 
 def open_info_file(infile):
     """Open the informational text file.
@@ -116,13 +131,13 @@ def open_info_file(infile):
 
     txtname = os.path.basename(infile.name) + ".txt"
     if nice_open_file(txtname):
-        print "Writing information file", txtname
+        print("Writing information file", txtname)
         txtfile = open(txtname, "w")
         return txtfile
     else:
         return None
 
-################################################################################
+###############################################################################
 
 def dump_png(infile, pnglen, maxlen, pngid):
     """Dump the embedded PNG file from the archive file to an output file.
@@ -138,15 +153,14 @@ def dump_png(infile, pnglen, maxlen, pngid):
         outname = os.path.basename(infile.name) + "_" + pngid + ".png"
         if nice_open_file(outname):
             buf = infile.read(pnglen)
-            print "Writing PNG file", outname
-            outfile = open(outname, "wb")
-            print >> outfile, buf,
-            outfile.close()
+            print("Writing PNG file", outname)
+            with open(outname, "wb") as outfile:
+                print(buf, end=' ', file=outfile)
     else:
-        print "PNG image %s too large (%i instead of maximal %i bytes), " \
-            "file not written." % (pngid, pnglen, maxlen)
+        print("PNG image %s too large (%i instead of maximal %i bytes), "
+              "file not written." % (pngid, pnglen, maxlen))
 
-################################################################################
+###############################################################################
 
 def dump_info(infile, txtfile, what):
     """Dumps the 9 information strings from the input file.
@@ -157,13 +171,13 @@ def dump_info(infile, txtfile, what):
               descriptions
     """
 
-    print >> txtfile, "\n", what, ":"
-    for i in xrange(9):
+    print("\n", what, ":", file=txtfile)
+    for i in range(9):
         info = strip_blanks(infile.read(0x100))
         if len(info) > 0:
-            print >> txtfile, lang[i], ":", info
+            print(lang[i], ":", info, file=txtfile)
 
-################################################################################
+###############################################################################
 
 def mstime(intime):
     """Convert the time given in Microsoft format to a normal time tuple.
@@ -172,15 +186,15 @@ def mstime(intime):
        @return the time tuple
     """
 
-    num_d = (intime & 0xFFFF0000L) >> 16
-    num_t = intime & 0x0000FFFFL
+    num_d = (intime & 0xFFFF0000) >> 16
+    num_t = intime & 0x0000FFFF
     # format below is : year, month, day, hour, minute, second,
     #                   weekday (Monday), yearday (unused), DST flag (guess)
     return ((num_d >> 9) + 1980, (num_d >> 5) & 0x0F, num_d & 0x1F,
             (num_t & 0xFFFF) >> 11, (num_t >> 5) & 0x3F, (num_t & 0x1F) * 2,
             0, 0, -1)
 
-################################################################################
+###############################################################################
 
 def do_utime(targetname, atime, mtime):
     """Set the access and update date/time of the target.
@@ -197,9 +211,9 @@ def do_utime(targetname, atime, mtime):
         # Using utime() on directories is not allowed on Win32 according to
         # msdn.microsoft.com
         os.utime(targetname,
-            (time.mktime(mstime(atime)), time.mktime(mstime(mtime))))
+                 (time.mktime(mstime(atime)), time.mktime(mstime(mtime))))
 
-################################################################################
+###############################################################################
 
 def check_sha1(sha1, entry, infile, start, end):
     """Check the SHA1 value of the specified range of the input file.
@@ -231,7 +245,7 @@ def check_sha1(sha1, entry, infile, start, end):
         return ret + "wrong (should be " + hexdig + " actual " + \
             found_sha1.hexdigest() + ")"
 
-################################################################################
+###############################################################################
 
 def get_cluster(startclust, offset):
     """get the real starting cluster"""
@@ -243,10 +257,10 @@ def get_cluster(startclust, offset):
     # END wxPirs
     return rst
 
-################################################################################
+###############################################################################
 
 def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
-        offset):
+                   offset):
     """Fill the directory structure with the files contained in the archive.
 
        @param infile pointer to the archive
@@ -262,13 +276,13 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
 
     # dictionary which holds the directory structure,
     # patch 0xFFFF is the 'root' directory.
-    paths = {0xFFFF:""}
+    paths = {0xFFFF: ""}
 
-    oldpathind = 0xFFFF # initial path, speed up file/dir creation
+    oldpathind = 0xFFFF  # initial path, speed up file/dir creation
 
-    for i in xrange(0x1000 * firstclust // 64):
+    for i in range(0x1000 * firstclust // 64):
         cur = contents[i * 64:(i + 1) * 64]
-        if ord(cur[40]) == 0:
+        if ord(cur[40:41]) == 0:
             # if filename length is zero, we're done
             break
         (outname, namelen, clustsize1, val1, clustsize2, val2, startclust,
@@ -284,35 +298,35 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
 
         nlen = namelen & ~0xC0
         if nlen < 1 or nlen > 40:
-            print "Filename length (%i) out of range, skipping file." % nlen
+            print("Filename length (%i) out of range, skipping file." % nlen)
             continue
-        outname = outname[0:nlen] # strip trailing 0x00 from filename
+        outname = outname[0:nlen]  # strip trailing 0x00 from filename
 
-        if txtfile != None:
+        if txtfile is not None:
             if namelen & 0x80 == 0x80:
-                print >> txtfile, "Directory",
+                print("Directory", end=' ', file=txtfile)
             else:
-                print >> txtfile, "File",
-            print >> txtfile, "name:", outname
+                print("File", end=' ', file=txtfile)
+            print("name:", outname, file=txtfile)
             if namelen & 0x40 == 0x40:
-                print >> txtfile, "Bit 6 of namelen is set."
+                print("Bit 6 of namelen is set.", file=txtfile)
 
         if clustsize1 != clustsize2:
-            print "Cluster sizes don't match (%i != %i), skipping file." % \
-                (clustsize1, clustsize2)
+            print("Cluster sizes don't match (%i != %i), skipping file." % (
+                clustsize1, clustsize2))
             continue
         if startclust < 1 and namelen & 0x80 == 0:
-            print "Starting cluster must be 1 or greater, skipping file."
+            print("Starting cluster must be 1 or greater, skipping file.")
             continue
         if filelen > 0x1000 * clustsize1:
-            print "File length (%i) is greater than the size in clusters " \
-                "(%i), skipping file." % (filelen, clustsize1)
+            print("File length (%i) is greater than the size in clusters "
+                  "(%i), skipping file." % (filelen, clustsize1))
             continue
 
         if pathind != oldpathind:
             # working directory changed
-            for _ in xrange(paths[oldpathind].count("/")):
-                os.chdir("..") # go back to root directory
+            for _ in range(paths[oldpathind].count("/")):
+                os.chdir("..")  # go back to root directory
             os.chdir(paths[pathind])
             oldpathind = pathind
         if namelen & 0x80 == 0x80:
@@ -323,11 +337,11 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
             # this is a file
             # space between files is set to 0x00
             adstart = startclust * 0x1000 + start
-            if txtfile != None:
-                print >> txtfile, "Starting: advertized", hex(adstart)
+            if txtfile is not None:
+                print("Starting: advertized", hex(adstart), file=txtfile)
 
             # block reading algorithm originally from wxPirs
-            buf = ""
+            buf = b""
             while filelen > 0:
                 realstart = adstart + get_cluster(startclust, offset)
                 infile.seek(realstart)
@@ -335,17 +349,16 @@ def fill_directory(infile, txtfile, contents, firstclust, makedir, start,
                 startclust += 1
                 adstart += 0x1000
                 filelen -= 0x1000
-            outfile = open(outname, "wb")
-            print >> outfile, buf,
-            outfile.close()
+            with open(outname, "wb") as outfile:
+                outfile.write(buf)
 
         do_utime(outname, dati2, dati1)
 
     # pop directory
-    for _ in xrange(paths[oldpathind].count("/")):
+    for _ in range(paths[oldpathind].count("/")):
         os.chdir("..")
 
-################################################################################
+###############################################################################
 
 def write_common_part(infile, txtfile, png2stop, start):
     """Writes out the common part of PIRS/LIVE and CON files.
@@ -358,52 +371,56 @@ def write_common_part(infile, txtfile, png2stop, start):
     """
 
     infile.seek(0x32C)
-    mhash = infile.read(20) # xbox180 : SHA1 hash of 0x0344-0xB000,
-                            # CON : 0x0344 - 0xA000 (i.e. png2stop)
+    # xbox180 : SHA1 hash of 0x0344-0xB000,
+    # CON : 0x0344 - 0xA000 (i.e. png2stop)
+    mhash = infile.read(20)
     (mentry_id, content_type) = struct.unpack(">LL", infile.read(8))
 
-    if txtfile != None:
-        print >> txtfile, "\nMaster SHA1 hash :", \
-            check_sha1(mhash, mentry_id, infile, 0x0344, png2stop)
-        print >> txtfile, "\nContent type", hex(content_type), ":",
+    if txtfile is not None:
+        print("\nMaster SHA1 hash :",
+              check_sha1(mhash, mentry_id, infile, 0x0344, png2stop),
+              file=txtfile)
+        print("\nContent type", hex(content_type), ":", end=' ', file=txtfile)
         # content type list partially from V1kt0R
         # su20076000_00000000 has type 0x000b0000,
         # i.e. "Full game demo" & "Theme" ...
         if content_type == 0:
-            print >> txtfile, "(no type)"
+            print("(no type)", file=txtfile)
         elif content_type & 0x00000001:
-            print >> txtfile, "Game save"
+            print("Game save", file=txtfile)
         elif content_type & 0x00000002:
-            print >> txtfile, "Game add-on"
+            print("Game add-on", file=txtfile)
         elif content_type & 0x00030000:
-            print >> txtfile, "Theme"
+            print("Theme", file=txtfile)
         elif content_type & 0x00090000:
-            print >> txtfile, "Video clip"
+            print("Video clip", file=txtfile)
         elif content_type & 0x000C0000:
-            print >> txtfile, "Game trailer"
+            print("Game trailer", file=txtfile)
         elif content_type & 0x000D0000:
-            print >> txtfile, "XBox Live Arcade"
+            print("XBox Live Arcade", file=txtfile)
         elif content_type & 0x00010000:
-            print >> txtfile, "Gamer profile"
+            print("Gamer profile", file=txtfile)
         elif content_type & 0x00020000:
-            print >> txtfile, "Gamer picture"
+            print("Gamer picture", file=txtfile)
         elif content_type & 0x00040000:
-            print >> txtfile, "System update"
+            print("System update", file=txtfile)
         elif content_type & 0x00080000:
-            print >> txtfile, "Full game demo"
+            print("Full game demo", file=txtfile)
         else:
-            print >> txtfile, "(unknown)"
+            print("(unknown)", file=txtfile)
 
-        print >> txtfile, "\nDirectory data at (hex)", hex(start)
+        print("\nDirectory data at (hex)", hex(start), file=txtfile)
         infile.seek(0x410)
         dump_info(infile, txtfile, "Titles")
         dump_info(infile, txtfile, "Descriptions")
-        print >> txtfile, "\nPublisher:", strip_blanks(infile.read(0x80)), "\n"
-        print >> txtfile, "\nFilename:", strip_blanks(infile.read(0x80)), "\n"
+        print("\nPublisher:", strip_blanks(infile.read(0x80)), "\n",
+              file=txtfile)
+        print("\nFilename:", strip_blanks(infile.read(0x80)), "\n",
+              file=txtfile)
     infile.seek(0x1710)
     (val1, png1len, png2len) = struct.unpack(">HLL", infile.read(10))
-    if txtfile != None:
-        print >> txtfile, "Value:", val1
+    if txtfile is not None:
+        print("Value:", val1, file=txtfile)
 
     if png1len > 0:
         dump_png(infile, png1len, 0x571A - 0x171A, "1")
@@ -423,7 +440,7 @@ def write_common_part(infile, txtfile, png2stop, start):
     outname = os.path.basename(infile.name) + ".dir"
     makedir = nice_open_dir(outname)
     if makedir:
-        print "Creating and filling content directory", outname
+        print("Creating and filling content directory", outname)
         do_mkdir(outname)
         os.chdir(outname)
     if png2stop == 0xB000 and start == 0xC000:
@@ -433,33 +450,33 @@ def write_common_part(infile, txtfile, png2stop, start):
     fill_directory(infile, txtfile, buf, firstclust, makedir, start, offset)
 
     # table of SHA1 hashes of payload
-    if txtfile != None:
-        print >> txtfile
+    if txtfile is not None:
+        print(file=txtfile)
         infile.seek(png2stop)
         buf = infile.read(start - png2stop)
         numempty = 0
-        for i in xrange(len(buf) // 24):
+        for i in range(len(buf) // 24):
             entry = buf[i * 24: i * 24 + 24]
-            if entry.count("\0") < 24:
+            if entry.count(b"\0") < 24:
                 if numempty > 0:
-                    print >> txtfile, "\nEmpty entries:", numempty
+                    print("\nEmpty entries:", numempty, file=txtfile)
                     numempty = 0
-                print >> txtfile, "Hash (hex):",
-                for j in xrange(20):
-                    print >> txtfile, hex(ord(entry[j])),
+                print("Hash (hex):", end=' ', file=txtfile)
+                for j in range(20):
+                    print(hex(ord(entry[j:j + 1])), end=' ', file=txtfile)
                 (j, ) = struct.unpack(">L", entry[20:24])
-                print >> txtfile, "\nEntry id:", hex(j)
+                print("\nEntry id:", hex(j), file=txtfile)
             else:
                 numempty += 1
 
-        print >> txtfile, "\nTrailing data (hex):",
-        for i in buf[len(buf) - (len(buf) % 24):]:
-            print >> txtfile, hex(ord(i)),
-        print >> txtfile
+        print("\nTrailing data (hex):", end=' ', file=txtfile)
+        for i in range(len(buf) - (len(buf) % 24), len(buf)):
+            print(hex(ord(buf[i:i + 1])), end=' ', file=txtfile)
+        print(file=txtfile)
 
         txtfile.close()
 
-################################################################################
+###############################################################################
 
 def handle_live_pirs(infile, fsize):
     """LIVE and PIRS files are archive files.
@@ -470,104 +487,107 @@ def handle_live_pirs(infile, fsize):
        @param fsize size of infile
     """
 
-    print "Handling LIVE/PIRS file."
+    print("Handling LIVE/PIRS file.")
 
     if not check_size(fsize, 0xD000):
         return
 
     txtfile = open_info_file(infile)
-    if txtfile != None:
-        print >> txtfile, "Certificate (hex):",
+    if txtfile is not None:
+        print("Certificate (hex):", end=' ', file=txtfile)
         cert = infile.read(0x100)
-        for i in cert:
-            print >> txtfile, hex(ord(i)),
+        for i in range(len(cert)):
+            print(hex(ord(cert[i:i + 1])), end=' ', file=txtfile)
 
-        print >> txtfile, "\n\nData (hex):",
+        print("\n\nData (hex):", end=' ', file=txtfile)
         data = infile.read(0x228)
-        for i in data:
-            print >> txtfile, hex(ord(i)),
-        print >> txtfile
+        for i in range(len(data)):
+            print(hex(ord(data[i:i + 1])), end=' ', file=txtfile)
+        print(file=txtfile)
 
-    ### BEGIN wxPirs ###
-    infile.seek(0xC032) # originally 4 bytes at 0xC030
+    # BEGIN wxPirs
+    infile.seek(0xC032)  # originally 4 bytes at 0xC030
     (pathind, ) = struct.unpack(">H", infile.read(2))
     if pathind == 0xFFFF:
-        start  = 0xC000
+        start = 0xC000
     else:
-        start  = 0xD000
-    ### END wxPirs ###
+        start = 0xD000
+    # END wxPirs
     write_common_part(infile, txtfile, 0xB000, start)
 
-################################################################################
+###############################################################################
 
 # End of code taken from extract360.py.
 
 def getFileOrURL(filename, url):
-	# Check if a file named filename exists on disk.
-	# If so, return its contents.  If not, download it, save it, and return its contents.
-	try:
-		f = open(filename)
-		print "Found", filename, "cached on disk, using local copy"
-		retval = f.read()
-		return retval
-	except IOError, e:
-		pass
-	print "Downloading", filename, "from", url
-	req = Request(url)
-	try:
-		response = urlopen(req)
-	except URLError, e:
-		if hasattr(e, 'reason'):
-			print "Failed to reach download server.  Reason:", e.reason
-		elif hasattr(e, 'code'):
-			print "The server couldn't fulfill the request.  Error code:", e.code
-	print "Reading response..."
-	retval = response.read()
-	# Save downloaded file to disk
-	f = open(filename, "wb")
-	f.write(retval)
-	f.close()
-	print "done, saved to", filename
-	return retval
+    # Check if a file named filename exists on disk.
+    # If so, return its contents.  If not, download it, save it, and return its
+    # contents.
+    try:
+        with open(filename, 'rb') as f:
+            print("Found", filename, "cached on disk, using local copy")
+            retval = f.read()
+        return retval
+    except IOError:
+        pass
+    print("Downloading", filename, "from", url)
+    req = Request(url)
+    try:
+        response = urlopen(req)
+    except URLError as e:
+        if hasattr(e, 'reason'):
+            print("Failed to reach download server.  Reason:", e.reason)
+        elif hasattr(e, 'code'):
+            print("The server couldn't fulfill the request.  Error code:",
+                  e.code)
+    print("Reading response...")
+    retval = response.read()
+    # Save downloaded file to disk
+    with open(filename, "wb") as f:
+        f.write(retval)
+    print("done, saved to", filename)
+    return retval
 
 def extractPirsFromZip(systemupdate):
-	print "Extracting $SystemUpdate/FFFE07DF00000001 from system update file..."
-	updatefile = StringIO.StringIO(systemupdate)
-	z = zipfile.ZipFile(updatefile)
-	#print z.namelist()
-	pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
-	print "done."
-	return pirs
+    print("Extracting $SystemUpdate/FFFE07DF00000001 from system update "
+          "file...")
+    updatefile = io.BytesIO(systemupdate)
+    with zipfile.ZipFile(updatefile) as z:
+        # print(z.namelist())
+        pirs = z.open("$SystemUpdate/FFFE07DF00000001").read()
+    print("done.")
+    return pirs
 
 if __name__ == "__main__":
-	target = "audios.bin"
-	if len(sys.argv) == 2:
-		target = sys.argv[1]
-	if not os.path.isfile(target):
-		fw = getFileOrURL("SystemUpdate.zip", "http://www.xbox.com/system-update-usb")
-		pirs = extractPirsFromZip(fw)
+    target = "audios.bin"
+    if len(sys.argv) == 2:
+        target = sys.argv[1]
+    if not os.path.isfile(target):
+        fw = getFileOrURL("SystemUpdate.zip",
+                          "http://www.xbox.com/system-update-usb")
+        pirs = extractPirsFromZip(fw)
 
-		lang = ["English", "Japanese", "German", "French", "Spanish", "Italian",
-				            "Korean", "Chinese", "Portuguese"]
-		sio = StringIO.StringIO(pirs)
-		basename = "FFFE07DF00000001"
-		sio.name = basename
-		pwd = os.getcwd()
-		handle_live_pirs(sio, len(pirs)-4)
+        lang = ["English", "Japanese", "German", "French", "Spanish",
+                "Italian", "Korean", "Chinese", "Portuguese"]
+        bio = io.BytesIO(pirs)
+        basename = "FFFE07DF00000001"
+        bio.name = basename
+        pwd = os.getcwd()
+        handle_live_pirs(bio, len(pirs) - 4)
 
-		os.chdir(pwd)
-		print "Moving audios.bin to current folder"
-		os.rename(os.path.join(basename + ".dir", "audios.bin"), target)
+        os.chdir(pwd)
+        print("Moving audios.bin to current folder")
+        os.rename(os.path.join(basename + ".dir", "audios.bin"), target)
 
-		print "Cleaning up"
-		os.unlink(basename + ".txt")
-		for root, dirs, files in os.walk(basename + ".dir"):
-			for name in files:
-				os.remove(os.path.join(root, name))
-			for name in dirs:
-				os.rmdir(os.path.join(root, name))
-			os.rmdir(root)
-		os.unlink("SystemUpdate.zip")
-		print "Done!"
-	else:
-		print "Already have audios.bin"
+        print("Cleaning up")
+        os.unlink(basename + ".txt")
+        for root, dirs, files in os.walk(basename + ".dir"):
+            for name in files:
+                os.remove(os.path.join(root, name))
+            for name in dirs:
+                os.rmdir(os.path.join(root, name))
+            os.rmdir(root)
+        os.unlink("SystemUpdate.zip")
+        print("Done!")
+    else:
+        print("Already have audios.bin")
