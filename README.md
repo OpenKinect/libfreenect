@@ -25,35 +25,46 @@ For the examples, you'll need
 - glut     (included with OSX)
 - [pthreads-win32](http://sourceforge.net/projects/pthreads4w/) (Windows)
 
-For audio support, you must have firmware to upload to the Kinect.
-If you specify a non-redistributable package, firmware will be downloaded automatically:
-
-    cmake -L .. -DBUILD_REDIST_PACKAGE=OFF
-
-Note that the downloaded firmware may not be legal to redistribute!
-
 ## <a name="fetch-build"></a>Fetch & Build
 
     git clone https://github.com/OpenKinect/libfreenect
     cd libfreenect
     mkdir build
     cd build
-    cmake -L ..
+    cmake -L .. # -L lists all the project options
     make
 
     # if you don't have `make` or don't want color output
     # cmake --build .
 
+Use CMake options to control what gets built.
+For example, to build the python wrapper:
+
+    cmake .. -DCMAKE_BUILD_PYTHON=ON
+    make
+    python2 wrappers/python/python2/test.py
+    python3 wrappers/python/python3/test.py
+
 You can specify a build with debug symbols:
 
-    cmake -L .. -DCMAKE_BUILD_TYPE=debug
+    cmake .. -DCMAKE_BUILD_TYPE=debug
     # or with optimizations
-    # cmake -L .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
+    # cmake .. -DCMAKE_BUILD_TYPE=RelWithDebInfo
 
 You can build .deb, .rpm, and/or .tgz packages with `cpack`:
 
-    cmake .. -L -DBUILD_CPACK_DEB=ON -DBUILD_CPACK_RPM=ON -DBUILD_CPACK_TGZ=ON
+    cmake .. -DBUILD_CPACK_DEB=ON -DBUILD_CPACK_RPM=ON -DBUILD_CPACK_TGZ=ON
     cpack
+
+For audio support, you must upload firmware to the device.
+Newer Kinect models may require audio firmware for motor and LED support.
+The best method is to [insert firmware at runtime](https://github.com/OpenKinect/libfreenect/issues/376#issuecomment-41211251) just after calling `freenect_init()`.
+
+Alternately, firmware for Kinect model 1414 can be downloaded automatically by specifying:
+
+    cmake .. -DBUILD_REDIST_PACKAGE=OFF
+
+Note that firmware may not be legal to redistribute in your jurisdiction!
 
 ## OSX
 
@@ -135,16 +146,6 @@ Wrappers are not guaranteed to be API stable or up to date.
 - ruby
 - actionscript
 - Java (JNA)
-
-## Python
-
-    cd wrappers/python
-    # if you have cython and want to rebuild the binding
-    # cython freenect.pyx
-    python2 setup.py build_ext --inplace
-
-For example, start with [demo_cv_async.py](https://github.com/OpenKinect/libfreenect/tree/master/wrappers/python/demo_cv_async.py).
-
 
 # Code Contributions
 
