@@ -11,6 +11,7 @@ namespace FreenectDriver
   {
   private:
     unsigned int frame_id; // number each frame
+    uint64_t prev_timestamp; // timestamp of the last processed frame
 
     virtual OniStatus setVideoMode(OniVideoMode requested_mode) = 0;
     virtual void populateFrame(void* data, OniFrame* frame) const = 0;
@@ -26,6 +27,7 @@ namespace FreenectDriver
   public:
     VideoStream(Freenect::FreenectDevice* device) :
       frame_id(1),
+      prev_timestamp(0),
       device(device),
       mirroring(false)
       {
@@ -42,10 +44,23 @@ namespace FreenectDriver
 
       OniFrame* frame = getServices().acquireFrame();
       frame->frameIndex = frame_id++;
-      frame->timestamp = timestamp;
       frame->videoMode = video_mode;
       frame->width = video_mode.resolutionX;
       frame->height = video_mode.resolutionY;
+
+      // Handle overflow, input timestamp comes from a 60MHz clock and overflows
+      // in ~70s
+      if (timestamp < prev_timestamp)
+      {
+        uint32_t prev_int = static_cast<uint32_t>(prev_timestamp);
+        uint64_t temp_delta = std::abs<int64_t>(timestamp - prev_int);
+        prev_timestamp += temp_delta;
+      } else {
+        prev_timestamp = timestamp;
+      }
+
+      // OpenNI wants the value in microseconds
+      frame->timestamp = prev_timestamp / 60;
 
       populateFrame(data, frame);
       raiseNewFrame(frame);
