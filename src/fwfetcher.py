@@ -531,7 +531,7 @@ def getFileOrURL(filename, url):
     except IOError:
         pass
     print("Downloading", filename, "from", url)
-    req = Request(url)
+    req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
     try:
         response = urlopen(req)
     except URLError as e:
