@@ -218,7 +218,7 @@ namespace FreenectDriver
       return "freenect://" + to_string(id);
     }
 
-    static int uri_to_devid(const std::string uri) {
+    static int uri_to_devid(const std::string& uri) {
       int id;
       std::istringstream is(uri);
       is.seekg(strlen("freenect://"));

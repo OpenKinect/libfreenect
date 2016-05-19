@@ -16,24 +16,24 @@ namespace FreenectDriver
   class DepthStream : public VideoStream
   {
   public:
+    static constexpr OniSensorType SENSOR_TYPE = ONI_SENSOR_DEPTH;
     // from NUI library and converted to radians
-    static const float DIAGONAL_FOV = 70 * (M_PI / 180);
-    static const float HORIZONTAL_FOV = 58.5 * (M_PI / 180);
-    static const float VERTICAL_FOV = 45.6 * (M_PI / 180);
+    static constexpr float DIAGONAL_FOV = 70 * (M_PI / 180);
+    static constexpr float HORIZONTAL_FOV = 58.5 * (M_PI / 180);
+    static constexpr float VERTICAL_FOV = 45.6 * (M_PI / 180);
     // from DepthKinectStream.cpp
-    static const int MAX_VALUE = 10000;
-    static const unsigned long long GAIN_VAL = 42;
-    static const unsigned long long CONST_SHIFT_VAL = 200;
-    static const unsigned long long MAX_SHIFT_VAL = 2047;
-    static const unsigned long long PARAM_COEFF_VAL = 4;
-    static const unsigned long long SHIFT_SCALE_VAL = 10;
-    static const unsigned long long ZERO_PLANE_DISTANCE_VAL = 120;
-    static const double ZERO_PLANE_PIXEL_SIZE_VAL = 0.10520000010728836;
-    static const double EMITTER_DCMOS_DISTANCE_VAL = 7.5;
+    static constexpr int MAX_VALUE = 10000;
+    static constexpr unsigned long long GAIN_VAL = 42;
+    static constexpr unsigned long long CONST_SHIFT_VAL = 200;
+    static constexpr unsigned long long MAX_SHIFT_VAL = 2047;
+    static constexpr unsigned long long PARAM_COEFF_VAL = 4;
+    static constexpr unsigned long long SHIFT_SCALE_VAL = 10;
+    static constexpr unsigned long long ZERO_PLANE_DISTANCE_VAL = 120;
+    static constexpr double ZERO_PLANE_PIXEL_SIZE_VAL = 0.10520000010728836;
+    static constexpr double EMITTER_DCMOS_DISTANCE_VAL = 7.5;
 
   private:
     typedef std::map< OniVideoMode, std::pair<freenect_depth_format, freenect_resolution> > FreenectDepthModeMap;
-    static const OniSensorType sensor_type = ONI_SENSOR_DEPTH;
     OniImageRegistrationMode image_registration_mode;
 
     static FreenectDepthModeMap getSupportedVideoModes();
@@ -49,7 +49,7 @@ namespace FreenectDriver
       FreenectDepthModeMap supported_modes = getSupportedVideoModes();
       OniVideoMode* modes = new OniVideoMode[supported_modes.size()];
       std::transform(supported_modes.begin(), supported_modes.end(), modes, ExtractKey());
-      OniSensorInfo sensors = { sensor_type, static_cast<int>(supported_modes.size()), modes };
+      OniSensorInfo sensors = { SENSOR_TYPE, static_cast<int>(supported_modes.size()), modes };
       return sensors;
     }
 

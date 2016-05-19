@@ -17,7 +17,6 @@ namespace FreenectDriver
     virtual void populateFrame(void* data, OniFrame* frame) const = 0;
 
   protected:
-    static const OniSensorType sensor_type;
     Freenect::FreenectDevice* device;
     bool running; // buildFrame() does something iff true
     OniVideoMode video_mode;

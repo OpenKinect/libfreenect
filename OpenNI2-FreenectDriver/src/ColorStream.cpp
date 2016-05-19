@@ -50,7 +50,7 @@ OniStatus ColorStream::setVideoMode(OniVideoMode requested_mode)
 
 void ColorStream::populateFrame(void* data, OniFrame* frame) const
 {
-  frame->sensorType = sensor_type;
+  frame->sensorType = SENSOR_TYPE;
   frame->stride = video_mode.resolutionX * 3;
   frame->cropOriginX = 0;
   frame->cropOriginY = 0;
