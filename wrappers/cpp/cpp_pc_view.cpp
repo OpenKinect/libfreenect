@@ -24,6 +24,7 @@
  * either License.
  */
 
+#include <cstdlib>
 #include <iostream>
 #include <vector>
 #include <pthread.h>
