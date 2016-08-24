@@ -318,8 +318,8 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 	if (cnt < 0)
 		return -1;
 
-	int i = 0, nr_cam = 0, nr_mot = 0;
-	int nr_audio = 0;
+	int i = 0, nr_cam = 0;
+
 	int res;
 	struct libusb_device_descriptor desc;
 
@@ -424,19 +424,32 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 	if (ctx->enabled_subdevices == FREENECT_DEVICE_CAMERA || res < 0)
 		cnt = 0;
 	
-	// Search for the motor
-	for (i = 0; i < cnt; i++)
-	{
+    //FIND MOTOR BASED ON PARENT HUB
+    if( (ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR) && dev->usb_cam.dev != NULL )
+    {
+        
+        libusb_device * camera = libusb_get_device( dev->usb_cam.dev );
+        libusb_device * cameraParent = libusb_get_parent( camera );
+        
+        if( cameraParent != NULL )
+        {
+
+            for(i = 0; i < cnt; i++)
+            {
+            
+                // Match audio based on camera parent
+                if( cameraParent == libusb_get_parent(devs[i]) )
+                {
+                    
 		int r = libusb_get_device_descriptor (devs[i], &desc);
 		if (r < 0)
 			continue;
 
 		if (desc.idVendor != VID_MICROSOFT)
 			continue;
-		if ((ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR) && !dev->usb_motor.dev && desc.idProduct == PID_NUI_MOTOR)
-		{
-			// If the index given by the user matches our camera index
-			if (nr_mot == index)
+                    
+                    // This has to be the device we are looking for as it is a Kinect motor device with the same parent as the camera
+                    if ( !dev->usb_motor.dev && desc.idProduct == PID_NUI_MOTOR)
 			{
 				dev->usb_motor.VID = desc.idVendor;
 				dev->usb_motor.PID = desc.idProduct;
@@ -456,18 +469,39 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					dev->usb_motor.dev = NULL;
 					break;
 				}
-			}
-			else
-			{
-				nr_mot++;
-			}
-		}
+                        
+                        // This has to be the device we need, as it is matched by parent - so don't try any others
+                        break;
+                    }
+                }
+            }
+        }
+    }
+    
+    // FIND AUDIO BASED ON PARENT HUB
+    if( (ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO) && dev->usb_cam.dev != NULL )
+    {
+    
+        libusb_device * camera = libusb_get_device( dev->usb_cam.dev );
+        libusb_device * cameraParent = libusb_get_parent( camera );
+        
+        if( cameraParent != NULL )
+        {
 
-		// Search for the audio
-		if ((ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO) && !dev->usb_audio.dev && (desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct)))
-		{
-			// If the index given by the user matches our audio index
-			if (nr_audio == index)
+            for(i = 0; i < cnt; i++)
+            {
+                // Match audio based on camera parent
+                if( cameraParent == libusb_get_parent(devs[i]) )
+                {
+                    int r = libusb_get_device_descriptor (devs[i], &desc);
+                    if (r < 0)
+                        continue;
+
+                    if (desc.idVendor != VID_MICROSOFT)
+                        continue;
+
+                    // This has to be the device we are looking for as it is a Kinect audio device with the same parent as the camera
+                    if ( !dev->usb_audio.dev && (desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct)))
 			{
 				dev->usb_audio.VID = desc.idVendor;
 				dev->usb_audio.PID = desc.idProduct;
@@ -625,10 +659,11 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 					}
 					free(audio_serial);
 				}
-			}
-			else
-			{
-				nr_audio++;
+                    
+                        // This has to be the device we need, as it is matched by parent - so don't try any others
+                        break;
+                    }
+                }
 			}
 		}
 	}
