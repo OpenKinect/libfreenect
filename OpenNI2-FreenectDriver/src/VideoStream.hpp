@@ -52,7 +52,7 @@ namespace FreenectDriver
       if (timestamp < prev_timestamp)
       {
         uint32_t prev_int = static_cast<uint32_t>(prev_timestamp);
-        uint64_t temp_delta = std::abs(timestamp - prev_int);
+        uint64_t temp_delta = std::abs(static_cast<intmax_t>(timestamp - prev_int));
         prev_timestamp += temp_delta;
       } else {
         prev_timestamp = timestamp;
