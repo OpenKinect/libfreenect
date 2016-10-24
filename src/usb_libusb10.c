@@ -37,27 +37,39 @@
 #endif 
 
 
-FN_INTERNAL int fnusb_num_devices(fnusb_ctx *ctx)
+FN_INTERNAL int fnusb_num_devices(freenect_context *ctx)
 {
-	libusb_device **devs; 
-	//pointer to pointer of device, used to retrieve a list of devices	
-	ssize_t cnt = libusb_get_device_list (ctx->ctx, &devs); 
-	//get the list of devices	
-	if (cnt < 0)
-		return (-1);
-	int nr = 0, i = 0;
+	libusb_device **devs; // pointer to pointer of device, used to retrieve a list of devices
+	ssize_t count = libusb_get_device_list (ctx->usb.ctx, &devs);
+	if (count < 0)
+		return (count >= INT_MIN) ? (int)count : -1;
+
+	int number_found = 0, i = 0;
 	struct libusb_device_descriptor desc;
-	for (i = 0; i < cnt; ++i)
+	for (i = 0; i < count; ++i)
 	{
 		int r = libusb_get_device_descriptor (devs[i], &desc);
 		if (r < 0)
+		{
+			FN_WARNING("Failed to query USB device descriptor.\n");
 			continue;
-		if (desc.idVendor == VID_MICROSOFT && (desc.idProduct == PID_NUI_CAMERA || desc.idProduct == PID_K4W_CAMERA))
-			nr++;
+		}
+
+		if (desc.idVendor == VID_MICROSOFT)
+		{
+			if (desc.idProduct == PID_NUI_CAMERA || desc.idProduct == PID_K4W_CAMERA)
+			{
+				number_found++;
+			}
+			else if (desc.idProduct == PID_KV2_CAMERA)
+			{
+				FN_NOTICE("Skipping Kinect v2 device (needs https://github.com/libfreenect2).\n");
+			}
+		}
 	}
+
 	libusb_free_device_list (devs, 1);
-	// free the list, unref the devices in it
-	return nr;
+	return number_found;
 }
 
 // Returns 1 if `pid` identifies K4W audio, 0 otherwise
@@ -107,16 +119,14 @@ FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * ca
 	return NULL;
 }
 
-FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_device_attributes** attribute_list)
+FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes** attribute_list)
 {
-	// todo: figure out how to log without freenect_context
-
 	*attribute_list = NULL; // initialize some return value in case the user is careless.
 	libusb_device **devs;   // pointer to pointer of device, used to retrieve a list of devices
-	ssize_t count = libusb_get_device_list (ctx->ctx, &devs);
+	ssize_t count = libusb_get_device_list (ctx->usb.ctx, &devs);
 	if (count < 0)
 	{
-		return -1;
+		return (count >= INT_MIN) ? (int)count : -1;
 	}
 
 	struct freenect_device_attributes** next_attr = attribute_list;
@@ -173,7 +183,7 @@ FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_dev
 					res = libusb_get_device_descriptor(audio_device, &audio_desc);
 					if (res != 0)
 					{
-						//FN_ERROR("Failed to get audio serial descriptors of K4W or 1473 device: %d\n", res);
+						FN_WARNING("Failed to get audio serial descriptors of K4W or 1473 device: %d\n", res);
 					}
 					else
 					{
@@ -181,7 +191,7 @@ FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_dev
 						res = libusb_open(audio_device, &audio_handle);
 						if (res != 0)
 						{
-							//FN_ERROR("Failed to open audio device for serial of K4W or 1473 device: %d\n", res);
+							FN_WARNING("Failed to open audio device for serial of K4W or 1473 device: %d\n", res);
 						}
 						else
 						{
@@ -189,7 +199,7 @@ FN_INTERNAL int fnusb_list_device_attributes(fnusb_ctx *ctx, struct freenect_dev
 							libusb_close(audio_handle);
 							if (res != 0)
 							{
-								//FN_ERROR("Failed to get audio serial of K4W or 1473 device: %d\n", res);
+								FN_WARNING("Failed to get audio serial of K4W or 1473 device: %d\n", res);
 							}
 						}
 					}
