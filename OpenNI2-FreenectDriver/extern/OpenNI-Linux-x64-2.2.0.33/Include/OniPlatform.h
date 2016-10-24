@@ -39,7 +39,7 @@
 #	include "Android-Arm/OniPlatformAndroid-Arm.h"
 #elif (__linux__ && (__i386__ || __x86_64__))
 #	include "Linux-x86/OniPlatformLinux-x86.h"
-#elif (__linux__ && __arm__)
+#elif (__linux__ && (__arm__ || __aarch64__))
 #	include "Linux-Arm/OniPlatformLinux-Arm.h"
 #elif _ARC
 #	include "ARC/OniPlaformARC.h"
