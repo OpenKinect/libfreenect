@@ -10,7 +10,7 @@ It runs on Linux, OSX, and Windows and supports
 - LED
 - Audio
 
-Notice: If you have the newer Kinect v2 (XBox One), use [OpenKinect/libfreenect2](OpenKinect/libfreenect2) instead.
+Notice: If you have the newer Kinect v2 (XBox One), use [OpenKinect/libfreenect2](https://github.com/OpenKinect/libfreenect2) instead.
 
 
 # Build Instructions
