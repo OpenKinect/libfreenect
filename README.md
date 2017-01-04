@@ -44,8 +44,6 @@ For example, to build the python wrapper:
 
     cmake .. -DCMAKE_BUILD_PYTHON=ON
     make
-    python2 wrappers/python/python2/test.py
-    python3 wrappers/python/python3/test.py
 
 You can specify a build with debug symbols:
 
