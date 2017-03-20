@@ -1,0 +1,18 @@
+# clj-openkinect
+by John Vlachoyiannis (jon@emotionull.com)
+
+This is a wrapper of the Java libs and I aim to wrap everything :D
+So, why a clojure wrapper?
+
+I needed to experiment with Kinect and I ended up compiling and
+searching for libs. Also, I am addicted to REPL so I want to
+experiment and use the AWESOME clojure libraries and play around.
+Do you need more excuses? 
+
+All java jars are copied inside lib so, fire up a lein swank,
+your emacs, and there you go!
+
+As you can see, it is still VEEEERY experimental but I am working on it!
+ 
+## License
+Distributed under GPL
