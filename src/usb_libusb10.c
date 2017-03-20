@@ -254,7 +254,10 @@ FN_INTERNAL int fnusb_shutdown(fnusb_ctx *ctx)
 
 FN_INTERNAL int fnusb_process_events(fnusb_ctx *ctx)
 {
-	return libusb_handle_events(ctx->ctx);
+	struct timeval t;
+	timerclear(&t);
+	t.tv_usec = 25600; // 0.0256 sec
+	return libusb_handle_events_timeout(ctx->ctx, &t);
 }
 
 FN_INTERNAL int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* timeout)
