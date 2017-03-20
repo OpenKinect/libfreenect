@@ -1,0 +1,19 @@
+These are a synchronous binding to the C libfreenect library, written using the
+C API where one can retrieve images from the kinect, rather than use the
+callback mechanism.
+
+e.g.:
+
+from pykinect import Kinect()
+k = Kinect()
+
+while True:
+    depths = k.get_depths()
+    print depths.timestamp
+    print depths[1, 2] # depth of coordinate (1, 2)
+    print depths.data # raw data in a tuple
+
+To install:
+
+python setup.py build
+python setup.py install # (may require superuser)
