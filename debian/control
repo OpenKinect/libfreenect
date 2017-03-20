@@ -1,0 +1,36 @@
+Source: openkinect
+Priority: extra
+Maintainer: Fajran Iman Rusadi <fajran@gmail.com>
+Build-Depends: debhelper (>= 7), cmake, cdbs, libusb-1.0-0-dev
+Standards-Version: 3.8.3
+Section: libs
+Homepage: http://openkinect.org/
+
+Package: libfreenect-dev
+Section: libdevel
+Architecture: any
+Depends: libfreenect0 (= ${binary:Version})
+Description: Libraries for the Xbox Kinect device
+ OpenKinect is an open community of people interested in
+ making use of the amazing Xbox Kinect hardware with our PCs
+ and other devices. We are working on free, open source
+ libraries that will enable the Kinect to be used with
+ Windows, Linux, and Mac.
+ .
+ This package contains the development headers and static
+ libraries needed to compile applications or shared objects
+ that use libfreenect.
+
+Package: libfreenect0
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Libraries for the Xbox Kinect device
+ OpenKinect is an open community of people interested in
+ making use of the amazing Xbox Kinect hardware with our PCs
+ and other devices. We are working on free, open source
+ libraries that will enable the Kinect to be used with
+ Windows, Linux, and Mac.
+ .
+ This package contains the shared libraries for libfreenect.
+

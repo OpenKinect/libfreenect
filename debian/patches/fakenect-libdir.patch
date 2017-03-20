@@ -1,0 +1,22 @@
+diff --git a/fakenect/CMakeLists.txt b/fakenect/CMakeLists.txt
+index 8bab01b..00d68b6 100644
+--- a/fakenect/CMakeLists.txt
++++ b/fakenect/CMakeLists.txt
+@@ -2,7 +2,7 @@
+ # Fakenect Mock Library
+ ######################################################################################
+ SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/utils)
+-SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib/fakenect)
++SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib/openkinect/fakenect)
+ add_library (fakenect SHARED fakenect.c ../src/accel.c)
+ set_target_properties ( fakenect PROPERTIES
+   VERSION ${PROJECT_VER}
+@@ -10,7 +10,7 @@ set_target_properties ( fakenect PROPERTIES
+   OUTPUT_NAME freenect)
+ 
+ install (TARGETS fakenect
+-  DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/fakenect")
++  DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/openkinect/fakenect")
+ 
+ add_executable(record record.c)
+ target_link_libraries(record freenect m)
