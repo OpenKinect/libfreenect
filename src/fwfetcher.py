@@ -519,6 +519,23 @@ def handle_live_pirs(infile, fsize):
 
 # End of code taken from extract360.py.
 
+def urlopen_timeout_retry(request, attempts = 5):
+    import socket
+
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            return urlopen(request)
+        except URLError, e:
+            if isinstance(e.reason, socket.timeout):
+                print("Timeout! ", e)
+            else: raise
+            last_error = e
+        except socket.timeout, e:
+            print("Timeout! ", e)
+            last_error = e
+    raise last_error
+
 def getFileOrURL(filename, url):
     # Check if a file named filename exists on disk.
     # If so, return its contents.  If not, download it, save it, and return its
@@ -530,16 +547,11 @@ def getFileOrURL(filename, url):
         return retval
     except IOError:
         pass
+
     print("Downloading", filename, "from", url)
-    req = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
-    try:
-        response = urlopen(req)
-    except URLError as e:
-        if hasattr(e, 'reason'):
-            print("Failed to reach download server.  Reason:", e.reason)
-        elif hasattr(e, 'code'):
-            print("The server couldn't fulfill the request.  Error code:",
-                  e.code)
+    request = Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+    response = urlopen_timeout_retry(request)
+
     print("Reading response...")
     retval = response.read()
     # Save downloaded file to disk
@@ -564,7 +576,7 @@ if __name__ == "__main__":
         target = sys.argv[1]
     if not os.path.isfile(target):
         fw = getFileOrURL("SystemUpdate.zip",
-                          "http://www.xbox.com/system-update-usb")
+                          "https://www.xbox.com/system-update-usb")
         pirs = extractPirsFromZip(fw)
 
         lang = ["English", "Japanese", "German", "French", "Spanish",
