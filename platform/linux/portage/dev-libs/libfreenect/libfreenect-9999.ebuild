@@ -4,8 +4,8 @@
 
 EAPI="5"
 
-inherit cmake-utils git-2 multilib python
-
+PYTHON_COMPAT=( python{2_7,3_4} )
+inherit cmake-utils git-2 multilib python-r1
 
 DESCRIPTION="Core library for accessing the Microsoft Kinect."
 HOMEPAGE="https://github.com/OpenKinect/${PN}"
@@ -14,9 +14,7 @@ EGIT_REPO_URI="git://github.com/OpenKinect/${PN}.git"
 LICENSE="Apache-2.0 GPL-2"
 SLOT="0"
 KEYWORDS=""
-IUSE="bindist +c_sync +cpp doc examples fakenect opencv openni2 python"
-
-PYTHON_DEPEND="!bindist? 2"
+IUSE="bindist +c_sync +cpp doc examples fakenect opencv openni2"
 
 COMMON_DEP="virtual/libusb:1
             examples? ( media-libs/freeglut
@@ -24,14 +22,18 @@ COMMON_DEP="virtual/libusb:1
                         x11-libs/libXi 
                         x11-libs/libXmu )
             opencv? ( media-libs/opencv )
-            python? ( dev-python/numpy )"
+            ${PYTHON_DEPS}
+            python_targets_python2_7? ( dev-python/numpy )
+            python_targets_python3_4? ( dev-python/numpy )"
 
 RDEPEND="${COMMON_DEP}"
 DEPEND="${COMMON_DEP}
          dev-util/cmake
          virtual/pkgconfig
+         !bindist? ( dev-lang/python:2 )
          doc? ( app-doc/doxygen )
-         python? ( dev-python/cython )"
+         python_targets_python2_7? ( dev-python/cython )
+         python_targets_python3_4? ( dev-python/cython )"
 
 
 src_configure() {
@@ -43,7 +45,8 @@ src_configure() {
         $(cmake-utils_use_build fakenect FAKENECT)
         $(cmake-utils_use_build opencv   CV)
         $(cmake-utils_use_build openni2  OPENNI2_DRIVER)
-        $(cmake-utils_use_build python   PYTHON)
+        $(cmake-utils_use_build python_targets_python2_7   PYTHON2)
+        $(cmake-utils_use_build python_targets_python3_4   PYTHON3)
     )
     cmake-utils_src_configure
 }
