@@ -10,7 +10,7 @@ target_link_libraries(freenect-wavrecord freenect)
 install(TARGETS freenect-camtest freenect-wavrecord
         DESTINATION bin)
 
-# All viewers need pthreads and GLUT.
+# Most viewers need pthreads and GLUT.
 set(THREADS_USE_PTHREADS_WIN32 true)
 find_package(Threads)
 find_package(OpenGL)
@@ -37,22 +37,21 @@ endif ()
 
 # A few examples use c_sync.
 if (BUILD_C_SYNC)
-  find_package(Threads REQUIRED)
   include_directories(../wrappers/c_sync/)
-  include_directories(${THREADS_PTHREADS_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
 
   add_executable(freenect-regtest regtest.c)
   add_executable(freenect-tiltdemo tiltdemo.c)
 
-  target_link_libraries(freenect-regtest freenect_sync ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
-  target_link_libraries(freenect-tiltdemo freenect_sync ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+  target_link_libraries(freenect-regtest freenect_sync ${MATH_LIB})
+  target_link_libraries(freenect-tiltdemo freenect_sync ${MATH_LIB})
 
   install(TARGETS freenect-regtest freenect-tiltdemo
           DESTINATION bin)
 
   if (OPENGL_FOUND AND GLUT_FOUND)
+    include_directories(${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
     add_executable(freenect-glpclview glpclview.c)
-    target_link_libraries(freenect-glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+    target_link_libraries(freenect-glpclview freenect_sync ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${MATH_LIB})
     install(TARGETS freenect-glpclview
             DESTINATION bin)
   endif ()
