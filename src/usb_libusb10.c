@@ -24,7 +24,6 @@
  * either License.
  */
 
-#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +35,7 @@
 #ifdef _MSC_VER
 	# define sleep(x) Sleep((x)*1000) 
 #endif 
+
 
 FN_INTERNAL int fnusb_num_devices(freenect_context *ctx)
 {
@@ -78,59 +78,16 @@ FN_INTERNAL int fnusb_is_pid_k4w_audio(int pid)
 	return (pid == PID_K4W_AUDIO || pid == PID_K4W_AUDIO_ALT_1 || pid == PID_K4W_AUDIO_ALT_2);
 }
 
-FN_INTERNAL libusb_device * fnusb_find_orphan_audio(libusb_device * camera, libusb_device ** deviceList, int count)
+FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * camera, libusb_device ** deviceList, int cnt)
 {
-	if (count <= 0) return NULL;
+	if (cnt <= 0) return NULL;
 
-	const int cameraBusNo = libusb_get_bus_number(camera);
-	if (cameraBusNo < 0) return NULL;
-
-	#define max_busses 4096
-	assert(cameraBusNo <= max_busses);
-	int numAudioByBus[max_busses] = { 0 };
-	libusb_device* devicesByBus_Unique[max_busses] = { NULL };
-
-	int i = 0;
-	for (i = 0; i < count; i++)
-	{
-		struct libusb_device_descriptor desc;
-		int res = libusb_get_device_descriptor (deviceList[i], &desc);
-		if (res < 0)
-		{
-			continue;
-		}
-
-		if (desc.idVendor == VID_MICROSOFT)
-		{
-			// make sure its some type of Kinect audio device
-			if ((desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct)))
-			{
-				const int audioBusNo = libusb_get_bus_number(deviceList[i]);
-				if (audioBusNo == cameraBusNo)
-				{
-					if (++(numAudioByBus[cameraBusNo]) == 1) {
-						devicesByBus_Unique[cameraBusNo] = deviceList[i];
-					} else {
-						devicesByBus_Unique[cameraBusNo] = NULL; // no duplicates!
-					}
-				}
-			}
-		}
-	}
-
-	return devicesByBus_Unique[cameraBusNo];
-}
-
-FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * camera, libusb_device ** deviceList, int count)
-{
-	if (count <= 0) return NULL;
-
-	const int cameraBusNo = libusb_get_bus_number(camera);
+	int cameraBusNo = libusb_get_bus_number(camera);
 	if (cameraBusNo < 0) return NULL;
 	libusb_device * cameraParent = libusb_get_parent(camera);
 
 	int i = 0;
-	for (i = 0; i < count; i++)
+	for (i = 0; i < cnt; i++)
 	{
 		struct libusb_device_descriptor desc;
 		int res = libusb_get_device_descriptor (deviceList[i], &desc);
@@ -144,12 +101,12 @@ FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * ca
 			// make sure its some type of Kinect audio device
 			if ((desc.idProduct == PID_NUI_AUDIO || fnusb_is_pid_k4w_audio(desc.idProduct)))
 			{
-				const int audioBusNo = libusb_get_bus_number(deviceList[i]);
+				int audioBusNo = libusb_get_bus_number(deviceList[i]);
 				if (audioBusNo == cameraBusNo)
 				{
 					// we have a match!
 					// let's double check
-					const libusb_device * audioParent = libusb_get_parent(deviceList[i]);
+					libusb_device * audioParent = libusb_get_parent(deviceList[i]);
 					if (cameraParent == audioParent)
 					{
 						return deviceList[i];
@@ -159,7 +116,7 @@ FN_INTERNAL libusb_device * fnusb_find_connected_audio_device(libusb_device * ca
 		}
 	}
 
-	return fnusb_find_orphan_audio(camera, deviceList, count);
+	return NULL;
 }
 
 FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes** attribute_list)
