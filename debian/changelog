@@ -1,0 +1,80 @@
+libfreenect (1:0.5.1) unstable; urgency=low
+
+  * Version bump
+  * Headers are installed to ${PREFIX}/usr/include/libfreenect/
+  * OpenNI2 driver is installed by default
+
+-- Benn Snyder <benn.snyder@gmail.com>  Sun, 09 Nov 2014 12:00:28 -0700
+
+libfreenect (1:0.3.0-0ubuntu1~saucy) saucy; urgency=low
+
+  * OpenNI2-FreenectDriver is now part of libfreenect #358
+  * Chunk processing for performance-critical applications (@wizgrav) #351
+  * Video rotation feature in glview (@teknotus) #234
+  * Fixes to C++ wrapper #286 #295 #339
+
+-- Benn Snyder <benn.snyder@gmail.com>  Wed, 12 Feb 2014 22:30:22 -0400
+
+libfreenect (1:0.2.1-0ubuntu1~saucy) saucy; urgency=low
+
+  * Make freenect_flag a real flags enum (@nneonneo) #342
+  * Error reporting for failed subdevice initialization (@jdcole) #270
+  * Enumeration updates in C# wrapper #285
+  * Fixes to C++ wrapper and fakenect #349 #205
+  
+ -- Benn Snyder <benn.snyder@gmail.com>  Wed, 12 Feb 2014 22:29:22 -0400
+
+libfreenect (1:0.2.0-0ubuntu1~raring) raring; urgency=low
+
+  * Kinect for Windows and Kinect for Xbox 360 Model 1473 support #325
+  * Camera Flags - Auto Exposure, Auto White Balance, Raw Color, & Mirror #332
+  * Fixes to the C++ and ActionScript wrappers #266 #310 #334
+
+  * Newly supported hardware models and upgraded firmware may be unstable on OSX.  If you plan to use a Kinect on OSX, **do not** connect it to an XBox.
+  * Depth and Video streams may now be mirrored (horizontal flip) in hardware, but the IR stream cannot be mirrored due to hardware limitations.
+
+ -- Benn Snyder <benn.snyder@gmail.com>  Tue, 30 July 2013 20:49:22 -0400 
+
+libfreenect (1:0.1.1.3-0ubuntu2~oneiric) oneiric; urgency=low
+
+  * add libfreenect-demos package
+  * bump version to 0.1.1.3 using git unstable snapshot from 2011-11-07
+
+ -- Florian Echtler <floe@butterbrot.org>  Mon, 07 Nov 2011 12:44:10 +0100
+
+libfreenect (1:0.1.1.2-0ubuntu1~lucid) lucid; urgency=low
+
+  * update to Oneiric Ocelot, bump version to 1:0.1.1.2
+    (overriding the outdated package from oneiric)
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 16 Oct 2011 22:26:49 +0200
+
+libfreenect (0.1.1-0ubuntu5~natty) natty; urgency=low
+
+  * moved include files to /usr/include
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 18 Sep 2011 18:39:55 +0200
+
+libfreenect (0.1.1-0ubuntu4~natty) natty; urgency=low
+
+  * lib/lib64 fix 
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 18 Sep 2011 17:48:35 +0200
+
+libfreenect (0.1.1-0ubuntu3~natty) natty; urgency=low
+
+  * more missing builddeps
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 18 Sep 2011 17:37:54 +0200
+
+libfreenect (0.1.1-0ubuntu2~natty) natty; urgency=low
+
+  * fix builddeps, use debhelper cmake macros
+
+ -- Florian Echtler <floe@butterbrot.org>  Sun, 18 Sep 2011 15:29:34 +0200
+
+libfreenect (0.1.1-0ubuntu1~natty) natty; urgency=medium
+
+  * Package built with CMake
+
+ -- OpenKinect <openkinect@googlegroups.com>  Sun, 18 Sep 2011 13:28:33 +0200
