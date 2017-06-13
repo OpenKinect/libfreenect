@@ -7,7 +7,7 @@ add_library (fakenect SHARED fakenect.c)
 set_target_properties ( fakenect PROPERTIES
   VERSION ${PROJECT_VER}
   SOVERSION ${PROJECT_APIVER}
-  OUTPUT_NAME freenect)
+  OUTPUT_NAME freenect_faked)
 target_link_libraries(fakenect ${MATH_LIB})
 
 install (TARGETS fakenect
