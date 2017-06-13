@@ -18,7 +18,7 @@ Notice: If you have the newer Kinect v2 (XBox One), use [OpenKinect/libfreenect2
 To build libfreenect, you'll need
 
 - [libusb](http://libusb.info) >= 1.0.18
-- [CMake](http://cmake.org) >= 2.6
+- [CMake](http://cmake.org) >= 2.8.12
 - [python](http://python.org) >= 2.7 or >= 3.3 (only if BUILD_PYTHON=ON or BUILD_PYTHON2=ON or BUILD_PYTHON3=ON or BUILD_REDIST_PACKAGE=OFF)
 
 For the examples, you'll need
@@ -146,6 +146,19 @@ Wrappers are not guaranteed to be API stable or up to date.
 - ruby
 - actionscript
 - Java (JNA)
+
+# Using Fakenect
+
+To use a fakenect recorded stream, just provide the fakenect lib as a pre loaded library with `LD_PRELOAD` and indicates the recorded files directory with `FAKENECT_PATH`
+
+- Sample with python wrappers :
+```shell
+    LD_PRELOAD="/usr/local/lib/fakenect/libfreenect_faked.so" FAKENECT_PATH="./sample/hand1" python ./wrappers/python/demo_cv_sync.py
+```
+- Sample with C bin :
+```shell
+    LD_PRELOAD="/usr/local/lib/fakenect/libfreenect_faked.so" FAKENECT_PATH="./sample/hand1" freenect-glview 
+```
 
 # Code Contributions
 
