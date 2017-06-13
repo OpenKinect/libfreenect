@@ -18,7 +18,7 @@ Notice: If you have the newer Kinect v2 (XBox One), use [OpenKinect/libfreenect2
 To build libfreenect, you'll need
 
 - [libusb](http://libusb.info) >= 1.0.18
-- [CMake](http://cmake.org) >= 2.6
+- [CMake](http://cmake.org) >= 2.8.12
 - [python](http://python.org) >= 2.7 or >= 3.3 (only if BUILD_PYTHON=ON or BUILD_PYTHON2=ON or BUILD_PYTHON3=ON or BUILD_REDIST_PACKAGE=OFF)
 
 For the examples, you'll need
