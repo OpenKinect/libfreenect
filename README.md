@@ -147,17 +147,22 @@ Wrappers are not guaranteed to be API stable or up to date.
 - actionscript
 - Java (JNA)
 
-# Using Fakenect
+# Fakenect
 
-To use a fakenect recorded stream, just provide the fakenect lib as a pre loaded library with `LD_PRELOAD` and indicates the recorded files directory with `FAKENECT_PATH`
+Using fakenect, you can record a session to a directory and play it back later.
+
+    mkdir session
+    fakenect-record ./session
+
+To use a fakenect recorded stream, just provide the fakenect lib as a pre loaded library with `LD_PRELOAD` and indicates the recorded files directory with `FAKENECT_PATH`.
 
 - Sample with python wrappers :
 ```shell
-    LD_PRELOAD="/usr/local/lib/fakenect/libfreenect_faked.so" FAKENECT_PATH="./sample/hand1" python ./wrappers/python/demo_cv_sync.py
+    LD_PRELOAD="/usr/local/lib/fakenect/libfakenect.so" FAKENECT_PATH="./session" python ./wrappers/python/demo_cv_sync.py
 ```
 - Sample with C bin :
 ```shell
-    LD_PRELOAD="/usr/local/lib/fakenect/libfreenect_faked.so" FAKENECT_PATH="./sample/hand1" freenect-glview 
+    LD_PRELOAD="/usr/local/lib/fakenect/libfakenect.so" FAKENECT_PATH="./session" freenect-glview
 ```
 
 # Code Contributions
