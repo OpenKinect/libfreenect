@@ -526,12 +526,12 @@ def urlopen_timeout_retry(request, attempts = 5):
     for attempt in range(attempts):
         try:
             return urlopen(request)
-        except URLError, e:
+        except URLError as e:
             if isinstance(e.reason, socket.timeout):
                 print("Timeout! ", e)
             else: raise
             last_error = e
-        except socket.timeout, e:
+        except socket.timeout as e:
             print("Timeout! ", e)
             last_error = e
     raise last_error
