@@ -74,9 +74,16 @@ set_target_properties(cython${Python_BUILD_VERSION}_freenect PROPERTIES
   PREFIX ""
   OUTPUT_NAME "freenect"
   LIBRARY_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/python${Python_BUILD_VERSION})
+
+set(ldflags "")
+if(APPLE)
+  list(APPEND ldflags "-undefined dynamic_lookup")
+endif()
+
 target_link_libraries(cython${Python_BUILD_VERSION}_freenect
   freenect_sync
-  ${PYTHON${Python_BUILD_VERSION}_LIBRARIES})
+  ${PYTHON${Python_BUILD_VERSION}_LIBRARIES}
+  ${ldflags})
 target_include_directories(cython${Python_BUILD_VERSION}_freenect PRIVATE
   ${PYTHON${Python_BUILD_VERSION}_INCLUDE_PATH}
   ../c_sync/
