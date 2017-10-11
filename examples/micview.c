@@ -40,6 +40,8 @@
 pthread_t freenect_thread;
 volatile int die = 0;
 
+int window;
+
 static freenect_context* f_ctx;
 static freenect_device* f_dev;
 
@@ -149,7 +151,8 @@ void Reshape(int w, int h) {
 void Keyboard(unsigned char key, int x, int y) {
 	if(key == 'q') {
 		die = 1;
-		pthread_exit(NULL);
+		pthread_join(freenect_thread, NULL);
+		glutDestroyWindow(window);
 	}
 	if(key == 32) {
 		paused = !paused;
@@ -205,7 +208,7 @@ int main(int argc, char** argv) {
 	glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_ALPHA );
 	glutInitWindowSize(800, 600);
 	glutInitWindowPosition(0, 0);
-	glutCreateWindow("Microphones");
+	window = glutCreateWindow("Microphones");
 	glClearColor(0.0, 0.0, 0.0, 0.0);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
