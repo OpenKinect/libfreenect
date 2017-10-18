@@ -120,7 +120,6 @@ namespace FreenectDriver
         case ONI_DEVICE_PROPERTY_SERIAL_NUMBER:           // string
         case ONI_DEVICE_PROPERTY_ERROR_STATE:             // ?
         // files
-        case ONI_DEVICE_PROPERTY_PLAYBACK_SPEED:          // float
         case ONI_DEVICE_PROPERTY_PLAYBACK_REPEAT_ENABLED: // OniBool
         // xn
         case XN_MODULE_PROPERTY_USB_INTERFACE:            // XnSensorUsbInterface
@@ -139,6 +138,14 @@ namespace FreenectDriver
           }
           *(static_cast<OniImageRegistrationMode*>(data)) = depth->getImageRegistrationMode();
           return ONI_STATUS_OK;
+        case ONI_DEVICE_PROPERTY_PLAYBACK_SPEED:
+	  if (*pDataSize != sizeof(float))
+	{
+		LogError("Unexpected size of ONI_DEVICE_PROPERTY_PLAYBACK_SPEED");
+		return ONI_STATUS_ERROR;
+		}
+	  *(static_cast<float*>(data)) = 1; 
+		break;
       }
     }
     
@@ -153,7 +160,6 @@ namespace FreenectDriver
         case ONI_DEVICE_PROPERTY_SERIAL_NUMBER:           // string
         case ONI_DEVICE_PROPERTY_ERROR_STATE:             // ?
         // files
-        case ONI_DEVICE_PROPERTY_PLAYBACK_SPEED:          // float
         case ONI_DEVICE_PROPERTY_PLAYBACK_REPEAT_ENABLED: // OniBool
         // xn
         case XN_MODULE_PROPERTY_USB_INTERFACE:            // XnSensorUsbInterface
@@ -178,7 +184,21 @@ namespace FreenectDriver
             return ONI_STATUS_ERROR;
           }
           return depth->setImageRegistrationMode(*(static_cast<const OniImageRegistrationMode*>(data)));
-      }
+        case ONI_DEVICE_PROPERTY_PLAYBACK_SPEED:
+	  if (dataSize != sizeof(float))
+	{
+		LogError("Unexpected size for setting ONI_DEVICE_PROPERTY_PLAYBACK_SPEED");
+		return ONI_STATUS_ERROR;
+		try {
+		setLed((freenect_led_options)*(static_cast<const float*>(data)));
+		return ONI_STATUS_OK;
+		}
+	catch(...)
+	{
+		return ONI_STATUS_ERROR;
+}
+      }}
+
     }
 
     OniBool isCommandSupported(int commandId)
