@@ -24,7 +24,10 @@
  */
 
 #include "libfreenect.h"
+#include "freenect_internal.h"
 #include "platform.h"
+#include "parson.h"
+#include "registration.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -36,10 +39,11 @@
 
 // The dev and ctx are just faked with these numbers
 
-static freenect_device *fake_dev = (freenect_device *)1234;
+static freenect_device fake_dev_singleton;
+static freenect_device *fake_dev = &fake_dev_singleton;
 static freenect_context *fake_ctx = (freenect_context *)5678;
 static freenect_depth_cb cur_depth_cb = NULL;
-static freenect_video_cb cur_rgb_cb = NULL;
+static freenect_video_cb cur_video_cb = NULL;
 static char *input_path = NULL;
 static FILE *index_fp = NULL;
 static freenect_raw_tilt_state state = { 0 };
@@ -47,11 +51,41 @@ static uint16_t ir_brightness = 25;
 static int already_warned = 0;
 static double playback_prev_time = 0.;
 static double record_prev_time = 0.;
-static void *depth_buffer = NULL;
-static void *rgb_buffer = NULL;
+static void *user_depth_buf = NULL;
+static void *user_video_buf = NULL;
 static int depth_running = 0;
 static int rgb_running = 0;
 static void *user_ptr = NULL;
+
+#define MAKE_RESERVED(res, fmt) (uint32_t)(((res & 0xff) << 8) | (((fmt & 0xff))))
+#define RESERVED_TO_RESOLUTION(reserved) (freenect_resolution)((reserved >> 8) & 0xff)
+#define RESERVED_TO_FORMAT(reserved) ((reserved) & 0xff)
+
+static freenect_frame_mode rgb_video_mode =
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB),
+	    FREENECT_RESOLUTION_MEDIUM, {FREENECT_VIDEO_RGB},
+	    640*480*3, 640,  480, 24, 0, 30, 1 };
+static freenect_frame_mode yuv_video_mode =
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_YUV_RAW),
+	    FREENECT_RESOLUTION_MEDIUM, {FREENECT_VIDEO_YUV_RAW},
+	    640*480*2, 640, 480, 16, 0, 15, 1 };
+
+static freenect_frame_mode video_mode;
+
+static freenect_frame_mode depth_11_mode =
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT),
+	    FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT},
+	    640*480*2, 640, 480, 11, 5, 30, 1};
+static freenect_frame_mode depth_mm_mode =
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM),
+	    FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_MM},
+	    640*480*2, 640, 480, 16, 0, 30, 1};
+
+static freenect_frame_mode depth_mode;
+
+static void *default_video_back;
+static void *default_depth_back;
+
 
 static char *one_line(FILE *fp)
 {
@@ -112,11 +146,6 @@ static int parse_line(char *type, double *cur_time, unsigned int *timestamp, uns
 
 static void open_index()
 {
-	input_path = getenv("FAKENECT_PATH");
-	if (!input_path) {
-		printf("Error: Environmental variable FAKENECT_PATH is not set.  Set it to a path that was created using the 'record' utility.\n");
-		exit(1);
-	}
 	int index_path_size = strlen(input_path) + 50;
 	char *index_path = malloc(index_path_size);
 	snprintf(index_path, index_path_size, "%s/INDEX.txt", input_path);
@@ -136,6 +165,33 @@ static char *skip_line(char *str)
 		exit(1);
 	}
 	return out + 1;
+}
+
+static void convert_rgb_to_uyvy(uint8_t *rgb_buffer, uint8_t *yuv_buffer,
+				freenect_frame_mode mode)
+{
+	int x,y;
+	for (y = 0; y < mode.height; y++) {
+		for (x = 0; x < mode.width; x+=2) {
+			int pos = y * mode.width + x;
+			uint8_t *rgb0 = rgb_buffer + pos * 3;
+			uint8_t *rgb1 = rgb_buffer + (pos + 1) * 3;
+			float y0 = (0.257f * rgb0[0]) + (0.504f * rgb0[1]) + (0.098f * rgb0[2]) + 16;
+			float u0 = -(0.148f * rgb0[0]) - (0.291f * rgb0[1]) + (0.439f * rgb0[2]) + 128;
+			float v0 = (0.439f * rgb0[0]) - (0.368f * rgb0[1]) - (0.071f * rgb0[2]) + 128;
+
+			float y1 = (0.257f * rgb1[0]) + (0.504f * rgb1[1]) + (0.098f * rgb1[2]) + 16;
+			float u1 = -(0.148f * rgb1[0]) - (0.291f * rgb1[1]) + (0.439f * rgb1[2]) + 128;
+			float v1 = (0.439f * rgb1[0]) - (0.368f * rgb1[1]) - (0.071f * rgb1[2]) + 128;
+
+			uint8_t *uyvy = yuv_buffer + pos * 2;
+
+			uyvy[0] = (u0+u1)/2.f;
+			uyvy[1] = y0;
+			uyvy[2] = (v0+v1)/2.f;
+			uyvy[3] = y1;
+		}
+	}
 }
 
 int freenect_process_events(freenect_context *ctx)
@@ -166,22 +222,45 @@ int freenect_process_events(freenect_context *ctx)
 	switch (type) {
 		case 'd':
 			if (cur_depth_cb && depth_running) {
+				freenect_frame_mode mode = freenect_get_current_depth_mode(fake_dev);
 				void *cur_depth = skip_line(data);
-				if (depth_buffer) {
-					memcpy(depth_buffer, cur_depth, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT).bytes);
-					cur_depth = depth_buffer;
+				void *depth_buffer = user_depth_buf ? user_depth_buf : default_depth_back;
+
+				switch (mode.depth_format) {
+				case FREENECT_DEPTH_11BIT:
+				    memcpy(depth_buffer, cur_depth, mode.bytes);
+				    break;
+				case FREENECT_DEPTH_MM:
+				    freenect_apply_depth_unpacked_to_mm(fake_dev, cur_depth, depth_buffer);
+				    break;
+				default:
+				    assert(0);
+				    break;
 				}
-				cur_depth_cb(fake_dev, cur_depth, timestamp);
+
+				cur_depth_cb(fake_dev, depth_buffer, timestamp);
 			}
 			break;
 		case 'r':
-			if (cur_rgb_cb && rgb_running) {
-				void *cur_rgb = skip_line(data);
-				if (rgb_buffer) {
-					memcpy(rgb_buffer, cur_rgb, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB).bytes);
-					cur_rgb = rgb_buffer;
+			if (cur_video_cb && rgb_running) {
+				void *cur_video = skip_line(data);
+				void *video_buffer = user_video_buf ? user_video_buf : default_video_back;
+
+				freenect_frame_mode mode = freenect_get_current_video_mode(fake_dev);
+
+				switch (mode.video_format) {
+				case FREENECT_VIDEO_RGB:
+					memcpy(video_buffer, cur_video, mode.bytes);
+					break;
+				case FREENECT_VIDEO_YUV_RAW:
+					convert_rgb_to_uyvy(cur_video, video_buffer, mode);
+					break;
+				default:
+					assert(0);
+					break;
 				}
-				cur_rgb_cb(fake_dev, cur_rgb, timestamp);
+
+				cur_video_cb(fake_dev, video_buffer, timestamp);
 			}
 			break;
 		case 'a':
@@ -241,13 +320,14 @@ void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb)
 
 void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb)
 {
-	cur_rgb_cb = cb;
+	cur_video_cb = cb;
 }
 
 int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode)
 {
         // Always say it was successful but continue to pass through the
         // underlying data.  Would be better to check for conflict.
+	video_mode = mode;
         return 0;
 }
 
@@ -255,16 +335,32 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
 {
         // Always say it was successful but continue to pass through the
         // underlying data.  Would be better to check for conflict.
+	depth_mode = mode;
+
+	if (mode.depth_format == FREENECT_DEPTH_MM  &&
+	    dev->registration.zero_plane_info.reference_distance == 0) {
+		printf("Warning: older fakenect recording doesn't contain "
+		       "registration info for mapping depth to MM units\n");
+	}
+
         return 0;
 }
 
 freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt) {
     assert(FREENECT_RESOLUTION_MEDIUM == res);
-    assert(FREENECT_VIDEO_RGB == fmt);
-    // NOTE: This will leave uninitialized values if new fields are added.
-    // To update this line run the "record" program, look at the top output
-    freenect_frame_mode out = {256, 1, {0}, 921600, 640, 480, 24, 0, 30, 1};
-    return out;
+
+    switch(fmt) {
+    case FREENECT_VIDEO_RGB:
+	    return rgb_video_mode;
+    case FREENECT_VIDEO_YUV_RAW:
+	    return yuv_video_mode;
+    default:
+	    assert(0);
+	    break;
+    }
+
+    freenect_frame_mode invalid = { 0 };
+    return invalid;
 }
 
 int freenect_get_video_mode_count()
@@ -274,21 +370,36 @@ int freenect_get_video_mode_count()
 
 freenect_frame_mode freenect_get_video_mode(int mode_num)
 {
-    return freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB);
+    if (mode_num == 0)
+	return rgb_video_mode;
+    else if (mode_num == 1)
+	return yuv_video_mode;
+    else {
+	freenect_frame_mode invalid = { 0 };
+	return invalid;
+    }
 }
 
 freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 {
-    return freenect_get_video_mode(0);
+    return video_mode;
 }
 
 freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_depth_format fmt) {
     assert(FREENECT_RESOLUTION_MEDIUM == res);
-    assert(FREENECT_DEPTH_11BIT == fmt);
-    // NOTE: This will leave uninitialized values if new fields are added.
-    // To update this line run the "record" program, look at the top output
-    freenect_frame_mode out = {256, 1, {0}, 614400, 640, 480, 11, 5, 30, 1};
-    return out;
+
+    switch (fmt) {
+    case FREENECT_DEPTH_11BIT:
+	    return depth_11_mode;
+    case FREENECT_DEPTH_MM:
+	    return depth_mm_mode;
+    default:
+	    assert(0);
+	    break;
+    }
+
+    freenect_frame_mode invalid = { 0 };
+    return invalid;
 }
 
 int freenect_get_depth_mode_count()
@@ -298,12 +409,19 @@ int freenect_get_depth_mode_count()
 
 freenect_frame_mode freenect_get_depth_mode(int mode_num)
 {
-    return freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT);
+    if (mode_num == 0)
+	return depth_11_mode;
+    else if (mode_num == 1)
+	return depth_mm_mode;
+    else {
+	freenect_frame_mode invalid = { 0 };
+	return invalid;
+    }
 }
 
 freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
 {
-    return freenect_get_depth_mode(0);
+    return depth_mode;
 }
 
 int freenect_num_devices(freenect_context *ctx)
@@ -325,9 +443,82 @@ int freenect_open_device_by_camera_serial(freenect_context *ctx, freenect_device
     return 0;
 }
 
+static void read_device_info(freenect_device *dev)
+{
+	char fn[512];
+	snprintf(fn, sizeof(fn), "%s/device.json", input_path);
+
+	/* We silently return if this file is missing for compatibility with
+	 * older recordings and applications that don't depend on registration
+	 * info.
+	 */
+	JSON_Value *js = json_parse_file(fn);
+        if (!js)
+		return;
+
+	JSON_Object *reg_info = json_object_get_object(json_object(js), "reg_info");
+	JSON_Object *pad_info = json_object_get_object(reg_info, "pad_info");
+	JSON_Object *zp_info = json_object_get_object(reg_info, "zero_plane_info");
+
+	dev->registration.reg_info.ax = json_object_get_number(reg_info, "ax");
+	dev->registration.reg_info.bx = json_object_get_number(reg_info, "bx");
+	dev->registration.reg_info.cx = json_object_get_number(reg_info, "cx");
+	dev->registration.reg_info.dx = json_object_get_number(reg_info, "dx");
+	dev->registration.reg_info.ay = json_object_get_number(reg_info, "ay");
+	dev->registration.reg_info.by = json_object_get_number(reg_info, "by");
+	dev->registration.reg_info.cy = json_object_get_number(reg_info, "cy");
+	dev->registration.reg_info.dy = json_object_get_number(reg_info, "dy");
+	dev->registration.reg_info.dx_start = json_object_get_number(reg_info, "dx_start");
+	dev->registration.reg_info.dy_start = json_object_get_number(reg_info, "dy_start");
+	dev->registration.reg_info.dx_beta_start = json_object_get_number(reg_info, "dx_beta_start");
+	dev->registration.reg_info.dy_beta_start = json_object_get_number(reg_info, "dy_beta_start");
+	dev->registration.reg_info.dx_beta_inc = json_object_get_number(reg_info, "dx_beta_inc");
+	dev->registration.reg_info.dy_beta_inc = json_object_get_number(reg_info, "dy_beta_inc");
+	dev->registration.reg_info.dxdx_start = json_object_get_number(reg_info, "dxdx_start");
+	dev->registration.reg_info.dxdy_start = json_object_get_number(reg_info, "dxdy_start");
+	dev->registration.reg_info.dydx_start = json_object_get_number(reg_info, "dydx_start");
+	dev->registration.reg_info.dydy_start = json_object_get_number(reg_info, "dydy_start");
+	dev->registration.reg_info.dxdxdx_start = json_object_get_number(reg_info, "dxdxdx_start");
+	dev->registration.reg_info.dydxdx_start = json_object_get_number(reg_info, "dydxdx_start");
+	dev->registration.reg_info.dxdxdy_start = json_object_get_number(reg_info, "dxdxdy_start");
+	dev->registration.reg_info.dydxdy_start = json_object_get_number(reg_info, "dydxdy_start");
+	dev->registration.reg_info.dydydx_start = json_object_get_number(reg_info, "dydydx_start");
+	dev->registration.reg_info.dydydy_start = json_object_get_number(reg_info, "dydydy_start");
+
+	dev->registration.reg_pad_info.start_lines = json_object_get_number(pad_info, "start_lines");
+	dev->registration.reg_pad_info.end_lines = json_object_get_number(pad_info, "end_lines");
+	dev->registration.reg_pad_info.cropping_lines = json_object_get_number(pad_info, "cropping_lines");
+
+	dev->registration.zero_plane_info.dcmos_emitter_dist = json_object_get_number(zp_info, "dcmos_emitter_distance");
+	dev->registration.zero_plane_info.dcmos_rcmos_dist = json_object_get_number(zp_info, "dcmos_rcmos_distance");
+	dev->registration.zero_plane_info.reference_distance = json_object_get_number(zp_info, "reference_distance");
+	dev->registration.zero_plane_info.reference_pixel_size = json_object_get_number(zp_info, "reference_pixel_size");
+
+	dev->registration.const_shift = json_object_get_number(json_object(js), "const_shift");
+
+	json_value_free(js);
+
+	freenect_init_registration(fake_dev);
+}
+
 int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 {
+	input_path = getenv("FAKENECT_PATH");
+	if (!input_path) {
+		printf("Error: Environmental variable FAKENECT_PATH is not set.  Set it to a path that was created using the 'record' utility.\n");
+		exit(1);
+	}
+
 	*ctx = fake_ctx;
+
+	read_device_info(fake_dev);
+
+	video_mode = rgb_video_mode;
+	depth_mode = depth_11_mode;
+
+	default_video_back = malloc(640*480*3);
+	default_depth_back = malloc(640*480*2);
+
 	return 0;
 }
 
@@ -343,13 +534,13 @@ void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags sub
 
 int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 {
-	depth_buffer = buf;
+	user_depth_buf = buf;
 	return 0;
 }
 
 int freenect_set_video_buffer(freenect_device *dev, void *buf)
 {
-	rgb_buffer = buf;
+	user_video_buf = buf;
 	return 0;
 }
 
@@ -389,7 +580,7 @@ int freenect_stop_video(freenect_device *dev)
 
 int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt)
 {
-	assert(fmt == FREENECT_VIDEO_RGB);
+	assert(fmt == FREENECT_VIDEO_RGB || fmt == FREENECT_VIDEO_YUV_RAW);
 	return 0;
 }
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
@@ -402,6 +593,8 @@ void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb) {}
 void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level) {}
 int freenect_shutdown(freenect_context *ctx)
 {
+	free(default_video_back);
+	free(default_depth_back);
 	return 0;
 }
 int freenect_close_device(freenect_device *dev)
