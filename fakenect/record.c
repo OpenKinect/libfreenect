@@ -24,7 +24,9 @@
  */
 
 #include "libfreenect.h"
+#include "freenect_internal.h"
 #include "platform.h"
+#include "parson.h"
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <stdio.h>
@@ -201,6 +203,70 @@ void print_mode(const char *name, freenect_frame_mode mode) {
 	   mode.framerate, mode.is_valid);
 }
 
+static void write_device_info(freenect_device *dev)
+{
+	JSON_Value *js = json_value_init_object();
+	JSON_Object *dev_js = json_object(js);
+
+	JSON_Value *reg_info_val = json_value_init_object();
+	JSON_Object *reg_info = json_object(reg_info_val);
+
+	json_object_set_value(dev_js, "reg_info", reg_info_val);
+
+	json_object_set_number(reg_info, "ax", dev->registration.reg_info.ax);
+	json_object_set_number(reg_info, "bx", dev->registration.reg_info.bx);
+	json_object_set_number(reg_info, "cx", dev->registration.reg_info.cx);
+	json_object_set_number(reg_info, "dx", dev->registration.reg_info.dx);
+	json_object_set_number(reg_info, "ay", dev->registration.reg_info.ay);
+	json_object_set_number(reg_info, "by", dev->registration.reg_info.by);
+	json_object_set_number(reg_info, "cy", dev->registration.reg_info.cy);
+	json_object_set_number(reg_info, "dy", dev->registration.reg_info.dy);
+	json_object_set_number(reg_info, "dx_start", dev->registration.reg_info.dx_start);
+	json_object_set_number(reg_info, "dy_start", dev->registration.reg_info.dy_start);
+	json_object_set_number(reg_info, "dx_beta_start", dev->registration.reg_info.dx_beta_start);
+	json_object_set_number(reg_info, "dy_beta_start", dev->registration.reg_info.dy_beta_start);
+	json_object_set_number(reg_info, "dx_beta_inc", dev->registration.reg_info.dx_beta_inc);
+	json_object_set_number(reg_info, "dy_beta_inc", dev->registration.reg_info.dy_beta_inc);
+	json_object_set_number(reg_info, "dxdx_start", dev->registration.reg_info.dxdx_start);
+	json_object_set_number(reg_info, "dxdy_start", dev->registration.reg_info.dxdy_start);
+	json_object_set_number(reg_info, "dydx_start", dev->registration.reg_info.dydx_start);
+	json_object_set_number(reg_info, "dydy_start", dev->registration.reg_info.dydy_start);
+	json_object_set_number(reg_info, "dxdxdx_start", dev->registration.reg_info.dxdxdx_start);
+	json_object_set_number(reg_info, "dydxdx_start", dev->registration.reg_info.dydxdx_start);
+	json_object_set_number(reg_info, "dxdxdy_start", dev->registration.reg_info.dxdxdy_start);
+	json_object_set_number(reg_info, "dydxdy_start", dev->registration.reg_info.dydxdy_start);
+	json_object_set_number(reg_info, "dydydx_start", dev->registration.reg_info.dydydx_start);
+	json_object_set_number(reg_info, "dydydy_start", dev->registration.reg_info.dydydy_start);
+
+	JSON_Value *pad_info_val = json_value_init_object();
+	JSON_Object *pad_info = json_object(pad_info_val);
+
+	json_object_set_value(reg_info, "pad_info", pad_info_val);
+
+	json_object_set_number(pad_info, "start_lines", dev->registration.reg_pad_info.start_lines);
+	json_object_set_number(pad_info, "end_lines", dev->registration.reg_pad_info.end_lines);
+	json_object_set_number(pad_info, "cropping_lines", dev->registration.reg_pad_info.cropping_lines);
+
+	JSON_Value *zp_info_val = json_value_init_object();
+	JSON_Object *zp_info = json_object(zp_info_val);
+
+	json_object_set_value(reg_info, "zero_plane_info", zp_info_val);
+
+	json_object_set_number(zp_info, "dcmos_emitter_distance", dev->registration.zero_plane_info.dcmos_emitter_dist);
+	json_object_set_number(zp_info, "dcmos_rcmos_distance", dev->registration.zero_plane_info.dcmos_rcmos_dist);
+	json_object_set_number(zp_info, "reference_distance", dev->registration.zero_plane_info.reference_distance);
+	json_object_set_number(zp_info, "reference_pixel_size", dev->registration.zero_plane_info.reference_pixel_size);
+
+	json_object_set_number(dev_js, "const_shift", dev->registration.const_shift);
+
+	char fn[512];
+	snprintf(fn, sizeof(fn), "%s/device.json", out_dir);
+
+	json_serialize_to_file_pretty(js, fn);
+
+	json_value_free(js);
+}
+
 void init()
 {
 	freenect_context *ctx;
@@ -223,6 +289,9 @@ void init()
 	freenect_start_depth(dev);
 	freenect_set_video_mode(dev, freenect_find_video_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_RGB));
 	freenect_start_video(dev);
+
+	write_device_info(dev);
+
 	if (use_ffmpeg) {
 		init_ffmpeg_streams();
 		freenect_set_depth_callback(dev, depth_cb_ffmpeg);
