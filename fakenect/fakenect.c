@@ -34,6 +34,8 @@
 #include <math.h>
 #include <unistd.h>
 #include <assert.h>
+#include <stdbool.h>
+#include <ctype.h>
 
 #define GRAVITY 9.80665
 
@@ -56,6 +58,7 @@ static void *user_video_buf = NULL;
 static int depth_running = 0;
 static int rgb_running = 0;
 static void *user_ptr = NULL;
+static bool loop_playback = true;
 
 #define MAKE_RESERVED(res, fmt) (uint32_t)(((res & 0xff) << 8) | (((fmt & 0xff))))
 #define RESERVED_TO_RESOLUTION(reserved) (freenect_resolution)((reserved >> 8) & 0xff)
@@ -157,6 +160,14 @@ static void open_index()
 	free(index_path);
 }
 
+static void close_index()
+{
+	fclose(index_fp);
+	index_fp = NULL;
+	record_prev_time = 0;
+	playback_prev_time = 0;
+}
+
 static char *skip_line(char *str)
 {
 	char *out = strchr(str, '\n');
@@ -211,8 +222,13 @@ int freenect_process_events(freenect_context *ctx)
 	double record_cur_time;
 	unsigned int timestamp, data_size;
 	char *data = NULL;
-	if (parse_line(&type, &record_cur_time, &timestamp, &data_size, &data))
-		return -1;
+	if (parse_line(&type, &record_cur_time, &timestamp, &data_size, &data)) {
+                if (loop_playback) {
+			close_index();
+			return 0;
+                } else
+		    return -1;
+	}
 	// Sleep an amount that compensates for the original and current delays
 	// playback_ is w.r.t. the current time
 	// record_ is w.r.t. the original time period during the recording
@@ -507,6 +523,21 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 	if (!input_path) {
 		printf("Error: Environmental variable FAKENECT_PATH is not set.  Set it to a path that was created using the 'record' utility.\n");
 		exit(1);
+	}
+
+	char *var = getenv("FAKENECT_LOOP");
+	if (var) {
+		int len = strlen(var);
+		char tmp[len + 1];
+		for (int i = 0; i < len; i++)
+			tmp[i] = tolower(var[i]);
+		tmp[len] = '\0';
+		if (strcmp(tmp, "0") == 0 ||
+		    strcmp(tmp, "false") == 0 ||
+		    strcmp(tmp, "no") == 0 ||
+		    strcmp(tmp, "off") == 0) {
+			loop_playback = false;
+		}
 	}
 
 	*ctx = fake_ctx;
