@@ -43,6 +43,7 @@ static freenect_video_cb cur_rgb_cb = NULL;
 static char *input_path = NULL;
 static FILE *index_fp = NULL;
 static freenect_raw_tilt_state state = { 0 };
+static uint16_t ir_brightness = 25;
 static int already_warned = 0;
 static double playback_prev_time = 0.;
 static double record_prev_time = 0.;
@@ -419,3 +420,13 @@ int freenect_update_tilt_state(freenect_device *dev)
 {
 	return 0;
 }
+int freenect_get_ir_brightness(freenect_device *dev)
+{
+	return ir_brightness;
+}
+int freenect_set_ir_brightness(freenect_device *dev, uint16_t brightness)
+{
+	ir_brightness = (brightness % 50);
+	return 0;
+}
+
