@@ -30,12 +30,18 @@ namespace FreenectDriver
   private:
     ColorStream* color;
     DepthStream* depth;
+    bool ledchanged = false;
+    freenect_led_options nextled ;
 
-    // for Freenect::FreenectDevice
-    void DepthCallback(void* data, uint32_t timestamp) {
+    void DepthCallback(void* data, uint32_t timestamp) {     
       depth->buildFrame(data, timestamp);
     }
     void VideoCallback(void* data, uint32_t timestamp) {
+      if(ledchanged)
+      {
+         printf("LED change in VideoCallback %d\n",(int)nextled);
+        ledchanged = false;
+      }
       color->buildFrame(data, timestamp);
     }
 
@@ -185,19 +191,28 @@ namespace FreenectDriver
           }
           return depth->setImageRegistrationMode(*(static_cast<const OniImageRegistrationMode*>(data)));
         case ONI_DEVICE_PROPERTY_PLAYBACK_SPEED:
+printf("ONI_DEVICE_PROPERTY_PLAYBACK_SPEED hack led \n");
 	  if (dataSize != sizeof(float))
 	{
-		LogError("Unexpected size for setting ONI_DEVICE_PROPERTY_PLAYBACK_SPEED");
+	
+		LogError("Unexpected size for setting ONI_DEVICE_PROPERTY_PLAYBACK_SPEED as led ");
 		return ONI_STATUS_ERROR;
+		}
 		try {
-		setLed((freenect_led_options)*(static_cast<const float*>(data)));
+		nextled = (freenect_led_options)*(static_cast<const float*>(data));
+		//ledchanged = true;
+		        setLed(nextled);
+        updateState();
+
+		printf("ONI_DEVICE_PROPERTY_PLAYBACK_SPEED hack led value %d\n",(int)nextled);
 		return ONI_STATUS_OK;
 		}
 	catch(...)
 	{
+			LogError("ONI_DEVICE_PROPERTY_PLAYBACK_SPEED aka LED error");
 		return ONI_STATUS_ERROR;
 }
-      }}
+      }
 
     }
 
@@ -252,7 +267,7 @@ namespace FreenectDriver
       WriteMessage("Using libfreenect v" + to_string(PROJECT_VER));
 
       freenect_set_log_level(m_ctx, FREENECT_LOG_DEBUG);
-      freenect_select_subdevices(m_ctx, FREENECT_DEVICE_CAMERA); // OpenNI2 doesn't use MOTOR or AUDIO
+      freenect_select_subdevices(m_ctx, (freenect_device_flags)(FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA)); // OpenNI2 doesn't use MOTOR or AUDIO
       DriverServices = &getServices();
     }
     ~Driver() { shutdown(); }
