@@ -190,6 +190,22 @@ FN_INTERNAL int freenect_apply_depth_to_mm(freenect_device* dev, uint8_t* input_
 	return 0;
 }
 
+// Same as freenect_apply_depth_to_mm, but don't need to unpack 11 bit depth values
+FN_INTERNAL int freenect_apply_depth_unpacked_to_mm(freenect_device* dev, uint16_t* input, uint16_t* output_mm)
+{
+	freenect_registration* reg = &(dev->registration);
+	uint32_t x,y;
+	for (y = 0; y < DEPTH_Y_RES; y++) {
+		for (x = 0; x < DEPTH_X_RES; x++) {
+			// get the value at the current depth pixel, convert to millimeters
+			uint32_t buf_index = y * DEPTH_X_RES + x;
+			uint16_t metric_depth = reg->raw_to_mm_shift[input[buf_index]];
+			output_mm[buf_index] = metric_depth < DEPTH_MAX_METRIC_VALUE ? metric_depth : DEPTH_MAX_METRIC_VALUE;
+		}
+	}
+	return 0;
+}
+
 // create temporary x/y shift tables
 static void freenect_create_dxdy_tables(double* reg_x_table, double* reg_y_table, int32_t resolution_x, int32_t resolution_y, freenect_reg_info* regdata )
 {
