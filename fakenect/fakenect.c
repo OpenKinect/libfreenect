@@ -79,6 +79,10 @@ static freenect_frame_mode depth_11_mode =
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT),
 	    FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT},
 	    640*480*2, 640, 480, 11, 5, 30, 1};
+static freenect_frame_mode depth_registered_mode =
+	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_REGISTERED),
+	    FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_REGISTERED},
+	    640*480*2, 640, 480, 16, 0, 30, 1};
 static freenect_frame_mode depth_mm_mode =
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM),
 	    FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_MM},
@@ -246,6 +250,9 @@ int freenect_process_events(freenect_context *ctx)
 				case FREENECT_DEPTH_11BIT:
 				    memcpy(depth_buffer, cur_depth, mode.bytes);
 				    break;
+                                case FREENECT_DEPTH_REGISTERED:
+                                    freenect_apply_registration(fake_dev, cur_depth, depth_buffer, true);
+                                    break;
 				case FREENECT_DEPTH_MM:
 				    freenect_apply_depth_unpacked_to_mm(fake_dev, cur_depth, depth_buffer);
 				    break;
@@ -353,7 +360,8 @@ int freenect_set_depth_mode(freenect_device* dev, const freenect_frame_mode mode
         // underlying data.  Would be better to check for conflict.
 	depth_mode = mode;
 
-	if (mode.depth_format == FREENECT_DEPTH_MM  &&
+	if ((mode.depth_format == FREENECT_DEPTH_MM ||
+             mode.depth_format == FREENECT_DEPTH_REGISTERED) &&
 	    dev->registration.zero_plane_info.reference_distance == 0) {
 		printf("Warning: older fakenect recording doesn't contain "
 		       "registration info for mapping depth to MM units\n");
@@ -407,6 +415,8 @@ freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_d
     switch (fmt) {
     case FREENECT_DEPTH_11BIT:
 	    return depth_11_mode;
+    case FREENECT_DEPTH_REGISTERED:
+            return depth_registered_mode;
     case FREENECT_DEPTH_MM:
 	    return depth_mm_mode;
     default:
@@ -420,7 +430,7 @@ freenect_frame_mode freenect_find_depth_mode(freenect_resolution res, freenect_d
 
 int freenect_get_depth_mode_count()
 {
-    return 1;
+    return 3;
 }
 
 freenect_frame_mode freenect_get_depth_mode(int mode_num)
@@ -429,6 +439,8 @@ freenect_frame_mode freenect_get_depth_mode(int mode_num)
 	return depth_11_mode;
     else if (mode_num == 1)
 	return depth_mm_mode;
+    else if (mode_num == 2)
+        return depth_registered_mode;
     else {
 	freenect_frame_mode invalid = { 0 };
 	return invalid;
