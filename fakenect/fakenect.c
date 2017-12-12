@@ -529,7 +529,8 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 	if (var) {
 		int len = strlen(var);
 		char tmp[len + 1];
-		for (int i = 0; i < len; i++)
+		int i;
+		for (i = 0; i < len; i++)
 			tmp[i] = tolower(var[i]);
 		tmp[len] = '\0';
 		if (strcmp(tmp, "0") == 0 ||
