@@ -28,6 +28,7 @@ namespace FreenectDriver
       frame_id(1),
       prev_timestamp(0),
       device(device),
+      running(false),
       mirroring(false)
       {
         // joy of structs
