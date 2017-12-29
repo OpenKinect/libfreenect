@@ -214,7 +214,7 @@ FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freen
 					res = libusb_get_device_descriptor(audio_device, &audio_desc);
 					if (res != 0)
 					{
-						FN_WARNING("Failed to get audio serial descriptors of K4W or 1473 device: %d\n", res);
+						FN_WARNING("Failed to get audio serial descriptors of K4W or 1473 device: %s\n", libusb_error_name(res));
 					}
 					else
 					{
@@ -222,7 +222,7 @@ FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freen
 						res = libusb_open(audio_device, &audio_handle);
 						if (res != 0)
 						{
-							FN_WARNING("Failed to open audio device for serial of K4W or 1473 device: %d\n", res);
+							FN_WARNING("Failed to open audio device for serial of K4W or 1473 device: %s\n", libusb_error_name(res));
 						}
 						else
 						{
@@ -230,7 +230,7 @@ FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freen
 							libusb_close(audio_handle);
 							if (res != 0)
 							{
-								FN_WARNING("Failed to get audio serial of K4W or 1473 device: %d\n", res);
+								FN_WARNING("Failed to get audio serial of K4W or 1473 device: %s\n", libusb_error_name(res));
 							}
 						}
 					}
@@ -348,7 +348,7 @@ FN_INTERNAL int fnusb_keep_alive_led(freenect_context* ctx, libusb_device* audio
 
 	res = libusb_open(audio, &audioHandle);
 	if (res < 0) {
-		FN_ERROR("Failed to set the LED of K4W or 1473 device: %d\n", res);
+		FN_ERROR("Failed to set the LED of K4W or 1473 device: %s\n", libusb_error_name(res));
 		return res;
 	}
 
@@ -359,14 +359,14 @@ FN_INTERNAL int fnusb_keep_alive_led(freenect_context* ctx, libusb_device* audio
 
 	res = libusb_open(audio, &audioHandle);
 	if (res < 0) {
-		FN_ERROR("Failed to set the LED of K4W or 1473 device: %d\n", res);
+		FN_ERROR("Failed to set the LED of K4W or 1473 device: %s\n", libusb_error_name(res));
 		return res;
 	}
 
 	res = libusb_claim_interface(audioHandle, 0);
 	if (res < 0)
 	{
-		FN_ERROR("Unable to claim interface %d\n", res);
+		FN_ERROR("Unable to claim interface %s\n", libusb_error_name(res));
 	}
 	else
 	{
@@ -423,7 +423,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			res = libusb_open(camera, &dev->usb_cam.dev);
 			if (res < 0 || !dev->usb_cam.dev)
 			{
-				FN_ERROR("Could not open camera: %d\n", res);
+				FN_ERROR("Could not open camera: %s\n", libusb_error_name(res));
 				dev->usb_cam.dev = NULL;
 				goto failure;
 			}
@@ -481,21 +481,21 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		struct libusb_device_descriptor desc;
 		res = libusb_get_device_descriptor(motor, &desc);
 		if (res < 0) {
-			FN_ERROR("Could not query device: %d\n", res);
+			FN_ERROR("Could not query device: %s\n", libusb_error_name(res));
 			goto failure;
 		}
 
 		res = libusb_open(motor, &dev->usb_motor.dev);
 		if (res < 0 || !dev->usb_motor.dev)
 		{
-			FN_ERROR("Could not open device: %d\n", res);
+			FN_ERROR("Could not open device: %s\n", libusb_error_name(res));
 			dev->usb_motor.dev = NULL;
 			goto failure;
 		}
 
 		res = libusb_claim_interface(dev->usb_motor.dev, 0);
 		if (res < 0) {
-			FN_ERROR("Could not claim interface: %d\n", res);
+			FN_ERROR("Could not claim interface: %s\n", libusb_error_name(res));
 			libusb_close(dev->usb_motor.dev);
 			dev->usb_motor.dev = NULL;
 			goto failure;
@@ -518,21 +518,21 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		struct libusb_device_descriptor desc;
 		res = libusb_get_device_descriptor(audio, &desc);
 		if (res < 0) {
-			FN_ERROR("Could not query device: %d\n", res);
+			FN_ERROR("Could not query device: %s\n", libusb_error_name(res));
 			goto failure;
 		}
 
 		res = libusb_open(audio, &dev->usb_audio.dev);
 		if (res < 0 || !dev->usb_audio.dev)
 		{
-			FN_ERROR("Could not open device: %d\n", res);
+			FN_ERROR("Could not open device: %s\n", libusb_error_name(res));
 			dev->usb_audio.dev = NULL;
 			goto failure;
 		}
 
 		res = libusb_claim_interface(dev->usb_audio.dev, 0);
 		if (res < 0) {
-			FN_ERROR("Could not claim interface: %d\n", res);
+			FN_ERROR("Could not claim interface: %s\n", libusb_error_name(res));
 			libusb_close(dev->usb_audio.dev);
 			dev->usb_audio.dev = NULL;
 			goto failure;
@@ -742,7 +742,7 @@ static void LIBUSB_CALL iso_callback(struct libusb_transfer *xfer)
 			int res;
 			res = libusb_submit_transfer(xfer);
 			if (res != 0) {
-				FN_ERROR("iso_callback(): failed to resubmit transfer after successful completion: %d\n", res);
+				FN_ERROR("iso_callback(): failed to resubmit transfer after successful completion: %s\n", libusb_error_name(res));
 				strm->dead_xfers++;
 				if (res == LIBUSB_ERROR_NO_DEVICE) {
 					strm->parent->device_dead = 1;
@@ -790,7 +790,7 @@ static void LIBUSB_CALL iso_callback(struct libusb_transfer *xfer)
 			int res;
 			res = libusb_submit_transfer(xfer);
 			if (res != 0) {
-				FN_ERROR("Isochronous transfer resubmission failed after unknown error: %d\n", res);
+				FN_ERROR("Isochronous transfer resubmission failed after unknown error: %s\n", libusb_error_name(res));
 				strm->dead_xfers++;
 				if (res == LIBUSB_ERROR_NO_DEVICE) {
 					strm->parent->device_dead = 1;
@@ -849,7 +849,7 @@ FN_INTERNAL int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_i
 			int ret = libusb_submit_transfer(strm->xfers[i]);
 			if (ret < 0)
 			{
-				FN_WARNING("Failed to submit isochronous transfer %d: %d\n", i, ret);
+				FN_WARNING("Failed to submit isochronous transfer %d: %s\n", i, libusb_error_name(ret));
 				strm->dead_xfers++;
 			}
 		}
