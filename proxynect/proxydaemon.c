@@ -29,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 
 #define log(level, ...) do { if(device->loglevel >= FREENECT_LOG_##level) { fprintf(stderr, __VA_ARGS__); } } while(0)
 
