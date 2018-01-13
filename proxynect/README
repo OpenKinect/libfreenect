@@ -1,0 +1,29 @@
+=Proxynect=
+© 2012 Robert Xiao <brx@cs.cmu.edu>
+
+==Description==
+Proxynect runs a persistent daemon which controls a single device. Multiple subscribers using the proxynect library can connect to and control the device.
+
+Proxynect allows multiple processes to use the same Kinect, and avoids certain issues related to repeated reinitialization of the Kinect.
+
+==Daemon==
+Run the daemon with
+./proxydaemon [deviceindex]
+If deviceindex is not specified, 0 is assumed. Press Ctrl+C to quit.
+
+The proxydaemon tries to avoid running if another instance seems to be active. Add "--force" to the command-line if you want to override this (e.g. if the last instance did not shutdown properly).
+
+==Library==
+Use the resulting proxynect .so dynamically instead of libfreenect.
+
+==Build==
+This is built with the main cmake script.
+
+This gives you a build/lib/proxynect/libfreenect.so that you dynamically link in instead of libfreenect.so.
+
+You can call proxynect in front of your application to automatically force the proxynect library to be used, e.g.
+
+proxynect glview
+
+==Credits==
+This library is based on the fakenect library by Brandyn White.
