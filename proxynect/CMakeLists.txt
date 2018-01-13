@@ -8,12 +8,13 @@ set_target_properties (proxynect PROPERTIES
   VERSION ${PROJECT_VER}
   SOVERSION ${PROJECT_APIVER}
   OUTPUT_NAME freenect)
+target_link_libraries(proxynect rt)
 
 install (TARGETS proxynect
   DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/proxynect")
 
 add_executable(proxydaemon proxydaemon.c proxyutils.c)
-target_link_libraries(proxydaemon freenect m)
+target_link_libraries(proxydaemon freenect m rt)
 install (TARGETS proxydaemon
   DESTINATION bin)
 
