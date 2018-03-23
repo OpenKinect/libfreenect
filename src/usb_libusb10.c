@@ -204,7 +204,37 @@ FN_INTERNAL char* usb_get_serial(freenect_context* ctx, libusb_device* device, l
 		return NULL;
 	}
 
+	const char* const K4W_1473_SERIAL = "0000000000000000";
+	if (strncmp((const char*)serial, K4W_1473_SERIAL, 16) == 0) {
+		return NULL; // K4W and 1473 provide an empty serial; more easily handled as NULL.
+	}
+	
 	return strndup((const char*)serial, sizeof(serial));
+}
+
+FN_INTERNAL int fnusb_get_device_attributes(freenect_device* dev, struct freenect_device_attributes* attributes)
+{
+	freenect_context* ctx = dev->parent;
+
+	int res = 0;
+
+	char* serial = usb_get_serial(ctx, NULL, dev->usb_cam.dev, NULL);
+	if (serial == NULL)
+	{
+		char* audio_serial = usb_get_serial(ctx, NULL, dev->usb_audio.dev, NULL);
+		if (audio_serial) {
+			free(serial);
+			serial = audio_serial;
+		}
+	}
+
+	if (serial == NULL) {
+		return -1;
+	}
+
+	attributes->next = NULL;
+	attributes->camera_serial = serial;
+	return res;
 }
 
 FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes** attribute_list)
@@ -240,10 +270,7 @@ FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freen
 		}
 
 		char* serial = usb_get_serial(ctx, camera_device, NULL, &desc);
-
-		// K4W and 1473 don't provide a camera serial; use audio serial instead.
-		const char* const K4W_1473_SERIAL = "0000000000000000";
-		if (serial == NULL || strncmp((const char*)serial, K4W_1473_SERIAL, 16) == 0)
+		if (serial == NULL)
 		{
 			libusb_device* audio_device = fnusb_find_sibling_device(ctx, camera_device, devs, count, &fnusb_is_audio);
 			if (audio_device != NULL)
