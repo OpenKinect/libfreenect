@@ -400,6 +400,19 @@ FN_INTERNAL int fnusb_keep_alive_led(freenect_context* ctx, libusb_device* audio
 	return res;
 }
 
+FN_INTERNAL void fnusb_reset_subdevice(fnusb_dev* dev, freenect_device* parent)
+{
+	if (dev) {
+		if (dev->dev) {
+			libusb_release_interface(dev->dev, 0);
+			libusb_attach_kernel_driver(dev->dev, 0);
+			libusb_close(dev->dev);
+			dev->dev = NULL;
+		}
+		dev->parent = parent;
+	}
+}
+
 FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	freenect_context *ctx = dev->parent;
@@ -407,12 +420,9 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 	dev->device_does_motor_control_with_audio = 0;
 	dev->motor_control_with_audio_enabled = 0;
     
-	dev->usb_cam.parent = dev;
-	dev->usb_cam.dev = NULL;
-	dev->usb_motor.parent = dev;
-	dev->usb_motor.dev = NULL;
-	dev->usb_audio.parent = dev;
-	dev->usb_audio.dev = NULL;
+	fnusb_reset_subdevice(&dev->usb_cam, dev);
+	fnusb_reset_subdevice(&dev->usb_motor, dev);
+	fnusb_reset_subdevice(&dev->usb_audio, dev);
 
 	libusb_device **devs; // pointer to pointer of device, used to retrieve a list of devices
 	ssize_t count = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
@@ -724,24 +734,9 @@ finally:
 
 FN_INTERNAL int fnusb_close_subdevices(freenect_device *dev)
 {
-	if (dev->usb_cam.dev) {
-		libusb_release_interface(dev->usb_cam.dev, 0);
-#ifndef _WIN32
-		libusb_attach_kernel_driver(dev->usb_cam.dev, 0);
-#endif
-		libusb_close(dev->usb_cam.dev);
-		dev->usb_cam.dev = NULL;
-	}
-	if (dev->usb_motor.dev) {
-		libusb_release_interface(dev->usb_motor.dev, 0);
-		libusb_close(dev->usb_motor.dev);
-		dev->usb_motor.dev = NULL;
-	}
-	if (dev->usb_audio.dev) {
-		libusb_release_interface(dev->usb_audio.dev, 0);
-		libusb_close(dev->usb_audio.dev);
-		dev->usb_audio.dev = NULL;
-	}
+	fnusb_reset_subdevice(&dev->usb_cam, dev);
+	fnusb_reset_subdevice(&dev->usb_motor, dev);
+	fnusb_reset_subdevice(&dev->usb_audio, dev);
 	return 0;
 }
 
