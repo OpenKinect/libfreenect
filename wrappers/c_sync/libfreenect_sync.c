@@ -249,7 +249,7 @@ static int change_depth_format(sync_kinect_t *kinect, freenect_resolution res, f
 static sync_kinect_t *alloc_kinect(int index)
 {
 	sync_kinect_t *kinect = (sync_kinect_t*)malloc(sizeof(sync_kinect_t));
-	if (freenect_open_device(ctx, &kinect->dev, index)) {
+	if (freenect_open_device(ctx, &kinect->dev, index) < 0) {
 		free(kinect);
 		return NULL;
 	}

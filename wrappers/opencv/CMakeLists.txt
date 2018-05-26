@@ -2,7 +2,7 @@
 # OpenCV Interface
 ######################################################################################
 find_package(OpenCV REQUIRED)
-add_library (freenect_cv SHARED libfreenect_cv.c)
+add_library (freenect_cv SHARED libfreenect_cv.cpp)
 set_target_properties (freenect_cv PROPERTIES
   VERSION ${PROJECT_VER}
   SOVERSION ${PROJECT_APIVER})
@@ -16,7 +16,7 @@ install (TARGETS freenect_cv
 install (FILES "libfreenect_cv.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 
-add_executable(freenect-cvdemo cvdemo.c)
+add_executable(freenect-cvdemo cvdemo.cpp)
 target_link_libraries(freenect-cvdemo freenect freenect_sync freenect_cv ${OpenCV_LIBS})
 install (TARGETS freenect-cvdemo
   DESTINATION bin)
