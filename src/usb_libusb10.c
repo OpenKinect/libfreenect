@@ -465,6 +465,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 	}
 	
 	if (res < 0 || camera == NULL) {
+		res = -1;
 		goto failure;
 	}
 
