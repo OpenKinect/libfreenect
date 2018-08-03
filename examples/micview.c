@@ -29,6 +29,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
+#ifdef _MSC_VER
+#define HAVE_STRUCT_TIMESPEC
+#endif
 #include <pthread.h>
 
 #if defined(__APPLE__)
