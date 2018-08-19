@@ -31,6 +31,9 @@
 #include <assert.h>
 #include "libfreenect.h"
 
+#ifdef _MSC_VER
+#define HAVE_STRUCT_TIMESPEC
+#endif
 #include <pthread.h>
 #include <math.h>
 

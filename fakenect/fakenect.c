@@ -540,7 +540,7 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 	char *var = getenv("FAKENECT_LOOP");
 	if (var) {
 		int len = strlen(var);
-		char tmp[len + 1];
+		char* tmp = malloc((len + 1) * sizeof(char));
 		int i;
 		for (i = 0; i < len; i++)
 			tmp[i] = tolower(var[i]);
@@ -551,6 +551,7 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 		    strcmp(tmp, "off") == 0) {
 			loop_playback = false;
 		}
+		free (tmp);
 	}
 
 	*ctx = fake_ctx;

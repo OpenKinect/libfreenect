@@ -24,9 +24,7 @@
  * either License.
  */
 
-
 #include "libfreenect.hpp"
-#include <pthread.h>
 #include <stdio.h>
 #include <iostream>
 #include <string.h>

@@ -30,7 +30,9 @@
 #include <string.h>
 #include <assert.h>
 #include "libfreenect.h"
-
+#ifdef _MSC_VER
+#define HAVE_STRUCT_TIMESPEC
+#endif
 #include <pthread.h>
 
 #if defined(__APPLE__)

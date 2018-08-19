@@ -27,7 +27,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
-#include <pthread.h>
 #include <libfreenect.hpp>
 
 #if defined(__APPLE__)
