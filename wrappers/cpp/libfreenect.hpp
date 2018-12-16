@@ -74,6 +74,7 @@ namespace Freenect {
 		}
 		virtual ~FreenectDevice() {
 			if(freenect_close_device(m_dev) < 0){} //FN_WARNING("Device did not shutdown in a clean fashion");
+			delete[] m_rgb_buffer;
 		}
 		void startVideo() {
 			if(freenect_start_video(m_dev) < 0) throw std::runtime_error("Cannot start RGB callback");
@@ -105,13 +106,21 @@ namespace Freenect {
 				freenect_frame_mode mode = freenect_find_video_mode(requested_resolution, requested_format);
 				if (!mode.is_valid) throw std::runtime_error("Cannot set video format: invalid mode");
 				if (freenect_set_video_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set video format");
-				if (wasRunning)
+				if (wasRunning) {
+					freenect_stop_video(m_dev);
+					m_video_format = requested_format;
+					m_video_resolution = requested_resolution;
+					if(m_rgb_buffer != 0) delete[] m_rgb_buffer;
+					m_rgb_buffer = new uint8_t[getVideoBufferSize()];
+					freenect_set_video_buffer(m_dev, m_rgb_buffer);  
 					freenect_start_video(m_dev);
+					return;
+				}
 				m_video_format = requested_format;
 				m_video_resolution = requested_resolution;
 				if(m_rgb_buffer != 0) delete[] m_rgb_buffer;
 				m_rgb_buffer = new uint8_t[getVideoBufferSize()];
-				freenect_set_video_buffer(m_dev, m_rgb_buffer);
+				freenect_set_video_buffer(m_dev, m_rgb_buffer);  
 			}
 		}
 		freenect_video_format getVideoFormat() {
