@@ -25,6 +25,7 @@
  */
 #pragma once
 
+#include <memory>
 #include "libfreenect.h"
 #include <stdexcept>
 #include <sstream>
@@ -44,7 +45,7 @@ namespace Freenect {
 		Noncopyable( const Noncopyable& );
 		const Noncopyable& operator=( const Noncopyable& );
 	};
-	
+
 	class FreenectTiltState {
 	  friend class FreenectDevice;
 		FreenectTiltState(freenect_raw_tilt_state *_state):
@@ -104,17 +105,19 @@ namespace Freenect {
 		}
 		void setVideoFormat(freenect_video_format requested_format, freenect_resolution requested_resolution = FREENECT_RESOLUTION_MEDIUM) {
 			if (requested_format != m_video_format || requested_resolution != m_video_resolution) {
-				bool wasRunning = (freenect_stop_video(m_dev) >= 0);
-				freenect_frame_mode mode = freenect_find_video_mode(requested_resolution, requested_format);
+				const bool wasRunning = (freenect_stop_video(m_dev) >= 0);
+				const freenect_frame_mode mode = freenect_find_video_mode(requested_resolution, requested_format);
 				if (!mode.is_valid) throw std::runtime_error("Cannot set video format: invalid mode");
 				if (freenect_set_video_mode(m_dev, mode) < 0) throw std::runtime_error("Cannot set video format");
-				if (wasRunning)
-					freenect_start_video(m_dev);
+
 				m_video_format = requested_format;
 				m_video_resolution = requested_resolution;
-				if(m_rgb_buffer != 0) delete[] m_rgb_buffer;
-				m_rgb_buffer = new uint8_t[getVideoBufferSize()];
-				freenect_set_video_buffer(m_dev, m_rgb_buffer);
+				m_rgb_buffer.reset(new uint8_t[mode.bytes]);
+				freenect_set_video_buffer(m_dev, m_rgb_buffer.get());
+
+				if (wasRunning) {
+					freenect_start_video(m_dev);
+				}
 			}
 		}
 		freenect_video_format getVideoFormat() {
@@ -176,7 +179,7 @@ namespace Freenect {
 		freenect_depth_format m_depth_format;
 		freenect_resolution m_video_resolution;
 		freenect_resolution m_depth_resolution;
-		uint8_t* m_rgb_buffer = 0;
+		std::unique_ptr<uint8_t[]> m_rgb_buffer;
 		static void freenect_depth_callback(freenect_device *dev, void *depth, uint32_t timestamp) {
 			FreenectDevice* device = static_cast<FreenectDevice*>(freenect_get_user(dev));
 			device->DepthCallback(depth, timestamp);
@@ -249,7 +252,7 @@ namespace Freenect {
 			return NULL;
 		}
 	  protected:
-		freenect_context *m_ctx;	    
+		freenect_context *m_ctx;
 	  private:
 		volatile bool m_stop;
 		pthread_t m_thread;
