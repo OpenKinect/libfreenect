@@ -40,10 +40,16 @@ For the examples, you'll need
     # cmake --build .
 
 Use CMake options to control what gets built.
-For example, to build the python wrapper:
+For example, to build the Python wrapper (defaults to system Python):
 
-    cmake .. -DCMAKE_BUILD_PYTHON=ON
+    cmake .. -DBUILD_PYTHON=ON
     make
+    
+Or the Python 3 wrapper:
+    
+    cmake .. -DBUILD_PYTHON3=ON
+    make
+    
 
 You can specify a build with debug symbols:
 
