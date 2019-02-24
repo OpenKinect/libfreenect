@@ -17,7 +17,7 @@ Notice: If you have the newer Kinect v2 (XBox One), use [OpenKinect/libfreenect2
 
 To build libfreenect, you'll need
 
-- [libusb](http://libusb.info) >= 1.0.18
+- [libusb](http://libusb.info) >= 1.0.18 (Windows needs >= 1.0.22)
 - [CMake](http://cmake.org) >= 3.1.0
 - [python](http://python.org) >= 2.7 or >= 3.3 (only if BUILD_PYTHON=ON or BUILD_PYTHON2=ON or BUILD_PYTHON3=ON or BUILD_REDIST_PACKAGE=OFF)
 
@@ -122,22 +122,14 @@ Alternately, the [libfreenect-git](https://aur.archlinux.org/packages/libfreenec
 
 ## Windows
 
-As of February 2015, libusb still [does not support](https://github.com/libusb/libusb/issues/46) isochronous transfers on Windows.
-This support may be patched in by performing these steps or their GUI equivalent.
-
-    git clone https://github.com/libusb/libusb.git
-    cd libusb
-    git remote add jblake https://github.com/JoshBlake/libusbx.git
-    git fetch jblake
-    git cherry-pick c5b0af4 1c74211
-    MSBuild.exe msvc/libusb_2013.sln
+As of libusb 1.0.22, [libusbK isochronous transfers](https://github.com/libusb/libusb/commit/55ced7746dd697024f2042aca009b7436892bf2b) are now supported natively.  There is no longer a need to compile a custom version of libusb.
 
 Use [Zadig](http://zadig.akeo.ie/) to install the libusbK driver for each device you wish to use.
 Follow [Fetch & Build](#fetch-build) or use Github and CMake GUI tools.
 Remember to supply paths to CMake so it can find dependencies.
 For example:
 
-    cmake .. -DLIBUSB_1_INCLUDE_DIR="C:\path\to\patched\libusb\include" -DLIBUSB_1_LIBRARY="C:\path\to\patched\libusb\libusb.lib"
+    cmake .. -DLIBUSB_1_INCLUDE_DIR="C:\path\to\libusb\include" -DLIBUSB_1_LIBRARY="C:\path\to\libusb\libusb.lib"
 
 
 # Wrappers
