@@ -491,7 +491,7 @@ def sync_get_depth(index=0, format=DEPTH_11BIT):
 
     Returns:
         (depth, timestamp) or None on error
-        depth: A numpy array, shape:(640,480) dtype:np.uint16
+        depth: A numpy array, shape:(480,640) dtype:np.uint16
         timestamp: int representing the time
     """
     cdef void* data
