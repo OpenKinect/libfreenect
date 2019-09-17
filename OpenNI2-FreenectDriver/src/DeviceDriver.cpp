@@ -141,7 +141,7 @@ namespace FreenectDriver
           return ONI_STATUS_OK;
       }
     }
-    
+
     OniStatus setProperty(int propertyId, const void* data, int dataSize)
     {
       switch (propertyId)
@@ -190,7 +190,7 @@ namespace FreenectDriver
           return false;
       }
     }
-    
+
     OniStatus invoke(int commandId, void* data, int dataSize)
     {
       switch (commandId)
@@ -247,7 +247,7 @@ namespace FreenectDriver
         std::string uri = devid_to_uri(i);
 
         WriteMessage("Found device " + uri);
-        
+
         OniDeviceInfo info;
         strncpy(info.uri, uri.c_str(), ONI_MAX_STR);
         strncpy(info.vendor, "Microsoft", ONI_MAX_STR);
@@ -281,7 +281,7 @@ namespace FreenectDriver
           {
             return iter->second;
           }
-          else 
+          else
           {
             WriteMessage("Opening device " + std::string(uri));
             int id = uri_to_devid(iter->first.uri);
@@ -304,7 +304,7 @@ namespace FreenectDriver
         {
           WriteMessage("Closing device " + std::string(iter->first.uri));
           int id = uri_to_devid(iter->first.uri);
-          devices.erase(iter);
+          iter->second = NULL;
           deleteDevice(id);
           return;
         }
