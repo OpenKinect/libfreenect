@@ -455,6 +455,9 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 				ctx->zero_plane_res = 322;
 			}
 
+			dev->usb_cam.VID = desc.idVendor;
+			dev->usb_cam.PID = desc.idProduct;
+
 			res = fnusb_claim_camera(dev);
 			if (res < 0) {
 				goto failure;
