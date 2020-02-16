@@ -2,8 +2,6 @@
 # OpenNI2-FreenectDriver
 ######################################################################################
 
-cmake_minimum_required(VERSION 3.1.0)
-
 file(GLOB HEADERS src/*.hpp src/*.h)
 file(GLOB SOURCES src/*.cpp)
 add_library(FreenectDriver SHARED ${HEADERS} ${SOURCES})
@@ -17,12 +15,11 @@ set_target_properties(FreenectDriver PROPERTIES
   OUTPUT_NAME FreenectDriver)
   
 add_definitions(-DPROJECT_VER="${PROJECT_VER}")
-
+add_definitions(--std=c++11)
 include_directories(extern/OpenNI-Linux-x64-2.2.0.33/Include)
 include_directories(${PROJECT_SOURCE_DIR}/src)
 include_directories(${PROJECT_SOURCE_DIR}/wrappers/cpp)
 
-target_compile_features(FreenectDriver PUBLIC cxx_constexpr)
 
 target_link_libraries(FreenectDriver freenectstatic ${MATH_LIB})
 
