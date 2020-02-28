@@ -51,7 +51,7 @@ set (PROJECT_VER_PATCH 1)
 set (PROJECT_VER
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 set (PROJECT_APIVER
-  "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}")
+  "${PROJECT_VER_MAJOR}")
 
 OPTION(BUILD_REDIST_PACKAGE "Build libfreenect in a legally-redistributable manner (only affects audio)" ON)
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
