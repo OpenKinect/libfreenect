@@ -112,7 +112,7 @@ There is also a [debian branch](https://github.com/OpenKinect/libfreenect/tree/d
 
 ### Gentoo Linux
 
-There is a live ebuild for your convenience in [platform/linux/portage/dev-libs/libfreenect/](https://github.com/OpenKinect/libfreenect/tree/master/platform/linux/portage/dev-libs/libfreenect).
+There are [dev-libs/libfreenect](https://github.com/piedar/overboard/tree/master/dev-libs/libfreenect) ebuilds in the [overboard repo](https://github.com/piedar/overboard).
 
 ### Arch Linux
 
