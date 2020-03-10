@@ -63,7 +63,7 @@ FN_INTERNAL int fnusb_num_devices(freenect_context *ctx)
 			}
 			else if (desc.idProduct == PID_KV2_CAMERA)
 			{
-				FN_NOTICE("Skipping Kinect v2 device (needs https://github.com/libfreenect2).\n");
+				FN_NOTICE("Skipping Kinect v2 device (needs https://github.com/OpenKinect/libfreenect2).\n");
 			}
 		}
 	}
