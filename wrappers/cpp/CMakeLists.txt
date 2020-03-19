@@ -1,5 +1,4 @@
-cmake_minimum_required(VERSION 3.1.0)
-set_property(DIRECTORY PROPERTY CXX_STANDARD 11)
+cmake_minimum_required(VERSION 3.8.2)
 
 install(FILES libfreenect.hpp
         DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
@@ -15,6 +14,9 @@ if (BUILD_EXAMPLES)
 
     add_executable(freenect-cppview cppview.cpp)
     add_executable(freenect-cpp_pcview cpp_pc_view.cpp)
+
+    target_compile_features(freenect-cppview PUBLIC cxx_std_11)
+    target_compile_features(freenect-cpp_pcview PUBLIC cxx_std_11)
 
     target_link_libraries(freenect-cppview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
     target_link_libraries(freenect-cpp_pcview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
