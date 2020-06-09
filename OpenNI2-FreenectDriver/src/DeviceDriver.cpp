@@ -252,9 +252,7 @@ namespace FreenectDriver
         strncpy(info.uri, uri.c_str(), ONI_MAX_STR);
         strncpy(info.vendor, "Microsoft", ONI_MAX_STR);
         strncpy(info.name, "Kinect", ONI_MAX_STR);
-        devices[info] = NULL;
-        deviceConnected(&info);
-        deviceStateChanged(&info, 0);
+        devices[info] = NULL;        
 
         freenect_device* dev;
         if (freenect_open_device(m_ctx, &dev, i) == 0)
@@ -262,6 +260,9 @@ namespace FreenectDriver
           info.usbVendorId = dev->usb_cam.VID;
           info.usbProductId = dev->usb_cam.PID;
           freenect_close_device(dev);
+          
+          deviceConnected(&info);
+          deviceStateChanged(&info, 0);
         }
         else
         {
