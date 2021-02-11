@@ -26,6 +26,7 @@
 
 #include "libfreenect.h"
 #include "libfreenect_audio.h"
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <signal.h>
