@@ -101,7 +101,7 @@ int update_tilt_state_alt(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 
-	if (dev->usb_audio.dev == NULL)
+	if (dev->usb_audio.dev_handle == NULL)
 	{
 		FN_WARNING("Motor control failed: audio device missing");
 		return -1;
@@ -118,13 +118,13 @@ int update_tilt_state_alt(freenect_device *dev)
 	unsigned char buffer[256];
 	memcpy(buffer, &cmd, 16);
     
-	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 16, &transferred, 250);
+	res = libusb_bulk_transfer(dev->usb_audio.dev_handle, 0x01, buffer, 16, &transferred, 250);
 	if (res != 0)
 	{
 		return res;
 	}
     
-	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x81, buffer, 256, &transferred, 250); // 104 bytes
+	res = libusb_bulk_transfer(dev->usb_audio.dev_handle, 0x81, buffer, 256, &transferred, 250); // 104 bytes
 	if (res != 0)
 	{
 		return res;
@@ -149,7 +149,7 @@ int update_tilt_state_alt(freenect_device *dev)
 
 	// Reply: skip four uint32_t, then you have three int32_t that give you acceleration in that direction, it seems.
 	// Units still to be worked out.
-	return get_reply(dev->usb_audio.dev, ctx);
+	return get_reply(dev->usb_audio.dev_handle, ctx);
 }
 
 int freenect_update_tilt_state(freenect_device *dev)
@@ -195,7 +195,7 @@ int freenect_set_tilt_degs_alt(freenect_device *dev, int tilt_degrees)
 		return -1;
 	}
 
-	if (dev->usb_audio.dev == NULL)
+	if (dev->usb_audio.dev_handle == NULL)
 	{
 		FN_WARNING("Motor control failed: audio device missing");
 		return -1;
@@ -212,13 +212,13 @@ int freenect_set_tilt_degs_alt(freenect_device *dev, int tilt_degrees)
 	unsigned char buffer[20];
 	memcpy(buffer, &cmd, 20);
 
-	res = libusb_bulk_transfer(dev->usb_audio.dev, 0x01, buffer, 20, &transferred, 250);
+	res = libusb_bulk_transfer(dev->usb_audio.dev_handle, 0x01, buffer, 20, &transferred, 250);
 	if (res != 0) {
 		FN_ERROR("freenect_set_tilt_alt(): libusb_bulk_transfer failed: %s (transferred = %d)\n", libusb_error_name(res), transferred);
 		return res;
 	}
     
-	return get_reply(dev->usb_audio.dev, ctx);
+	return get_reply(dev->usb_audio.dev_handle, ctx);
 }
 
 int freenect_set_tilt_degs(freenect_device *dev, double angle)
@@ -291,13 +291,13 @@ int freenect_set_led_alt(freenect_device *dev, freenect_led_options state)
 {
 	freenect_context *ctx = dev->parent;
 
-	if (dev->usb_audio.dev == NULL)
+	if (dev->usb_audio.dev_handle == NULL)
 	{
 		FN_WARNING("Motor control failed: audio device missing");
 		return -1;
 	}
 
-	return fnusb_set_led_alt(dev->usb_audio.dev, ctx, state);
+	return fnusb_set_led_alt(dev->usb_audio.dev_handle, ctx, state);
 }
 
 int freenect_set_led(freenect_device *dev, freenect_led_options option)

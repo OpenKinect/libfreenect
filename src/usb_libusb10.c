@@ -151,6 +151,69 @@ FN_INTERNAL libusb_device * fnusb_find_sibling_device(freenect_context* ctx, lib
 	return NULL;
 }
 
+FN_INTERNAL char* usb_get_serial(freenect_context* ctx, libusb_device* device, libusb_device_handle* handle)
+{
+	if (ctx == NULL) return NULL;
+
+	if (device == NULL) {
+		if (handle == NULL) {
+			FN_WARNING("No handle or device for serial\n");
+			return NULL;
+		}
+		device = libusb_get_device(handle); // no need to free or unref
+	}
+
+	int res = 0;
+	struct libusb_device_descriptor desc;
+
+	res = libusb_get_device_descriptor(device, &desc);
+	if (res != 0) {
+		FN_WARNING("Failed to get serial descriptor: %s\n", libusb_error_name(res));
+		return NULL;
+	}
+
+	// Verify that a serial number exists to query.  If not, don't touch the device.
+	if (desc.iSerialNumber == 0) {
+		FN_WARNING("Device has no serial number\n");
+		return NULL;
+	}
+
+	libusb_device_handle* localHandle = NULL;
+
+	if (handle == NULL) {
+		res = libusb_open(device, &localHandle);
+		if (res != 0) {
+			FN_WARNING("Failed to open device for serial: %s\n", libusb_error_name(res));
+			return NULL;
+		}
+		handle = localHandle;
+	}
+
+	unsigned char serial[256]; // String descriptors are at most 256 bytes.
+	res = libusb_get_string_descriptor_ascii(handle, desc.iSerialNumber, serial, 256);
+
+	if (localHandle != NULL) {
+		libusb_close(localHandle);
+	}
+
+	if (res < 0) {
+		FN_WARNING("Failed to get serial: %s\n", libusb_error_name(res));
+		return NULL;
+	}
+
+	const char* const K4W_1473_SERIAL = "0000000000000000";
+	if (strncmp((const char*)serial, K4W_1473_SERIAL, 16) == 0) {
+		return NULL; // K4W and 1473 provide an empty serial; more easily handled as NULL.
+	}
+
+	return strndup((const char*)serial, sizeof(serial));
+}
+
+FN_INTERNAL char* fnusb_get_serial(fnusb_dev* device)
+{
+	return usb_get_serial(device->parent->parent, device->dev, device->dev_handle);
+}
+
 FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes** attribute_list)
 {
 	*attribute_list = NULL; // initialize some return value in case the user is careless.
@@ -161,6 +224,7 @@ FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freen
 		return (count >= INT_MIN) ? (int)count : -1;
 	}
 
+	int res = 0;
 	struct freenect_device_attributes** next_attr = attribute_list;
 
 	// Pass over the list.  For each camera seen, if we already have a camera
@@ -173,79 +237,41 @@ FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freen
 		libusb_device* camera_device = devs[i];
 
 		struct libusb_device_descriptor desc;
-		int res = libusb_get_device_descriptor (camera_device, &desc);
-		if (res < 0)
-		{
+		res = libusb_get_device_descriptor(camera_device, &desc);
+		if (res < 0) {
 			continue;
 		}
 
-		if (desc.idVendor == VID_MICROSOFT && (desc.idProduct == PID_NUI_CAMERA || desc.idProduct == PID_K4W_CAMERA))
+		if (!fnusb_is_camera(desc)) {
+			continue;
+		}
+
+		char* serial = usb_get_serial(ctx, camera_device, NULL);
+		if (serial == NULL)
 		{
-			// Verify that a serial number exists to query.  If not, don't touch the device.
-			if (desc.iSerialNumber == 0)
+			libusb_device* audio_device = fnusb_find_sibling_device(ctx, camera_device, devs, count, &fnusb_is_audio);
+			if (audio_device != NULL)
 			{
-				continue;
-			}
-
-			libusb_device_handle *camera_handle;
-			res = libusb_open(camera_device, &camera_handle);
-			if (res != 0)
-			{
-				continue;
-			}
-
-			// Read string descriptor referring to serial number.
-			unsigned char serial[256]; // String descriptors are at most 256 bytes.
-			res = libusb_get_string_descriptor_ascii(camera_handle, desc.iSerialNumber, serial, 256);
-			libusb_close(camera_handle);
-			if (res < 0)
-			{
-				continue;
-			}
-
-			// K4W and 1473 don't provide a camera serial; use audio serial instead.
-			const char* const K4W_1473_SERIAL = "0000000000000000";
-			if (strncmp((const char*)serial, K4W_1473_SERIAL, 16) == 0)
-			{
-				libusb_device* audio_device = fnusb_find_sibling_device(ctx, camera_device, devs, count, &fnusb_is_audio);
-				if (audio_device != NULL)
-				{
-					struct libusb_device_descriptor audio_desc;
-					res = libusb_get_device_descriptor(audio_device, &audio_desc);
-					if (res != 0)
-					{
-						FN_WARNING("Failed to get audio serial descriptors of K4W or 1473 device: %s\n", libusb_error_name(res));
-					}
-					else
-					{
-						libusb_device_handle * audio_handle = NULL;
-						res = libusb_open(audio_device, &audio_handle);
-						if (res != 0)
-						{
-							FN_WARNING("Failed to open audio device for serial of K4W or 1473 device: %s\n", libusb_error_name(res));
-						}
-						else
-						{
-							res = libusb_get_string_descriptor_ascii(audio_handle, audio_desc.iSerialNumber, serial, 256);
-							libusb_close(audio_handle);
-							if (res != 0)
-							{
-								FN_WARNING("Failed to get audio serial of K4W or 1473 device: %s\n", libusb_error_name(res));
-							}
-						}
-					}
+				char* audio_serial = usb_get_serial(ctx, audio_device, NULL);
+				if (audio_serial) {
+					free(serial);
+					serial = audio_serial;
 				}
 			}
-
-			// Add item to linked list.
-			struct freenect_device_attributes* current_attr = (struct freenect_device_attributes*)malloc(sizeof(struct freenect_device_attributes));
-			memset(current_attr, 0, sizeof(*current_attr));
-
-			current_attr->camera_serial = strdup((char*)serial);
-			*next_attr = current_attr;
-			next_attr = &(current_attr->next);
-			num_cams++;
 		}
+
+		if (serial == NULL) {
+			continue;
+		}
+
+		// Add item to linked list.
+		struct freenect_device_attributes* current_attr = (struct freenect_device_attributes*)malloc(sizeof(struct freenect_device_attributes));
+		memset(current_attr, 0, sizeof(*current_attr));
+
+		current_attr->camera_serial = serial;
+		*next_attr = current_attr;
+		next_attr = &(current_attr->next);
+		num_cams++;
 	}
 
 	libusb_free_device_list(devs, 1);
@@ -301,37 +327,37 @@ FN_INTERNAL int fnusb_claim_camera(freenect_device* dev)
 
 #ifndef _WIN32 // todo: necessary?
 	// Detach an existing kernel driver for the device
-	ret = libusb_kernel_driver_active(dev->usb_cam.dev, 0);
+	ret = libusb_kernel_driver_active(dev->usb_cam.dev_handle, 0);
 	if (ret == 1)
 	{
-		ret = libusb_detach_kernel_driver(dev->usb_cam.dev, 0);
+		ret = libusb_detach_kernel_driver(dev->usb_cam.dev_handle, 0);
 		if (ret < 0)
 		{
 			FN_ERROR("Failed to detach camera kernel driver: %s\n", libusb_error_name(ret));
-			libusb_close(dev->usb_cam.dev);
-			dev->usb_cam.dev = NULL;
+			libusb_close(dev->usb_cam.dev_handle);
+			dev->usb_cam.dev_handle = NULL;
 			return ret;
 		}
 	}
 #endif
 
-	ret = libusb_claim_interface(dev->usb_cam.dev, 0);
+	ret = libusb_claim_interface(dev->usb_cam.dev_handle, 0);
 	if (ret < 0)
 	{
 		FN_ERROR("Failed to claim camera interface: %s\n", libusb_error_name(ret));
-		libusb_close(dev->usb_cam.dev);
-		dev->usb_cam.dev = NULL;
+		libusb_close(dev->usb_cam.dev_handle);
+		dev->usb_cam.dev_handle = NULL;
 		return ret;
 	}
 
 	if (dev->usb_cam.PID == PID_K4W_CAMERA)
 	{
-		ret = libusb_set_interface_alt_setting(dev->usb_cam.dev, 0, 1);
+		ret = libusb_set_interface_alt_setting(dev->usb_cam.dev_handle, 0, 1);
 		if (ret != 0)
 		{
 			FN_ERROR("Failed to set alternate interface #1 for K4W: %s\n", libusb_error_name(ret));
-			libusb_close(dev->usb_cam.dev);
-			dev->usb_cam.dev = NULL;
+			libusb_close(dev->usb_cam.dev_handle);
+			dev->usb_cam.dev_handle = NULL;
 			return ret;
 		}
 	}
@@ -378,6 +404,28 @@ FN_INTERNAL int fnusb_keep_alive_led(freenect_context* ctx, libusb_device* audio
 	return res;
 }
 
+FN_INTERNAL void fnusb_reset_subdevice(fnusb_dev* dev, freenect_device* parent)
+{
+	if (dev->dev_handle) {
+		libusb_release_interface(dev->dev_handle, 0);
+		libusb_attach_kernel_driver(dev->dev_handle, 0);
+		libusb_close(dev->dev_handle);
+		dev->dev_handle = NULL;
+	}
+
+	if (dev->dev) {
+		libusb_unref_device(dev->dev);
+		dev->dev = NULL;
+	}
+
+	dev->parent = parent;
+}
+
+FN_INTERNAL libusb_device* fnusb_try_ref_device(libusb_device* dev)
+{
+	return dev ? libusb_ref_device(dev) : NULL;
+}
+
 FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 {
 	freenect_context *ctx = dev->parent;
@@ -385,12 +433,9 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 	dev->device_does_motor_control_with_audio = 0;
 	dev->motor_control_with_audio_enabled = 0;
     
-	dev->usb_cam.parent = dev;
-	dev->usb_cam.dev = NULL;
-	dev->usb_motor.parent = dev;
-	dev->usb_motor.dev = NULL;
-	dev->usb_audio.parent = dev;
-	dev->usb_audio.dev = NULL;
+	fnusb_reset_subdevice(&dev->usb_cam, dev);
+	fnusb_reset_subdevice(&dev->usb_motor, dev);
+	fnusb_reset_subdevice(&dev->usb_audio, dev);
 
 	libusb_device **devs; // pointer to pointer of device, used to retrieve a list of devices
 	ssize_t count = libusb_get_device_list (dev->parent->usb.ctx, &devs); //get the list of devices
@@ -417,14 +462,16 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			continue;
 		}
 
-		camera = devs[i]; // found the requested camera
+		camera = devs[i];
+		dev->usb_cam.dev = fnusb_try_ref_device(camera);
+
 		if (ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA)
 		{
-			res = libusb_open(camera, &dev->usb_cam.dev);
-			if (res < 0 || !dev->usb_cam.dev)
+			res = libusb_open(camera, &dev->usb_cam.dev_handle);
+			if (res < 0 || !dev->usb_cam.dev_handle)
 			{
 				FN_ERROR("Could not open camera: %s\n", libusb_error_name(res));
-				dev->usb_cam.dev = NULL;
+				dev->usb_cam.dev_handle = NULL;
 				goto failure;
 			}
 
@@ -472,10 +519,13 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		goto failure;
 	}
 
+
 	// FIND MOTOR
+	libusb_device* motor = fnusb_find_sibling_device(ctx, camera, devs, count, &fnusb_is_motor);
+	dev->usb_motor.dev = fnusb_try_ref_device(motor);
+
 	if (ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR)
 	{
-		libusb_device* motor = fnusb_find_sibling_device(ctx, camera, devs, count, &fnusb_is_motor);
 		if (motor == NULL) {
 			FN_ERROR("Could not find device sibling\n");
 			res = -1;
@@ -489,19 +539,19 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			goto failure;
 		}
 
-		res = libusb_open(motor, &dev->usb_motor.dev);
-		if (res < 0 || !dev->usb_motor.dev)
+		res = libusb_open(motor, &dev->usb_motor.dev_handle);
+		if (res < 0 || !dev->usb_motor.dev_handle)
 		{
 			FN_ERROR("Could not open device: %s\n", libusb_error_name(res));
-			dev->usb_motor.dev = NULL;
+			dev->usb_motor.dev_handle = NULL;
 			goto failure;
 		}
 
-		res = libusb_claim_interface(dev->usb_motor.dev, 0);
+		res = libusb_claim_interface(dev->usb_motor.dev_handle, 0);
 		if (res < 0) {
 			FN_ERROR("Could not claim interface: %s\n", libusb_error_name(res));
-			libusb_close(dev->usb_motor.dev);
-			dev->usb_motor.dev = NULL;
+			libusb_close(dev->usb_motor.dev_handle);
+			dev->usb_motor.dev_handle = NULL;
 			goto failure;
 		}
 
@@ -509,10 +559,13 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		dev->usb_motor.PID = desc.idProduct;
 	}
     
+
 	// FIND AUDIO
+	libusb_device* audio = fnusb_find_sibling_device(ctx, camera, devs, count, &fnusb_is_audio);
+	dev->usb_audio.dev = fnusb_try_ref_device(audio);
+
 	if (ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO)
 	{
-		libusb_device* audio = fnusb_find_sibling_device(ctx, camera, devs, count, &fnusb_is_audio);
 		if (audio == NULL) {
 			FN_ERROR("Could not find device sibling\n");
 			res = -1;
@@ -526,19 +579,19 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 			goto failure;
 		}
 
-		res = libusb_open(audio, &dev->usb_audio.dev);
-		if (res < 0 || !dev->usb_audio.dev)
+		res = libusb_open(audio, &dev->usb_audio.dev_handle);
+		if (res < 0 || !dev->usb_audio.dev_handle)
 		{
 			FN_ERROR("Could not open device: %s\n", libusb_error_name(res));
-			dev->usb_audio.dev = NULL;
+			dev->usb_audio.dev_handle = NULL;
 			goto failure;
 		}
 
-		res = libusb_claim_interface(dev->usb_audio.dev, 0);
+		res = libusb_claim_interface(dev->usb_audio.dev_handle, 0);
 		if (res < 0) {
 			FN_ERROR("Could not claim interface: %s\n", libusb_error_name(res));
-			libusb_close(dev->usb_audio.dev);
-			dev->usb_audio.dev = NULL;
+			libusb_close(dev->usb_audio.dev_handle);
+			dev->usb_audio.dev_handle = NULL;
 			goto failure;
 		}
 
@@ -563,7 +616,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		{
 			// Read the serial number from the string descriptor and save it.
 			unsigned char string_desc[256]; // String descriptors are at most 256 bytes
-			res = libusb_get_string_descriptor_ascii(dev->usb_audio.dev, desc.iSerialNumber, string_desc, 256);
+			res = libusb_get_string_descriptor_ascii(dev->usb_audio.dev_handle, desc.iSerialNumber, string_desc, 256);
 			if (res < 0) {
 				FN_ERROR("Failed to retrieve serial number for audio device in bootloader state\n");
 				goto failure;
@@ -594,8 +647,8 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 				goto failure;
 			}
 
-			libusb_close(dev->usb_audio.dev);
-			dev->usb_audio.dev = NULL;
+			libusb_close(dev->usb_audio.dev_handle);
+			dev->usb_audio.dev_handle = NULL;
 
 			// Wait for the device to reappear.
 			int loops = 0;
@@ -643,7 +696,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 								continue;
 							}
 							// Save the device handle.
-							dev->usb_audio.dev = new_dev_handle;
+							dev->usb_audio.dev_handle = new_dev_handle;
 
 							// Verify that we've actually found a device running the right firmware.
 							num_interfaces = fnusb_num_interfaces(&dev->usb_audio);
@@ -658,7 +711,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 							else
 							{
 								FN_SPEW("Opened audio with matching serial but too few interfaces.\n");
-								dev->usb_audio.dev = NULL;
+								dev->usb_audio.dev_handle = NULL;
 								libusb_close(new_dev_handle);
 								continue;
 							}
@@ -674,7 +727,7 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 
 				libusb_free_device_list(new_dev_list, 1);
 				// If we found the right device, break out of this loop.
-				if (dev->usb_audio.dev)
+				if (dev->usb_audio.dev_handle)
 					break;
 				// Sleep for a second to give the device more time to reenumerate.
 				sleep(1);
@@ -684,9 +737,9 @@ FN_INTERNAL int fnusb_open_subdevices(freenect_device *dev, int index)
 		}
 	}
 
-	if ((dev->usb_cam.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA))
-   && (dev->usb_motor.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
-   && (dev->usb_audio.dev || !(ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO)))
+	if ((dev->usb_cam.dev_handle || !(ctx->enabled_subdevices & FREENECT_DEVICE_CAMERA))
+   && (dev->usb_motor.dev_handle || !(ctx->enabled_subdevices & FREENECT_DEVICE_MOTOR))
+   && (dev->usb_audio.dev_handle || !(ctx->enabled_subdevices & FREENECT_DEVICE_AUDIO)))
 	{
 		// Each requested subdevice is open.
 		goto finally;
@@ -702,24 +755,9 @@ finally:
 
 FN_INTERNAL int fnusb_close_subdevices(freenect_device *dev)
 {
-	if (dev->usb_cam.dev) {
-		libusb_release_interface(dev->usb_cam.dev, 0);
-#ifndef _WIN32
-		libusb_attach_kernel_driver(dev->usb_cam.dev, 0);
-#endif
-		libusb_close(dev->usb_cam.dev);
-		dev->usb_cam.dev = NULL;
-	}
-	if (dev->usb_motor.dev) {
-		libusb_release_interface(dev->usb_motor.dev, 0);
-		libusb_close(dev->usb_motor.dev);
-		dev->usb_motor.dev = NULL;
-	}
-	if (dev->usb_audio.dev) {
-		libusb_release_interface(dev->usb_audio.dev, 0);
-		libusb_close(dev->usb_audio.dev);
-		dev->usb_audio.dev = NULL;
-	}
+	fnusb_reset_subdevice(&dev->usb_cam, dev);
+	fnusb_reset_subdevice(&dev->usb_motor, dev);
+	fnusb_reset_subdevice(&dev->usb_audio, dev);
 	return 0;
 }
 
@@ -809,7 +847,7 @@ FN_INTERNAL int fnusb_get_max_iso_packet_size(fnusb_dev *dev, unsigned char endp
 {
 	freenect_context *ctx = dev->parent->parent;
 
-	int size = libusb_get_max_iso_packet_size(libusb_get_device(dev->dev), endpoint);
+	int size = libusb_get_max_iso_packet_size(libusb_get_device(dev->dev_handle), endpoint);
 	if (size <= 0)
 	{
 		FN_WARNING("libusb_get_max_iso_packet_size() returned %d; using default %d\n", size, default_size);
@@ -847,7 +885,7 @@ FN_INTERNAL int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_i
 		}
 		else
 		{
-			libusb_fill_iso_transfer(strm->xfers[i], dev->dev, endpoint, bufp, pkts * len, pkts, iso_callback, strm, 0);
+			libusb_fill_iso_transfer(strm->xfers[i], dev->dev_handle, endpoint, bufp, pkts * len, pkts, iso_callback, strm, 0);
 			libusb_set_iso_packet_lengths(strm->xfers[i], len);
 
 			int ret = libusb_submit_transfer(strm->xfers[i]);
@@ -896,18 +934,18 @@ FN_INTERNAL int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm)
 
 FN_INTERNAL int fnusb_control(fnusb_dev *dev, uint8_t bmRequestType, uint8_t bRequest, uint16_t wValue, uint16_t wIndex, uint8_t *data, uint16_t wLength)
 {
-	return libusb_control_transfer(dev->dev, bmRequestType, bRequest, wValue, wIndex, data, wLength, 0);
+	return libusb_control_transfer(dev->dev_handle, bmRequestType, bRequest, wValue, wIndex, data, wLength, 0);
 }
 
 FN_INTERNAL int fnusb_bulk(fnusb_dev *dev, uint8_t endpoint, uint8_t *data, int len, int *transferred) {
 	*transferred = 0;
-	return libusb_bulk_transfer(dev->dev, endpoint, data, len, transferred, 0);
+	return libusb_bulk_transfer(dev->dev_handle, endpoint, data, len, transferred, 0);
 }
 
 FN_INTERNAL int fnusb_num_interfaces(fnusb_dev *dev) {
 	int retval = 0;
 	int res;
-	libusb_device* d = libusb_get_device(dev->dev);
+	libusb_device* d = libusb_get_device(dev->dev_handle);
 	struct libusb_config_descriptor* config;
 	res = libusb_get_active_config_descriptor(d, &config);
 	if (res < 0) // Something went wrong

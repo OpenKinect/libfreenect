@@ -56,8 +56,9 @@ typedef struct {
 
 typedef struct {
 	freenect_device *parent; //so we can go up from the libusb userdata
-	libusb_device_handle *dev;
-	int device_dead; // set to 1 when the underlying libusb_device_handle vanishes (ie, Kinect was unplugged)
+	libusb_device *dev;
+	libusb_device_handle *dev_handle;
+	short device_dead; // set to 1 when the underlying libusb_device_handle vanishes (ie, Kinect was unplugged)
 	int VID;
 	int PID;
 } fnusb_dev;
@@ -75,6 +76,7 @@ typedef struct {
 } fnusb_isoc_stream;
 
 int fnusb_num_devices(freenect_context *ctx);
+char* fnusb_get_serial(fnusb_dev* dev);
 int fnusb_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes** attribute_list);
 
 int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx);
