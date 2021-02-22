@@ -226,3 +226,7 @@ IF ( BUILD_CPACK_TGZ OR BUILD_CPACK_DEB OR BUILD_CPACK_RPM )
 
 ENDIF ( )
 
+# Create a cmake file for importing the project easily with cmake
+
+CONFIGURE_FILE("${PROJECT_SOURCE_DIR}/config.cmake.in" "${PROJECT_BINARY_DIR}/Find${PROJECT_NAME}.cmake" @ONLY)
+INSTALL(FILES "${PROJECT_BINARY_DIR}/Find${PROJECT_NAME}.cmake" DESTINATION lib/cmake/ )
