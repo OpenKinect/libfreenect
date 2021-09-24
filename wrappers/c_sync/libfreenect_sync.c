@@ -284,7 +284,11 @@ static int setup_kinect(int index, int res, int fmt, int is_depth)
 	int thread_running_prev = thread_running;
 	if (!thread_running) {
 		int ret = init_thread();
-		if (ret != 0) return ret;
+		if (ret != 0) {
+			pthread_mutex_unlock(&runloop_lock);
+			pending_runloop_tasks_dec();
+			return ret;
+		}
 	}
 	if (!kinects[index]) {
 		kinects[index] = alloc_kinect(index);
