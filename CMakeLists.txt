@@ -151,6 +151,7 @@ ENDIF()
 
 IF(BUILD_CV)
   add_subdirectory (wrappers/opencv)
+  add_subdirectory (wrappers/cppopencv)
 ENDIF()
 
 IF(BUILD_AS3_SERVER)
