@@ -27,6 +27,7 @@
 #include "libfreenect.h"
 #include "freenect_internal.h"
 #include "registration.h"
+#include "convert.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -73,42 +74,23 @@ static void freenect_init_depth_to_rgb(int32_t* depth_to_rgb, freenect_zero_plan
 	}
 }
 
-// unrolled inner loop of the 11-bit unpacker
-static inline void unpack_8_pixels(uint8_t *raw, uint16_t *frame)
+// apply registration data to a single frame
+FN_INTERNAL int freenect_apply_registration(const freenect_registration* reg, const freenect_frame_mode input_mode, void* input, uint16_t* output_mm)
 {
-	uint16_t baseMask = 0x7FF;
+	if (!reg || !input || !output_mm) return -1;
+	if (!input_mode.is_valid) return -1;
+	if (input_mode.resolution != FREENECT_RESOLUTION_MEDIUM) return -2;
 
-	uint8_t r0  = *(raw+0);
-	uint8_t r1  = *(raw+1);
-	uint8_t r2  = *(raw+2);
-	uint8_t r3  = *(raw+3);
-	uint8_t r4  = *(raw+4);
-	uint8_t r5  = *(raw+5);
-	uint8_t r6  = *(raw+6);
-	uint8_t r7  = *(raw+7);
-	uint8_t r8  = *(raw+8);
-	uint8_t r9  = *(raw+9);
-	uint8_t r10 = *(raw+10);
+	if (input_mode.depth_format == FREENECT_DEPTH_REGISTERED) {
+		memcpy(output_mm, input, input_mode.bytes);
+		return 0;
+	}
 
-	frame[0] =  (r0<<3)  | (r1>>5);
-	frame[1] = ((r1<<6)  | (r2>>2) )           & baseMask;
-	frame[2] = ((r2<<9)  | (r3<<1) | (r4>>7) ) & baseMask;
-	frame[3] = ((r4<<4)  | (r5>>4) )           & baseMask;
-	frame[4] = ((r5<<7)  | (r6>>1) )           & baseMask;
-	frame[5] = ((r6<<10) | (r7<<2) | (r8>>6) ) & baseMask;
-	frame[6] = ((r8<<5)  | (r9>>3) )           & baseMask;
-	frame[7] = ((r9<<8)  | (r10)   )           & baseMask;
-}
-
-// apply registration data to a single packed frame
-FN_INTERNAL int freenect_apply_registration(freenect_device* dev, uint8_t* input, uint16_t* output_mm, bool unpacked)
-{
-	freenect_registration* reg = &(dev->registration);
 	// set output buffer to zero using pointer-sized memory access (~ 30-40% faster than memset)
 	size_t i, *wipe = (size_t*)output_mm;
 	for (i = 0; i < DEPTH_X_RES * DEPTH_Y_RES * sizeof(uint16_t) / sizeof(size_t); i++) wipe[i] = DEPTH_NO_MM_VALUE;
 
-	uint16_t unpack[8];
+	uint16_t unpack[8] = { 0 };
 
 	uint32_t target_offset = DEPTH_Y_RES * reg->reg_pad_info.start_lines;
 	uint32_t x,y,source_index = 8;
@@ -116,22 +98,32 @@ FN_INTERNAL int freenect_apply_registration(freenect_device* dev, uint8_t* input
 	for (y = 0; y < DEPTH_Y_RES; y++) {
 		for (x = 0; x < DEPTH_X_RES; x++) {
 
-                        uint16_t metric_depth;
+			uint16_t metric_depth;
 
-                        if (unpacked) {
-                                uint32_t buf_index = y * DEPTH_X_RES + x;
-                                metric_depth = reg->raw_to_mm_shift[((uint16_t *)input)[buf_index]];
-                        } else {
-                                // get 8 pixels from the packed frame
-                                if (source_index == 8) {
-                                        unpack_8_pixels( input, unpack );
-                                        source_index = 0;
-                                        input += 11;
-                                }
-
-                                // get the value at the current depth pixel, convert to millimeters
-                                metric_depth = reg->raw_to_mm_shift[ unpack[source_index++] ];
-                        }
+			switch (input_mode.depth_format) {
+				case FREENECT_DEPTH_MM:
+					uint32_t mm_index = (y * input_mode.width) + x;
+					metric_depth = ((uint16_t *)input)[mm_index];
+					break;
+				case FREENECT_DEPTH_11BIT: // as used by fakenect-record
+				case FREENECT_DEPTH_10BIT: // todo: does this work?
+					uint32_t buf_index = (y * input_mode.width) + x;
+					metric_depth = reg->raw_to_mm_shift[((uint16_t *)input)[buf_index]];
+					break;
+				case FREENECT_DEPTH_11BIT_PACKED:
+				case FREENECT_DEPTH_10BIT_PACKED:
+					// get 8 pixels from the packed frame
+					if (source_index == 8) {
+						convert_packed_to_16bit(input, unpack, input_mode.data_bits_per_pixel, 8);
+						source_index = 0;
+						input += 11;
+					}
+					// get the value at the current depth pixel, convert to millimeters
+					metric_depth = reg->raw_to_mm_shift[ unpack[source_index++] ];
+					break;
+				default:
+					return -99;
+			}
 
 			// so long as the current pixel has a depth value
 			if (metric_depth == DEPTH_NO_MM_VALUE) continue;
@@ -175,17 +167,29 @@ FN_INTERNAL int freenect_apply_registration(freenect_device* dev, uint8_t* input
 	return 0;
 }
 
+FREENECTAPI int freenect_map_depth_to_video(freenect_device* dev, void* input, uint16_t* output_mm)
+{
+	if (!dev || !input || !output_mm) return -1;
+
+	if (!dev->registration.registration_table) {
+		freenect_init_registration(dev);
+	}
+	const freenect_registration* reg = &(dev->registration);
+	const freenect_frame_mode depth_mode = freenect_get_current_depth_mode(dev);
+	return freenect_apply_registration(reg, depth_mode, input, output_mm);
+}
+
 // Same as freenect_apply_registration, but don't bother aligning to the RGB image
 FN_INTERNAL int freenect_apply_depth_to_mm(freenect_device* dev, uint8_t* input_packed, uint16_t* output_mm)
 {
 	freenect_registration* reg = &(dev->registration);
-	uint16_t unpack[8];
+	uint16_t unpack[8] = { 0 };
 	uint32_t x,y,source_index = 8;
 	for (y = 0; y < DEPTH_Y_RES; y++) {
 		for (x = 0; x < DEPTH_X_RES; x++) {
 			// get 8 pixels from the packed frame
 			if (source_index == 8) {
-				unpack_8_pixels( input_packed, unpack );
+				convert_packed_to_16bit(input_packed, output_mm, 11, 8);
 				source_index = 0;
 				input_packed += 11;
 			}

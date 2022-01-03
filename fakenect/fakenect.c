@@ -220,18 +220,20 @@ int freenect_process_events(freenect_context *ctx)
 	   best as we can to match those from the original data and current run
 	   conditions (e.g., if it takes longer to run this code then we wait less).
 	 */
+	int err = 0;
+
 	if (!index_fp)
 		open_index();
 	char type;
 	double record_cur_time;
 	unsigned int timestamp, data_size;
 	char *data = NULL;
-	if (parse_line(&type, &record_cur_time, &timestamp, &data_size, &data)) {
-                if (loop_playback) {
+	err = parse_line(&type, &record_cur_time, &timestamp, &data_size, &data);
+	if (err) {
+		if (loop_playback) {
 			close_index();
 			return 0;
-                } else
-		    return -1;
+		} else return err;
 	}
 	// Sleep an amount that compensates for the original and current delays
 	// playback_ is w.r.t. the current time
@@ -250,9 +252,9 @@ int freenect_process_events(freenect_context *ctx)
 				case FREENECT_DEPTH_11BIT:
 				    memcpy(depth_buffer, cur_depth, mode.bytes);
 				    break;
-                                case FREENECT_DEPTH_REGISTERED:
-                                    freenect_apply_registration(fake_dev, cur_depth, depth_buffer, true);
-                                    break;
+				case FREENECT_DEPTH_REGISTERED:
+					err = freenect_apply_registration(&(fake_dev->registration), freenect_find_video_mode(mode.resolution, FREENECT_DEPTH_11BIT), cur_depth, depth_buffer);
+					break;
 				case FREENECT_DEPTH_MM:
 				    freenect_apply_depth_unpacked_to_mm(fake_dev, cur_depth, depth_buffer);
 				    break;
@@ -303,7 +305,7 @@ int freenect_process_events(freenect_context *ctx)
 	}
 	free(data);
 	playback_prev_time = get_time();
-	return 0;
+	return err;
 }
 
 int freenect_process_events_timeout(freenect_context *ctx, struct timeval *timeout)

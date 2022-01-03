@@ -28,15 +28,23 @@
 #include <stdio.h>
 #include <string.h>
 #include "libfreenect.h"
+#include "libfreenect_registration.h"
 
 #ifndef SIGQUIT // win32 compat
 	#define SIGQUIT SIGTERM
 #endif
 
 
+uint16_t mapped_depth[640 * 480];
+
 void depth_cb(freenect_device* dev, void* data, uint32_t timestamp)
 {
 	printf("Received depth frame at %d\n", timestamp);
+
+	int err = freenect_map_depth_to_video(dev, data, mapped_depth);
+	if (err) {
+		printf("Registration error %d\n", err);
+	}
 }
 
 void video_cb(freenect_device* dev, void* data, uint32_t timestamp)

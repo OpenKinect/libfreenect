@@ -125,6 +125,18 @@ FREENECTAPI void freenect_camera_to_world(freenect_device* dev,
 FREENECTAPI void freenect_map_rgb_to_depth( freenect_device* dev,
 	uint16_t* depth_mm, uint8_t* rgb_raw, uint8_t* rgb_registered );
 
+/**
+ * Converts the depth_frame to output_mm and aligns it with the video frame.
+ * This is similar to using the FREENECT_DEPTH_REGISTERED mode.
+ *
+ * @param dev freenect device
+ * @param depth_frame depth frame buffer
+ * @param output_mm output buffer which must have length at least width * height
+ *
+ * @return 0 on success
+ */
+FREENECTAPI int freenect_map_depth_to_video(freenect_device* dev, void* depth_frame, uint16_t* output_mm);
+
 #ifdef __cplusplus
 }
 #endif

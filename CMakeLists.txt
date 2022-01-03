@@ -46,8 +46,8 @@ include (FindOS)
 include (SetupDirectories)
 
 set (PROJECT_VER_MAJOR 0)
-set (PROJECT_VER_MINOR 6)
-set (PROJECT_VER_PATCH 3)
+set (PROJECT_VER_MINOR 7)
+set (PROJECT_VER_PATCH 0)
 set (PROJECT_VER
   "${PROJECT_VER_MAJOR}.${PROJECT_VER_MINOR}.${PROJECT_VER_PATCH}")
 set (PROJECT_APIVER
@@ -101,7 +101,7 @@ SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
 if    (MSVC)
   set(C_FLAGS_WARNING "-W4")
 else  ()
-  set(C_FLAGS_WARNING "-Wall")
+  set(C_FLAGS_WARNING "-Wall -Wno-unused-function")
 endif (MSVC)
 
 set(C_CXX_FLAGS_DEFAULT "${C_FLAGS_WARNING} -O2")
