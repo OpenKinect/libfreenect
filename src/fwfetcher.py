@@ -576,7 +576,7 @@ if __name__ == "__main__":
         target = sys.argv[1]
     if not os.path.isfile(target):
         fw = getFileOrURL("SystemUpdate.zip",
-                          "https://www.xbox.com/system-update-usb")
+                          "https://download.digiex.net/Consoles/Xbox360/Dashboards/SystemUpdate_17559_USB.zip")
         pirs = extractPirsFromZip(fw)
 
         lang = ["English", "Japanese", "German", "French", "Spanish",
