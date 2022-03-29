@@ -1,0 +1,42 @@
+How to cross-build libfreenect for Windows on e.g. Ubuntu Linux
+
+== Compile libusb (v1.0.26 or git) ==
+
+Below instructions assume this is built in ~/SRC/libusb
+
+ cd ~/SRC/libusb
+ ./configure --host=x86_64-w64-mingw32
+ make -j5
+
+== Compile freeglut (v3.2.3 or git) ==
+
+Below instructions assume this is built in ~/SRC/freeglut
+Follow the instructions in the README.mingw_cross but with
+the addition of this cmake flag:
+ -D FREEGLUT_REPLACE_GLUT=1
+(Note the dll will actually end up in the bin folder)
+
+== Compile libfreenect ==
+
+This can surely be improved, the system FindGLUT doesn't work well.
+Also the included FindThreads.cmake doesn't seem to help in this case.
+
+ touch ../cmake_modules/FindGLUT.cmake
+
+ cmake -D CMAKE_TOOLCHAIN_FILE=mingw.cmake \
+       -D LIBUSB_1_INCLUDE_DIR=~/SRC/libusb/libusb \
+       -D LIBUSB_1_LIBRARY=~/SRC/libusb/libusb/.libs/libusb-1.0.dll \
+       -D THREADS_PTHREADS_WIN32_LIBRARY=/usr/x86_64-w64-mingw32/lib/libpthread.dll.a \
+       -D GLUT_FOUND=1 \
+       -D GLUT_INCLUDE_DIR=~/SRC/freeglut/freeglut/include \
+       -D GLUT_LIBRARY=~/SRC/freeglut/freeglut/bin/libglut.dll \
+       -D CMAKE_INSTALL_PREFIX=install-win \
+       ..
+
+ make -j5
+ make install
+ find install-win
+
+This results in dynamically linked executables, so you'd need
+libusb.dll libglut.dll libphreads-1.0.dll on the target computer.
+
