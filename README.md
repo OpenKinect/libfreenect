@@ -72,6 +72,18 @@ Alternately, firmware for Kinect model 1414 can be downloaded automatically by s
 
 Note that firmware may not be legal to redistribute in your jurisdiction!
 
+## Install and build instructions via vcpkg
+----------------------------------------
+You can download and install libfreenect using the vcpkg(https://github.com/Microsoft/vcpkg) dependency manager:
+
+    git clone https://github.com/Microsoft/vcpkg.git
+    cd vcpkg
+    ./bootstrap-vcpkg.sh
+    ./vcpkg integrate install
+    vcpkg install libfreenect
+
+The libfreenect port in vcpkg is kept up to date by Microsoft team members and community contributors. If the version is out of date, please create an issue or pull request(https://github.com/Microsoft/vcpkg) on the vcpkg repository.
+
 ## OSX
 
 If you don't have a package manager, install [Homebrew](http://brew.sh/).
