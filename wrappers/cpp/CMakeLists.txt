@@ -5,6 +5,7 @@ install(FILES libfreenect.hpp
 
 if (BUILD_EXAMPLES)
   set(THREADS_USE_PTHREADS_WIN32 true)
+  set(OpenGL_GL_PREFERENCE "GLVND")
   find_package(Threads)
   find_package(OpenGL)
   find_package(GLUT)
@@ -18,8 +19,8 @@ if (BUILD_EXAMPLES)
     target_compile_features(freenect-cppview PUBLIC cxx_std_11)
     target_compile_features(freenect-cpp_pcview PUBLIC cxx_std_11)
 
-    target_link_libraries(freenect-cppview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
-    target_link_libraries(freenect-cpp_pcview freenect ${OPENGL_LIBRARIES} ${GLUT_LIBRARY} ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+    target_link_libraries(freenect-cppview freenect OpenGL::GL OpenGL::GLU GLUT::GLUT ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+    target_link_libraries(freenect-cpp_pcview freenect OpenGL::GL OpenGL::GLU GLUT::GLUT ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
 
     install(TARGETS freenect-cppview freenect-cpp_pcview
             DESTINATION bin)
