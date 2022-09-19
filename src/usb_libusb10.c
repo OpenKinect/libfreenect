@@ -228,7 +228,7 @@ FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freen
 						{
 							res = libusb_get_string_descriptor_ascii(audio_handle, audio_desc.iSerialNumber, serial, 256);
 							libusb_close(audio_handle);
-							if (res != 0)
+							if (res <= 0)
 							{
 								FN_WARNING("Failed to get audio serial of K4W or 1473 device: %s\n", libusb_error_name(res));
 							}
