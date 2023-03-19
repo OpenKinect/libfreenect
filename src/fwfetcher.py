@@ -534,7 +534,8 @@ def urlopen_timeout_retry(request, attempts = 5):
         except socket.timeout as e:
             print("Timeout! ", e)
             last_error = e
-    raise last_error
+    if last_error:
+        raise last_error
 
 def getFileOrURL(filename, url):
     # Check if a file named filename exists on disk.
