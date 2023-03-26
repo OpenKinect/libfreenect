@@ -110,6 +110,7 @@ typedef enum {
 typedef enum {
 	// values written to the CMOS register
 	FREENECT_AUTO_EXPOSURE      = 1 << 14,
+	FREENECT_AUTO_FLICKER       = 1 << 7,
 	FREENECT_AUTO_WHITE_BALANCE = 1 << 1,
 	FREENECT_RAW_COLOR          = 1 << 4,
 	// arbitrary bitfields to support flag combination
@@ -669,6 +670,34 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
  * @return 0 on success, < 0 if error
  */
 FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value);
+
+/**
+ * Get the current exposure in microseconds
+ *
+ * @param dev Device to set exposure
+ * @param time_us exposure time in microseconds
+ *
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_get_exposure(freenect_device *dev, int *time_us);
+
+/**
+ * Sets a static exposure time in microseconds
+ * note: you must turn off auto-exposure before calling this function
+ *
+ * Sample usage with 33.333ms exposure:
+ *
+ *   freenect_set_flag(fn_dev, FREENECT_AUTO_EXPOSURE, FREENECT_OFF);
+ *   freenect_set_flag(fn_dev, FREENECT_AUTO_FLICKER, FREENECT_OFF);
+ *   freenect_set_flag(fn_dev, FREENECT_AUTO_WHITE_BALANCE, FREENECT_OFF);
+ *   freenect_set_exposure(fn_dev, 33333);
+ *
+ * @param dev Device to set exposure
+ * @param time_us exposure time in microseconds
+ *
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_set_exposure(freenect_device *dev, int time_us);
 
 /**
  * Returns the brightness of the IR sensor.

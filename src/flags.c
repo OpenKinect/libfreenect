@@ -93,6 +93,58 @@ int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_va
 	return write_cmos_register(dev, 0x0106, cmos_value);
 }
 
+int freenect_get_exposure(freenect_device *dev, int *time_us)
+{
+	freenect_context *ctx = dev->parent;
+
+	uint16_t shutter_width = read_cmos_register(dev, 0x0009);
+	if (shutter_width == UINT16_MAX)
+	{
+		return -1;
+	}
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+		case FREENECT_VIDEO_BAYER:
+			*time_us = shutter_width * SHUTTER_WIDTH_TO_EXP_RGB;
+			break;
+		case FREENECT_VIDEO_YUV_RGB:
+		case FREENECT_VIDEO_YUV_RAW:
+			*time_us = shutter_width * SHUTTER_WIDTH_TO_EXP_YUV;
+			break;
+		case FREENECT_VIDEO_DUMMY:
+		case FREENECT_VIDEO_IR_8BIT:
+		case FREENECT_VIDEO_IR_10BIT:
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			FN_WARNING("Could not get exposure, invalid video format");
+			return -1;
+	}
+	return 0;
+}
+
+int freenect_set_exposure(freenect_device *dev, int time_us)
+{
+	freenect_context *ctx = dev->parent;
+
+	uint16_t cmos_value = 0;
+	switch (dev->video_format) {
+		case FREENECT_VIDEO_RGB:
+		case FREENECT_VIDEO_BAYER:
+			cmos_value = time_us / SHUTTER_WIDTH_TO_EXP_RGB;
+			break;
+		case FREENECT_VIDEO_YUV_RGB:
+		case FREENECT_VIDEO_YUV_RAW:
+			cmos_value = time_us / SHUTTER_WIDTH_TO_EXP_YUV;
+			break;
+		case FREENECT_VIDEO_DUMMY:
+		case FREENECT_VIDEO_IR_8BIT:
+		case FREENECT_VIDEO_IR_10BIT:
+		case FREENECT_VIDEO_IR_10BIT_PACKED:
+			FN_WARNING("Could not set exposure, invalid video format");
+			return -1;
+	}
+	return write_cmos_register(dev, 0x0009, cmos_value);;
+}
+
 int freenect_get_ir_brightness(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;

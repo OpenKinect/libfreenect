@@ -148,6 +148,12 @@ static inline int32_t fn_le32s(int32_t s)
 #define PID_K4W_AUDIO_ALT_1 0x02c3
 #define PID_K4W_AUDIO_ALT_2 0x02bb
 
+// Conversion from shutter width to exposure in microseconds
+// Measured using camtest.c with various very long exposure times
+// TODO: calculate this from camera registers instead of magic numbers
+#define SHUTTER_WIDTH_TO_EXP_RGB 54.21
+#define SHUTTER_WIDTH_TO_EXP_YUV 63.25
+
 typedef struct {
 	int running;
 	uint8_t flag;
