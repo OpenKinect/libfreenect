@@ -202,6 +202,19 @@ FREENECTAPI int freenect_open_device_by_camera_serial(freenect_context *ctx, fre
 	return -1;
 }
 
+FREENECTAPI char* freenect_get_device_serial(freenect_device* dev)
+{
+	if (dev == NULL) return NULL;
+
+	int res;
+
+	struct freenect_device_attributes attr;
+	res = fnusb_get_device_attributes(dev, &attr);
+	if (res != 0) return NULL;
+
+	return strdup(attr.camera_serial);
+}
+
 FREENECTAPI int freenect_close_device(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;

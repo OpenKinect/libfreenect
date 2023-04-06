@@ -26,6 +26,7 @@
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "libfreenect.h"
 
@@ -90,6 +91,12 @@ int main(int argc, char** argv)
 	{
 		freenect_shutdown(fn_ctx);
 		return ret;
+	}
+
+	{
+		char* serial = freenect_get_device_serial(fn_dev);
+		if (serial) printf("Found device with serial %s\n", serial);
+		free(serial);
 	}
 
 	// Set depth and video modes.

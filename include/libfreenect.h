@@ -357,6 +357,15 @@ FREENECTAPI int freenect_open_device(freenect_context *ctx, freenect_device **de
 FREENECTAPI int freenect_open_device_by_camera_serial(freenect_context *ctx, freenect_device **dev, const char* camera_serial);
 
 /**
+ * Gets a serial number for the device.
+ * The caller must free() the serial after use.
+ *
+ * @param dev
+ * @return an appropriate serial number, or NULL if none was found.
+ */
+FREENECTAPI char* freenect_get_device_serial(freenect_device* dev);
+
+/**
  * Closes a device that is currently open
  *
  * @param dev Device to close
