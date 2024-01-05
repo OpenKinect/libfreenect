@@ -45,6 +45,15 @@ int rotangles[2] = {0}; // Panning angles
 float zoom = 1;         // zoom factor
 int color = 1;          // Use the RGB texture or just draw it as color
 
+// implemented here to avoid dependency on libGLU
+void gluPerspective(GLdouble fovY, GLdouble aspect, GLdouble zNear, GLdouble zFar)
+{
+    const double pi = acos(-1);
+    const GLdouble fH = tan(fovY / 360 * pi) * zNear;
+    const GLdouble fW = fH * aspect;
+    glFrustum(-fW, fW, -fH, fH, zNear, zFar);
+}
+
 // Do the projection from u,v,depth to X,Y,Z directly in an opengl matrix
 // These numbers come from a combination of the ros kinect_node wiki, and
 // nicolas burrus' posts.
