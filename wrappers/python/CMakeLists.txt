@@ -37,6 +37,10 @@ add_custom_command(OUTPUT freenect${Python_BUILD_VERSION}.c
     ${CYTHON_EXECUTABLE}
       -${Python_BUILD_VERSION}
       -o freenect${Python_BUILD_VERSION}.c
+      # cython 3.0 needs certain functions to be marked noexcept
+      # but noexcept is not defined in old cython shipped in ubuntu 20.04
+      # todo: eventually require cython >= 0.29.31 and add proper noexcept without this workaround
+      -X legacy_implicit_noexcept=True
       "${CMAKE_CURRENT_SOURCE_DIR}/freenect.pyx")
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES freenect${Python_BUILD_VERSION}.c)
 
