@@ -51,11 +51,11 @@ if (BUILD_C_SYNC)
   install(TARGETS freenect-regtest freenect-tiltdemo
           DESTINATION bin)
 
-  if (OpenGL_OpenGL_FOUND AND OPENGL_GLU_FOUND AND GLUT_FOUND)
+  if (OpenGL_OpenGL_FOUND AND GLUT_FOUND)
     include_directories(${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
     add_executable(freenect-glpclview glpclview.c)
     include(ChooseOpenGLTarget)
-    target_link_libraries(freenect-glpclview freenect_sync "${OPENGL_TARGET}" OpenGL::GLU GLUT::GLUT ${MATH_LIB})
+    target_link_libraries(freenect-glpclview freenect_sync "${OPENGL_TARGET}" GLUT::GLUT ${MATH_LIB})
     install(TARGETS freenect-glpclview
             DESTINATION bin)
   endif ()
