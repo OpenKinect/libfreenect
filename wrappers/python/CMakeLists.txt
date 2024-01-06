@@ -31,17 +31,30 @@ execute_process(COMMAND
     -c "import numpy; print(numpy.get_include())"
   OUTPUT_VARIABLE Python${Python_BUILD_VERSION}_NumPy_INCLUDE_DIRS OUTPUT_STRIP_TRAILING_WHITESPACE)
 
+# cython 3.0 has breaking changes, like certain functions must be marked noexcept
+# but noexcept is not defined in old cython < 0.29.31 shipped in ubuntu 20.04
+# todo: eventually drop support for cython 0.x.x
+execute_process(COMMAND
+  ${CYTHON_EXECUTABLE} --version
+  ERROR_VARIABLE CYTHON_VERSION_OUTPUT ERROR_STRIP_TRAILING_WHITESPACE)
+string(REGEX MATCH "[0-9]+\\.[0-9]+\\.[0-9]+" CYTHON_VERSION "${CYTHON_VERSION_OUTPUT}")
+string(REGEX MATCHALL "[0-9]+" CYTHON_VERSION_COMPONENTS "${CYTHON_VERSION}")
+list(GET CYTHON_VERSION_COMPONENTS 0 CYTHON_VERSION_MAJOR)
+list(GET CYTHON_VERSION_COMPONENTS 1 CYTHON_VERSION_MINOR)
+list(GET CYTHON_VERSION_COMPONENTS 2 CYTHON_VERSION_PATCH)
+if (${CYTHON_VERSION_MAJOR} LESS_EQUAL 0)
+  set(FREENECT_PYX "freenect.cython0.pyx")
+else()
+  set(FREENECT_PYX "freenect.pyx")
+endif()
+
 # How to Cython the .pyx file
 add_custom_command(OUTPUT freenect${Python_BUILD_VERSION}.c
   COMMAND
     ${CYTHON_EXECUTABLE}
       -${Python_BUILD_VERSION}
       -o freenect${Python_BUILD_VERSION}.c
-      # cython 3.0 needs certain functions to be marked noexcept
-      # but noexcept is not defined in old cython shipped in ubuntu 20.04
-      # todo: eventually require cython >= 0.29.31 and add proper noexcept without this workaround
-      -X legacy_implicit_noexcept=True
-      "${CMAKE_CURRENT_SOURCE_DIR}/freenect.pyx")
+      "${CMAKE_CURRENT_SOURCE_DIR}/${FREENECT_PYX}")
 list(APPEND ADDITIONAL_MAKE_CLEAN_FILES freenect${Python_BUILD_VERSION}.c)
 
 # Compile the extension

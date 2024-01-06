@@ -321,7 +321,7 @@ cpdef open_device(CtxPtr ctx, int index):
 
 _depth_cb, _video_cb = None, None
 
-cdef void depth_cb(freenect_device *dev, void *data, uint32_t timestamp) noexcept with gil:
+cdef void depth_cb(freenect_device *dev, void *data, uint32_t timestamp) with gil:
     cdef freenect_frame_mode mode = freenect_get_current_depth_mode(dev)
     if not mode.is_valid:
         return
@@ -332,7 +332,7 @@ cdef void depth_cb(freenect_device *dev, void *data, uint32_t timestamp) noexcep
     pydata = _depth_cb_np(data, &mode)
     _depth_cb(dev_out, pydata, timestamp)
 
-cdef void video_cb(freenect_device *dev, void *data, uint32_t timestamp) noexcept with gil:
+cdef void video_cb(freenect_device *dev, void *data, uint32_t timestamp) with gil:
     cdef freenect_frame_mode mode = freenect_get_current_video_mode(dev)
     if not mode.is_valid:
         return
