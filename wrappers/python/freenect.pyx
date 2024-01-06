@@ -27,7 +27,6 @@ import numpy as np
 cimport numpy as npc
 
 cdef extern from "numpy/arrayobject.h":
-    void import_array()
     cdef object PyArray_SimpleNewFromData(int nd, npc.npy_intp *dims,
                                            int typenum, void *data)
 
@@ -455,7 +454,7 @@ def base_runloop(CtxPtr ctx, body=None):
     except Kill:
         pass
 
-import_array()
+npc.import_array()
 
 cdef object _depth_cb_np(void *data, freenect_frame_mode *mode):
     cdef npc.npy_intp dims[2]
