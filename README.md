@@ -20,6 +20,7 @@ To build libfreenect, you'll need
 - [libusb](http://libusb.info) >= 1.0.18 (Windows needs >= 1.0.22)
 - [CMake](http://cmake.org) >= 3.12.4
 - [python](http://python.org) >= 2.7 or >= 3.3 (only if BUILD_PYTHON=ON or BUILD_PYTHON2=ON or BUILD_PYTHON3=ON or BUILD_REDIST_PACKAGE=OFF)
+- [cython] (https://cython.org)
 
 For the examples, you'll need
 
@@ -102,6 +103,8 @@ To install newer packaged builds, see [the wiki](http://openkinect.org/wiki/Gett
 Continue with this section for a manual build.
 
     sudo apt-get install git cmake build-essential libusb-1.0-0-dev
+
+    pip install cython
 
     # only if you are building the examples:
     sudo apt-get install freeglut3-dev libxmu-dev libxi-dev
