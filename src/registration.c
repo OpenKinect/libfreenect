@@ -288,6 +288,11 @@ static void freenect_init_registration_table(int32_t (*registration_table)[2], f
 
 	double* regtable_dx = (double*)malloc(DEPTH_X_RES*DEPTH_Y_RES*sizeof(double));
 	double* regtable_dy = (double*)malloc(DEPTH_X_RES*DEPTH_Y_RES*sizeof(double));
+	if (!regtable_dx || !regtable_dy) {
+		free(regtable_dx);
+		free(regtable_dy);
+		return;
+	}
 	memset(regtable_dx, 0, DEPTH_X_RES*DEPTH_Y_RES * sizeof(double));
 	memset(regtable_dy, 0, DEPTH_X_RES*DEPTH_Y_RES * sizeof(double));
 	int32_t x,y,index = 0;
