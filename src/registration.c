@@ -287,7 +287,14 @@ static void freenect_create_dxdy_tables(double* reg_x_table, double* reg_y_table
 static void freenect_init_registration_table(int32_t (*registration_table)[2], freenect_reg_info* reg_info) {
 
 	double* regtable_dx = (double*)malloc(DEPTH_X_RES*DEPTH_Y_RES*sizeof(double));
+	if (!regtable_dx) {
+		return;
+	}
 	double* regtable_dy = (double*)malloc(DEPTH_X_RES*DEPTH_Y_RES*sizeof(double));
+	if (!regtable_dy) {
+		free(regtable_dx);
+		return;
+	}
 	memset(regtable_dx, 0, DEPTH_X_RES*DEPTH_Y_RES * sizeof(double));
 	memset(regtable_dy, 0, DEPTH_X_RES*DEPTH_Y_RES * sizeof(double));
 	int32_t x,y,index = 0;
