@@ -258,6 +258,15 @@ FN_INTERNAL int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
 	if (!usb_ctx) {
 		res = libusb_init(&ctx->ctx);
 		if (res >= 0) {
+#if defined(_WIN32) || defined(__WIN32__) || defined(__WINDOWS__)
+			// Mirrors libfreenect2 (libfreenect2.cpp): on Windows, ask
+			// libusb to use the UsbDk backend so the Kinect can be
+			// reached without forcing the user to replace the device's
+			// driver via Zadig+libusbK. With UsbDk installed, libusb can
+			// attach to the device even when another driver (e.g. the
+			// Microsoft Kinect SDK driver) currently owns it.
+			(void)libusb_set_option(ctx->ctx, LIBUSB_OPTION_USE_USBDK);
+#endif
 			ctx->should_free_ctx = 1;
 			return 0;
 		} else {
