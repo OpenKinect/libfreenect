@@ -64,6 +64,9 @@ OPTION(BUILD_PYTHON "Build Python extensions" OFF)
 OPTION(BUILD_PYTHON2 "Build Python 2 extension" OFF)
 OPTION(BUILD_PYTHON3 "Build Python 3 extension" OFF)
 OPTION(BUILD_OPENNI2_DRIVER "Build libfreenect driver for OpenNI2" OFF)
+IF(WIN32)
+	OPTION(BUILD_DRIVER_INSTALLER "Build freenect-driver-install (binds the Kinect to WinUSB)" ON)
+ENDIF(WIN32)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK_DEB "Build an DEB using CPack" OFF)
 	OPTION(BUILD_CPACK_RPM "Build an RPM using CPack" OFF)
@@ -132,6 +135,10 @@ endif()
 
 # Add library project
 add_subdirectory (src)
+
+IF(WIN32 AND BUILD_DRIVER_INSTALLER)
+  add_subdirectory (platform/windows/driver-install)
+ENDIF()
 
 IF(BUILD_EXAMPLES)
   add_subdirectory (examples)
