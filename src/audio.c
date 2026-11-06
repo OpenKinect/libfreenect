@@ -29,6 +29,9 @@
 
 #include <string.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 
 static void prepare_iso_out_data(freenect_device* dev, uint8_t* buffer) {
@@ -153,6 +156,26 @@ int freenect_start_audio(freenect_device* dev) {
 	if (dev->audio.running)
 		return -1;
 
+#ifdef _WIN32
+	// Safety guard. In a hardware test on Windows 11 (WinUSB, Xbox 1414 with
+	// audios.bin), the audio isochronous streams reported stalls, and the
+	// outstanding transfers were never completed by the kernel. The process
+	// could then not be terminated, and Windows hung during restart, because
+	// shutdown waits for that I/O. Until the audio path is understood and
+	// verified on Windows, refuse to start it unless explicitly requested.
+	{
+		char value[8];
+		DWORD n = GetEnvironmentVariableA("LIBFREENECT_WINDOWS_AUDIO_UNSAFE", value, sizeof(value));
+		if (!(n > 0 && n < sizeof(value) && value[0] == '1')) {
+			FN_ERROR("Audio streaming is disabled on Windows: in testing it left USB transfers that never "
+			         "completed, which made the process unkillable and hung Windows shutdown. "
+			         "Set LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1 only on a machine you can hard-reset.\n");
+			return -1;
+		}
+		FN_WARNING("LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1: starting audio streaming on Windows. This can hang the machine.\n");
+	}
+#endif
+
 	// Allocate buffers
 	dev->audio.audio_out_ring = (freenect_sample_51*)malloc(256 * sizeof(freenect_sample_51));
 	memset(dev->audio.audio_out_ring, 0, 256 * sizeof(freenect_sample_51));
@@ -188,6 +211,7 @@ int freenect_start_audio(freenect_device* dev) {
 	res = fnusb_start_iso(&dev->usb_audio, &dev->audio_out_isoc, iso_out_callback, 0x02, NUM_XFERS, PKTS_PER_XFER, 76);
 	if (res < 0) {
 		FN_ERROR("audio: failed to start isochronous OUT stream: %d\n", res);
+		fnusb_stop_iso(&dev->usb_audio, &dev->audio_in_isoc);
 		return res;
 	}
 

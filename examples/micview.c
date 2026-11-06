@@ -198,7 +198,12 @@ int main(int argc, char** argv) {
 	freenect_set_user(f_dev, &state);
 
 	freenect_set_audio_in_callback(f_dev, in_callback);
-	freenect_start_audio(f_dev);
+	if (freenect_start_audio(f_dev) < 0) {
+		printf("Could not start audio\n");
+		freenect_close_device(f_dev);
+		freenect_shutdown(f_ctx);
+		return 1;
+	}
 
 	int res = pthread_create(&freenect_thread, NULL, freenect_threadfunc, NULL);
 	if (res) {

@@ -1,0 +1,18 @@
+{
+  "name": "libfreenect",
+  "version-string": "0.7.5",
+  "description": "Userspace driver for the Microsoft Kinect v1",
+  "homepage": "https://github.com/OpenKinect/libfreenect",
+  "license": "Apache-2.0 OR GPL-2.0-only",
+  "dependencies": [
+    "libusb"
+  ],
+  "features": {
+    "examples": {
+      "description": "Dependencies of the OpenGL viewers (glview, regview, ...)",
+      "dependencies": [
+        "freeglut"
+      ]
+    }
+  }
+}

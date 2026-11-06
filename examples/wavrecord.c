@@ -27,11 +27,10 @@
 #include "libfreenect.h"
 #include "libfreenect_audio.h"
 #include <stdio.h>
-#include <signal.h>
+#include "console_exit.h"
 
 static freenect_context* f_ctx;
 static freenect_device* f_dev;
-int die = 0;
 
 char wavheader[] = {
 	0x52, 0x49, 0x46, 0x46, // ChunkID = "RIFF"
@@ -65,12 +64,10 @@ void in_callback(freenect_device* dev, int num_samples,
 	printf("Sample received.  Total samples recorded: %d\n", c->samples);
 }
 
-void cleanup(int sig) {
-	printf("Caught SIGINT, cleaning up\n");
-	die = 1;
-}
-
 int main(int argc, char** argv) {
+	// Stop cleanly on Ctrl+C, termination, or when the terminal is closed.
+	fn_install_exit_handlers();
+
 	if (freenect_init(&f_ctx, NULL) < 0) {
 		printf("freenect_init() failed\n");
 		return 1;
@@ -105,15 +102,20 @@ int main(int argc, char** argv) {
 	freenect_set_user(f_dev, &state);
 
 	freenect_set_audio_in_callback(f_dev, in_callback);
-	freenect_start_audio(f_dev);
-	signal(SIGINT, cleanup);
-
-	while(!die && freenect_process_events(f_ctx) >= 0) {
-		// If we did anything else, it might go here.
-		// Alternately, we might split off another thread
-		// to do this loop while the main thread did something
-		// interesting.
+	if (freenect_start_audio(f_dev) < 0) {
+		printf("Could not start audio\n");
+		freenect_close_device(f_dev);
+		freenect_shutdown(f_ctx);
+		return 1;
 	}
+	while (!fn_exit_requested) {
+		struct timeval tv = { 0, 100000 }; // wake up at least every 100 ms
+		if (freenect_process_events_timeout(f_ctx, &tv) < 0)
+			break;
+	}
+	printf("Stopping, writing the WAV files\n");
+	freenect_stop_audio(f_dev);
+	freenect_close_device(f_dev);
 
 	// Make the WAV header valid for each of the four files
 	int i;
@@ -140,5 +142,7 @@ int main(int argc, char** argv) {
 	}
 
 	freenect_shutdown(f_ctx);
+	printf("Done\n");
+	fn_exit_done();
 	return 0;
 }

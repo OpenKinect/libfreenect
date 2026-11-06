@@ -17,7 +17,7 @@ Notice: If you have the newer Kinect v2 (XBox One), use [OpenKinect/libfreenect2
 
 To build libfreenect, you'll need
 
-- [libusb](http://libusb.info) >= 1.0.18 (Windows needs >= 1.0.22)
+- [libusb](http://libusb.info) >= 1.0.18 (Windows needs >= 1.0.26)
 - [CMake](http://cmake.org) >= 3.12.4
 - [python](http://python.org) >= 2.7 or >= 3.3 (only if BUILD_PYTHON=ON or BUILD_PYTHON2=ON or BUILD_PYTHON3=ON or BUILD_REDIST_PACKAGE=OFF)
 
@@ -25,7 +25,7 @@ For the examples, you'll need
 
 - OpenGL   (included with OSX)
 - glut     (included with OSX)
-- [pthreads-win32](http://sourceforge.net/projects/pthreads4w/) (Windows)
+- [pthreads-win32](http://sourceforge.net/projects/pthreads4w/) (Windows, optional: without it, a built-in header-only pthread subset over native Win32 threads is used)
 
 ## <a name="fetch-build"></a>Fetch & Build
 
@@ -122,10 +122,18 @@ Alternately, the [libfreenect-git](https://aur.archlinux.org/packages/libfreenec
 
 ## Windows
 
-As of libusb 1.0.22, [libusbK isochronous transfers](https://github.com/libusb/libusb/commit/55ced7746dd697024f2042aca009b7436892bf2b) are now supported natively.  There is no longer a need to compile a custom version of libusb.
+libfreenect talks to the Kinect from user mode through libusb, using Microsoft's in-box WinUSB driver.
+No kernel driver of its own is needed, so it works on Windows 11 with Memory integrity (core isolation) turned on, unlike the old Kinect for Windows SDK driver.
+Use libusb 1.0.26 or newer on Windows 8.1 or newer. Older libusb versions lack WinUSB isochronous support or have a known regression in it.
 
-Use [Zadig](http://zadig.akeo.ie/) to install the libusbK driver for each device you wish to use.
+Bind the Kinect to WinUSB by running `freenect-driver-install --install` from an Administrator terminal; `--list` shows the current drivers and `--uninstall` undoes it.
+See [platform/windows/README.md](platform/windows/README.md) for what it changes.
+[Zadig](http://zadig.akeo.ie/) also works: install **WinUSB** (or libusbK) for the camera, the motor and the audio device (enable *Options > List All Devices*).
+The old libusb-win32 (libusb0) driver cannot stream video or depth.
+If you have [UsbDk](https://github.com/daynix/UsbDk) installed instead, set the environment variable `LIBFREENECT_USBDK=1` to make libusb use it.
+
 Follow [Fetch & Build](#fetch-build) or use Github and CMake GUI tools.
+pthreads-win32 is optional (see above), so MSVC builds of the wrappers and examples need only libusb and, for the viewers, GLUT.
 Remember to supply paths to CMake so it can find dependencies.
 For example:
 

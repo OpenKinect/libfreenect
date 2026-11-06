@@ -26,6 +26,9 @@
 
 #include <string.h> // for memcpy
 #include <unistd.h> // for usleep
+#ifndef _WIN32
+#include <time.h>   // for clock_gettime
+#endif
 #include "freenect_internal.h"
 #include "flags.h"
 
@@ -188,6 +191,24 @@ typedef struct {
 	uint16_t tag;
 } cam_hdr;
 
+// Camera command channel ("GM" commands, "RB" replies on EP0).
+#define SEND_CMD_POLL_US 1000       // poll interval while waiting for a reply
+#define SEND_CMD_TIMEOUT_MS 2000    // give up on a command after 2 s (wall clock)
+#define SEND_CMD_MAX_STALE 8        // most unrelated replies drained/skipped per command
+
+// Monotonic milliseconds. Sleeps are much longer than requested on some
+// systems (about 15 ms on Windows), so the timeout cannot count polls.
+static uint64_t send_cmd_now_ms(void)
+{
+#ifdef _WIN32
+	return GetTickCount64();
+#else
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + (uint64_t)(ts.tv_nsec / 1000000);
+#endif
+}
+
 FN_INTERNAL int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, int reply_len)
 {
 	freenect_context *ctx = dev->parent;
@@ -210,6 +231,22 @@ FN_INTERNAL int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsig
 
 	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
 
+	// Discard replies that are already waiting. They belong to commands whose
+	// reply was never read (an earlier failure, or a process that ended in the
+	// middle of a command). If they stayed, every following command would read
+	// the previous command's reply.
+	int i;
+	for (i = 0; i < SEND_CMD_MAX_STALE; i++) {
+		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
+		if (actual_len <= 0 || actual_len == 0x200)
+			break; // nothing pending
+		if (actual_len >= (int)sizeof(*rhdr))
+			FN_WARNING("send_cmd: discarding stale reply (cmd %04x tag %04x) before cmd %04x\n",
+			           fn_le16(rhdr->cmd), fn_le16(rhdr->tag), cmd);
+		else
+			FN_WARNING("send_cmd: discarding stale %d-byte reply before cmd %04x\n", actual_len, cmd);
+	}
+
 	res = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, cmd_len + sizeof(*chdr));
 	FN_SPEW("send_cmd: cmd=%04x tag=%04x len=%04x: %d\n", cmd, dev->cam_tag, cmd_len, res);
 	if (res < 0) {
@@ -217,30 +254,47 @@ FN_INTERNAL int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsig
 		return res;
 	}
 
-	do {
+	// Wait for the reply to this command: poll until one arrives, skip replies
+	// that belong to other commands, and give up after SEND_CMD_TIMEOUT_US
+	// instead of polling forever.
+	uint64_t start_ms = send_cmd_now_ms();
+	int stale = 0;
+	for (;;) {
 		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
 		FN_FLOOD("send_cmd: actual length = %d\n", actual_len);
-		usleep(1);
-	} while ((actual_len == 0) || (actual_len == 0x200));
-	FN_SPEW("Control reply: %d\n", res);
-	if (actual_len < (int)sizeof(*rhdr)) {
-		FN_ERROR("send_cmd: Input control transfer failed (%d)\n", res);
-		return res;
+		if (actual_len < 0) {
+			FN_ERROR("send_cmd: Input control transfer failed (%d)\n", actual_len);
+			return actual_len;
+		}
+		if (actual_len == 0 || actual_len == 0x200) { // no reply yet
+			if (send_cmd_now_ms() - start_ms >= SEND_CMD_TIMEOUT_MS) {
+				FN_ERROR("send_cmd: no reply to cmd %04x tag %04x after %d ms\n", cmd, dev->cam_tag, SEND_CMD_TIMEOUT_MS);
+				return -1;
+			}
+			usleep(SEND_CMD_POLL_US);
+			continue;
+		}
+		if (actual_len < (int)sizeof(*rhdr)) {
+			FN_ERROR("send_cmd: Short reply (%d bytes)\n", actual_len);
+			return -1;
+		}
+		if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
+			FN_ERROR("send_cmd: Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
+			return -1;
+		}
+		if (rhdr->cmd != chdr->cmd || rhdr->tag != chdr->tag) {
+			FN_WARNING("send_cmd: skipping reply for cmd %04x tag %04x while waiting for cmd %04x tag %04x\n",
+			           fn_le16(rhdr->cmd), fn_le16(rhdr->tag), cmd, dev->cam_tag);
+			if (++stale > SEND_CMD_MAX_STALE) {
+				FN_ERROR("send_cmd: too many unrelated replies, giving up on cmd %04x\n", cmd);
+				return -1;
+			}
+			continue;
+		}
+		break;
 	}
+	FN_SPEW("Control reply: %d\n", actual_len);
 	actual_len -= sizeof(*rhdr);
-
-	if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
-		FN_ERROR("send_cmd: Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
-		return -1;
-	}
-	if (rhdr->cmd != chdr->cmd) {
-		FN_ERROR("send_cmd: Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
-		return -1;
-	}
-	if (rhdr->tag != chdr->tag) {
-		FN_ERROR("send_cmd: Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
-		return -1;
-	}
 	if (fn_le16(rhdr->len) != (actual_len/2)) {
 		FN_ERROR("send_cmd: Bad len %04x != %04x\n", fn_le16(rhdr->len), (int)(actual_len/2));
 		return -1;
