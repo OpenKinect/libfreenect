@@ -58,6 +58,17 @@ It builds and signs a package in `<dir>`, trusts no certificate and installs not
 The old libusb-win32 (libusb0) driver can't do isochronous transfers, so it can't stream video or depth.
 If you use [UsbDk](https://github.com/daynix/UsbDk) instead, set `LIBFREENECT_USBDK=1`.
 
+## Audio firmware
+
+The Kinect's audio controller needs firmware (`audios.bin`, fetched with `src/fwfetcher.py`) after every power-up.
+On Kinect for Windows and the Xbox model 1473 it also controls the motor and LED.
+libfreenect uploads the firmware when an application opens the audio device.
+To do it ahead of time, for example at login, run:
+
+    freenect-fwloader [--firmware path\to\audios.bin]
+
+Without `--firmware`, `audios.bin` is looked for in `%LIBFREENECT_FIRMWARE_PATH%`, the current directory, `%LOCALAPPDATA%\libfreenect`, the directory of the program, and `%ProgramData%\libfreenect`.
+
 ## Building
 
 libusb, CMake and MSVC are enough. pthreads-win32 is optional: without it, the wrappers and examples use a header-only pthread subset in `platform/windows/pthread`.

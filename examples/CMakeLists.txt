@@ -7,9 +7,11 @@ cmake_minimum_required(VERSION 3.10)
 # These examples have no external dependencies and should always build.
 add_executable(freenect-camtest camtest.c)
 add_executable(freenect-wavrecord wavrecord.c)
+add_executable(freenect-fwloader fwloader.c)
 target_link_libraries(freenect-camtest freenect)
 target_link_libraries(freenect-wavrecord freenect)
-install(TARGETS freenect-camtest freenect-wavrecord
+target_link_libraries(freenect-fwloader freenect)
+install(TARGETS freenect-camtest freenect-wavrecord freenect-fwloader
         DESTINATION bin)
 
 # Most viewers need pthreads and GLUT.

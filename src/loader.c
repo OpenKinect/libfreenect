@@ -31,6 +31,9 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 
 static void dump_bl_cmd(freenect_context* ctx, bootloader_command cmd) {
@@ -122,113 +125,87 @@ static int check_version_string(fnusb_dev* dev) {
 }
 
 
+// Append "<dir><sep><filename>" to the candidate list (skipped if dir is NULL or empty).
+static void add_firmware_candidate(char candidates[][1024], int *count, int max, const char *dir, const char *sub, const char *filename)
+{
+	if (!dir || !*dir || *count >= max)
+		return;
+	snprintf(candidates[*count], 1024, "%s%s/%s", dir, sub ? sub : "", filename);
+	(*count)++;
+}
+
 FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
-    freenect_context* ctx = dev->parent->parent;
-	/* Search for firmware file (audios.bin) in the following places:
-	 * $LIBFREENECT_FIRMWARE_PATH
-	 * .
-	 * ${HOME}/.libfreenect
-	 * /usr/local/share/libfreenect
-	 * /usr/share/libfreenect
-     * ./../Resources/ ( for OS X )
+	freenect_context* ctx = dev->parent->parent;
+	/* Search for the firmware file (audios.bin) in, in order:
+	 *   $LIBFREENECT_FIRMWARE_PATH
+	 *   .
+	 *   ${HOME}/.libfreenect
+	 *   %LOCALAPPDATA%\libfreenect          (Windows)
+	 *   <directory of the executable>       (Windows)
+	 *   %ProgramData%\libfreenect           (Windows)
+	 *   /usr/local/share/libfreenect
+	 *   /usr/share/libfreenect
+	 *   ./../Resources                      (OS X)
 	 */
-    
-    //need to add a forward slash
-    char fw_filename[1024];
-    sprintf(fw_filename, "/%s", filename);
-    
-    int filenamelen = strlen(fw_filename);
+	enum { MAX_CANDIDATES = 9 };
+	char candidates[MAX_CANDIDATES][1024];
+	int count = 0;
 	int i;
-	int searchpathcount;
 	FILE* fw = NULL;
-    
-	for(i = 0, searchpathcount = 6; !fw && i < searchpathcount; i++) {
-		char* fwfile;
-		int needs_free = 0;
-		switch(i) {
-			case 0: {
-				char* envpath = getenv("LIBFREENECT_FIRMWARE_PATH");
-				if (!envpath)
-					continue;
-				int pathlen = strlen(envpath);
-				fwfile = (char *)malloc(pathlen + filenamelen + 1);
-				strcpy(fwfile, envpath);
-				strcat(fwfile, fw_filename);
-				needs_free = 1;
-				}
-				break;
-			case 1:
-				//fwfile = "./audios.bin";
-				fwfile = (char *)malloc(2048);
-                needs_free = 1;
-                sprintf(fwfile, ".%s", fw_filename);
-				break;
-			case 2: {
-				// Construct $HOME/.libfreenect/
-				char* home = getenv("HOME");
-				if (!home)
-					continue;
-				int homelen = strlen(home);
-				char* dotfolder = "/.libfreenect";
-				int locallen = strlen(dotfolder);
-				fwfile = (char*)malloc(homelen + locallen + filenamelen + 1);
-				strcpy(fwfile, home);
-				strcat(fwfile, dotfolder);
-				strcat(fwfile, fw_filename);
-				needs_free = 1;
-				}
-				break;
-			case 3:
-				//fwfile = "/usr/local/share/libfreenect/audios.bin";
-                fwfile = (char *)malloc(2048);
-                needs_free = 1;
-                sprintf(fwfile, "/usr/local/share/libfreenect%s", fw_filename);
-				break;
-			case 4:
-				//fwfile = "/usr/share/libfreenect/audios.bin";
-				fwfile = (char *)malloc(2048);
-                needs_free = 1;
-                sprintf(fwfile, "/usr/share/libfreenect%s", fw_filename);
-				break;
-			case 5:
-                //fwfile = "./../Resources/audios.bin"; //default for OS X equivilant to: "./audios.bin";
-				fwfile = (char *)malloc(2048);
-                needs_free = 1;
-                sprintf(fwfile, "./../Resources%s", fw_filename);
-				break;
-			default: break;
+
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("LIBFREENECT_FIRMWARE_PATH"), NULL, filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, ".", NULL, filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("HOME"), "/.libfreenect", filename);
+#ifdef _WIN32
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("LOCALAPPDATA"), "/libfreenect", filename);
+	{
+		char exe_dir[MAX_PATH];
+		DWORD n = GetModuleFileNameA(NULL, exe_dir, MAX_PATH);
+		if (n > 0 && n < MAX_PATH) {
+			char *slash = strrchr(exe_dir, '\\');
+			if (slash) {
+				*slash = '\0';
+				add_firmware_candidate(candidates, &count, MAX_CANDIDATES, exe_dir, NULL, filename);
+			}
 		}
-		FN_INFO("Trying to open %s as firmware...\n", fwfile);
-		fw = fopen(fwfile, "rb");
-		if (needs_free) {
-			free(fwfile);
-		}
+	}
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("ProgramData"), "/libfreenect", filename);
+#endif
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, "/usr/local/share/libfreenect", NULL, filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, "/usr/share/libfreenect", NULL, filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, "./../Resources", NULL, filename);
+
+	for (i = 0; !fw && i < count; i++) {
+		FN_INFO("Trying to open %s as firmware...\n", candidates[i]);
+		fw = fopen(candidates[i], "rb");
 	}
 	if (!fw) {
-		FN_ERROR("upload_firmware: failed to find firmware file.\n");
-		return -errno;
+		FN_ERROR("upload_firmware: failed to find firmware file %s. Run fwfetcher.py and put the file in one of the locations above, or set LIBFREENECT_FIRMWARE_PATH.\n", filename);
+		return -ENOENT;
 	}
-    
-    // get the number of bytes of the file
-    fseek(fw , 0, SEEK_END);
-    int fw_num_bytes = ftell(fw);
-    rewind(fw);
-    
-    if( fw_num_bytes <= 0 ){
-		FN_ERROR("upload_firmware: failed to find file with any data.\n");
-		return -errno;
-    }
-    
-    unsigned char * fw_bytes = (unsigned char *)malloc(fw_num_bytes);
-    int numRead = fread(fw_bytes, 1, fw_num_bytes, fw);
-    fw_num_bytes = numRead; // just in case
 
-    int retVal = upload_firmware_from_memory(dev, fw_bytes, fw_num_bytes);
-    
-    fclose(fw);
-    fw = NULL;
-    
-    return retVal;
+	// get the number of bytes of the file
+	fseek(fw, 0, SEEK_END);
+	long fw_num_bytes = ftell(fw);
+	rewind(fw);
+
+	if (fw_num_bytes <= 0) {
+		FN_ERROR("upload_firmware: firmware file is empty.\n");
+		fclose(fw);
+		return -EINVAL;
+	}
+
+	unsigned char * fw_bytes = (unsigned char *)malloc(fw_num_bytes);
+	if (!fw_bytes) {
+		fclose(fw);
+		return -ENOMEM;
+	}
+	size_t num_read = fread(fw_bytes, 1, (size_t)fw_num_bytes, fw);
+	fclose(fw);
+
+	int retVal = upload_firmware_from_memory(dev, fw_bytes, (unsigned int)num_read);
+	free(fw_bytes);
+	return retVal;
 }
 
 FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_from_mem, unsigned int fw_size_in_btyes) {
