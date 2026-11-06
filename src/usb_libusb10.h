@@ -41,17 +41,29 @@
   #define VIDEO_PKTBUF 1920
 
   #if defined(_WIN32)
+    // 16 x 32 packets = 64 ms queued per stream at high speed. With 8 transfers
+    // (32 ms), WinUSB dropped depth packets while transfers were resubmitted.
     #define PKTS_PER_XFER 32
-    #define NUM_XFERS 8
+    #define NUM_XFERS 16
   #else
     #define PKTS_PER_XFER 16
     #define NUM_XFERS 16
   #endif
 #endif
 
+// High-speed isochronous transfers must cover whole 1 ms frames (8 microframes).
+// WinUSB rejects transfers that don't (WinUsb_RegisterIsochBuffer), so enforce it.
+#if (PKTS_PER_XFER % 8) != 0
+  #error "PKTS_PER_XFER must be a multiple of 8"
+#endif
+#if (PKTS_PER_XFER * NUM_XFERS) > 1000
+  #error "PKTS_PER_XFER * NUM_XFERS must not exceed 1000"
+#endif
+
 typedef struct {
 	libusb_context *ctx;
 	int should_free_ctx;
+	int using_usbdk; // Windows only: the UsbDk backend was requested via LIBFREENECT_USBDK=1
 } fnusb_ctx;
 
 typedef struct {
@@ -78,6 +90,7 @@ int fnusb_num_devices(freenect_context *ctx);
 int fnusb_list_device_attributes(freenect_context *ctx, struct freenect_device_attributes** attribute_list);
 
 int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx);
+void fnusb_check_version(freenect_context *ctx);
 int fnusb_shutdown(fnusb_ctx *ctx);
 int fnusb_process_events(fnusb_ctx *ctx);
 int fnusb_process_events_timeout(fnusb_ctx *ctx, struct timeval* timeout);

@@ -252,13 +252,29 @@ FN_INTERNAL int fnusb_list_device_attributes(freenect_context *ctx, struct freen
 	return num_cams;
 }
 
+#ifdef _WIN32
+// LIBFREENECT_USBDK=1 selects libusb's UsbDk backend instead of WinUSB/libusbK.
+static int fnusb_usbdk_requested(void)
+{
+	char value[8];
+	DWORD n = GetEnvironmentVariableA("LIBFREENECT_USBDK", value, sizeof(value));
+	return n > 0 && n < sizeof(value) && value[0] == '1';
+}
+#endif
+
 FN_INTERNAL int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
 {
 	int res;
+	ctx->using_usbdk = 0;
 	if (!usb_ctx) {
 		res = libusb_init(&ctx->ctx);
 		if (res >= 0) {
 			ctx->should_free_ctx = 1;
+#if defined(_WIN32) && defined(LIBUSB_API_VERSION) && (LIBUSB_API_VERSION >= 0x01000106)
+			// Must happen before any device is opened (libusb >= 1.0.22).
+			if (fnusb_usbdk_requested() && libusb_set_option(ctx->ctx, LIBUSB_OPTION_USE_USBDK) == LIBUSB_SUCCESS)
+				ctx->using_usbdk = 1;
+#endif
 			return 0;
 		} else {
 			ctx->should_free_ctx = 0;
@@ -271,6 +287,19 @@ FN_INTERNAL int fnusb_init(fnusb_ctx *ctx, freenect_usb_context *usb_ctx)
 		ctx->should_free_ctx = 0;
 		return 0;
 	}
+}
+
+FN_INTERNAL void fnusb_check_version(freenect_context *ctx)
+{
+	const struct libusb_version *v = libusb_get_version();
+	FN_INFO("Using libusb %u.%u.%u%s\n", v->major, v->minor, v->micro, ctx->usb.using_usbdk ? " (UsbDk backend)" : "");
+#ifdef _WIN32
+	// WinUSB isochronous support appeared in libusb 1.0.23; 1.0.24 and 1.0.25
+	// shipped a Windows isochronous regression that 1.0.26 fixed.
+	if (v->major == 1 && v->minor == 0 && v->micro < 26)
+		FN_WARNING("libusb %u.%u.%u is too old for Kinect streaming on Windows; use libusb 1.0.26 or newer\n",
+		           v->major, v->minor, v->micro);
+#endif
 }
 
 FN_INTERNAL int fnusb_shutdown(fnusb_ctx *ctx)
@@ -740,7 +769,16 @@ static void LIBUSB_CALL iso_callback(struct libusb_transfer *xfer)
 		{
 			uint8_t *buf = (uint8_t*)xfer->buffer;
 			for (i=0; i<strm->pkts; i++) {
-				strm->cb(strm->parent->parent, buf, xfer->iso_packet_desc[i].actual_length);
+				// A completed transfer can still contain packets that failed or
+				// were never filled (missed microframes, especially with WinUSB).
+				// Their bytes are not data: pass them on as empty packets, so the
+				// stream parser counts them as lost via the sequence numbers
+				// instead of misparsing them and resyncing.
+				const struct libusb_iso_packet_descriptor *desc = &xfer->iso_packet_desc[i];
+				int len = (desc->status == LIBUSB_TRANSFER_COMPLETED) ? (int)desc->actual_length : 0;
+				if (len == 0 && desc->status != LIBUSB_TRANSFER_COMPLETED)
+					FN_SPEW("EP %02x: skipping iso packet %d with status %d\n", xfer->endpoint, i, desc->status);
+				strm->cb(strm->parent->parent, buf, len);
 				buf += strm->len;
 			}
 			int res;
@@ -827,12 +865,23 @@ FN_INTERNAL int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_i
 	strm->num_xfers = xfers;
 	strm->pkts = pkts;
 	strm->len = len;
-	strm->buffer = (uint8_t*)malloc(xfers * pkts * len);
-	strm->xfers = (struct libusb_transfer**)malloc(sizeof(struct libusb_transfer*) * xfers);
+	strm->buffer = (uint8_t*)malloc((size_t)xfers * pkts * len);
+	strm->xfers = (struct libusb_transfer**)calloc(xfers, sizeof(struct libusb_transfer*));
 	strm->dead = 0;
 	strm->dead_xfers = 0;
+	if (!strm->buffer || !strm->xfers)
+	{
+		FN_ERROR("Failed to allocate isochronous buffers for endpoint %02x\n", endpoint);
+		free(strm->buffer);
+		free(strm->xfers);
+		strm->buffer = NULL;
+		strm->xfers = NULL;
+		return LIBUSB_ERROR_NO_MEM;
+	}
 
 	int i;
+	int submitted = 0;
+	int first_error = LIBUSB_SUCCESS;
 	uint8_t *bufp = strm->buffer;
 
 	for (i = 0; i < xfers; i++)
@@ -844,6 +893,8 @@ FN_INTERNAL int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_i
 		{
 			FN_WARNING("Failed to allocate transfer\n");
 			strm->dead_xfers++;
+			if (first_error == LIBUSB_SUCCESS)
+				first_error = LIBUSB_ERROR_NO_MEM;
 		}
 		else
 		{
@@ -855,11 +906,51 @@ FN_INTERNAL int fnusb_start_iso(fnusb_dev *dev, fnusb_isoc_stream *strm, fnusb_i
 			{
 				FN_WARNING("Failed to submit isochronous transfer %d: %s\n", i, libusb_error_name(ret));
 				strm->dead_xfers++;
+				if (first_error == LIBUSB_SUCCESS)
+					first_error = ret;
+			}
+			else
+			{
+				submitted++;
 			}
 		}
 
 		bufp += pkts*len;
 	}
+
+	if (submitted == 0)
+	{
+		// Nothing is in flight, so the stream can be torn down right here.
+		FN_ERROR("Could not start isochronous stream on endpoint %02x: %s\n", endpoint, libusb_error_name(first_error));
+		if (first_error == LIBUSB_ERROR_NOT_SUPPORTED)
+		{
+#ifdef _WIN32
+			FN_ERROR("The driver bound to this Kinect function cannot do isochronous transfers. "
+			         "Bind it to WinUSB (or libusbK); libusb0/libusb-win32 cannot stream. "
+			         "WinUSB isochronous transfers also need Windows 8.1 or newer and libusb 1.0.26 or newer.\n");
+#else
+			FN_ERROR("The USB stack does not support isochronous transfers for this device.\n");
+#endif
+		}
+		else if (first_error == LIBUSB_ERROR_ACCESS)
+		{
+#ifdef _WIN32
+			FN_ERROR("Access denied: another program or driver is using this Kinect function.\n");
+#else
+			FN_ERROR("Access denied: install the udev rules (platform/linux/udev) or run with sufficient permissions.\n");
+#endif
+		}
+		for (i = 0; i < xfers; i++)
+			libusb_free_transfer(strm->xfers[i]);
+		free(strm->buffer);
+		free(strm->xfers);
+		strm->buffer = NULL;
+		strm->xfers = NULL;
+		strm->dead = 1;
+		return first_error;
+	}
+	if (submitted < xfers)
+		FN_WARNING("Only %d of %d isochronous transfers started on endpoint %02x; frames may be dropped\n", submitted, xfers, endpoint);
 
 	return 0;
 }
@@ -873,13 +964,34 @@ FN_INTERNAL int fnusb_stop_iso(fnusb_dev *dev, fnusb_isoc_stream *strm)
 
 	strm->dead = 1;
 
+	if (!strm->xfers)
+		return 0; // never started, or fnusb_start_iso() already cleaned up
+
 	for (i=0; i<strm->num_xfers; i++)
-		libusb_cancel_transfer(strm->xfers[i]);
+		if (strm->xfers[i])
+			libusb_cancel_transfer(strm->xfers[i]);
 	FN_FLOOD("fnusb_stop_iso() cancelled all transfers\n");
 
-	while (strm->dead_xfers < strm->num_xfers) {
+	// Wait for the cancellations to complete, but not forever, so this function
+	// itself cannot hang. Note the limit: if the OS never completes a
+	// transfer (seen with WinUSB on the stalled audio stream), the process
+	// still cannot exit until it does, and Windows shutdown can hang. That
+	// case is prevented in freenect_start_audio(), not here.
+	int waited_ms = 0;
+	while (strm->dead_xfers < strm->num_xfers && waited_ms < 3000) {
+		struct timeval tv = { 0, 100000 };
 		FN_FLOOD("fnusb_stop_iso() dead = %d\tnum = %d\n", strm->dead_xfers, strm->num_xfers);
-		libusb_handle_events(ctx->usb.ctx);
+		libusb_handle_events_timeout_completed(ctx->usb.ctx, &tv, NULL);
+		waited_ms += 100;
+	}
+	if (strm->dead_xfers < strm->num_xfers) {
+		// libusb may still own these transfers and write into the buffer, so
+		// leak them rather than free memory that is still in use.
+		FN_WARNING("fnusb_stop_iso(): %d of %d transfers on this stream did not finish cancelling; leaking them\n",
+		           strm->num_xfers - strm->dead_xfers, strm->num_xfers);
+		strm->xfers = NULL;
+		strm->buffer = NULL;
+		return 0;
 	}
 
 	for (i=0; i<strm->num_xfers; i++)
