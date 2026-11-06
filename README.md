@@ -25,7 +25,7 @@ For the examples, you'll need
 
 - OpenGL   (included with OSX)
 - glut     (included with OSX)
-- [pthreads-win32](http://sourceforge.net/projects/pthreads4w/) (Windows)
+- [pthreads-win32](http://sourceforge.net/projects/pthreads4w/) (Windows, optional: without it, a built-in header-only pthread subset over native Win32 threads is used)
 
 ## <a name="fetch-build"></a>Fetch & Build
 
