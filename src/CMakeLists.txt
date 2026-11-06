@@ -30,7 +30,12 @@ install (TARGETS freenect
   DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}")
 
 add_library (freenectstatic STATIC ${SRC})
-set_target_properties (freenectstatic PROPERTIES OUTPUT_NAME freenect)
+if (MSVC)
+  # freenect.lib is already the import library of freenect.dll
+  set_target_properties (freenectstatic PROPERTIES OUTPUT_NAME freenect_static)
+else ()
+  set_target_properties (freenectstatic PROPERTIES OUTPUT_NAME freenect)
+endif ()
 IF(UNIX AND NOT APPLE)
   SET_TARGET_PROPERTIES (freenectstatic PROPERTIES COMPILE_FLAGS "-fPIC")
 ENDIF()
