@@ -1,0 +1,130 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows ${{ matrix.arch }} (MSVC)
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            triplet: x64-windows
+          - arch: ARM64
+            triplet: arm64-windows
+    env:
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: "Configure (vcpkg manifest: libusb, freeglut)"
+        shell: pwsh
+        run: >
+          cmake -S . -B build -A ${{ matrix.arch }}
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+          -DVCPKG_MANIFEST_FEATURES=examples
+          -DBUILD_EXAMPLES=ON -DBUILD_C_SYNC=ON -DBUILD_CPP=ON
+          -DBUILD_FAKENECT=OFF -DBUILD_DRIVER_INSTALLER=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Smoke tests (no Kinect attached)
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "$PWD\build\lib\Release;$PWD\build\bin\Release;$env:PATH"
+          $bin = "build\bin\Release"
+
+          & "$bin\freenect-driver-install.exe" --list
+          if ($LASTEXITCODE -ne 0) { throw "--list failed" }
+
+          & "$bin\freenect-driver-install.exe" --package-only pkg
+          if ($LASTEXITCODE -ne 0) { throw "--package-only failed" }
+          $sig = Get-AuthenticodeSignature pkg\libfreenect-kinect.cat
+          Write-Host "catalog signature: $($sig.Status), signer: $($sig.SignerCertificate.Subject)"
+          if ($sig.SignerCertificate.Subject -notlike '*libfreenect Kinect WinUSB*') { throw "catalog is not signed by the package certificate" }
+          if ($sig.SignerCertificate.HasPrivateKey) { throw "signing key was not destroyed" }
+
+          & "$bin\freenect-fwloader.exe"
+          if ($LASTEXITCODE -ne 2) { throw "freenect-fwloader should report no Kinect (exit 2), got $LASTEXITCODE" }
+          $global:LASTEXITCODE = 0
+
+      - name: Collect binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build\bin\Release\* dist\
+          Copy-Item build\lib\Release\*.dll dist\
+          Copy-Item build\lib\Release\*.lib dist\
+          Copy-Item -Recurse include dist\include
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libfreenect-windows-${{ matrix.arch }}
+          path: dist
+
+  linux:
+    name: Linux ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake build-essential pkg-config \
+            libusb-1.0-0-dev freeglut3-dev libgl1-mesa-dev libglu1-mesa-dev
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_EXAMPLES=ON -DBUILD_C_SYNC=ON -DBUILD_CPP=ON -DBUILD_FAKENECT=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Smoke test (no Kinect attached)
+        run: |
+          set +e
+          ./build/bin/freenect-fwloader
+          code=$?
+          test "$code" -eq 2 || { echo "freenect-fwloader should report no Kinect (exit 2), got $code"; exit 1; }
+
+  macos:
+    name: macOS (Apple Silicon)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: brew install libusb
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_EXAMPLES=ON -DBUILD_C_SYNC=ON -DBUILD_CPP=ON -DBUILD_FAKENECT=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Smoke test (no Kinect attached)
+        run: |
+          set +e
+          ./build/bin/freenect-fwloader
+          code=$?
+          test "$code" -eq 2 || { echo "freenect-fwloader should report no Kinect (exit 2), got $code"; exit 1; }
