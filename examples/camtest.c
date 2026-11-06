@@ -23,44 +23,37 @@
  * Binary distributions must follow the binary distribution requirements of
  * either License.
  */
-#include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "libfreenect.h"
+#include "console_exit.h"
 
-#ifndef SIGQUIT // win32 compat
-	#define SIGQUIT SIGTERM
-#endif
+// Usage: freenect-camtest [seconds]
+// Without an argument it runs until Ctrl+C; with one it stops by itself and
+// prints how many frames arrived.
 
+static unsigned depth_frames = 0, video_frames = 0;
 
 void depth_cb(freenect_device* dev, void* data, uint32_t timestamp)
 {
+	depth_frames++;
 	printf("Received depth frame at %d\n", timestamp);
 }
 
 void video_cb(freenect_device* dev, void* data, uint32_t timestamp)
 {
+	video_frames++;
 	printf("Received video frame at %d\n", timestamp);
-}
-
-volatile bool running = true;
-void signalHandler(int signal)
-{
-	if (signal == SIGINT
-	 || signal == SIGTERM
-	 || signal == SIGQUIT)
-	{
-		running = false;
-	}
 }
 
 int main(int argc, char** argv)
 {
-	// Handle signals gracefully.
-	signal(SIGINT, signalHandler);
-	signal(SIGTERM, signalHandler);
-	signal(SIGQUIT, signalHandler);
+	// Stop cleanly on Ctrl+C, termination, or when the terminal is closed.
+	fn_install_exit_handlers();
+	int seconds = argc > 1 ? atoi(argv[1]) : 0;
 
 	// Initialize libfreenect.
 	freenect_context* fn_ctx;
@@ -124,13 +117,22 @@ int main(int argc, char** argv)
 		return ret;
 	}
 
-	// Run until interruption or failure.
-	while (running && freenect_process_events(fn_ctx) >= 0)
+	// Run until interruption, failure, or the requested duration.
+	time_t start = time(NULL);
+	while (!fn_exit_requested)
 	{
-
+		struct timeval tv = { 0, 100000 }; // wake up at least every 100 ms
+		if (freenect_process_events_timeout(fn_ctx, &tv) < 0)
+			break;
+		if (seconds > 0 && time(NULL) - start >= seconds)
+			break;
 	}
+	double elapsed = difftime(time(NULL), start);
 
 	printf("Shutting down\n");
+	if (elapsed > 0)
+		printf("Frames in %.0f s: depth %u (%.1f/s), video %u (%.1f/s)\n",
+		       elapsed, depth_frames, depth_frames / elapsed, video_frames, video_frames / elapsed);
 
 	// Stop everything and shutdown.
 	freenect_stop_depth(fn_dev);
@@ -139,6 +141,7 @@ int main(int argc, char** argv)
 	freenect_shutdown(fn_ctx);
 
 	printf("Done!\n");
+	fn_exit_done();
 
 	return 0;
 }
