@@ -1,0 +1,179 @@
+/*
+ * This file is part of the OpenKinect Project. http://www.openkinect.org
+ *
+ * Copyright (c) 2026 individual OpenKinect contributors. See the CONTRIB file
+ * for details.
+ *
+ * This code is licensed to you under the terms of the Apache License, version
+ * 2.0, or, at your option, the terms of the GNU General Public License,
+ * version 2.0. See the APACHE20 and GPL2 files for the text of the licenses,
+ * or the following URLs:
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.gnu.org/licenses/gpl-2.0.txt
+ *
+ * If you redistribute this file in source form, modified or unmodified, you
+ * may:
+ *   1) Leave this header intact and distribute it under the same terms,
+ *      accompanying it with the APACHE20 and GPL20 files, or
+ *   2) Delete the Apache 2.0 clause and accompany it with the GPL2 file, or
+ *   3) Delete the GPL v2 clause and accompany it with the APACHE20 file
+ * In all cases you must keep the copyright notice intact and include a copy
+ * of the CONTRIB file.
+ *
+ * Binary distributions must follow the binary distribution requirements of
+ * either License.
+ */
+#pragma once
+
+#include <stdint.h>
+
+#ifdef _WIN32
+#define FREENECT_NUI_API __declspec(dllexport)
+#else
+#define FREENECT_NUI_API
+#endif
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
+ * libfreenect_nui: skeleton tracking for the Kinect v1 (optional addon,
+ * library freenect_nui, CMake BUILD_NUI).
+ *
+ * It needs Microsoft's body-part forest (DATABASE.WSDF), which libfreenect
+ * does not contain: freenect-driver-install --fetch-nui-models (Windows) or
+ * fwfetcher.py --nui extract it from Microsoft's Kinect Runtime download on
+ * your machine, and Microsoft's licence terms for the Runtime apply to it.
+ *
+ * Feed it 640x480 millimetre depth frames as libfreenect delivers them
+ * (FREENECT_DEPTH_MM, not mirrored); it returns up to 6 users with 20 joints
+ * each, in the Kinect for Windows SDK's skeleton space: metres, centred on
+ * the depth camera, x to the Kinect's left, y up, z away from it (the
+ * coordinate mapper's camera space, libfreenect_coordinate_mapper.h).
+ */
+
+#define FREENECT_NUI_JOINTS 20
+#define FREENECT_NUI_MAX_USERS 6
+
+/// The SDK's joint order.
+typedef enum {
+	FREENECT_NUI_HIP_CENTER = 0, FREENECT_NUI_SPINE, FREENECT_NUI_SHOULDER_CENTER, FREENECT_NUI_HEAD,
+	FREENECT_NUI_SHOULDER_LEFT, FREENECT_NUI_ELBOW_LEFT, FREENECT_NUI_WRIST_LEFT, FREENECT_NUI_HAND_LEFT,
+	FREENECT_NUI_SHOULDER_RIGHT, FREENECT_NUI_ELBOW_RIGHT, FREENECT_NUI_WRIST_RIGHT, FREENECT_NUI_HAND_RIGHT,
+	FREENECT_NUI_HIP_LEFT, FREENECT_NUI_KNEE_LEFT, FREENECT_NUI_ANKLE_LEFT, FREENECT_NUI_FOOT_LEFT,
+	FREENECT_NUI_HIP_RIGHT, FREENECT_NUI_KNEE_RIGHT, FREENECT_NUI_ANKLE_RIGHT, FREENECT_NUI_FOOT_RIGHT,
+} freenect_nui_joint;
+
+typedef enum {
+	FREENECT_NUI_JOINT_NOT_TRACKED = 0,
+	FREENECT_NUI_JOINT_INFERRED = 1,
+	FREENECT_NUI_JOINT_TRACKED = 2,
+} freenect_nui_joint_state;
+
+typedef enum {
+	FREENECT_NUI_USER_NOT_TRACKED = 0,
+	FREENECT_NUI_USER_POSITION_ONLY = 1, ///< a user is there; only its centre is known
+	FREENECT_NUI_USER_TRACKED = 2,       ///< with a full skeleton
+} freenect_nui_user_state;
+
+/// Quality flags (the SDK's NUI_SKELETON_QUALITY_CLIPPED_*): the user
+/// extends past that edge of the depth camera's view.
+#define FREENECT_NUI_CLIPPED_RIGHT 1
+#define FREENECT_NUI_CLIPPED_LEFT 2
+#define FREENECT_NUI_CLIPPED_TOP 4
+#define FREENECT_NUI_CLIPPED_BOTTOM 8
+
+typedef struct {
+	float x, y, z;
+} freenect_nui_point;
+
+/// One user. users[i] of a frame is player index i + 1 in the player
+/// index image, as in the SDK.
+typedef struct {
+	freenect_nui_user_state state;
+	uint32_t tracking_id;                       ///< stable while the user stays; never 0 when present
+	freenect_nui_point position;                ///< the user's centre
+	freenect_nui_point joints[FREENECT_NUI_JOINTS];
+	freenect_nui_joint_state joint_state[FREENECT_NUI_JOINTS];
+	uint32_t quality;                           ///< FREENECT_NUI_CLIPPED_*
+} freenect_nui_skeleton;
+
+typedef struct {
+	uint32_t frame_number;
+	uint32_t timestamp;                         ///< as passed in
+	float floor_plane[4];                       ///< A x + B y + C z + D = 0 (metres); all 0 if not found
+	freenect_nui_skeleton users[FREENECT_NUI_MAX_USERS];
+} freenect_nui_frame;
+
+typedef struct freenect_nui freenect_nui;
+
+/// Track seated users: only the upper body (joints 2-11) is reported, the
+/// others are 0 and NOT_TRACKED (the SDK's seated mode).
+#define FREENECT_NUI_SEATED 1
+
+/// A tracker. models_dir: where DATABASE.WSDF is (NULL: where the fetchers
+/// install it, or $LIBFREENECT_NUI_MODELS). NULL if the model is missing or
+/// not valid, or out of memory.
+FREENECT_NUI_API freenect_nui* freenect_nui_create(const char* models_dir, int flags);
+FREENECT_NUI_API void freenect_nui_destroy(freenect_nui* nui);
+FREENECT_NUI_API void freenect_nui_reset(freenect_nui* nui);
+
+/// Tracks one 640x480 depth frame (mm, 0 = no data, as FREENECT_DEPTH_MM).
+/// Returns 0, or < 0 on error.
+FREENECT_NUI_API int freenect_nui_process(freenect_nui* nui, const uint16_t* depth_mm, uint32_t timestamp,
+                                          freenect_nui_frame* out);
+
+/// The player index (0: none, 1..6) of every pixel of the last frame, 640x480
+/// in libfreenect's orientation (aligned with the depth frame passed in).
+FREENECT_NUI_API int freenect_nui_get_player_index(freenect_nui* nui, uint8_t* out);
+
+/// How many users get a full skeleton: the SDK tracks the 2 nearest
+/// (default 2, at most 6).
+FREENECT_NUI_API int freenect_nui_set_max_tracked(freenect_nui* nui, int n);
+/// Which users get the full skeletons (tracking ids; 0 = free choice), as
+/// NuiSkeletonSetTrackedSkeletons. NULL returns to the nearest ones.
+FREENECT_NUI_API int freenect_nui_set_tracked_users(freenect_nui* nui, const uint32_t* ids, int n);
+
+/* ------------------------------------------------------------ smoothing */
+
+/// The SDK's NuiTransformSmooth parameters (Holt double exponential filter).
+typedef struct {
+	float smoothing, correction, prediction, jitter_radius, max_deviation_radius;
+} freenect_nui_smoothing;
+
+/// The SDK's defaults: 0.5, 0.5, 0.5, 0.05 m, 0.04 m.
+#define FREENECT_NUI_SMOOTHING_DEFAULT { 0.5f, 0.5f, 0.5f, 0.05f, 0.04f }
+
+typedef struct freenect_nui_smoother freenect_nui_smoother;
+FREENECT_NUI_API freenect_nui_smoother* freenect_nui_smoother_create(void);
+FREENECT_NUI_API void freenect_nui_smoother_destroy(freenect_nui_smoother* s);
+/// Smooths the tracked users of a frame in place, as NuiTransformSmooth
+/// (params NULL: the defaults). History is kept per user slot.
+FREENECT_NUI_API int freenect_nui_smooth(freenect_nui_smoother* s, freenect_nui_frame* frame,
+                                         const freenect_nui_smoothing* params);
+
+/* ------------------------------------------------------------ orientations */
+
+/// A bone's rotation, as NUI_SKELETON_BONE_ORIENTATION: rows of `matrix` are
+/// the bone's X, Y and Z axes, Y along the bone; quaternion (x, y, z, w).
+typedef struct {
+	float matrix[3][3];
+	float quaternion[4];
+} freenect_nui_rotation;
+
+typedef struct {
+	int end_joint, start_joint;
+	freenect_nui_rotation hierarchical; ///< relative to the parent bone
+	freenect_nui_rotation absolute;     ///< relative to the camera
+} freenect_nui_bone;
+
+/// The 20 bone orientations of a tracked user, as
+/// NuiSkeletonCalculateBoneOrientations. Returns 0, or -1 if the user is
+/// not tracked (bones are then identity).
+FREENECT_NUI_API int freenect_nui_bone_orientations(const freenect_nui_skeleton* user,
+                                                    freenect_nui_bone bones[FREENECT_NUI_JOINTS]);
+
+#ifdef __cplusplus
+}
+#endif
