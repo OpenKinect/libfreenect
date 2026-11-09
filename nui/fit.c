@@ -229,7 +229,9 @@ static void refine(fn_nui_fit* f, v3 x[NJ], const v3 target[NJ], const float wta
                    const int have_pred, const uint16_t* map)
 {
 	static normal_eq E;
+	v3 start[NJ];
 	int it, j;
+	memcpy(start, x, sizeof(start));
 	for (it = 0; it < 4; it++) {
 		memset(&E, 0, sizeof(E));
 		for (j = 0; j < NJ; j++) {
@@ -239,6 +241,8 @@ static void refine(fn_nui_fit* f, v3 x[NJ], const v3 target[NJ], const float wta
 				add_point_term(&E, j, x[j], target[j], 4.0 * wtarget[j]);
 			if (have_pred)
 				add_point_term(&E, j, x[j], pred[j], wtarget[j] > 0.0f ? 0.05 : 0.6);
+			else if (wtarget[j] <= 0.0f)
+				add_point_term(&E, j, x[j], start[j], 0.3); // first frame: hold unseen joints near their start
 			if (fit_parent[j] >= 0)
 				add_bone_term(&E, j, fit_parent[j], x[j], x[fit_parent[j]], f->bone[j], 3.0);
 			// not in front of the measured surface (3 cm margin)
@@ -260,17 +264,21 @@ static void refine(fn_nui_fit* f, v3 x[NJ], const v3 target[NJ], const float wta
 				}
 			}
 		}
-		// spine is not a variable; a tiny diagonal keeps the system regular
+		// Levenberg-Marquardt damping (also keeps SPINE's empty rows regular)
 		for (j = 0; j < NV; j++)
-			E.A[j][j] += 1e-4;
+			E.A[j][j] = E.A[j][j] * 1.2 + 1e-3;
 		if (cholesky_solve(E.A, E.b, NV) < 0)
 			return;
 		for (j = 0; j < NJ; j++) {
+			v3 step;
+			float l;
 			if (j == 1)
 				continue;
-			x[j].x += (float)E.b[3 * j];
-			x[j].y += (float)E.b[3 * j + 1];
-			x[j].z += (float)E.b[3 * j + 2];
+			step = v3make((float)E.b[3 * j], (float)E.b[3 * j + 1], (float)E.b[3 * j + 2]);
+			l = fn_nui_v3len(step);
+			if (l > 0.2f) // at most 20 cm per iteration
+				step = v3scale(step, 0.2f / l);
+			x[j] = v3add(x[j], step);
 		}
 	}
 }
@@ -331,11 +339,27 @@ static uint32_t clip_flags(v3 p)
 int fn_nui_fit_user(fn_nui_fit* f, const fn_nui_props* P, const uint16_t* map, const uint8_t* mask,
                     int slot, float scale)
 {
-	int sel[NJ], j, tracked = 0, good;
+	int sel[NJ], j, tracked = 0, good, c;
 	v3 x[NJ], target[NJ], pred[NJ];
 	float wt[NJ];
+	static fn_nui_props edge; // P with distrust at the image border
 	(void)mask;
 	(void)slot;
+
+	// A body part cut off by the edge of the view leaves its last visible
+	// pixels there, which the forest may label as the next joint (shins as
+	// ankles): proposals within 4 map pixels of the border count for less.
+	edge = *P;
+	for (j = 0; j < NJ; j++)
+		for (c = 0; c < edge.n[j]; c++) {
+			float u, v;
+			if (edge.c[j][c].p.z <= 0.1f)
+				continue;
+			fn_nui_project(edge.c[j][c].p, &u, &v);
+			if (u < 4.0f || u > NW - 5.0f || v < 4.0f || v > NH - 5.0f)
+				edge.c[j][c].conf *= 0.3f;
+		}
+	P = &edge;
 
 	choose(f, P, sel);
 
@@ -416,6 +440,8 @@ int fn_nui_fit_user(fn_nui_fit* f, const fn_nui_props* P, const uint16_t* map, c
 	// SPINE again, with the final states of its two ends
 	f->jstate[1] = (f->jstate[0] == 2 && f->jstate[2] == 2) ? 2 : 1;
 	f->has_prev = 1;
-	good = tracked >= 8 && f->jstate[3] == 2 && f->jstate[2] == 2;
+	// the shoulder centre comes from the upper chest part and can sit a little
+	// high; either it or the head is enough
+	good = tracked >= 8 && (f->jstate[3] == 2 || f->jstate[2] == 2);
 	return good;
 }

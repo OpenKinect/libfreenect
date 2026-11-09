@@ -275,7 +275,8 @@ typedef struct {
 	double sx, sy, sz;
 	float ymin, ymax, xmin, xmax, zmin, zmax;
 	int umin, umax, vmin, vmax;
-	int user;               // assigned user slot + 1
+	int user;               // assigned user slot + 1 (-1: split)
+	unsigned choosers;      // users that continue in this component (bit k)
 } comp;
 
 #define MAXCOMP 4096
@@ -355,26 +356,47 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			C->overlap[s->prev_user[i] - 1]++;
 	}
 
-	// continue existing users (u[k].pixels is still last frame's count), start new ones
+	// Continue existing users: each user takes the one component it overlaps
+	// most, at a plausible depth (u[k].pixels is still last frame's count).
+	// A component two users take is split between them; other components
+	// (a strip of wall a moving user uncovers, say) are new candidates.
 	memset(s->user, 0, NPIX);
 	for (i = 1; i <= ncomp; i++) {
-		comp* C = &cs[i];
-		int best = -1, bo = 0, nusers = 0;
-		C->user = 0;
-		if (C->count < MIN_USER_PIXELS / 4)
+		cs[i].user = 0;
+		cs[i].choosers = 0;
+	}
+	for (k = 0; k < NU; k++) {
+		int best = 0, bo = 0;
+		if (!s->u[k].active)
 			continue;
-		for (k = 0; k < NU; k++)
-			if (s->u[k].active && C->overlap[k] > 0) {
-				nusers++;
-				if (C->overlap[k] > bo) {
-					bo = C->overlap[k];
-					best = k;
+		for (i = 1; i <= ncomp; i++) {
+			float zc;
+			if (cs[i].overlap[k] <= bo || cs[i].count < MIN_USER_PIXELS / 4)
+				continue;
+			zc = (float)(cs[i].sz / cs[i].count);
+			if (s->u[k].pixels && fabsf(zc - s->u[k].centre.z) > 0.6f)
+				continue;
+			bo = cs[i].overlap[k];
+			best = i;
+		}
+		if (best && (bo * 5 >= cs[best].count || bo * 3 >= s->u[k].pixels + 1))
+			cs[best].choosers |= 1u << k;
+	}
+	for (i = 1; i <= ncomp; i++) {
+		comp* C = &cs[i];
+		if (C->choosers) {
+			int n2 = 0;
+			for (k = 0; k < NU; k++)
+				if (C->choosers & (1u << k)) {
+					n2++;
+					C->user = k + 1;
 				}
-			}
-		if (best >= 0 && (bo * 5 >= C->count || bo * 3 >= s->u[best].pixels + 1)) {
-			C->user = nusers > 1 ? -1 : best + 1; // -1: split among its users
+			if (n2 > 1)
+				C->user = -1; // split among its choosers
 			continue;
 		}
+		if (C->count < MIN_USER_PIXELS / 4)
+			continue;
 		{
 			float h = C->ymax - C->ymin, w = C->xmax - C->xmin, dz = C->zmax - C->zmin;
 			float zc = (float)(C->sz / C->count);
@@ -412,7 +434,7 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			float bd = 1e9f;
 			for (k = 0; k < NU; k++) {
 				float dx, dz2, dd;
-				if (!s->u[k].active || cs[c].overlap[k] == 0)
+				if (!s->u[k].active || !(cs[c].choosers & (1u << k)))
 					continue;
 				dx = p.x - s->u[k].centre.x;
 				dz2 = p.z - s->u[k].centre.z;
