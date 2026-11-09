@@ -463,11 +463,14 @@ static int freenect_fetch_reg_info(freenect_device *dev)
 	freenect_context *ctx = dev->parent;
 	char reply[0x200];
 	uint16_t cmd[5];
-	freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+	// Read once at open, for 640x480 at 30 fps, as Microsoft's init script
+	// does ([0x40, 0, 1, 30, 0], §20.1.1): the mapping for every colour
+	// resolution uses these values (§20.5.2), and asking with the hi-res
+	// colour mode fails.
 	cmd[0] = fn_le16(0x40); // ParamID - in this scenario, XN_HOST_PROTOCOL_ALGORITHM_REGISTRATION
 	cmd[1] = fn_le16(0); // Format
-	cmd[2] = fn_le16((uint16_t)mode.resolution); // Resolution
-	cmd[3] = fn_le16((uint16_t)mode.framerate); // FPS
+	cmd[2] = fn_le16(1); // Resolution
+	cmd[3] = fn_le16(30); // FPS
 	cmd[4] = fn_le16(0); // Offset
 
 	int res;
@@ -664,7 +667,10 @@ int freenect_start_depth(freenect_device *dev)
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_REGISTERED:
 		case FREENECT_DEPTH_MM:
-			freenect_init_registration(dev);
+			if (freenect_init_registration(dev) < 0) {
+				FN_ERROR("freenect_start_depth(): out of memory for the registration tables\n");
+				return -1;
+			}
 			// fall through - these are computed from the 11-bit stream
 		case FREENECT_DEPTH_11BIT:
 			stream_init(ctx, &dev->depth, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT_PACKED).bytes, out_mode.bytes);
@@ -1021,9 +1027,6 @@ int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode
 	freenect_video_format fmt = (freenect_video_format)RESERVED_TO_FORMAT(mode.reserved);
 	dev->video_format = fmt;
 	dev->video_resolution = res;
-	// Now that we've changed video format and resolution, we need to update
-	// registration tables.
-	freenect_fetch_reg_info(dev);
 	return 0;
 }
 
@@ -1116,6 +1119,10 @@ FN_INTERNAL int freenect_camera_init(freenect_device *dev)
 		FN_ERROR("freenect_camera_init(): Failed to fetch const shift for device\n");
 		return res;
 	}
+	// As before, a camera that does not answer still opens; depth to colour
+	// mapping is then off.
+	if (freenect_fetch_reg_info(dev) < 0)
+		FN_WARNING("freenect_camera_init(): no registration info; depth/colour mapping will be wrong\n");
 	// Only for freenect_nudge_stream_timing(); a camera without them streams
 	// as before.
 	if (fn_fetch_timing_params(dev) < 0)
