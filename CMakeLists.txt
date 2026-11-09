@@ -144,6 +144,11 @@ if (FREENECT_WERROR AND (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang"))
   add_compile_options(-Wall -Wextra -Werror)
 endif ()
 
+# Before any subdirectory that adds tests (nui/ has its own)
+IF(BUILD_TESTS)
+  enable_testing()
+ENDIF()
+
 # Add library project
 add_subdirectory (src)
 if (BUILD_NUI)
@@ -173,7 +178,6 @@ IF(BUILD_FAKENECT)
 ENDIF()
 
 IF(BUILD_TESTS)
-  enable_testing()
   add_subdirectory (test)
 ENDIF()
 
