@@ -134,6 +134,24 @@ The beams are designed from the microphone positions, so no Microsoft data is ne
 arecord -D hw:Kinect -c4 -f S32_LE -r16000 -t wav - | freenect-micbeam --wav -
 ```
 
+## Skeleton, hand and finger tracking (optional)
+
+`libfreenect_nui.h` (library `freenect_nui`, CMake `-DBUILD_NUI=ON`, off by default) tracks people from the depth stream, with the output of the Kinect for Windows SDK:
+- up to 6 users, the nearest 2 (or the ones you choose) with 20 joints;
+- joint states and clipping flags;
+- the player index image and the floor plane;
+- the SDK's smoothing filter and bone orientations.
+
+It adds what the SDK didn't have: each hand's state (open, closed, pointing, gun shape), whether it holds something, and, closer than about 1.5 m, the fingertips.
+
+It uses Microsoft's body-part forest from the Kinect Runtime, which libfreenect does not contain. Fetch it once on your machine; Microsoft's licence terms for the Runtime apply to it:
+
+```bash
+python3 src/fwfetcher.py --nui --user
+```
+
+On Windows, use `freenect-driver-install --fetch-nui-models` instead. The body-part labels are the SDK's own, bit for bit. Segmentation, joint finding and the skeleton fit are libfreenect's. `freenect-nuitest` tracks for 30 s, prints what it sees, and saves a picture of the skeletons.
+
 ## Colour camera settings (Kinect for Windows)
 
 The Kinect for Windows (model 1517) has the colour controls of Microsoft's SDK: auto exposure, exposure time, frame interval, gain, brightness, power-line frequency, backlight compensation, auto white balance, white balance, contrast, hue, saturation, gamma and sharpness. Set them with `freenect_set_color_setting()`, with the SDK's values, ranges and defaults (listed with `freenect_color_setting` in `libfreenect.h`). The camera accepts them only while video streams, so libfreenect keeps them and sends them once frames arrive, and again after every video start. On the Xbox 360 models the functions return `-ENOTSUP`, as the SDK does.
