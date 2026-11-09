@@ -78,3 +78,10 @@ if (BUILD_AUDIO_DSP)
   endif ()
   install(TARGETS freenect-micbeam DESTINATION bin)
 endif ()
+
+# freenect-nuitest: skeleton, hand and finger tracking on a real Kinect
+if (BUILD_NUI)
+  add_executable(freenect-nuitest nuitest.c)
+  target_link_libraries(freenect-nuitest freenect freenect_nui)
+  install(TARGETS freenect-nuitest DESTINATION bin)
+endif ()
