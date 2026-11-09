@@ -663,3 +663,128 @@ done:
 	free(out);
 	return rc;
 }
+
+/* ---- the skeleton tracking models (§30.2, §30.3) ------------------------ */
+
+static const struct {
+	const char *name;
+	const wchar_t *wname;
+	size_t size;
+	const char *sha256;
+} nui_models[] = {
+	{ "DATABASE.WSDF", L"DATABASE.WSDF", 13795880u, "b3d084bd5848ef76de4219f592922c3b1e5379e5ccc975ff8d1f68c426b41164" },
+	{ "HEADPOSITION.MSHDF", L"HEADPOSITION.MSHDF", 246487u, "343e3c2a23d4c5baf73af05f232131c9d13a9264f5dacde182106121750535cf" },
+};
+
+/* The resource of type `type` named `name` (both strings) in an x64 PE image. */
+static const BYTE *pe_resource(const BYTE *img, size_t len, const char *type, const char *name, size_t *out_len)
+{
+	DWORD pe, rva;
+	ULONGLONG base, root;
+	const BYTE *p;
+	const char *want[2];
+	int level;
+	ULONGLONG dir;
+	if (len < 0x40)
+		return NULL;
+	pe = *(const DWORD *)(img + 0x3C);
+	if ((size_t)pe + 24 + 112 + 24 > len)
+		return NULL;
+	base = *(const ULONGLONG *)(img + pe + 24 + 24);
+	rva = *(const DWORD *)(img + pe + 24 + 112 + 2 * 8);
+	if (!rva)
+		return NULL;
+	root = base + rva;
+	want[0] = type;
+	want[1] = name;
+	dir = root;
+	for (level = 0; level < 3; level++) {
+		const BYTE *hdr = kr_pe_at(img, len, dir, 16);
+		DWORD i, n, found = 0, off = 0;
+		if (!hdr)
+			return NULL;
+		n = (DWORD)*(const WORD *)(hdr + 12) + *(const WORD *)(hdr + 14);
+		for (i = 0; i < n && !found; i++) {
+			const BYTE *e = kr_pe_at(img, len, dir + 16 + 8 * i, 8);
+			DWORD id, o;
+			if (!e)
+				return NULL;
+			id = *(const DWORD *)e;
+			o = *(const DWORD *)(e + 4);
+			if (level == 2) { /* the first language */
+				found = 1;
+				off = o;
+			} else if (id & 0x80000000u) {
+				const BYTE *s = kr_pe_at(img, len, root + (id & 0x7FFFFFFFu), 2);
+				WORD ln, j;
+				const BYTE *str;
+				if (!s)
+					return NULL;
+				ln = *(const WORD *)s;
+				str = kr_pe_at(img, len, root + (id & 0x7FFFFFFFu) + 2, 2u * ln);
+				if (!str || strlen(want[level]) != ln)
+					continue;
+				for (j = 0; j < ln; j++) {
+					WORD c = *(const WORD *)(str + 2 * j);
+					char a = want[level][j];
+					if (c >= 'a' && c <= 'z') c = (WORD)(c - 32);
+					if (a >= 'a' && a <= 'z') a = (char)(a - 32);
+					if (c != (WORD)(unsigned char)a)
+						break;
+				}
+				if (j == ln) {
+					found = 1;
+					off = o;
+				}
+			}
+		}
+		if (!found)
+			return NULL;
+		if (level < 2) {
+			if (!(off & 0x80000000u))
+				return NULL;
+			dir = root + (off & 0x7FFFFFFFu);
+		} else {
+			const BYTE *data = kr_pe_at(img, len, root + off, 8);
+			DWORD drva, dsize;
+			if (!data)
+				return NULL;
+			drva = *(const DWORD *)data;
+			dsize = *(const DWORD *)(data + 4);
+			p = kr_pe_at(img, len, base + drva, dsize);
+			if (p)
+				*out_len = dsize;
+			return p;
+		}
+	}
+	return NULL;
+}
+
+int kr_fetch_nui_models(kinect_runtime *kr, const wchar_t *dest_dir)
+{
+	size_t len = 0, i;
+	BYTE *dll = kr_extract(kr, "a1", "FILE_x64_Kinect10.dll", &len);
+	const BYTE *res[2];
+	size_t res_len[2] = { 0, 0 };
+	wchar_t dir[MAX_PATH];
+	int rc = -1;
+	if (!dll)
+		return -1;
+	for (i = 0; i < 2; i++) {
+		char hex[65];
+		res[i] = pe_resource(dll, len, "BINARY", nui_models[i].name, &res_len[i]);
+		if (!res[i] || res_len[i] != nui_models[i].size || sha256_hex(res[i], res_len[i], hex) != 0 ||
+		    strcmp(hex, nui_models[i].sha256) != 0) {
+			fwprintf(stderr, L"error: %hs in Kinect10.dll is not the known model; not installing anything\n", nui_models[i].name);
+			goto done;
+		}
+	}
+	swprintf(dir, MAX_PATH, L"%ls\\nui", dest_dir);
+	for (i = 0; i < 2; i++)
+		if (kr_install(dir, nui_models[i].wname, res[i], res_len[i]) != 0)
+			goto done;
+	rc = 0;
+done:
+	free(dll);
+	return rc;
+}

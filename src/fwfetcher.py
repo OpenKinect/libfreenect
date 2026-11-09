@@ -867,6 +867,117 @@ def data_target(output, user, filename):
     return os.path.join(output, filename)
 
 
+###############################################################################
+# --nui: the skeleton tracker's models for the optional libfreenect_nui addon
+#
+# Kinect10.dll (x64, in the Runtime's MSI "a1") carries the body-part forest
+# and the seated-mode head forest as zlib-compressed resources of type BINARY
+# (reference §30.2, §30.3). They are copied out unchanged into a "nui"
+# folder next to the firmware; libfreenect does not contain them.
+
+NUI_MODELS = {
+    # name: (size, SHA-256) of the resource as stored in Kinect10.dll v1.8 x64
+    "DATABASE.WSDF": (13795880, "b3d084bd5848ef76de4219f592922c3b1e5379e5ccc975ff8d1f68c426b41164"),
+    "HEADPOSITION.MSHDF": (246487, "343e3c2a23d4c5baf73af05f232131c9d13a9264f5dacde182106121750535cf"),
+}
+
+
+def pe_resource(dll, type_name, name):
+    """Resource `name` of type `type_name` (both strings) in a PE32+ image."""
+    pe = PE(dll)
+    p, = struct.unpack_from("<I", dll, 0x3C)
+    opt = p + 24
+    rva, size = struct.unpack_from("<II", dll, opt + 112 + 2 * 8)  # data directory 2
+    if not rva:
+        raise ValueError("no resources")
+    root = pe.base + rva
+
+    def entries(dir_va):
+        named, ids = struct.unpack("<HH", pe.read(dir_va + 12, 4))
+        for i in range(named + ids):
+            n, off = struct.unpack("<II", pe.read(dir_va + 16 + 8 * i, 8))
+            label = None
+            if n & 0x80000000:
+                s = root + (n & 0x7FFFFFFF)
+                ln, = struct.unpack("<H", pe.read(s, 2))
+                label = pe.read(s + 2, 2 * ln).decode("utf-16-le")
+            yield label, off
+
+    def find(dir_va, want):
+        for label, off in entries(dir_va):
+            if label is not None and label.upper() == want.upper():
+                return off
+        raise KeyError(want)
+
+    off = find(root, type_name)
+    off = find(root + (off & 0x7FFFFFFF), name)
+    lang_dir = root + (off & 0x7FFFFFFF)
+    _, off = next(entries(lang_dir))       # first language
+    data_rva, data_size = struct.unpack("<II", pe.read(root + off, 8))
+    return pe.read(pe.base + data_rva, data_size)
+
+
+def fetch_nui_models(target_dir, installer_path=None, dll_path=None):
+    import zlib
+    try:
+        if dll_path:
+            print("Reading", dll_path)
+            with open(dll_path, "rb") as f:
+                dll = f.read()
+        else:
+            installer = read_runtime_installer(installer_path, "these skeleton tracking models")
+            dll = runtime_file(installer, "a1", "FILE_x64_Kinect10.dll")
+            if dll is None:
+                sys.exit("error: the installer does not contain Kinect10.dll")
+        models = {}
+        for name, (size, sha) in NUI_MODELS.items():
+            data = pe_resource(dll, "BINARY", name)
+            if len(data) != size or hashlib.sha256(data).hexdigest() != sha:
+                sys.exit("error: %s in Kinect10.dll is not the known model; not installing anything" % name)
+            models[name] = data
+    except (ValueError, KeyError, IndexError, struct.error, zlib.error) as e:
+        sys.exit("error: the models could not be extracted (%s: %s); not installing anything"
+                 % (type(e).__name__, e))
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
+    for name, data in models.items():
+        path = os.path.join(target_dir, name)
+        with open(path, "wb") as f:
+            f.write(data)
+        print("Wrote", path, "(%d bytes, SHA-256 verified)" % len(data))
+
+
+if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--nui":
+    # fwfetcher.py --nui [--from INSTALLER | --dll Kinect10.dll] [--user | DIR]
+    #   DIR: where the models go (default ./nui); --user: the user's libfreenect/nui
+    args = sys.argv[2:]
+    installer_path = dll_path = output = None
+    user = False
+    while args:
+        if args[0] in ("--from", "--dll") and len(args) >= 2:
+            if args[0] == "--from":
+                installer_path = args[1]
+            else:
+                dll_path = args[1]
+            args = args[2:]
+        elif args[0] == "--user":
+            user = True
+            args = args[1:]
+        elif not args[0].startswith("-") and output is None:
+            output = args[0]
+            args = args[1:]
+        else:
+            sys.exit("usage: fwfetcher.py --nui [--from INSTALLER | --dll Kinect10.dll] [--user | DIR]")
+    if user and output is not None:
+        sys.exit("error: give either --user or DIR, not both")
+    if user:
+        target = os.path.join(os.path.dirname(data_target(None, True, "x")), "nui")
+    else:
+        target = output or "nui"
+    fetch_nui_models(target, installer_path, dll_path)
+    sys.exit(0)
+
+
 if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--audio-weights":
     # fwfetcher.py --audio-weights [--from INSTALLER | --dll KinectAudio10.dll] [--user | OUTPUT]
     args = sys.argv[2:]

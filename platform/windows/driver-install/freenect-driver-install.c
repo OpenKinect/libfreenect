@@ -757,6 +757,20 @@ static int cmd_uninstall(int quiet)
 		wcscat_s(fw, MAX_PATH, L"\\" AUDIO_WEIGHTS_NAME);
 		if (DeleteFileW(fw))
 			wprintf(L"Removed the beamformer weights %ls\n", fw);
+		{
+			static const wchar_t *models[] = { L"DATABASE.WSDF", L"HEADPOSITION.MSHDF" };
+			wchar_t nui[MAX_PATH];
+			int m, removed = 0;
+			for (m = 0; m < 2; m++) {
+				uac_default_dir(fw, MAX_PATH);
+				swprintf(nui, MAX_PATH, L"%ls\\nui\\%ls", fw, models[m]);
+				removed += DeleteFileW(nui) ? 1 : 0;
+			}
+			swprintf(nui, MAX_PATH, L"%ls\\nui", fw);
+			RemoveDirectoryW(nui);
+			if (removed)
+				wprintf(L"Removed the skeleton tracking models from %ls\n", nui);
+		}
 		wprintf(L"Removed %d device(s), %d driver package(s) and %d certificate(s).\n", devices, pk, c1 + c2);
 		wprintf(L"The Kinect functions now have no driver until one is installed again.\n");
 	}
@@ -773,23 +787,38 @@ static void firmware_notice(void)
 	        L"Runtime apply to both. Skip this step with --no-firmware.\n\n");
 }
 
-/* UAC.BIN and the beamformer weights from one download. The firmware decides
- * success; the weights are optional (libfreenect designs its own). */
-static int fetch_runtime_data(const wchar_t *dir, const wchar_t *from)
+static void nui_notice(void)
+{
+	wprintf(L"The optional skeleton tracker (libfreenect_nui) needs Microsoft's models from\n"
+	        L"Kinect10.dll in the same download (DATABASE.WSDF, HEADPOSITION.MSHDF, 14 MB), copied\n"
+	        L"unchanged into the nui folder. Microsoft's licence terms for the Kinect for Windows\n"
+	        L"Runtime apply to them.\n\n");
+}
+
+/* From one download: UAC.BIN and the beamformer weights (firmware), and the
+ * skeleton models (nui). The firmware decides success when asked for; the
+ * weights are optional (libfreenect designs its own). */
+static int fetch_runtime_data(const wchar_t *dir, const wchar_t *from, int firmware, int nui)
 {
 	kinect_runtime kr;
-	int rc;
+	int rc = 0;
 	if (kr_open(&kr, from) != 0)
 		return -1;
-	rc = kr_fetch_firmware(&kr, dir);
-	if (kr_fetch_audio_weights(&kr, dir) != 0)
-		wprintf(L"The beamformer weights were not installed; libfreenect's audio DSP uses its own.\n");
+	if (firmware) {
+		rc = kr_fetch_firmware(&kr, dir);
+		if (kr_fetch_audio_weights(&kr, dir) != 0)
+			wprintf(L"The beamformer weights were not installed; libfreenect's audio DSP uses its own.\n");
+	}
+	if (nui && kr_fetch_nui_models(&kr, dir) != 0) {
+		wprintf(L"The skeleton tracking models were not installed.\n");
+		rc = -1;
+	}
 	kr_close(&kr);
 	return rc;
 }
 
-/* --fetch-firmware [--from INSTALLER] [DIR] */
-static int cmd_fetch_firmware(int argc, wchar_t **argv)
+/* --fetch-firmware / --fetch-nui-models [--from INSTALLER] [DIR] */
+static int cmd_fetch(int argc, wchar_t **argv, int firmware, int nui)
 {
 	wchar_t dir[MAX_PATH];
 	const wchar_t *from = NULL;
@@ -801,12 +830,16 @@ static int cmd_fetch_firmware(int argc, wchar_t **argv)
 		else
 			wcscpy_s(dir, MAX_PATH, argv[i]);
 	}
-	if (!from)
-		firmware_notice();
-	return fetch_runtime_data(dir, from) == 0 ? 0 : 1;
+	if (!from) {
+		if (firmware)
+			firmware_notice();
+		if (nui)
+			nui_notice();
+	}
+	return fetch_runtime_data(dir, from, firmware, nui) == 0 ? 0 : 1;
 }
 
-static int cmd_install(int with_firmware)
+static int cmd_install(int with_firmware, int with_nui)
 {
 	wchar_t dir[MAX_PATH], inf_path[MAX_PATH], oem_name[MAX_PATH];
 	PCCERT_CONTEXT cert;
@@ -841,14 +874,18 @@ static int cmd_install(int with_firmware)
 	if (st.reboot)
 		wprintf(L"Windows asks for a reboot to finish.\n");
 
-	if (with_firmware) {
+	if (with_firmware || with_nui) {
 		wchar_t fwdir[MAX_PATH];
-		firmware_notice();
+		if (with_firmware)
+			firmware_notice();
+		if (with_nui)
+			nui_notice();
 		uac_default_dir(fwdir, MAX_PATH);
 		/* The driver is installed either way; a failed download is reported
-		 * and can be retried with --fetch-firmware. */
-		if (fetch_runtime_data(fwdir, NULL) != 0)
-			wprintf(L"The driver is installed, but the audio firmware is not. Retry with --fetch-firmware.\n");
+		 * and can be retried with --fetch-firmware / --fetch-nui-models. */
+		if (fetch_runtime_data(fwdir, NULL, with_firmware, with_nui) != 0)
+			wprintf(L"The driver is installed, but not everything from Microsoft's download is. Retry with "
+			        L"--fetch-firmware%ls.\n", with_nui ? L" or --fetch-nui-models" : L"");
 	}
 	return st.failed ? 1 : 0;
 }
@@ -876,12 +913,15 @@ static void usage(void)
 	wprintf(L"freenect-driver-install: bind the Kinect v1 to Microsoft's in-box WinUSB driver\n\n"
 	        L"  --list               show the Kinect USB functions and their current drivers\n"
 	        L"  --install            install WinUSB for them and fetch the audio firmware\n"
-	        L"                       (run as Administrator; add --no-firmware to skip the firmware)\n"
+	        L"                       (run as Administrator; --no-firmware skips the firmware,\n"
+	        L"                       --with-nui also fetches the skeleton tracking models)\n"
 	        L"  --uninstall          remove what --install added (run as Administrator)\n"
 	        L"  --fetch-firmware [--from INSTALLER] [DIR]\n"
 	        L"                       only fetch the audio firmware (UAC.BIN) and the beamformer weights\n"
 	        L"                       from Microsoft's Kinect Runtime installer into DIR\n"
 	        L"                       (default %%ProgramData%%\\libfreenect)\n"
+	        L"  --fetch-nui-models [--from INSTALLER] [DIR]\n"
+	        L"                       only fetch the skeleton tracking models, into DIR\\nui\n"
 	        L"  --package-only DIR   only build and sign the driver package in DIR\n");
 }
 
@@ -892,14 +932,28 @@ int wmain(int argc, wchar_t **argv)
 	if (argc >= 3 && wcscmp(argv[1], L"--package-only") == 0)
 		return cmd_package_only(argv[2]);
 	if (argc >= 2 && wcscmp(argv[1], L"--fetch-firmware") == 0)
-		return cmd_fetch_firmware(argc, argv);
+		return cmd_fetch(argc, argv, 1, 0);
+	if (argc >= 2 && wcscmp(argv[1], L"--fetch-nui-models") == 0)
+		return cmd_fetch(argc, argv, 0, 1);
 	if (argc >= 2 && (wcscmp(argv[1], L"--install") == 0 || wcscmp(argv[1], L"--uninstall") == 0)) {
 		if (!is_elevated()) {
 			fwprintf(stderr, L"error: %ls needs Administrator rights. Run it from an elevated terminal.\n", argv[1]);
 			return 1;
 		}
-		if (wcscmp(argv[1], L"--install") == 0)
-			return cmd_install(!(argc >= 3 && wcscmp(argv[2], L"--no-firmware") == 0));
+		if (wcscmp(argv[1], L"--install") == 0) {
+			int i, firmware = 1, nui = 0;
+			for (i = 2; i < argc; i++) {
+				if (wcscmp(argv[i], L"--no-firmware") == 0)
+					firmware = 0;
+				else if (wcscmp(argv[i], L"--with-nui") == 0)
+					nui = 1;
+				else {
+					usage();
+					return 1;
+				}
+			}
+			return cmd_install(firmware, nui);
+		}
 		return cmd_uninstall(0);
 	}
 	usage();

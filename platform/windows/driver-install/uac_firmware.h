@@ -76,3 +76,8 @@ int kr_fetch_firmware(kinect_runtime *kr, const wchar_t *dest_dir);
  * (the same file as fwfetcher.py --audio-weights). */
 #define AUDIO_WEIGHTS_NAME L"kinect_beam_weights.bin"
 int kr_fetch_audio_weights(kinect_runtime *kr, const wchar_t *dest_dir);
+
+/* The skeleton tracker's models (DATABASE.WSDF, HEADPOSITION.MSHDF) from
+ * Kinect10.dll in "a1", copied unchanged and verified into dest_dir\nui
+ * (the same files as fwfetcher.py --nui), for the libfreenect_nui addon. */
+int kr_fetch_nui_models(kinect_runtime *kr, const wchar_t *dest_dir);
