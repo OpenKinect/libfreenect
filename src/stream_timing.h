@@ -65,23 +65,34 @@ static inline int fn_timing_nudge_value(int32_t nudge_us, int32_t k2, int32_t k3
  * - for a phase error of at least FN_TIMING_DEADBAND_US either way,
  * - when FN_TIMING_AGREE suggestions in a row point the same way, and
  * - at most every FN_TIMING_MIN_GAP_US.
+ * On the 1414 under Windows, nudges every 5 s for the same 1.3 ms error
+ * changed nothing, so when FN_TIMING_MAX_FUTILE nudges in a row leave the
+ * error where it was (within half the dead band), it stops for good.
  */
 #define FN_TIMING_DEADBAND_US 1000
 #define FN_TIMING_AGREE 3
 #define FN_TIMING_MIN_GAP_US 5000000
+#define FN_TIMING_MAX_FUTILE 2
 
 typedef struct {
 	int last_dir;          // -1, 0 (aligned) or +1: the last suggestion
 	int agree;             // suggestions in a row with that direction
 	uint64_t last_nudge_us;
 	int nudged;            // a nudge has been sent
+	int32_t last_err_us;   // phase error the last nudge was sent for
+	int futile;            // nudges in a row that left the error unchanged
+	int stopped;           // gave up: nudges have no effect
 } fn_timing_policy;
 
 // nudge_us as fn_phase_update() gives it: up to 1400 for depth late, at least
-// 32000 (a period minus the error) for depth early. Returns 1 to send it.
+// 32000 (a period minus the error) for depth early. Returns 1 to send it, 0
+// not to, and -1 (once) when it stops because nudges have no effect.
 static inline int fn_timing_accept(fn_timing_policy *p, int32_t nudge_us, uint64_t now_us)
 {
 	int dir;
+	int32_t err = nudge_us < FN_TIMING_PERIOD_US / 2 ? nudge_us : nudge_us - FN_TIMING_PERIOD_US;
+	if (p->stopped)
+		return 0;
 	if (nudge_us > 0 && nudge_us < FN_TIMING_PERIOD_US / 2)
 		dir = nudge_us >= FN_TIMING_DEADBAND_US ? 1 : 0;
 	else
@@ -91,12 +102,27 @@ static inline int fn_timing_accept(fn_timing_policy *p, int32_t nudge_us, uint64
 	else
 		p->agree = dir != 0 ? 1 : 0;
 	p->last_dir = dir;
-	if (dir == 0 || p->agree < FN_TIMING_AGREE)
+	if (dir == 0) {
+		p->futile = 0; // aligned: the nudges worked
+		return 0;
+	}
+	if (p->agree < FN_TIMING_AGREE)
 		return 0;
 	if (p->nudged && now_us - p->last_nudge_us < FN_TIMING_MIN_GAP_US)
 		return 0;
+	if (p->nudged) {
+		int32_t moved = err - p->last_err_us;
+		if (moved < 0)
+			moved = -moved;
+		p->futile = moved < FN_TIMING_DEADBAND_US / 2 ? p->futile + 1 : 0;
+		if (p->futile >= FN_TIMING_MAX_FUTILE) {
+			p->stopped = 1;
+			return -1;
+		}
+	}
 	p->nudged = 1;
 	p->last_nudge_us = now_us;
+	p->last_err_us = err;
 	p->agree = 0;
 	return 1;
 }

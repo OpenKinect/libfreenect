@@ -112,6 +112,28 @@ int main(void)
 		for (i = 0; i < 6; i++)
 			sent += fn_timing_accept(&p, 33000, t += 1000000);
 		CHECK(sent == 0, "depth early by only 0.3 ms (33000): never nudged");
+
+		/* R3 on the 1414: the same 1.3 ms error after every nudge */
+		memset(&p, 0, sizeof(p));
+		{
+			int stops = 0, r;
+			sent = 0;
+			for (i = 0; i < 150; i++) {
+				r = fn_timing_accept(&p, 32000, t += 200000);
+				if (r > 0) sent++;
+				if (r < 0) stops++;
+			}
+			CHECK(sent == 2 && stops == 1 && p.stopped, "nudges that change nothing: two, then it stops, once");
+		}
+		memset(&p, 0, sizeof(p));
+		sent = 0;
+		for (i = 0; i < 6; i++)
+			sent += fn_timing_accept(&p, 32000, t += 1000000) > 0;
+		for (i = 0; i < 6; i++)
+			sent += fn_timing_accept(&p, 33200, t += 1000000) > 0;
+		for (i = 0; i < 6; i++)
+			sent += fn_timing_accept(&p, 32000, t += 1000000) > 0;
+		CHECK(sent == 2 && !p.stopped, "  a nudge that brought it into phase does not count against it");
 	}
 
 	printf(pass ? "All passed\n" : "FAILURES\n");

@@ -75,7 +75,7 @@ FN_INTERNAL int fn_fetch_timing_params(freenect_device *dev)
 		return -1;
 	dev->timing_k2 = (int32_t)(f[2] * 1000.0f);
 	dev->timing_k3 = (int32_t)f[3];
-	FN_SPEW("Stream timing parameters: %f %f %f %f\n", f[0], f[1], f[2], f[3]);
+	FN_DEBUG("Stream timing parameters: %f %f %f %f\n", f[0], f[1], f[2], f[3]);
 	return dev->timing_k2 > 0 ? 0 : -1;
 }
 
@@ -150,8 +150,12 @@ FN_INTERNAL void fn_timing_process(freenect_device *dev)
 	}
 	if (due) {
 		freenect_context *ctx = dev->parent;
-		if (fn_timing_accept(&dev->timing_policy, nudge, fn_now_us()))
+		int r = fn_timing_accept(&dev->timing_policy, nudge, fn_now_us());
+		if (r > 0)
 			freenect_nudge_stream_timing(dev, nudge);
+		else if (r < 0)
+			FN_INFO("Stream timing: nudges do not change the measured phase (%d us); automatic alignment stopped\n",
+			        dev->timing_policy.last_err_us);
 		else
 			FN_SPEW("Stream timing: phase estimate suggests %d us; not acted on\n", nudge);
 	}
