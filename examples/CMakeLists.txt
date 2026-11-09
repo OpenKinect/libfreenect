@@ -9,11 +9,13 @@ add_executable(freenect-camtest camtest.c)
 add_executable(freenect-wavrecord wavrecord.c)
 add_executable(freenect-fwloader fwloader.c)
 add_executable(freenect-hotplug hotplug.c)
+add_executable(freenect-maptest maptest.c)
 target_link_libraries(freenect-camtest freenect)
 target_link_libraries(freenect-wavrecord freenect)
 target_link_libraries(freenect-fwloader freenect)
 target_link_libraries(freenect-hotplug freenect)
-install(TARGETS freenect-camtest freenect-wavrecord freenect-fwloader freenect-hotplug
+target_link_libraries(freenect-maptest freenect)
+install(TARGETS freenect-camtest freenect-wavrecord freenect-fwloader freenect-hotplug freenect-maptest
         DESTINATION bin)
 
 # freenect-v4l2 (Linux): depth and colour as V4L2 cameras through v4l2loopback
