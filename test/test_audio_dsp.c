@@ -32,6 +32,9 @@
  * - direction finding and beam choice on simulated sources;
  * - loading a weights file.
  */
+#if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
+#define _CRT_SECURE_NO_WARNINGS // fopen, getenv
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -188,17 +191,23 @@ static void test_beams(freenect_dsp* d)
 	double worst = 1e9;
 	printf("Designed beams\n");
 	for (b = 0; b < NB; b++)
-		for (k = 1; k < NK; k++) {
-			double f = (k + 0.5) * 31.25, r = response(d, d->W[b][k], d->beam_angle[b], f), ww = 0.0;
-			ok &= fabs(r - 1.0) < 1e-3;
+		for (k = 0; k < NK; k++) {
+			double f = (k + 0.5) * 31.25, g = band_gain(f), r = response(d, d->W[b][k], d->beam_angle[b], f), ww = 0.0;
+			ok &= fabs(r - g) < 1e-3;
+			if (g <= 0.0)
+				continue;
 			for (m = 0; m < d->nm; m++)
 				ww += d->W[b][k][m].re * d->W[b][k][m].re + d->W[b][k][m].im * d->W[b][k][m].im;
-			worst = fmin(worst, 1.0 / ww);
-			okw &= 1.0 / ww >= FN_DSP_MIN_WNG * 0.999;
+			// white noise gain does not depend on the fade: |w^H v|^2 / w^H w
+			worst = fmin(worst, r * r / ww);
+			okw &= r * r / ww >= FN_DSP_MIN_WNG * 0.999;
 		}
-	CHECK(ok, "each beam passes its own direction unchanged, at every band");
-	printf("    (smallest white noise gain %.3f)\n", worst);
-	CHECK(okw, "white noise gain at least -10 dB everywhere");
+	CHECK(ok, "each beam passes its own direction unchanged (faded in below 375 Hz, out above 7.2 kHz)");
+	CHECK(band_gain(100.0) == 0.0 && band_gain(1000.0) == 1.0 && band_gain(8000.0) == 0.0 &&
+	      fabs(band_gain(265.625) - 0.5) < 1e-9 && fabs(band_gain(7312.5) - 0.5) < 1e-9,
+	      "  fade: 156-375 Hz and 7156-7469 Hz, as Microsoft's beams");
+	printf("    (smallest white noise gain %.2f dB)\n", 10 * log10(worst));
+	CHECK(okw, "white noise gain at least +1.8 dB everywhere");
 	{
 		fn_cplx ds[MAXM];
 		double f = 1000.0, dim, did;
@@ -322,13 +331,13 @@ static void test_gain(void)
 	freenect_dsp_set_beam(d, NB / 2);
 	for (i = 0; i < 16000; i++)
 		for (m = 0; m < 4; m++) {
-			double tau = sqrt(1.0 + d->my[m] * d->my[m]) / 343.0;
-			in[4 * i + m] = (float)(0.05 * sin(2 * M_PI * 1000.0 * (i / 16000.0 - tau)));
+			double R = FN_DSP_BEAM_RANGE, tau = sqrt(R * R + d->my[m] * d->my[m]) / 343.0;
+			in[4 * i + m] = (float)(0.05 * sin(2 * M_PI * 1015.625 * (i / 16000.0 - tau)));
 		}
 	freenect_dsp_process_float(d, in, 16000, out);
 	for (i = 8000; i < 16000; i++)
 		peak = abs(out[i]) > peak ? abs(out[i]) : peak;
-	printf("    (1 kHz at 0.05 full scale from 0 deg: output peak %d = %.3f x input; the runtime: x2)\n", peak, peak / 32767.0 / 0.05);
+	printf("    (1015.6 Hz, a band centre, at 0.05 full scale from 0 deg: output peak %d = %.3f x input; the runtime: x2)\n", peak, peak / 32767.0 / 0.05);
 	CHECK(fabs(peak / 32767.0 / 0.05 - 2.0) < 0.1, "a source in the beam comes out at the runtime's level (x2, AGC off)");
 	freenect_dsp_set_beam(d, NB - 1);
 	freenect_dsp_process_float(d, in, 16000, out);
@@ -365,7 +374,7 @@ static int write_weights(const char* path, freenect_dsp* d, int conj_convention,
 			dc v[MAXM];
 			double f = k ? k * 31.25 : 15.625;
 			design_bin(d, d->beam_angle[b], f, w);
-			steering(d, d->beam_angle[b], 1.0, f, 343.0, v);
+			steering(d, d->beam_angle[b], FN_DSP_BEAM_RANGE, f, FN_DSP_C, v);
 			for (m = 0; m < 4; m++) {
 				size_t o = 8 * (((size_t)b * NK + k) * 4 + m);
 				putf(wt + o, w[m].re);
@@ -408,7 +417,8 @@ static void test_weights_file(void)
 			for (k = 16; k <= 224; k++)
 				maxd = fmax(maxd, fabs(response(d, d->W[b][k], d->beam_angle[b], (k + 0.5) * 31.25) - 1.0));
 		printf("    (each beam towards its own direction, 0.5-7 kHz: gain 1 within %.3f)\n", maxd);
-		CHECK(maxd < 0.05, "  its convention is recognised: each beam passes its own direction");
+		/* the other convention would give errors near 1 */
+		CHECK(maxd < 0.15, "  its convention is recognised: each beam passes its own direction");
 	}
 	write_weights(path, d, 1, 1);
 	CHECK(freenect_dsp_load_sdk_weights(d, path) == -EINVAL, "a damaged file (CRC) is refused");

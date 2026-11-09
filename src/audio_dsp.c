@@ -40,8 +40,21 @@
  * minimum-variance distortionless response for diffuse noise (a
  * superdirective beam), with diagonal loading raised until the white noise
  * gain is at least FN_DSP_MIN_WNG, so that low frequencies do not amplify
- * microphone noise without bound. The steering vectors model a point source
- * at 1 m, as the runtime's beam table does.
+ * microphone noise without bound; then faded in from 156 to 375 Hz and out
+ * from 7156 to 7469 Hz. The steering vectors model a point source at 1.5 m.
+ *
+ * How these choices compare with Microsoft's own weights (measured against
+ * the tables in KinectAudio10.dll, which are not used here): those are
+ * distortionless towards a source about 1.5 m away, fade in and out at the
+ * same frequencies, and keep the white noise gain high rather than push the
+ * directivity; they are not a closed-form design (each beam trades the two
+ * differently). With the +1.8 dB floor, the beams here have the same mean
+ * directivity (5.1 dB for both, 500-4000 Hz, spherically diffuse noise) and
+ * a higher worst-case white noise gain (+1.8 dB against -7.8 dB).
+ *
+ * Direction estimate: the runtime squares phase errors wrapped to [0, 2 pi),
+ * which biases every estimate the same way (+4..+7 degrees in simulation);
+ * here they are wrapped to (-pi, pi].
  */
 
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
@@ -70,8 +83,10 @@
 #define MAXM 4
 
 #define FN_DSP_C 343.0            // speed of sound for the beams (§40.6.3)
-#define FN_DSP_BEAM_RANGE 1.0     // m, the runtime's beam table
-#define FN_DSP_MIN_WNG 0.1        // -10 dB white noise gain at worst
+#define FN_DSP_BEAM_RANGE 1.5     // m: what the runtime's steering vectors fit
+#ifndef FN_DSP_MIN_WNG
+#define FN_DSP_MIN_WNG 1.5        // +1.8 dB white noise gain at worst (see the note at the top)
+#endif
 
 // Direction estimator (§40.6.16)
 #define DOA_C 342.0
@@ -247,11 +262,30 @@ static void design_bin(const freenect_dsp* d, double theta, double f, fn_cplx* w
 	}
 }
 
+// Raised-cosine fade at the ends of the band: 0 below 156.25 Hz, 1 from
+// 375 Hz to 7156.25 Hz, 0 above 7468.75 Hz.
+static double band_gain(double f)
+{
+	if (f <= 156.25 || f >= 7468.75)
+		return 0.0;
+	if (f < 375.0)
+		return 0.5 - 0.5 * cos(M_PI * (f - 156.25) / 218.75);
+	if (f > 7156.25)
+		return 0.5 + 0.5 * cos(M_PI * (f - 7156.25) / 312.5);
+	return 1.0;
+}
+
 static void design_beam(const freenect_dsp* d, double theta, fn_cplx W[NK][MAXM])
 {
-	int k;
-	for (k = 0; k < NK; k++)
-		design_bin(d, theta, (k + 0.5) * 31.25, W[k]);
+	int k, m;
+	for (k = 0; k < NK; k++) {
+		double f = (k + 0.5) * 31.25, g = band_gain(f);
+		design_bin(d, theta, f, W[k]);
+		for (m = 0; m < d->nm; m++) {
+			W[k][m].re = (float)(W[k][m].re * g);
+			W[k][m].im = (float)(W[k][m].im * g);
+		}
+	}
 }
 
 /* ------------------------------------------------- direction estimate */
@@ -469,6 +503,8 @@ static void doa_frame(freenect_dsp* d, fn_cplx X[MAXM][NK])
 				double s = 0.0;
 				for (m = 0; m < d->nm - 1; m++) {
 					double e = wrap2pi(phi[m] - d->dphi[m][i][k - DOA_K0]);
+					if (e > M_PI)
+						e -= 2.0 * M_PI; // symmetric, see the note at the top
 					s += e * e;
 				}
 				if (s < best) { best = s; bi = i; }
