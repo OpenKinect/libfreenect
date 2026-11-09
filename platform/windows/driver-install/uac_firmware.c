@@ -69,6 +69,11 @@ static const char FIRMWARE_SHA256[] = "4467ae36ad378c58477432729d74eed0f9d45d352
 #define FIRMWARE_BASE 0x00080000u
 #define FIRMWARE_ENTRY 0x00080030u
 
+// The beamformer weights of KinectAudio10.dll v1.8 x64, as kinect_beam_weights.bin
+#define KA10_WEIGHTSET_VA 0x180070098ull
+#define AUDIO_WEIGHTS_SIZE 180340u
+static const char AUDIO_WEIGHTS_SHA256[] = "a56ddba443684ba9588dc44e21cc499fd4b51bafc592fff086e4b40d4250e5e7";
+
 /* ---- small helpers ------------------------------------------------------ */
 
 static void fail(const wchar_t *what, DWORD err)
@@ -314,15 +319,17 @@ static const BYTE *find_payload_cab(const BYTE *data, size_t len, size_t *cab_le
 	return NULL;
 }
 
-/* Write the MSI's embedded cabinet (its first stream that starts with "MSCF"). */
-static int msi_embedded_cab(const wchar_t *msi_path, const wchar_t *out_path)
+/* Calls fn for every stream of the MSI that is a cabinet (written to
+ * cab_path first); stops when fn returns 0. Returns 0 if one did. */
+static int msi_each_cab(const wchar_t *msi_path, const wchar_t *cab_path,
+                        int (*fn)(void *ctx), void *ctx)
 {
 	MSIHANDLE db = 0, view = 0, rec = 0;
 	int ok = 0;
 	if (MsiOpenDatabaseW(msi_path, MSIDBOPEN_READONLY, &db) != ERROR_SUCCESS ||
 	    MsiDatabaseOpenViewW(db, L"SELECT `Name`, `Data` FROM `_Streams`", &view) != ERROR_SUCCESS ||
 	    MsiViewExecute(view, 0) != ERROR_SUCCESS) {
-		fwprintf(stderr, L"error: cannot read the drivers package inside the installer\n");
+		fwprintf(stderr, L"error: cannot read a package inside the installer\n");
 		goto out;
 	}
 	while (!ok && MsiViewFetch(view, &rec) == ERROR_SUCCESS) {
@@ -331,7 +338,8 @@ static int msi_embedded_cab(const wchar_t *msi_path, const wchar_t *out_path)
 			BYTE *buf = (BYTE *)malloc(size);
 			DWORD got = size;
 			if (buf && MsiRecordReadStream(rec, 2, (char *)buf, &got) == ERROR_SUCCESS &&
-			    got == size && memcmp(buf, "MSCF", 4) == 0 && write_file(out_path, buf, size) == 0)
+			    got == size && memcmp(buf, "MSCF", 4) == 0 && write_file(cab_path, buf, size) == 0 &&
+			    fn(ctx) == 0)
 				ok = 1;
 			free(buf);
 		}
@@ -344,60 +352,31 @@ out:
 	return ok ? 0 : -1;
 }
 
-/* ---- firmware check ----------------------------------------------------- */
+/* ---- the Runtime installer ---------------------------------------------- */
 
-static int check_firmware(const BYTE *fw, size_t len)
+int kr_open(kinect_runtime *kr, const wchar_t *local_installer)
 {
-	char hex[65];
-	const DWORD *w = (const DWORD *)fw;
-	if (len != FIRMWARE_SIZE) {
-		fwprintf(stderr, L"error: the extracted firmware has %zu bytes, expected %u\n", len, FIRMWARE_SIZE);
-		return -1;
-	}
-	if (w[0] != FIRMWARE_MAGIC || w[3] != FIRMWARE_BASE || w[5] != FIRMWARE_ENTRY) {
-		fwprintf(stderr, L"error: the extracted firmware has an unexpected header\n");
-		return -1;
-	}
-	if (sha256_hex(fw, len, hex) != 0 || strcmp(hex, FIRMWARE_SHA256) != 0) {
-		fwprintf(stderr, L"error: the extracted firmware's SHA-256 does not match\n");
-		return -1;
-	}
-	return 0;
-}
-
-/* ---- main entry --------------------------------------------------------- */
-
-int uac_fetch_firmware(const wchar_t *dest_dir, const wchar_t *local_installer)
-{
-	wchar_t tmp[MAX_PATH], exe_path[MAX_PATH], cab_path[MAX_PATH], msi_path[MAX_PATH], inner_cab[MAX_PATH];
-	wchar_t fw_tmp[MAX_PATH], dest_path[MAX_PATH], full_dest[MAX_PATH];
-	char tmp_a[MAX_PATH], msi_a[MAX_PATH], fw_a[MAX_PATH];
-	BYTE *installer = NULL, *fw = NULL;
-	size_t installer_len = 0, cab_len = 0, fw_len = 0;
+	BYTE *installer = NULL;
+	size_t installer_len = 0, cab_len = 0;
 	const BYTE *cab;
+	wchar_t exe_path[MAX_PATH], cab_path[MAX_PATH];
 	char hex[65];
 	GUID g;
 	int rc = -1;
 
-	if (GetFullPathNameW(dest_dir, MAX_PATH, full_dest, NULL) == 0)
-		return -1;
-
+	memset(kr, 0, sizeof(*kr));
 	/* Private temporary directory; the ANSI form is needed by FDI. */
-	GetTempPathW(MAX_PATH, tmp);
+	GetTempPathW(MAX_PATH, kr->tmp);
 	CoCreateGuid(&g);
-	swprintf(tmp + wcslen(tmp), MAX_PATH - wcslen(tmp), L"libfreenect-fw-%08lX\\", g.Data1);
-	if (!CreateDirectoryW(tmp, NULL) ||
-	    WideCharToMultiByte(CP_ACP, 0, tmp, -1, tmp_a, MAX_PATH, NULL, NULL) == 0) {
+	swprintf(kr->tmp + wcslen(kr->tmp), MAX_PATH - wcslen(kr->tmp), L"libfreenect-fw-%08lX\\", g.Data1);
+	if (!CreateDirectoryW(kr->tmp, NULL) ||
+	    WideCharToMultiByte(CP_ACP, 0, kr->tmp, -1, kr->tmp_a, MAX_PATH, NULL, NULL) == 0) {
 		fwprintf(stderr, L"error: cannot create a temporary directory\n");
+		kr->tmp[0] = 0;
 		return -1;
 	}
-	swprintf(exe_path, MAX_PATH, L"%lsKinectRuntime-v1.8-Setup.exe", tmp);
-	swprintf(cab_path, MAX_PATH, L"%lspayload.cab", tmp);
-	swprintf(msi_path, MAX_PATH, L"%lsa0", tmp);
-	swprintf(inner_cab, MAX_PATH, L"%lsdrivers.cab", tmp);
-	swprintf(fw_tmp, MAX_PATH, L"%lsUACFirmware", tmp);
-	WideCharToMultiByte(CP_ACP, 0, msi_path, -1, msi_a, MAX_PATH, NULL, NULL);
-	WideCharToMultiByte(CP_ACP, 0, fw_tmp, -1, fw_a, MAX_PATH, NULL, NULL);
+	swprintf(exe_path, MAX_PATH, L"%lsKinectRuntime-v1.8-Setup.exe", kr->tmp);
+	swprintf(cab_path, MAX_PATH, L"%lspayload.cab", kr->tmp);
 
 	if (local_installer) {
 		wprintf(L"Reading %ls\n", local_installer);
@@ -422,43 +401,265 @@ int uac_fetch_firmware(const wchar_t *dest_dir, const wchar_t *local_installer)
 	wprintf(L"Signature valid: Microsoft Corporation.\n");
 	if (sha256_hex(installer, installer_len, hex) == 0 && strcmp(hex, RUNTIME_SHA256) != 0)
 		wprintf(L"Note: the installer's SHA-256 differs from the known one (Microsoft re-signs its downloads);"
-		        L" the extracted firmware is checked instead.\n");
-
+		        L" what is extracted from it is checked instead.\n");
 	cab = find_payload_cab(installer, installer_len, &cab_len);
 	if (!cab || write_file(cab_path, cab, cab_len) != 0) {
 		fwprintf(stderr, L"error: the installer does not contain the expected payload\n");
 		goto out;
 	}
-	if (cab_extract(tmp_a, "payload.cab", "a0", msi_a) != 0) {
-		fwprintf(stderr, L"error: cannot extract the drivers package from the installer\n");
-		goto out;
-	}
-	if (msi_embedded_cab(msi_path, inner_cab) != 0)
-		goto out;
-	if (cab_extract(tmp_a, "drivers.cab", "UACFirmware", fw_a) != 0) {
-		fwprintf(stderr, L"error: the drivers package does not contain UACFirmware\n");
-		goto out;
-	}
-	fw = read_file(fw_tmp, &fw_len);
-	if (!fw || check_firmware(fw, fw_len) != 0)
-		goto out;
-
-	SHCreateDirectoryExW(NULL, full_dest, NULL);
-	swprintf(dest_path, MAX_PATH, L"%ls\\" UAC_FIRMWARE_NAME, full_dest);
-	if (write_file(dest_path, fw, fw_len) != 0) {
-		fwprintf(stderr, L"error: cannot write %ls\n", dest_path);
-		goto out;
-	}
-	wprintf(L"Installed the Kinect audio firmware to %ls (%u bytes, SHA-256 verified).\n", dest_path, FIRMWARE_SIZE);
+	kr->ready = 1;
 	rc = 0;
 out:
 	free(installer);
-	free(fw);
 	DeleteFileW(exe_path);
-	DeleteFileW(cab_path);
+	if (rc != 0)
+		kr_close(kr);
+	return rc;
+}
+
+typedef struct {
+	kinect_runtime *kr;
+	const char *file;
+	char out_a[MAX_PATH];
+} find_ctx;
+
+static int try_cab(void *p)
+{
+	find_ctx *c = (find_ctx *)p;
+	return cab_extract(c->kr->tmp_a, "inner.cab", c->file, c->out_a);
+}
+
+BYTE *kr_extract(kinect_runtime *kr, const char *msi_name, const char *file, size_t *len)
+{
+	wchar_t msi_path[MAX_PATH], inner[MAX_PATH], out_path[MAX_PATH], wname[64];
+	char msi_a[MAX_PATH];
+	find_ctx c;
+	BYTE *data = NULL;
+	if (!kr->ready)
+		return NULL;
+	MultiByteToWideChar(CP_ACP, 0, msi_name, -1, wname, 64);
+	swprintf(msi_path, MAX_PATH, L"%lsmsi-%ls", kr->tmp, wname);
+	swprintf(inner, MAX_PATH, L"%lsinner.cab", kr->tmp);
+	swprintf(out_path, MAX_PATH, L"%lsextracted.bin", kr->tmp);
+	WideCharToMultiByte(CP_ACP, 0, msi_path, -1, msi_a, MAX_PATH, NULL, NULL);
+	c.kr = kr;
+	c.file = file;
+	WideCharToMultiByte(CP_ACP, 0, out_path, -1, c.out_a, MAX_PATH, NULL, NULL);
+	if (cab_extract(kr->tmp_a, "payload.cab", msi_name, msi_a) != 0) {
+		fwprintf(stderr, L"error: cannot extract package %hs from the installer\n", msi_name);
+		goto out;
+	}
+	if (msi_each_cab(msi_path, inner, try_cab, &c) != 0) {
+		fwprintf(stderr, L"error: package %hs does not contain %hs\n", msi_name, file);
+		goto out;
+	}
+	data = read_file(out_path, len);
+out:
 	DeleteFileW(msi_path);
-	DeleteFileW(inner_cab);
-	DeleteFileW(fw_tmp);
-	RemoveDirectoryW(tmp);
+	DeleteFileW(inner);
+	DeleteFileW(out_path);
+	return data;
+}
+
+void kr_close(kinect_runtime *kr)
+{
+	wchar_t p[MAX_PATH];
+	if (!kr->tmp[0])
+		return;
+	swprintf(p, MAX_PATH, L"%lspayload.cab", kr->tmp);
+	DeleteFileW(p);
+	RemoveDirectoryW(kr->tmp);
+	kr->tmp[0] = 0;
+	kr->ready = 0;
+}
+
+int kr_install(const wchar_t *dest_dir, const wchar_t *name, const BYTE *data, size_t len)
+{
+	wchar_t full[MAX_PATH], path[MAX_PATH];
+	if (GetFullPathNameW(dest_dir, MAX_PATH, full, NULL) == 0)
+		return -1;
+	SHCreateDirectoryExW(NULL, full, NULL);
+	swprintf(path, MAX_PATH, L"%ls\\%ls", full, name);
+	if (write_file(path, data, len) != 0) {
+		fwprintf(stderr, L"error: cannot write %ls\n", path);
+		return -1;
+	}
+	wprintf(L"Installed %ls (%zu bytes, SHA-256 verified).\n", path, len);
+	return 0;
+}
+
+int kr_sha256_hex(const BYTE *data, size_t len, char hex[65])
+{
+	return sha256_hex(data, len, hex);
+}
+
+/* ---- the firmware ------------------------------------------------------- */
+
+static int check_firmware(const BYTE *fw, size_t len)
+{
+	char hex[65];
+	const DWORD *w = (const DWORD *)fw;
+	if (len != FIRMWARE_SIZE) {
+		fwprintf(stderr, L"error: the extracted firmware has %zu bytes, expected %u\n", len, FIRMWARE_SIZE);
+		return -1;
+	}
+	if (w[0] != FIRMWARE_MAGIC || w[3] != FIRMWARE_BASE || w[5] != FIRMWARE_ENTRY) {
+		fwprintf(stderr, L"error: the extracted firmware has an unexpected header\n");
+		return -1;
+	}
+	if (sha256_hex(fw, len, hex) != 0 || strcmp(hex, FIRMWARE_SHA256) != 0) {
+		fwprintf(stderr, L"error: the extracted firmware's SHA-256 does not match\n");
+		return -1;
+	}
+	return 0;
+}
+
+int kr_fetch_firmware(kinect_runtime *kr, const wchar_t *dest_dir)
+{
+	size_t len = 0;
+	BYTE *fw = kr_extract(kr, "a0", "UACFirmware", &len);
+	int rc = -1;
+	if (fw && check_firmware(fw, len) == 0)
+		rc = kr_install(dest_dir, UAC_FIRMWARE_NAME, fw, len);
+	free(fw);
+	return rc;
+}
+
+int uac_fetch_firmware(const wchar_t *dest_dir, const wchar_t *local_installer)
+{
+	kinect_runtime kr;
+	int rc;
+	if (kr_open(&kr, local_installer) != 0)
+		return -1;
+	rc = kr_fetch_firmware(&kr, dest_dir);
+	kr_close(&kr);
+	return rc;
+}
+
+/* ---- PE images ---------------------------------------------------------- */
+
+const BYTE *kr_pe_at(const BYTE *img, size_t len, ULONGLONG va, size_t n)
+{
+	DWORD pe, i;
+	WORD nsec, optsize;
+	ULONGLONG base, rva;
+	const BYTE *opt;
+	if (len < 0x40 || img[0] != 'M' || img[1] != 'Z')
+		return NULL;
+	pe = *(const DWORD *)(img + 0x3C);
+	if ((size_t)pe + 24 + 0x70 > len || memcmp(img + pe, "PE\0\0", 4) != 0 ||
+	    *(const WORD *)(img + pe + 4) != 0x8664)
+		return NULL;
+	nsec = *(const WORD *)(img + pe + 6);
+	optsize = *(const WORD *)(img + pe + 20);
+	opt = img + pe + 24;
+	if (*(const WORD *)opt != 0x20B)
+		return NULL;
+	base = *(const ULONGLONG *)(opt + 24);
+	if (va < base)
+		return NULL;
+	rva = va - base;
+	for (i = 0; i < nsec; i++) {
+		const BYTE *s = opt + optsize + 40 * i;
+		DWORD sva, rawsize, rawptr;
+		if ((size_t)(s + 40 - img) > len)
+			return NULL;
+		sva = *(const DWORD *)(s + 12);
+		rawsize = *(const DWORD *)(s + 16);
+		rawptr = *(const DWORD *)(s + 20);
+		if (rva >= sva && rva + n <= (ULONGLONG)sva + rawsize) {
+			ULONGLONG o = rawptr + (rva - sva);
+			if (o + n > len)
+				return NULL;
+			return img + o;
+		}
+	}
+	return NULL;
+}
+
+/* ---- the beamformer weights (§40.6.3) ----------------------------------- */
+
+static double dabs(double v) { return v < 0 ? -v : v; }
+
+static DWORD crc32_of(const BYTE *p, size_t n)
+{
+	DWORD c = 0xFFFFFFFFu;
+	size_t i;
+	int k;
+	for (i = 0; i < n; i++) {
+		c ^= p[i];
+		for (k = 0; k < 8; k++)
+			c = (c >> 1) ^ (0xEDB88320u & (0u - (c & 1u)));
+	}
+	return ~c;
+}
+
+/* kinect_beam_weights.bin (layout in src/audio_dsp.c) from KinectAudio10.dll,
+ * the same as fwfetcher.py --audio-weights. Returns its size, or 0. */
+static size_t beam_weights_file(const BYTE *dll, size_t len, BYTE *out)
+{
+	const BYTE *hdr = kr_pe_at(dll, len, KA10_WEIGHTSET_VA, 0x38), *p;
+	ULONGLONG ptr[4];
+	size_t o, table = 11 * 256 * 4 * 8;
+	int b, k;
+	if (!hdr || *(const int *)(hdr + 8) != 4 || *(const int *)(hdr + 12) != 256 || *(const int *)(hdr + 16) != 11)
+		return 0;
+	memcpy(ptr, hdr + 0x18, sizeof(ptr));
+	memcpy(out, "FNBW", 4);
+	*(DWORD *)(out + 4) = 1;
+	*(DWORD *)(out + 8) = 4;
+	*(DWORD *)(out + 12) = 256;
+	*(DWORD *)(out + 16) = 11;
+	*(DWORD *)(out + 20) = 0;
+	o = 24;
+	for (b = 0; b < 11; b++) {
+		double beam[3];
+		p = kr_pe_at(dll, len, ptr[0] + 24 * b, 24);
+		if (!p)
+			return 0;
+		memcpy(beam, p, sizeof(beam));
+		if (dabs(beam[0] - (-50 + 10 * b) * 3.14159265358979 / 180.0) > 0.01 || beam[1] != 0.0)
+			return 0;
+		memcpy(out + o, &beam[0], 8);
+		o += 8;
+	}
+	p = kr_pe_at(dll, len, ptr[1], 4 * 256);
+	if (!p)
+		return 0;
+	for (k = 0; k < 256; k++) {
+		float f;
+		memcpy(&f, p + 4 * k, 4);
+		if (dabs(f - 31.25 * k) > 1e-3)
+			return 0;
+	}
+	for (k = 2; k < 4; k++) {
+		p = kr_pe_at(dll, len, ptr[k], table);
+		if (!p)
+			return 0;
+		memcpy(out + o, p, table);
+		o += table;
+	}
+	*(DWORD *)(out + o) = crc32_of(out, o);
+	return o + 4;
+}
+
+int kr_fetch_audio_weights(kinect_runtime *kr, const wchar_t *dest_dir)
+{
+	size_t len = 0, n;
+	BYTE *dll = kr_extract(kr, "a1", "FILE_x64_KinectAudio10.dll", &len);
+	BYTE *out = (BYTE *)malloc(AUDIO_WEIGHTS_SIZE);
+	char hex[65];
+	int rc = -1;
+	if (!dll || !out)
+		goto done;
+	n = beam_weights_file(dll, len, out);
+	if (n != AUDIO_WEIGHTS_SIZE || sha256_hex(out, n, hex) != 0 || strcmp(hex, AUDIO_WEIGHTS_SHA256) != 0) {
+		fwprintf(stderr, L"error: the beamformer weights in KinectAudio10.dll are not the known ones; not installing them\n");
+		goto done;
+	}
+	rc = kr_install(dest_dir, AUDIO_WEIGHTS_NAME, out, n);
+done:
+	free(dll);
+	free(out);
 	return rc;
 }

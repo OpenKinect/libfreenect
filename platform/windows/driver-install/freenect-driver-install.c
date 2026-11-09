@@ -753,6 +753,10 @@ static int cmd_uninstall(int quiet)
 		wcscat_s(fw, MAX_PATH, L"\\" UAC_FIRMWARE_NAME);
 		if (DeleteFileW(fw))
 			wprintf(L"Removed the Kinect audio firmware %ls\n", fw);
+		uac_default_dir(fw, MAX_PATH);
+		wcscat_s(fw, MAX_PATH, L"\\" AUDIO_WEIGHTS_NAME);
+		if (DeleteFileW(fw))
+			wprintf(L"Removed the beamformer weights %ls\n", fw);
 		wprintf(L"Removed %d device(s), %d driver package(s) and %d certificate(s).\n", devices, pk, c1 + c2);
 		wprintf(L"The Kinect functions now have no driver until one is installed again.\n");
 	}
@@ -763,9 +767,25 @@ static void firmware_notice(void)
 {
 	wprintf(L"\nThe Kinect's audio controller needs Microsoft's firmware (UAC.BIN). This downloads\n"
 	        L"Microsoft's Kinect for Windows Runtime v1.8 (111 MB) from download.microsoft.com,\n"
-	        L"checks that Microsoft signed it, and extracts only the firmware file. The Runtime\n"
-	        L"is not installed. Microsoft's licence terms for the Kinect for Windows Runtime\n"
-	        L"apply to the firmware. Skip this step with --no-firmware.\n\n");
+	        L"checks that Microsoft signed it, and extracts only the firmware and, for\n"
+	        L"libfreenect's audio processing, the beamformer weights of KinectAudio10.dll. The\n"
+	        L"Runtime is not installed. Microsoft's licence terms for the Kinect for Windows\n"
+	        L"Runtime apply to both. Skip this step with --no-firmware.\n\n");
+}
+
+/* UAC.BIN and the beamformer weights from one download. The firmware decides
+ * success; the weights are optional (libfreenect designs its own). */
+static int fetch_runtime_data(const wchar_t *dir, const wchar_t *from)
+{
+	kinect_runtime kr;
+	int rc;
+	if (kr_open(&kr, from) != 0)
+		return -1;
+	rc = kr_fetch_firmware(&kr, dir);
+	if (kr_fetch_audio_weights(&kr, dir) != 0)
+		wprintf(L"The beamformer weights were not installed; libfreenect's audio DSP uses its own.\n");
+	kr_close(&kr);
+	return rc;
 }
 
 /* --fetch-firmware [--from INSTALLER] [DIR] */
@@ -783,7 +803,7 @@ static int cmd_fetch_firmware(int argc, wchar_t **argv)
 	}
 	if (!from)
 		firmware_notice();
-	return uac_fetch_firmware(dir, from) == 0 ? 0 : 1;
+	return fetch_runtime_data(dir, from) == 0 ? 0 : 1;
 }
 
 static int cmd_install(int with_firmware)
@@ -827,7 +847,7 @@ static int cmd_install(int with_firmware)
 		uac_default_dir(fwdir, MAX_PATH);
 		/* The driver is installed either way; a failed download is reported
 		 * and can be retried with --fetch-firmware. */
-		if (uac_fetch_firmware(fwdir, NULL) != 0)
+		if (fetch_runtime_data(fwdir, NULL) != 0)
 			wprintf(L"The driver is installed, but the audio firmware is not. Retry with --fetch-firmware.\n");
 	}
 	return st.failed ? 1 : 0;
@@ -859,8 +879,9 @@ static void usage(void)
 	        L"                       (run as Administrator; add --no-firmware to skip the firmware)\n"
 	        L"  --uninstall          remove what --install added (run as Administrator)\n"
 	        L"  --fetch-firmware [--from INSTALLER] [DIR]\n"
-	        L"                       only fetch the audio firmware (UAC.BIN) from Microsoft's Kinect\n"
-	        L"                       Runtime installer into DIR (default %%ProgramData%%\\libfreenect)\n"
+	        L"                       only fetch the audio firmware (UAC.BIN) and the beamformer weights\n"
+	        L"                       from Microsoft's Kinect Runtime installer into DIR\n"
+	        L"                       (default %%ProgramData%%\\libfreenect)\n"
 	        L"  --package-only DIR   only build and sign the driver package in DIR\n");
 }
 

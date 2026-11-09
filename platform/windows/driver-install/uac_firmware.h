@@ -46,3 +46,33 @@ int uac_fetch_firmware(const wchar_t *dest_dir, const wchar_t *local_installer);
 
 /* Default destination: %ProgramData%\libfreenect. */
 void uac_default_dir(wchar_t *dir, size_t len);
+
+/*
+ * The Runtime installer, opened once for several files: kr_open() reads or
+ * downloads it and checks Microsoft's signature; kr_extract() returns a file
+ * of one of its MSI packages ("a0": drivers, "a1": runtime DLLs; malloc'ed,
+ * NULL if missing); kr_close() deletes the temporary files.
+ */
+typedef struct {
+	wchar_t tmp[MAX_PATH];
+	char tmp_a[MAX_PATH];
+	int ready;
+} kinect_runtime;
+
+int kr_open(kinect_runtime *kr, const wchar_t *local_installer);
+BYTE *kr_extract(kinect_runtime *kr, const char *msi_name, const char *file, size_t *len);
+void kr_close(kinect_runtime *kr);
+/* Writes dest_dir\name, creating dest_dir. */
+int kr_install(const wchar_t *dest_dir, const wchar_t *name, const BYTE *data, size_t len);
+int kr_sha256_hex(const BYTE *data, size_t len, char hex[65]);
+/* n bytes at virtual address va of an x64 PE image in memory, or NULL. */
+const BYTE *kr_pe_at(const BYTE *img, size_t len, ULONGLONG va, size_t n);
+
+/* UACFirmware.bin, from "a0". */
+int kr_fetch_firmware(kinect_runtime *kr, const wchar_t *dest_dir);
+
+/* Microsoft's beamformer weights for libfreenect's audio DSP, from
+ * KinectAudio10.dll in "a1", verified and written as kinect_beam_weights.bin
+ * (the same file as fwfetcher.py --audio-weights). */
+#define AUDIO_WEIGHTS_NAME L"kinect_beam_weights.bin"
+int kr_fetch_audio_weights(kinect_runtime *kr, const wchar_t *dest_dir);

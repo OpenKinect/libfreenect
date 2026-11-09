@@ -699,31 +699,42 @@ def find_bundle_cabinet(installer):
     return installer[start:start + size]
 
 
-def fetch_uac_firmware(target, installer_path=None):
+def read_runtime_installer(installer_path, what):
+    """The Runtime installer's bytes: read from INSTALLER, or downloaded from Microsoft."""
     if sys.version_info < (3, 3):
-        sys.exit("--uac needs Python 3.3 or newer")
+        sys.exit("this needs Python 3.3 or newer")
     if installer_path:
         print("Reading", installer_path)
         with open(installer_path, "rb") as f:
             installer = f.read()
     else:
-        print("Microsoft's licence terms for the Kinect for Windows Runtime apply to this firmware.")
+        print("Microsoft's licence terms for the Kinect for Windows Runtime apply to %s." % what)
         print("Downloading Microsoft's Kinect for Windows Runtime v1.8 (111 MB) from download.microsoft.com")
         response = urlopen_timeout_retry(Request(UAC_RUNTIME_URL, headers={"User-Agent": "libfreenect-fwfetcher"}))
         installer = response.read()
     if hashlib.sha256(installer).hexdigest() != UAC_RUNTIME_SHA256:
         print("Note: the installer differs from the known one (Microsoft re-signs its downloads);"
-              " the extracted firmware is checked instead.")
+              " what is extracted from it is checked instead.")
+    return installer
+
+
+def runtime_file(installer, msi_name, file_name):
+    """File `file_name` of MSI `msi_name` in the Runtime bundle, or None."""
+    msi = cab_extract(find_bundle_cabinet(installer), msi_name)
+    for cab in cfb_cabinet_streams(msi):
+        try:
+            return cab_extract(cab, file_name)
+        except KeyError:
+            pass
+    return None
+
+
+def fetch_uac_firmware(target, installer_path=None):
+    installer = read_runtime_installer(installer_path, "this firmware")
     import zlib
     firmware = None
     try:
-        msi = cab_extract(find_bundle_cabinet(installer), "a0")
-        for cab in cfb_cabinet_streams(msi):
-            try:
-                firmware = cab_extract(cab, "UACFirmware")
-                break
-            except KeyError:
-                pass
+        firmware = runtime_file(installer, "a0", "UACFirmware")
     except (ValueError, KeyError, IndexError, struct.error, zlib.error) as e:
         sys.exit("error: the installer could not be unpacked (%s: %s); not installing anything"
                  % (type(e).__name__, e))
@@ -734,6 +745,156 @@ def fetch_uac_firmware(target, installer_path=None):
     with open(target, "wb") as f:
         f.write(firmware)
     print("Wrote", target, "(%d bytes, SHA-256 verified)" % len(firmware))
+
+
+###############################################################################
+# --audio-weights: Microsoft's beamformer weights for libfreenect's audio DSP
+#
+# KinectAudio10.dll (x64, in the Runtime's MSI "a1") holds, for the Kinect's
+# array, 11 beams x 256 frequencies x 4 microphones of complex weights and
+# steering vectors (reference §40.6.3). They are read from the user's own
+# download and written to kinect_beam_weights.bin, the file
+# freenect_dsp_load_sdk_weights() loads; libfreenect does not contain them.
+
+AUDIO_WEIGHTS_FILE = "kinect_beam_weights.bin"
+KA10_WEIGHTSET_VA = 0x180070098   # the "Kinect" beam set in KinectAudio10.dll v1.8 x64
+AUDIO_WEIGHTS_SIZE = 24 + 11 * 8 + 2 * 11 * 256 * 4 * 8 + 4   # 180340
+AUDIO_WEIGHTS_SHA256 = "a56ddba443684ba9588dc44e21cc499fd4b51bafc592fff086e4b40d4250e5e7"
+
+
+class PE(object):
+    """Just enough of a PE32+ image to read data at virtual addresses."""
+
+    def __init__(self, data):
+        self.d = data
+        if data[:2] != b"MZ":
+            raise ValueError("not a PE image")
+        pe, = struct.unpack_from("<I", data, 0x3C)
+        if data[pe:pe + 4] != b"PE\0\0":
+            raise ValueError("not a PE image")
+        machine, nsec = struct.unpack_from("<HH", data, pe + 4)
+        optsize, = struct.unpack_from("<H", data, pe + 20)
+        opt = pe + 24
+        if machine != 0x8664 or struct.unpack_from("<H", data, opt)[0] != 0x20B:
+            raise ValueError("not an x64 image")
+        self.base, = struct.unpack_from("<Q", data, opt + 24)
+        self.sections = []
+        for i in range(nsec):
+            s = opt + optsize + 40 * i
+            vsize, va, rawsize, rawptr = struct.unpack_from("<IIII", data, s + 8)
+            self.sections.append((va, max(vsize, rawsize), rawptr, rawsize))
+
+    def read(self, va, n):
+        rva = va - self.base
+        for sva, size, ptr, raw in self.sections:
+            if sva <= rva and rva + n <= sva + size:
+                o = rva - sva
+                if o + n > raw:
+                    raise ValueError("data outside the file")
+                return self.d[ptr + o:ptr + o + n]
+        raise ValueError("address 0x%x not in the image" % va)
+
+
+def beam_weights_file(dll):
+    """kinect_beam_weights.bin (layout in src/audio_dsp.c) from KinectAudio10.dll."""
+    import math
+    import zlib
+    pe = PE(dll)
+    w = KA10_WEIGHTSET_VA
+    nm, nf, nb = struct.unpack("<iii", pe.read(w + 8, 12))
+    if (nm, nf, nb) != (4, 256, 11):
+        raise ValueError("unexpected beam set shape %r" % ((nm, nf, nb),))
+    beams_va, freqs_va, weights_va, steer_va = struct.unpack("<QQQQ", pe.read(w + 0x18, 32))
+    angles = []
+    for b in range(nb):
+        az, el, rng = struct.unpack("<ddd", pe.read(beams_va + 24 * b, 24))
+        if abs(az - math.radians(-50 + 10 * b)) > 0.01 or el != 0.0 or abs(rng - 1.0) > 1e-6:
+            raise ValueError("unexpected beam %d (%g, %g, %g)" % (b, az, el, rng))
+        angles.append(az)
+    freqs = struct.unpack("<%df" % nf, pe.read(freqs_va, 4 * nf))
+    if any(abs(freqs[k] - 31.25 * k) > 1e-3 for k in range(nf)):
+        raise ValueError("unexpected frequency grid")
+    table = nb * nf * nm * 8
+    out = b"FNBW" + struct.pack("<IIIII", 1, nm, nf, nb, 0) + struct.pack("<%dd" % nb, *angles)
+    out += pe.read(weights_va, table) + pe.read(steer_va, table)
+    out += struct.pack("<I", zlib.crc32(out) & 0xFFFFFFFF)
+    return out
+
+
+def fetch_audio_weights(target, installer_path=None, dll_path=None):
+    import zlib
+    try:
+        if dll_path:
+            print("Reading", dll_path)
+            with open(dll_path, "rb") as f:
+                dll = f.read()
+        else:
+            installer = read_runtime_installer(installer_path, "these beamformer weights")
+            dll = runtime_file(installer, "a1", "FILE_x64_KinectAudio10.dll")
+            if dll is None:
+                sys.exit("error: the installer does not contain KinectAudio10.dll")
+        data = beam_weights_file(dll)
+    except (ValueError, KeyError, IndexError, struct.error, zlib.error) as e:
+        sys.exit("error: the weights could not be extracted (%s: %s); not installing anything"
+                 % (type(e).__name__, e))
+    if len(data) != AUDIO_WEIGHTS_SIZE or (AUDIO_WEIGHTS_SHA256 and
+                                          hashlib.sha256(data).hexdigest() != AUDIO_WEIGHTS_SHA256):
+        sys.exit("error: the extracted weights do not match the known ones; not installing them")
+    with open(target, "wb") as f:
+        f.write(data)
+    print("Wrote", target, "(%d bytes, SHA-256 verified)" % len(data))
+
+
+def data_target(output, user, filename):
+    """Where a fetched file goes. OUTPUT is a file if it ends in .bin and a
+    directory otherwise (created if needed); --user means
+    $XDG_DATA_HOME/libfreenect (~/.local/share/libfreenect), or on macOS
+    ~/Library/Application Support/libfreenect."""
+    if user:
+        if sys.platform == "darwin":
+            base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
+        else:
+            base = os.environ.get("XDG_DATA_HOME", "")
+            if not base.startswith("/"):
+                base = os.path.join(os.path.expanduser("~"), ".local", "share")
+        output = os.path.join(base, "libfreenect")
+    if output is None:
+        return filename
+    if output.lower().endswith(".bin"):
+        return output
+    if not os.path.isdir(output):
+        os.makedirs(output)
+    return os.path.join(output, filename)
+
+
+if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--audio-weights":
+    # fwfetcher.py --audio-weights [--from INSTALLER | --dll KinectAudio10.dll] [--user | OUTPUT]
+    args = sys.argv[2:]
+    installer_path = dll_path = output = None
+    user = False
+    while args:
+        if args[0] in ("--from", "--dll") and len(args) >= 2:
+            if args[0] == "--from":
+                installer_path = args[1]
+            else:
+                dll_path = args[1]
+            args = args[2:]
+        elif args[0] == "--user":
+            user = True
+            args = args[1:]
+        elif not args[0].startswith("-") and output is None:
+            output = args[0]
+            args = args[1:]
+        else:
+            sys.exit("usage: fwfetcher.py --audio-weights [--from INSTALLER | --dll KinectAudio10.dll] [--user | OUTPUT]")
+    if user and output is not None:
+        sys.exit("error: give either --user or OUTPUT, not both")
+    try:
+        target = data_target(output, user, AUDIO_WEIGHTS_FILE)
+    except OSError as e:
+        sys.exit("error: cannot create the output directory: %s" % e)
+    fetch_audio_weights(target, installer_path, dll_path)
+    sys.exit(0)
 
 
 def uac_target(output, user):
