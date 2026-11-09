@@ -301,6 +301,5 @@ int main(int argc, char **argv)
 	if (video_sink.fd >= 0) close(video_sink.fd);
 	free(depth_sink.buf);
 	free(video_sink.buf);
-	fn_exit_done();
-	return ret;
+	return fn_exit_done(ret);
 }

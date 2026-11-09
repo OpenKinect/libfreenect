@@ -88,6 +88,5 @@ int main(int argc, char *argv[])
 	freenect_sync_stop();
 	printf("Done\n");
 	fflush(stdout);
-	fn_exit_done();
-	return 0;
+	return fn_exit_done(0);
 }

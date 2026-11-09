@@ -145,6 +145,5 @@ int main(int argc, char** argv) {
 
 	freenect_shutdown(f_ctx);
 	printf("Done\n");
-	fn_exit_done();
-	return 0;
+	return fn_exit_done(0);
 }

@@ -30,7 +30,7 @@
  *   fn_install_exit_handlers();          at the start of main()
  *   while (!fn_exit_requested) ...;      main loop; poll with a short timeout
  *   ...stop streams, close the device, freenect_shutdown()...
- *   fn_exit_done();                      as the last step before returning
+ *   return fn_exit_done(code);           the last step: ends main()
  *
  * POSIX: SIGINT, SIGTERM, SIGHUP (terminal closed) and SIGQUIT request exit.
  * Windows: Ctrl+C, Ctrl+Break, closing the console window, logoff and
@@ -42,7 +42,14 @@
  * immediately, and if the clean shutdown takes longer than
  * FN_EXIT_WATCHDOG_MS, the program is ended anyway, so that a tool can always
  * be stopped.
+ *
+ * On Windows, fn_exit_done() ends the process itself, after flushing stdio,
+ * without unloading the DLLs: on the Xbox 1414, freenect-camtest and
+ * freenect-hotplug twice printed their last line and then never exited (after
+ * a power cycle, and after a replug), so the hang was past main(), where no
+ * Ctrl+C handler can run. Everything has been released by then.
  */
+#include <stdio.h>
 
 #pragma once
 
@@ -120,10 +127,13 @@ FN_EXIT_INLINE void fn_install_exit_handlers(void)
 	SetConsoleCtrlHandler(fn_console_handler, TRUE);
 }
 
-FN_EXIT_INLINE void fn_exit_done(void)
+FN_EXIT_INLINE int fn_exit_done(int code)
 {
 	if (fn_exit_done_event)
 		SetEvent(fn_exit_done_event);
+	fflush(NULL);
+	TerminateProcess(GetCurrentProcess(), (UINT)code); /* does not return */
+	return code;
 }
 
 /* Sleep for ms milliseconds, returning early once exit has been requested. */
@@ -173,9 +183,10 @@ FN_EXIT_INLINE void fn_install_exit_handlers(void)
 	signal(SIGALRM, SIG_DFL);
 }
 
-FN_EXIT_INLINE void fn_exit_done(void)
+FN_EXIT_INLINE int fn_exit_done(int code)
 {
 	alarm(0);
+	return code;
 }
 
 #endif

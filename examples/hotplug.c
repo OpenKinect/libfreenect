@@ -168,6 +168,5 @@ int main(int argc, char **argv)
 	close_dev();
 	freenect_shutdown(ctx);
 	printf("Done.\n");
-	fn_exit_done();
-	return 0;
+	return fn_exit_done(0);
 }
