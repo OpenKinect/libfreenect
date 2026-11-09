@@ -4,7 +4,11 @@
 SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
 SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib/fakenect)
 include_directories(../src)
-add_library (fakenect SHARED fakenect.c parson.c ../src/registration.c)
+add_library (fakenect SHARED fakenect.c parson.c ../src/registration.c ../src/coordinate_mapper.c)
+# no fused multiply-add in the mapper (see src/CMakeLists.txt)
+if (NOT MSVC)
+  set_source_files_properties (../src/coordinate_mapper.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+endif ()
 set_target_properties ( fakenect PROPERTIES
   VERSION ${PROJECT_VER}
   SOVERSION ${PROJECT_APIVER}
