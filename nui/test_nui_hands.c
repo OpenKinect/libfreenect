@@ -82,7 +82,8 @@ static void make_hand(int kind, float x0, float y0, float z0)
 		static const float bx[4] = { -0.027f, -0.009f, 0.009f, 0.027f }, tx[4] = { -0.055f, -0.019f, 0.019f, 0.055f };
 		static const float len[4] = { 0.065f, 0.08f, 0.085f, 0.075f };
 		int i;
-		cap(v3make(x0 - 0.02f, y0 - 0.01f, z0), v3make(x0 + 0.02f, y0 - 0.01f, z0), 0.035f); // palm
+		for (i = 0; i < 4; i++) // the palm: flat, 2.2 cm thick, as wide as the four fingers
+			cap(v3make(x0 + bx[i], y0 - 0.06f, z0), v3make(x0 + bx[i], y0 + 0.025f, z0), 0.011f);
 		for (i = 0; i < 4; i++) // index (nearest the thumb) .. little
 			cap(v3make(x0 + bx[i], y0 + 0.03f, z0), v3make(x0 + tx[i], y0 + 0.03f + len[i], z0), 0.0085f);
 		cap(v3make(x0 - 0.035f, y0 - 0.02f, z0), v3make(x0 - 0.09f, y0 + 0.025f, z0), 0.01f); // thumb
@@ -130,6 +131,81 @@ static void analyze(int kind, float z, freenect_nui_hand* h)
 	fn_nui_hand_analyze(depth, v3make(0.15f, 0.1f, z), wrist_at, v3make(-0.15f, 0.4f, z), h);
 }
 
+// turn p about the hand's centre c: first about the vertical (yaw, the palm
+// turning towards the body's midline for > 0), then about x (pitch, the
+// fingers coming towards the Kinect for > 0)
+static v3 turn(v3 p, v3 c, float yaw, float pitch)
+{
+	float cy = cosf(yaw), sy = sinf(yaw), cp = cosf(pitch), sp = sinf(pitch);
+	v3 d = v3sub(p, c), e, f;
+	e = v3make(d.x * cy + d.z * sy, d.y, -d.x * sy + d.z * cy);
+	f = v3make(e.x, e.y * cp + e.z * sp, -e.y * sp + e.z * cp);
+	return v3add(c, f);
+}
+
+static void analyze_turned(int kind, float z, float yaw_deg, float pitch_deg, freenect_nui_hand* h, v3* want_dir, v3* want_normal)
+{
+	static uint16_t depth[640 * 480];
+	float yaw = yaw_deg * 0.017453293f, pitch = pitch_deg * 0.017453293f;
+	v3 c = v3make(0.15f, 0.1f, z), o = v3make(0, 0, 0);
+	int k;
+	make_hand(kind, 0.15f, 0.1f, z);
+	for (k = 0; k < ncaps; k++) {
+		caps[k].a = turn(caps[k].a, c, yaw, pitch);
+		caps[k].b = turn(caps[k].b, c, yaw, pitch);
+	}
+	wrist_at = turn(wrist_at, c, yaw, pitch);
+	*want_dir = turn(v3make(0, 1, 0), o, yaw, pitch);
+	*want_normal = turn(v3make(0, 0, -1), o, yaw, pitch);
+	render(depth);
+	fn_nui_hand_analyze(depth, c, wrist_at, v3make(-0.15f, 0.4f, z), h);
+}
+
+static float angle_to(freenect_nui_point a, v3 b, int unsigned_)
+{
+	float c = a.x * b.x + a.y * b.y + a.z * b.z;
+	if (unsigned_)
+		c = fabsf(c);
+	return acosf(c > 1.0f ? 1.0f : c < -1.0f ? -1.0f : c) * 57.29578f;
+}
+
+static void orientation_checks(void)
+{
+	static const struct {
+		int kind;
+		float yaw, pitch;
+		float max_dir, max_normal;
+		const char* what;
+	} cases[] = {
+		{ OPEN, 0, 0, 10, 10, "open hand facing the Kinect" },
+		{ OPEN, -35, 0, 12, 12, "palm turned 35 degrees away from the body" },
+		{ OPEN, 45, 0, 12, 12, "palm turned 45 degrees towards the midline" },
+		{ OPEN, 0, 35, 12, 12, "fingers tipped 35 degrees towards the Kinect" },
+		{ OPEN, 0, -35, 12, 12, "fingers tipped 35 degrees away" },
+		{ OPEN, 30, 25, 15, 15, "turned 30 and tipped 25 degrees" },
+		{ OPEN, 80, 0, 15, 25, "edge-on (palm towards the midline, 80 degrees)" },
+		{ FIST, 0, 0, 20, 45, "fist: along the forearm" },
+	};
+	unsigned i;
+	for (i = 0; i < sizeof(cases) / sizeof(cases[0]); i++) {
+		freenect_nui_hand h;
+		v3 wd, wn, y;
+		float ed, en, eq;
+		char what[160];
+		analyze_turned(cases[i].kind, 1.0f, cases[i].yaw, cases[i].pitch, &h, &wd, &wn);
+		ed = angle_to(h.direction, wd, 0);
+		// the sign of the normal is a guess when the hand is edge-on
+		en = angle_to(h.normal, wn, cases[i].yaw >= 60);
+		y = v3make(h.orientation.matrix[1][0], h.orientation.matrix[1][1], h.orientation.matrix[1][2]);
+		eq = angle_to(h.direction, y, 0);
+		printf("    (%s: direction (%.2f %.2f %.2f) off %.1f, normal (%.2f %.2f %.2f) off %.1f degrees)\n", cases[i].what,
+		       h.direction.x, h.direction.y, h.direction.z, ed, h.normal.x, h.normal.y, h.normal.z, en);
+		snprintf(what, sizeof(what), "%s: direction within %.0f, normal within %.0f degrees", cases[i].what, cases[i].max_dir,
+		         cases[i].max_normal);
+		CHECK(ed <= cases[i].max_dir && (cases[i].kind == FIST || en <= cases[i].max_normal) && eq < 0.5f, what);
+	}
+}
+
 static const char* name(int s)
 {
 	return s == 1 ? "open" : s == 2 ? "closed" : s == 3 ? "pointing" : s == 4 ? "gun" : "unknown";
@@ -142,6 +218,89 @@ static void show(const freenect_nui_hand* h)
 	for (f = 0; f < 5; f++)
 		if (h->finger_found[f])
 			printf("      %-6s (%.3f %.3f %.3f)\n", fn[f], h->fingertips[f].x, h->fingertips[f].y, h->fingertips[f].z);
+}
+
+/* A right fist at 1 m with the index finger pointing at the Kinect (and the
+ * thumb up for a gun). */
+static void towards_kinect_checks(void)
+{
+	static uint16_t depth[640 * 480];
+	const float x0 = 0.15f, y0 = 0.1f, z0 = 1.0f;
+	int gun;
+	for (gun = 0; gun < 2; gun++) {
+		freenect_nui_hand h;
+		char what[128];
+		ncaps = 0;
+		wrist_at = v3make(x0, y0 - 0.06f, z0 + 0.05f);
+		cap(wrist_at, v3make(x0, y0 - 0.25f, z0 + 0.32f), 0.03f);                                   // forearm, back and down
+		cap(v3make(x0, y0 - 0.005f, z0), v3make(x0, y0 + 0.005f, z0), 0.045f);                      // fist
+		cap(v3make(x0 + 0.01f, y0 + 0.02f, z0 - 0.035f), v3make(x0 + 0.01f, y0 + 0.02f, z0 - 0.11f), 0.009f); // index, at the Kinect
+		if (gun)
+			cap(v3make(x0 - 0.02f, y0 + 0.035f, z0 - 0.01f), v3make(x0 - 0.025f, y0 + 0.095f, z0 - 0.01f), 0.0105f); // thumb, up
+		render(depth);
+		fn_nui_hand_analyze(depth, v3make(x0, y0, z0), wrist_at, v3make(-0.15f, 0.4f, z0), &h);
+		printf("    (%s at the Kinect: %d fingers, %s, towards %d, index (%.3f %.3f %.3f))\n", gun ? "gun" : "pointing", h.num_fingers,
+		       name(h.state), h.finger_towards_kinect, h.fingertips[1].x, h.fingertips[1].y, h.fingertips[1].z);
+		snprintf(what, sizeof(what), "%s at the Kinect: %s, the index tip within 2 cm", gun ? "a gun" : "pointing",
+		         gun ? "gun" : "pointing");
+		CHECK(h.finger_towards_kinect && h.finger_found[1] && h.state == (gun ? FREENECT_NUI_HAND_GUN : FREENECT_NUI_HAND_POINTING) &&
+		      fabsf(h.fingertips[1].z - (z0 - 0.119f)) < 0.02f && fabsf(h.fingertips[1].x - (x0 + 0.01f)) < 0.02f, what);
+	}
+	{
+		freenect_nui_hand h;
+		v3 wd, wn;
+		analyze_turned(OPEN, 1.0f, 0, 35, &h, &wd, &wn);
+		CHECK(!h.finger_towards_kinect, "an open hand tipped towards the Kinect is not a finger at it");
+		analyze(FIST, 1.0f, &h);
+		CHECK(!h.finger_towards_kinect && h.state == FREENECT_NUI_HAND_CLOSED, "a fist is not a finger at the Kinect");
+	}
+}
+
+/* Both hands together at 1 m in front of the body: two fists side by side,
+ * forearms back and down; optionally both index fingers together pointing
+ * at the Kinect (a two-hand gun), or up. */
+enum { CLASP_FISTS, CLASP_AT_KINECT, CLASP_APART_40 };
+
+static void make_clasp(int kind, v3* hl, v3* hr, v3* wl, v3* wr)
+{
+	const float x0 = 0.0f, y0 = 0.1f, z0 = 1.0f, half = kind == CLASP_APART_40 ? 0.2f : 0.045f;
+	ncaps = 0;
+	*hl = v3make(x0 - half, y0, z0);
+	*hr = v3make(x0 + half, y0, z0);
+	*wl = v3make(x0 - half - 0.01f, y0 - 0.06f, z0 + 0.05f);
+	*wr = v3make(x0 + half + 0.01f, y0 - 0.06f, z0 + 0.05f);
+	cap(*wl, v3make(x0 - half - 0.1f, y0 - 0.25f, z0 + 0.32f), 0.03f);
+	cap(*wr, v3make(x0 + half + 0.1f, y0 - 0.25f, z0 + 0.32f), 0.03f);
+	cap(v3make(hl->x, y0 - 0.005f, z0), v3make(hl->x, y0 + 0.005f, z0), 0.045f);
+	cap(v3make(hr->x, y0 - 0.005f, z0), v3make(hr->x, y0 + 0.005f, z0), 0.045f);
+	if (kind == CLASP_AT_KINECT)
+		cap(v3make(x0, y0 + 0.02f, z0 - 0.04f), v3make(x0, y0 + 0.02f, z0 - 0.12f), 0.013f);
+}
+
+static void clasp_checks(void)
+{
+	static uint16_t depth[640 * 480];
+	freenect_nui_clasp c;
+	v3 hl, hr, wl, wr;
+
+	make_clasp(CLASP_FISTS, &hl, &hr, &wl, &wr);
+	render(depth);
+	fn_nui_clasp_analyze(depth, hl, hr, wl, wr, v3make(0.0f, 0.4f, 1.3f), &c);
+	printf("    (clasped fists: clasped %d, %s)\n", c.clasped, name(c.state));
+	CHECK(c.clasped && c.state == FREENECT_NUI_HAND_CLOSED, "hands clasped together, nothing out: clasped, closed");
+
+	make_clasp(CLASP_AT_KINECT, &hl, &hr, &wl, &wr);
+	render(depth);
+	fn_nui_clasp_analyze(depth, hl, hr, wl, wr, v3make(0.0f, 0.4f, 1.3f), &c);
+	printf("    (two-hand gun: clasped %d, %s, towards %d, tip (%.3f %.3f %.3f), direction (%.2f %.2f %.2f))\n", c.clasped,
+	       name(c.state), c.towards_kinect, c.tip.x, c.tip.y, c.tip.z, c.direction.x, c.direction.y, c.direction.z);
+	CHECK(c.clasped && c.state == FREENECT_NUI_HAND_POINTING && c.towards_kinect && fabsf(c.tip.z - 0.867f) < 0.02f &&
+	      c.direction.z < -0.7f, "two-hand gun at the Kinect: pointing, the tip and direction");
+
+	make_clasp(CLASP_APART_40, &hl, &hr, &wl, &wr);
+	render(depth);
+	fn_nui_clasp_analyze(depth, hl, hr, wl, wr, v3make(0.0f, 0.4f, 1.3f), &c);
+	CHECK(!c.clasped, "hands 40 cm apart: not clasped");
 }
 
 int main(void)
@@ -189,6 +348,10 @@ int main(void)
 	CHECK(h.holding && h.state == FREENECT_NUI_HAND_CLOSED, "holding a stick at 2.5 m: holding, closed");
 	analyze(OPEN, 1.0f, &h);
 	CHECK(!h.holding, "an open hand holds nothing");
+
+	orientation_checks();
+	towards_kinect_checks();
+	clasp_checks();
 
 	analyze(OPEN, 2.5f, &h);
 	printf("    (open, 2.5 m: %d pixels, extent %.1f cm, palm r %.1f cm, fingers valid %d, %s)\n", h.pixels,

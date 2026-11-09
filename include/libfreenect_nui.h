@@ -105,6 +105,13 @@ typedef struct {
 	float x, y, z;
 } freenect_nui_point;
 
+/// A rotation, as NUI_SKELETON_BONE_ORIENTATION: rows of `matrix` are the
+/// object's X, Y and Z axes in skeleton space; quaternion (x, y, z, w).
+typedef struct {
+	float matrix[3][3];
+	float quaternion[4];
+} freenect_nui_rotation;
+
 /// One user. users[i] of a frame is player index i + 1 in the player
 /// index image, as in the SDK.
 typedef struct {
@@ -116,6 +123,13 @@ typedef struct {
 	uint32_t quality;                           ///< FREENECT_NUI_CLIPPED_*
 	freenect_nui_hand_state hand_state[2];      ///< left, right
 	int hand_holding[2];                        ///< 1 if that hand holds something (a stick, a handle)
+	/// Each hand's orientation (see freenect_nui_hand): Y from the wrist
+	/// towards the fingers, Z the palm's normal, X = Y x Z. Identity when
+	/// the hand is not seen.
+	freenect_nui_rotation hand_orientation[2];
+	/// 1 if the hands are clasped together (see freenect_nui_get_clasp);
+	/// hand_state then describes both hands together.
+	int hands_clasped;
 } freenect_nui_skeleton;
 
 typedef struct {
@@ -170,12 +184,76 @@ typedef struct {
 	int finger_found[5];                  ///< which of those are extended and seen
 	int pixels;                           ///< hand pixels in the 640x480 depth
 	int holding;                          ///< 1 if the hand holds something that sticks out of it (a stick, a handle)
+	/// Orientation, from the plane and the long axis of the hand's pixels:
+	/// direction from the wrist towards the fingers (for a fist, along the
+	/// forearm), and the normal of the hand's plane. Depth cannot tell the
+	/// palm from the back of the hand, so the normal points to the Kinect's
+	/// side; for a hand seen edge-on, away from the body's midline.
+	freenect_nui_point direction, normal;
+	freenect_nui_rotation orientation;    ///< Y = direction, Z = normal, X = Y x Z
+	/// 1 if a finger points at the Kinect: it does not stick out of the
+	/// hand's outline then, only towards the Kinect in depth. It is reported
+	/// as the index finger (fingertips[1]).
+	int finger_towards_kinect;
 } freenect_nui_hand;
+
+/// The two hands together (clasped): their pixels are then one region.
+typedef struct {
+	int clasped;                          ///< 1 if the hands are together
+	/// CLOSED: clasped with nothing out; POINTING / GUN: fingers out
+	/// together, along the arms (a two-hand gun; GUN if a thumb is also up)
+	freenect_nui_hand_state state;
+	freenect_nui_point center;            ///< of the clasped hands
+	freenect_nui_point tip;               ///< the fingertips, if pointing
+	freenect_nui_point direction;         ///< where they point (from the wrists to the tip), if pointing
+	int towards_kinect;                   ///< 1 if they point at the Kinect
+} freenect_nui_clasp;
 
 /// The hands (0: left, 1: right) of users[user] of the last frame, which
 /// must be TRACKED: the same analysis that filled the skeleton's hand
 /// joints. Returns 0, or -1 if the user has no skeleton.
 FREENECT_NUI_API int freenect_nui_get_hands(freenect_nui* nui, int user, freenect_nui_hand hands[2]);
+
+/// Whether users[user]'s hands are clasped together, and what they form.
+/// Returns 0, or -1 if the user has no skeleton.
+FREENECT_NUI_API int freenect_nui_get_clasp(freenect_nui* nui, int user, freenect_nui_clasp* out);
+
+/* ------------------------------------------------------------ two-hand manipulation */
+
+/// How an object is held between the two hands.
+typedef enum {
+	FREENECT_NUI_GRIP_NONE = 0,
+	FREENECT_NUI_GRIP_CLOSED = 1, ///< both fists closed (grabbing)
+	FREENECT_NUI_GRIP_HOLD = 2,   ///< open hands, palms facing each other (holding a ball)
+	FREENECT_NUI_GRIP_ANY = 3,    ///< for freenect_nui_set_grip: either
+} freenect_nui_grip;
+
+/// Two hands holding a virtual object in front of the user: turn it, zoom
+/// it (hands apart / together), move it. Starts after 3 frames of a grip
+/// with both hands at least 15 cm in front of the shoulders; ends after 4
+/// frames without. The deltas are the change since the last frame (only
+/// reported once they pass about 0.5 degrees, 0.3 % or 3 mm; smaller ones
+/// add up until they do), so applying each frame's delta gives the total.
+typedef struct {
+	int active;                         ///< the object is held this frame
+	int began, ended;                   ///< the grip began / ended this frame
+	freenect_nui_grip grip;
+	freenect_nui_point center;          ///< between the palms (skeleton space, m)
+	float distance;                     ///< between the palms, m
+	float scale;                        ///< distance change since the last frame: > 1 apart (zoom in), < 1 together
+	float rotation[4];                  ///< rotation since the last frame, quaternion (x, y, z, w), skeleton space
+	freenect_nui_point translation;     ///< centre movement since the last frame, m
+	float total_scale;                  ///< since the grip began
+	float total_rotation[4];
+	freenect_nui_point total_translation;
+} freenect_nui_manipulation;
+
+/// The two-hand manipulation of users[user] in the last frame. Returns 0
+/// (out->active says whether something is held), or -1 if the user has no
+/// skeleton.
+FREENECT_NUI_API int freenect_nui_get_manipulation(freenect_nui* nui, int user, freenect_nui_manipulation* out);
+/// Which grips start a manipulation (default FREENECT_NUI_GRIP_ANY).
+FREENECT_NUI_API int freenect_nui_set_grip(freenect_nui* nui, freenect_nui_grip grip);
 
 /* ------------------------------------------------------------ smoothing */
 
@@ -197,13 +275,7 @@ FREENECT_NUI_API int freenect_nui_smooth(freenect_nui_smoother* s, freenect_nui_
 
 /* ------------------------------------------------------------ orientations */
 
-/// A bone's rotation, as NUI_SKELETON_BONE_ORIENTATION: rows of `matrix` are
-/// the bone's X, Y and Z axes, Y along the bone; quaternion (x, y, z, w).
-typedef struct {
-	float matrix[3][3];
-	float quaternion[4];
-} freenect_nui_rotation;
-
+/// A bone's rotation (freenect_nui_rotation): Y along the bone.
 typedef struct {
 	int end_joint, start_joint;
 	freenect_nui_rotation hierarchical; ///< relative to the parent bone

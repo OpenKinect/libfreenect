@@ -32,3 +32,7 @@
  * in skeleton space. fingertips[] come out as thumb, index, middle, ring,
  * little, with finger_found[] saying which are there. */
 void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, v3 midline, freenect_nui_hand* out);
+
+/* The two hands together (hand joints within 16 cm): their pixels are one
+ * region, analysed as one hand from the joints' midpoints. */
+void fn_nui_clasp_analyze(const uint16_t* depth, v3 hand_l, v3 hand_r, v3 wrist_l, v3 wrist_r, v3 midline, freenect_nui_clasp* out);

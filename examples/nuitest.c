@@ -41,6 +41,7 @@
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS // fopen
 #endif
+#include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -206,6 +207,37 @@ static void print_hand(const char* side, const freenect_nui_skeleton* S, int whi
 			any = 1;
 		}
 	printf(any ? "]" : "");
+	if (S->hand_state[which] != FREENECT_NUI_HAND_UNKNOWN && !S->hands_clasped) {
+		// the palm's normal, in words (skeleton space: +x is towards the user's
+		// right as they face the Kinect, +y up, +z away from the Kinect)
+		const float* n = S->hand_orientation[which].matrix[2];
+		float ax = fabsf(n[0]), ay = fabsf(n[1]), az = fabsf(n[2]);
+		printf(", palm towards %s", az >= ax && az >= ay ? (n[2] < 0 ? "the Kinect" : "away")
+		                             : ax >= ay ? (n[0] < 0 ? "the user's left" : "the user's right")
+		                                        : (n[1] > 0 ? "up" : "down"));
+	}
+}
+
+// a quaternion as "N degrees about (x y z)"
+static void print_turn(const float q[4])
+{
+	float w = q[3] > 1.0f ? 1.0f : q[3] < -1.0f ? -1.0f : q[3], a = 2.0f * acosf(w), s = sinf(a / 2.0f);
+	if (s < 1e-4f)
+		printf("not turned");
+	else
+		printf("turned %.0f degrees about (%+.2f %+.2f %+.2f)", a * 57.29578f, q[0] / s, q[1] / s, q[2] / s);
+}
+
+static void print_manipulation(const freenect_nui_manipulation* m)
+{
+	print_turn(m->total_rotation);
+	printf(", zoom x%.2f, moved (%+.0f %+.0f %+.0f) cm", m->total_scale, 100 * m->total_translation.x,
+	       100 * m->total_translation.y, 100 * m->total_translation.z);
+}
+
+static const char* grip_name(freenect_nui_grip g)
+{
+	return g == FREENECT_NUI_GRIP_CLOSED ? "fists" : g == FREENECT_NUI_GRIP_HOLD ? "palms facing" : "?";
 }
 
 /* ------------------------------------------------------------ main */
@@ -222,6 +254,7 @@ int main(int argc, char** argv)
 	time_t start, last;
 	double busy = 0.0;
 	unsigned tracked_frames = 0, nframes = 0, sec_frames = 0;
+	static freenect_nui_manipulation last_manip[FREENECT_NUI_MAX_USERS];
 
 	fn_install_exit_handlers();
 	for (i = 1; i < argc; i++) {
@@ -277,6 +310,21 @@ int main(int argc, char** argv)
 					tracked_frames++;
 					break;
 				}
+			// two-hand manipulation: report when an object is grabbed and let go
+			for (k = 0; k < FREENECT_NUI_MAX_USERS; k++) {
+				freenect_nui_manipulation m;
+				if (freenect_nui_get_manipulation(nui, k, &m) < 0)
+					continue;
+				if (m.began)
+					printf("    [user %d grabs with %s, hands %.0f cm apart]\n", k + 1, grip_name(m.grip), 100 * m.distance);
+				if (m.active)
+					last_manip[k] = m;
+				if (m.ended) {
+					printf("    [user %d lets go: ", k + 1);
+					print_manipulation(&last_manip[k]);
+					printf("]\n");
+				}
+			}
 		}
 		t = time(NULL);
 		if (t != last) {
@@ -301,6 +349,22 @@ int main(int argc, char** argv)
 					printf("\n        hands: ");
 					print_hand("left", S, 0);
 					print_hand("; right", S, 1);
+					if (S->hands_clasped) {
+						freenect_nui_clasp c;
+						freenect_nui_get_clasp(nui, k, &c);
+						printf("\n        hands clasped: %s", c.state == FREENECT_NUI_HAND_GUN || c.state == FREENECT_NUI_HAND_POINTING
+						                                      ? (c.towards_kinect ? "two-hand gun, at the Kinect" : "two-hand gun")
+						                                      : "nothing out");
+						if (c.state == FREENECT_NUI_HAND_GUN || c.state == FREENECT_NUI_HAND_POINTING)
+							printf(", pointing (%+.2f %+.2f %+.2f)", c.direction.x, c.direction.y, c.direction.z);
+					}
+					{
+						freenect_nui_manipulation m;
+						if (freenect_nui_get_manipulation(nui, k, &m) == 0 && m.active) {
+							printf("\n        holding (%s, %.0f cm apart): ", grip_name(m.grip), 100 * m.distance);
+							print_manipulation(&m);
+						}
+					}
 				}
 				printf("\n");
 			}

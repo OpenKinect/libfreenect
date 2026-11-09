@@ -52,6 +52,7 @@
 #include <string.h>
 #include "nui_internal.h"
 #include "hands.h"
+#include "gestures.h"
 
 #define F640 571.26f
 #define WIN 256                // window side in 640x480 pixels (the whole reach from 0.8 m)
@@ -61,6 +62,7 @@
 #define MIN_PIXELS 40
 #define FINGER_PIXELS 300
 #define FINGER_MAX_Z 1.6f
+#define CLASP_APART 0.16f      // m between the hand joints: the hands are together
 
 // skeleton space <-> libfreenect's 640x480 (not mirrored)
 static void to_pixel(v3 p, float* X, float* Y)
@@ -183,6 +185,179 @@ static void name_fingers(freenect_nui_hand* out, v3 wrist, v3 midline)
 	}
 }
 
+/*
+ * Orientation:
+ * - direction: from where the forearm enters the hand region (the centroid
+ *   of its pixels within 1.5 cm of the wrist) to the palm centre. Both lie
+ *   on the visible surface, so the direction does not tilt towards the
+ *   Kinect, and the extended thumb does not pull it sideways;
+ * - normal: of the plane through the pixels around the palm (their least
+ *   spread). A hand seen edge-on shows only its narrow side, whose pixels
+ *   lie flat towards the Kinect; the thinner the hand is across the
+ *   direction in the image, the more the normal turns to the image-plane
+ *   perpendicular of the direction.
+ */
+static void orient(const uint16_t* depth, int x0, int y0, const uint8_t* in, v3 wrist, v3 axis, v3 midline, freenect_nui_hand* out)
+{
+	v3 palm = v3make(out->palm.x, out->palm.y, out->palm.z), vp[3], dir, nrm, view, edge, wc = v3make(0, 0, 0), hc = v3make(0, 0, 0);
+	double sp[3] = { 0, 0, 0 }, Cp[3][3], ep[3], across = 0.0;
+	double spp[3][3] = { { 0 } };
+	float rp = 1.5f * out->palm_radius, thin;
+	int np = 0, nw = 0, nh = 0, x, y, i, j;
+	if (rp < 0.03f)
+		rp = 0.03f;
+	for (y = 0; y < WIN; y++)
+		for (x = 0; x < WIN; x++) {
+			int X = x0 + x, Y = y0 + y;
+			v3 p;
+			double c[3];
+			if (!in[y * WIN + x])
+				continue;
+			p = from_pixel(X, Y, depth[Y * 640 + X]);
+			c[0] = p.x; c[1] = p.y; c[2] = p.z;
+			if (fn_nui_v3len(v3sub(p, palm)) < rp && v3dot(v3sub(p, wrist), axis) >= 0.025f) {
+				for (i = 0; i < 3; i++) {
+					sp[i] += c[i];
+					for (j = 0; j < 3; j++)
+						spp[i][j] += c[i] * c[j];
+				}
+				np++;
+			}
+			if (v3dot(v3sub(p, wrist), axis) < 0.015f) {
+				wc = v3add(wc, p);
+				nw++;
+			} else if (v3dot(v3sub(p, wrist), axis) >= 0.025f) {
+				hc = v3add(hc, p);
+				nh++;
+			}
+		}
+	if (np < 10 || nh < 10)
+		return;
+	hc = v3scale(hc, 1.0f / nh);
+	for (i = 0; i < 3; i++)
+		for (j = 0; j < 3; j++)
+			Cp[i][j] = spp[i][j] / np - (sp[i] / np) * (sp[j] / np);
+	fn_nui_eig3(Cp, ep, vp);
+	view = fn_nui_v3norm(palm);
+	wc = nw >= 5 ? v3scale(wc, 1.0f / nw) : wrist;
+	dir = v3sub(hc, wc);
+	if (fn_nui_v3len(dir) < 0.02f)
+		dir = v3sub(hc, wrist);
+	dir = fn_nui_v3norm(dir);
+	nrm = vp[2];
+	if (v3dot(nrm, view) > 0.0f)
+		nrm = v3scale(nrm, -1.0f);
+	// edge-on: the hand's spread across the direction in the image (a flat
+	// hand's standard deviation there is about 2 cm, its edge's under 1 cm)
+	edge = fn_nui_v3norm(v3cross(dir, view));
+	{
+		double e[3] = { edge.x, edge.y, edge.z };
+		for (i = 0; i < 3; i++)
+			for (j = 0; j < 3; j++)
+				across += e[i] * Cp[i][j] * e[j];
+	}
+	thin = (float)((sqrt(across > 0 ? across : 0) - 0.009) / (0.015 - 0.009));
+	thin = thin < 0.0f ? 0.0f : thin > 1.0f ? 1.0f : thin;
+	if (v3dot(edge, v3sub(palm, midline)) < 0.0f)
+		edge = v3scale(edge, -1.0f);
+	if (thin < 1.0f) {
+		// the fitted normal leans towards the edge's side; keep its sign
+		if (v3dot(nrm, edge) < 0.0f && thin > 0.5f)
+			edge = v3scale(edge, -1.0f);
+		nrm = fn_nui_v3norm(v3add(v3scale(nrm, thin), v3scale(edge, 1.0f - thin)));
+	}
+	// the direction in the hand's plane
+	dir = fn_nui_v3norm(v3sub(dir, v3scale(nrm, v3dot(dir, nrm))));
+	out->direction.x = dir.x; out->direction.y = dir.y; out->direction.z = dir.z;
+	out->normal.x = nrm.x; out->normal.y = nrm.y; out->normal.z = nrm.z;
+	fn_nui_rotation_from_axes(dir, nrm, &out->orientation);
+}
+
+/*
+ * A finger pointing at the Kinect does not stick out of the outline, only in
+ * depth: the region's nearest pixel lies more than 5 cm in front of the
+ * region's mean depth, and the pixels within 3 cm behind it stay within
+ * 3.5 cm of it (a finger, not a whole hand tipped towards the Kinect).
+ */
+static int forward_tip(const uint16_t* depth, int x0, int y0, const uint8_t* in, v3* tip)
+{
+	int x, y, best = 1 << 30, bx = -1, by = -1, n = 0, far = 0;
+	double mean = 0.0;
+	int count = 0;
+	v3 t;
+	for (y = 0; y < WIN; y++)
+		for (x = 0; x < WIN; x++)
+			if (in[y * WIN + x]) {
+				int d = depth[(y0 + y) * 640 + x0 + x];
+				mean += d;
+				count++;
+				if (d < best) {
+					best = d;
+					bx = x;
+					by = y;
+				}
+			}
+	if (bx < 0 || mean / count - best < 50.0)
+		return 0;
+	t = from_pixel(x0 + bx, y0 + by, best);
+	for (y = 0; y < WIN; y++)
+		for (x = 0; x < WIN; x++)
+			if (in[y * WIN + x]) {
+				int d = depth[(y0 + y) * 640 + x0 + x];
+				if (d > best + 30)
+					continue;
+				n++;
+				if (fn_nui_v3len(v3sub(from_pixel(x0 + x, y0 + y, d), t)) > 0.035f)
+					far++;
+			}
+	if (n < 8 || far > n / 10)
+		return 0;
+	*tip = t;
+	return 1;
+}
+
+void fn_nui_clasp_analyze(const uint16_t* depth, v3 hand_l, v3 hand_r, v3 wrist_l, v3 wrist_r, v3 midline, freenect_nui_clasp* out)
+{
+	freenect_nui_hand h;
+	v3 hand = v3scale(v3add(hand_l, hand_r), 0.5f), wrist = v3scale(v3add(wrist_l, wrist_r), 0.5f), arm, best_tip = hand;
+	float best = 0.0f;
+	int f;
+	memset(out, 0, sizeof(*out));
+	if (hand_l.z < 0.3f || hand_r.z < 0.3f || fn_nui_v3len(v3sub(hand_l, hand_r)) > CLASP_APART)
+		return;
+	fn_nui_hand_analyze(depth, hand, wrist, midline, &h);
+	if (h.state == FREENECT_NUI_HAND_UNKNOWN)
+		return;
+	out->clasped = 1;
+	out->center = h.palm;
+	out->state = FREENECT_NUI_HAND_CLOSED;
+	arm = fn_nui_v3norm(v3sub(hand, wrist));
+	// the fingers out along the arms; a thumb pointing up is not the aim
+	for (f = 1; f < 5; f++) {
+		v3 t = v3make(h.fingertips[f].x, h.fingertips[f].y, h.fingertips[f].z), d;
+		float along;
+		if (!h.finger_found[f])
+			continue;
+		d = v3sub(t, wrist);
+		along = v3dot(fn_nui_v3norm(d), arm);
+		if ((along > 0.7f || (f == 1 && h.finger_towards_kinect)) && fn_nui_v3len(d) > best) {
+			best = fn_nui_v3len(d);
+			best_tip = t;
+		}
+	}
+	if (best > 0.0f) {
+		v3 dir = fn_nui_v3norm(v3sub(best_tip, wrist));
+		out->state = h.finger_found[0] ? FREENECT_NUI_HAND_GUN : FREENECT_NUI_HAND_POINTING;
+		out->tip.x = best_tip.x;
+		out->tip.y = best_tip.y;
+		out->tip.z = best_tip.z;
+		out->direction.x = dir.x;
+		out->direction.y = dir.y;
+		out->direction.z = dir.z;
+		out->towards_kinect = h.finger_towards_kinect;
+	}
+}
+
 void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, v3 midline, freenect_nui_hand* out)
 {
 	static uint8_t in[WIN * WIN];
@@ -192,6 +367,7 @@ void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, v3 midline, f
 	int x0, y0, sx = -1, sy = -1, best = 1 << 30, x, y, head = 0, tail = 0, n = 0;
 	v3 axis = fn_nui_v3norm(v3sub(hand, wrist));
 	memset(out, 0, sizeof(*out));
+	fn_nui_rotation_from_axes(v3make(0.0f, 1.0f, 0.0f), v3make(0.0f, 0.0f, 1.0f), &out->orientation);
 	if (hand.z < 0.3f)
 		return;
 	to_pixel(hand, &hx, &hy);
@@ -278,6 +454,7 @@ void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, v3 midline, f
 			out->palm_radius = (float)bd * c.z / F640;
 		}
 	}
+	orient(depth, x0, y0, in, wrist, axis, midline, out);
 
 	// outline: region pixels with a 4-neighbour outside, traced in order
 	{
@@ -337,7 +514,13 @@ void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, v3 midline, f
 		out->extent = farthest;
 		// fingertips
 		if (n >= FINGER_PIXELS && no > 24 && hand.z <= FINGER_MAX_Z) {
-			int K = no / 24 < 4 ? 4 : no / 24, i;
+			// k-curvature over about 3 cm of outline: past a fingertip's
+			// rounded end, down its sides
+			int K = no / 24, i, Kmin = (int)(0.03f * F640 / hand.z);
+			if (K < Kmin)
+				K = Kmin;
+			if (K < 4)
+				K = 4;
 			float minext = 1.7f * out->palm_radius;
 			for (i = 0; i < no; i++) {
 				int a = (i - K + no) % no, b = (i + K) % no, X = x0 + ox[i], Y = y0 + oy[i], f2, dup = 0;
@@ -381,6 +564,31 @@ void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, v3 midline, f
 			}
 			out->fingers_valid = 1;
 			name_fingers(out, wrist, midline);
+		}
+	}
+
+	// a finger pointing at the Kinect: the index; one other finger out of the
+	// outline with it is the thumb (a gun aimed at the Kinect)
+	if (out->fingers_valid && !out->holding && out->num_fingers <= 1) {
+		v3 tip;
+		int f, other = -1;
+		for (f = 0; f < 5; f++)
+			if (out->finger_found[f])
+				other = f;
+		if (forward_tip(depth, x0, y0, in, &tip) &&
+		    (other < 0 || fn_nui_v3len(v3sub(tip, v3make(out->fingertips[other].x, out->fingertips[other].y,
+		                                                 out->fingertips[other].z))) > 0.03f)) {
+			if (other > 0) {
+				out->fingertips[0] = out->fingertips[other];
+				out->finger_found[0] = 1;
+				out->finger_found[other] = 0;
+			}
+			out->finger_towards_kinect = 1;
+			out->fingertips[1].x = tip.x;
+			out->fingertips[1].y = tip.y;
+			out->fingertips[1].z = tip.z;
+			out->finger_found[1] = 1;
+			out->num_fingers++;
 		}
 	}
 

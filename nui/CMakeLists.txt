@@ -6,7 +6,7 @@
 # fwfetcher.py --nui extract them from Microsoft's Kinect Runtime download.
 ######################################################################################
 
-set(NUI_SRC inflate.c models.c forest.c segment.c proposals.c fit.c output.c hands.c nui.c)
+set(NUI_SRC inflate.c models.c forest.c segment.c proposals.c fit.c output.c hands.c gestures.c nui.c)
 
 add_library(freenect_nui SHARED ${NUI_SRC})
 add_library(freenect_nui_static STATIC ${NUI_SRC})
@@ -50,10 +50,20 @@ endif ()
 
 if (BUILD_TESTS)
   # Hands and fingers on rendered depth; needs no model.
-  add_executable(test_nui_hands test_nui_hands.c hands.c segment.c)
+  add_executable(test_nui_hands test_nui_hands.c hands.c gestures.c segment.c)
   target_include_directories(test_nui_hands PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include)
   if (UNIX)
     target_link_libraries(test_nui_hands m)
   endif ()
   add_test(NAME nui_hands COMMAND test_nui_hands)
+endif ()
+
+if (BUILD_TESTS)
+  # Two-hand manipulation (turn, zoom, move) on synthetic hand paths; needs no model.
+  add_executable(test_nui_gestures test_nui_gestures.c gestures.c segment.c)
+  target_include_directories(test_nui_gestures PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include)
+  if (UNIX)
+    target_link_libraries(test_nui_gestures m)
+  endif ()
+  add_test(NAME nui_gestures COMMAND test_nui_gestures)
 endif ()
