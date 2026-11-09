@@ -27,6 +27,8 @@
 
 #include <memory>
 #include "libfreenect.h"
+#include "libfreenect_audio.h"
+#include "libfreenect_coordinate_mapper.h"
 #include <stdexcept>
 #include <sstream>
 #include <map>
@@ -167,6 +169,13 @@ namespace Freenect {
 		freenect_depth_range getDepthRange() {
 			return freenect_get_depth_range(m_dev);
 		}
+		// 1 if read from the Kinect (needs FREENECT_DEVICE_AUDIO), 0 for the standard values
+		int getMicGeometry(freenect_mic_geometry &geometry) {
+			return freenect_get_mic_geometry(m_dev, &geometry);
+		}
+		bool audioStreamingAvailable() {
+			return freenect_audio_streaming_available(m_dev) == 1;
+		}
 		const freenect_device *getDevice() {
 			return m_dev;
 		}
@@ -276,6 +285,50 @@ namespace Freenect {
 		volatile bool m_stop;
 		pthread_t m_thread;
 		DeviceMap m_devices;
+	};
+
+	// Depth, colour and camera space mapping for one Kinect
+	// (libfreenect_coordinate_mapper.h); usable after the device is gone.
+	class CoordinateMapper : Noncopyable {
+	  public:
+		explicit CoordinateMapper(FreenectDevice &device)
+			: m_mapper(freenect_create_coordinate_mapper(const_cast<freenect_device*>(device.getDevice())))
+		{
+			if (!m_mapper) throw std::runtime_error("Cannot create a coordinate mapper");
+		}
+		CoordinateMapper(const void *calibration, size_t size)
+			: m_mapper(freenect_create_coordinate_mapper_from_calibration(calibration, size))
+		{
+			if (!m_mapper) throw std::runtime_error("Not a libfreenect calibration");
+		}
+		~CoordinateMapper() { freenect_destroy_coordinate_mapper(m_mapper); }
+		void setMirrored(bool mirrored) { freenect_mapper_set_mirrored(m_mapper, mirrored ? 1 : 0); }
+		int getCalibration(void *buf, size_t size) { return freenect_mapper_get_calibration(m_mapper, buf, size); }
+		freenect_color_point depthToColor(freenect_depth_point p,
+			freenect_resolution depth_res = FREENECT_RESOLUTION_MEDIUM, freenect_resolution color_res = FREENECT_RESOLUTION_MEDIUM) {
+			freenect_color_point c;
+			if (freenect_map_depth_point_to_color(m_mapper, depth_res, color_res, p, &c) < 0) throw std::runtime_error("Unsupported resolution");
+			return c;
+		}
+		freenect_camera_point depthToCamera(freenect_depth_point p, freenect_resolution depth_res = FREENECT_RESOLUTION_MEDIUM) {
+			freenect_camera_point s;
+			if (freenect_map_depth_point_to_camera(m_mapper, depth_res, p, &s) < 0) throw std::runtime_error("Unsupported resolution");
+			return s;
+		}
+		freenect_depth_point cameraToDepth(freenect_camera_point s, freenect_resolution depth_res = FREENECT_RESOLUTION_MEDIUM) {
+			freenect_depth_point p;
+			if (freenect_map_camera_point_to_depth(m_mapper, depth_res, s, &p) < 0) throw std::runtime_error("Unsupported resolution");
+			return p;
+		}
+		freenect_color_point cameraToColor(freenect_camera_point s, freenect_resolution color_res = FREENECT_RESOLUTION_MEDIUM) {
+			freenect_color_point c;
+			if (freenect_map_camera_point_to_color(m_mapper, color_res, s, &c) < 0) throw std::runtime_error("Unsupported resolution");
+			return c;
+		}
+		// The frame functions: see libfreenect_coordinate_mapper.h
+		freenect_coordinate_mapper *get() { return m_mapper; }
+	  private:
+		freenect_coordinate_mapper *m_mapper;
 	};
 
 }

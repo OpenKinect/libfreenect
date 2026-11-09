@@ -110,6 +110,30 @@ freenect_destroy_coordinate_mapper(m);
 
 To map recordings later without the Kinect, save its calibration with `freenect_mapper_get_calibration()` (152 bytes) and load it with `freenect_create_coordinate_mapper_from_calibration()`.
 
+## Microphone array
+
+`freenect_get_mic_geometry()` reads the array's layout from the Kinect: four cardioid microphones on a line, at y = −113, 36, 76 and 113 mm.
+
+**Recording.** Which path records the microphones depends on the audio firmware:
+- **Microsoft's firmware (UAC.BIN):** the microphones are a standard USB audio device of the operating system (4 channels, 32-bit, 16 kHz). Record them with ALSA, PipeWire, Core Audio or WASAPI.
+- **The Xbox firmware (audios.bin):** libfreenect streams them itself with `freenect_start_audio()`, except on Windows.
+
+`freenect_audio_streaming_available()` says which applies to a device.
+
+**Processing.** `libfreenect_audio_dsp.h` (library `freenect_audio_dsp`, CMake `BUILD_AUDIO_DSP`, on by default) works on audio from either path. It follows the structure of Microsoft's Kinect audio DSP:
+- a 256-band filterbank;
+- 11 beams from −50° to +50°, chosen by the source's direction, steered to it, or fixed;
+- the runtime's direction estimate and tracker, with a confidence value;
+- with SpeexDSP, echo cancellation, noise suppression and gain control.
+
+The beams are designed from the microphone positions, so no Microsoft data is needed. Their mean directivity is the same as that of Microsoft's beams, and their worst-case white noise gain is higher. `freenect-driver-install` and `fwfetcher.py --audio-weights` can also extract Microsoft's own beam weights from the Kinect Runtime download on your machine, into `kinect_beam_weights.bin`; `freenect_dsp_load_sdk_weights()` uses them. libfreenect doesn't contain them.
+
+`freenect-micbeam` shows it all at work. On Windows it records the Kinect's array through WASAPI. Elsewhere it uses libfreenect's audio stream, or a WAV file or `arecord` piped into it:
+
+```bash
+arecord -D hw:Kinect -c4 -f S32_LE -r16000 -t wav - | freenect-micbeam --wav -
+```
+
 ## Colour camera settings (Kinect for Windows)
 
 The Kinect for Windows (model 1517) has the colour controls of Microsoft's SDK: auto exposure, exposure time, frame interval, gain, brightness, power-line frequency, backlight compensation, auto white balance, white balance, contrast, hue, saturation, gamma and sharpness. Set them with `freenect_set_color_setting()`, with the SDK's values, ranges and defaults (listed with `freenect_color_setting` in `libfreenect.h`). The camera accepts them only while video streams, so libfreenect keeps them and sends them once frames arrive, and again after every video start. On the Xbox 360 models the functions return `-ENOTSUP`, as the SDK does.
