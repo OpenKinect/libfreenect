@@ -59,6 +59,10 @@ FN_INTERNAL int fnusb_set_led_alt(libusb_device_handle * dev, freenect_context *
 // arrival.
 #define FN_HOTPLUG_MAX 16
 #define FN_HOTPLUG_POLL_MS 1000
+// A camera whose serial cannot be read yet (on Windows, for a moment after it
+// appears, before its driver is ready) is reported only once it can, or after
+// this long with an unknown serial.
+#define FN_HOTPLUG_SERIAL_WAIT_MS 5000
 typedef struct {
 	uint8_t bus;
 	uint8_t addr;
@@ -79,6 +83,11 @@ typedef struct {
 	int native;          // libusb hotplug is registered (no polling needed)
 	int native_handle;   // libusb_hotplug_callback_handle
 	uint64_t last_scan_ms;
+	struct {
+		uint8_t bus, addr;
+		uint64_t since_ms;
+	} pending[FN_HOTPLUG_MAX]; // new cameras whose serial could not be read yet
+	int n_pending;
 } fn_hotplug_state;
 
 // The entry for bus/addr in the last scan, or NULL.
@@ -88,6 +97,10 @@ const fn_hotplug_entry *fn_hotplug_find(const fn_hotplug_state *st, uint8_t bus,
 // returns how many there are.
 int fn_hotplug_update(fn_hotplug_state *st, const fn_hotplug_entry *now, int n_now,
                       fn_hotplug_change *changes, int max_changes);
+// Hold back from `now` (n_now cameras, scanned at now_ms) the new cameras
+// whose serial could not be read, for up to FN_HOTPLUG_SERIAL_WAIT_MS after
+// they were first seen. Returns how many cameras remain in `now`.
+int fn_hotplug_hold_unready(fn_hotplug_state *st, fn_hotplug_entry *now, int n_now, uint64_t now_ms);
 // USB side (usb_libusb10.c)
 int fnusb_scan_cameras(freenect_context *ctx, fn_hotplug_entry *out, int max);
 void fnusb_hotplug_register(freenect_context *ctx);

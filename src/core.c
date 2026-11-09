@@ -119,7 +119,10 @@ static int hotplug_scan(freenect_context *ctx, fn_hotplug_change *changes, int m
 
 	if (!ctx->hotplug.cb)
 		return 0;
-	if (!ctx->hotplug.dirty && (ctx->hotplug.native || t - ctx->hotplug.last_scan_ms < FN_HOTPLUG_POLL_MS))
+	// With libusb hotplug, scan when it reports a change, and once a second
+	// while a new camera's serial cannot be read yet.
+	if (!ctx->hotplug.dirty && ((ctx->hotplug.native && !ctx->hotplug.n_pending) ||
+	                            t - ctx->hotplug.last_scan_ms < FN_HOTPLUG_POLL_MS))
 		return 0;
 	ctx->hotplug.dirty = 0;
 	ctx->hotplug.last_scan_ms = t;
@@ -129,6 +132,7 @@ static int hotplug_scan(freenect_context *ctx, fn_hotplug_change *changes, int m
 		FN_WARNING("Hotplug: cannot list USB devices (%d)\n", n);
 		return 0;
 	}
+	n = fn_hotplug_hold_unready(&ctx->hotplug, now, n, t);
 	nch = fn_hotplug_update(&ctx->hotplug, now, n, changes, max_changes);
 	for (i = 0; i < nch; i++) {
 		if (changes[i].event != FREENECT_HOTPLUG_LEFT)
@@ -159,8 +163,9 @@ FREENECTAPI int freenect_process_events_timeout(freenect_context *ctx, struct ti
 	freenect_device *dev;
 	int nch, i, res;
 
-	// Without libusb hotplug, come back at least once per scan interval.
-	if (ctx->hotplug.cb && !ctx->hotplug.native && timeout &&
+	// Without libusb hotplug, or while a new camera's serial cannot be read
+	// yet, come back at least once per scan interval.
+	if (ctx->hotplug.cb && (!ctx->hotplug.native || ctx->hotplug.n_pending) && timeout &&
 	    (timeout->tv_sec > 1 || (timeout->tv_sec == 1 && timeout->tv_usec > 0))) {
 		capped.tv_sec = 1;
 		capped.tv_usec = 0;

@@ -82,6 +82,40 @@ int main(void)
 	n = fn_hotplug_update(&st, now, 0, ch, 3);
 	CHECK(n == 3 && st.n_known == 0, "change list capped at max_changes, table still updated");
 
+	printf("7. a new camera whose serial cannot be read yet (Windows, just after replugging)\n");
+	memset(&st, 0, sizeof(st));
+	now[0] = E(1, 42, "");
+	n = fn_hotplug_hold_unready(&st, now, 1, 10000);
+	CHECK(n == 0 && st.n_pending == 1, "held back at first");
+	n = fn_hotplug_update(&st, now, n, ch, 32);
+	CHECK(n == 0, "  no arrival reported");
+	now[0] = E(1, 42, "");
+	n = fn_hotplug_hold_unready(&st, now, 1, 12000);
+	CHECK(n == 0, "  still held 2 s later");
+	now[0] = E(1, 42, "C00000000000001C");
+	n = fn_hotplug_hold_unready(&st, now, 1, 13000);
+	CHECK(n == 1 && st.n_pending == 0, "  serial readable: passed on");
+	n = fn_hotplug_update(&st, now, n, ch, 32);
+	CHECK(n == 1 && ch[0].event == FREENECT_HOTPLUG_ARRIVED && strcmp(ch[0].dev.serial, "C00000000000001C") == 0,
+	      "  one arrival, with its serial");
+	n = fn_hotplug_hold_unready(&st, now, 1, 14000);
+	CHECK(n == 1 && fn_hotplug_update(&st, now, n, ch, 32) == 0, "  then no further event");
+
+	memset(&st, 0, sizeof(st));
+	now[0] = E(1, 43, "");
+	fn_hotplug_hold_unready(&st, now, 1, 20000);
+	n = fn_hotplug_hold_unready(&st, now, 1, 20000 + FN_HOTPLUG_SERIAL_WAIT_MS);
+	CHECK(n == 1 && st.n_pending == 0, "never readable: reported after the wait, without a serial");
+	CHECK(fn_hotplug_update(&st, now, n, ch, 32) == 1 && ch[0].dev.serial[0] == '\0', "  one arrival");
+	n = fn_hotplug_hold_unready(&st, now, 1, 30000);
+	CHECK(n == 1 && st.n_pending == 0, "  known now, so not held again");
+
+	memset(&st, 0, sizeof(st));
+	now[0] = E(1, 44, "");
+	fn_hotplug_hold_unready(&st, now, 1, 40000);
+	n = fn_hotplug_hold_unready(&st, now, 0, 41000);
+	CHECK(n == 0 && st.n_pending == 0, "unplugged while waiting: forgotten, nothing reported");
+
 	printf("\n%s\n", pass ? "ALL PASS" : "SOME FAILED");
 	return pass ? 0 : 1;
 }

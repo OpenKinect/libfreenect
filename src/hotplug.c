@@ -77,3 +77,49 @@ int fn_hotplug_update(fn_hotplug_state *st, const fn_hotplug_entry *now, int n_n
 	st->n_known = n_now;
 	return n;
 }
+
+static int find_pending(const fn_hotplug_state *st, const fn_hotplug_entry *e)
+{
+	int j;
+	for (j = 0; j < st->n_pending; j++)
+		if (st->pending[j].bus == e->bus && st->pending[j].addr == e->addr)
+			return j;
+	return -1;
+}
+
+int fn_hotplug_hold_unready(fn_hotplug_state *st, fn_hotplug_entry *now, int n_now, uint64_t now_ms)
+{
+	int i, j, n = 0, np = 0;
+	if (n_now > FN_HOTPLUG_MAX)
+		n_now = FN_HOTPLUG_MAX;
+
+	// Forget the waiting cameras that are gone.
+	for (j = 0; j < st->n_pending; j++) {
+		for (i = 0; i < n_now; i++)
+			if (now[i].bus == st->pending[j].bus && now[i].addr == st->pending[j].addr)
+				break;
+		if (i < n_now)
+			st->pending[np++] = st->pending[j];
+	}
+	st->n_pending = np;
+
+	for (i = 0; i < n_now; i++) {
+		int hold = 0;
+		j = find_pending(st, &now[i]);
+		if (now[i].serial[0] == '\0' && !fn_hotplug_find(st, now[i].bus, now[i].addr)) {
+			if (j < 0 && st->n_pending < FN_HOTPLUG_MAX) {
+				j = st->n_pending++;
+				st->pending[j].bus = now[i].bus;
+				st->pending[j].addr = now[i].addr;
+				st->pending[j].since_ms = now_ms;
+			}
+			hold = j >= 0 && now_ms - st->pending[j].since_ms < FN_HOTPLUG_SERIAL_WAIT_MS;
+		}
+		if (hold)
+			continue;
+		if (j >= 0) // reported now, with or without its serial
+			st->pending[j] = st->pending[--st->n_pending];
+		now[n++] = now[i];
+	}
+	return n;
+}
