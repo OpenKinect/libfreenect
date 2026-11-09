@@ -91,6 +91,25 @@ This downloads the installer from download.microsoft.com, extracts only the firm
 
 Distances outside the range are delivered as 0. Earlier versions of libfreenect kept every distance; to get that again, use `FREENECT_DEPTH_RANGE_FULL`. Earlier versions of libfreenect used a slightly different formula, with a 0.375-pixel offset, which gave shorter distances: with the reference sample calibration about 0.5 % at 1.2 m, 1.7 % at 4 m and 3 % at 7 m.
 
+## Mapping between depth, colour and 3-D points
+
+`libfreenect_coordinate_mapper.h` does what the SDK's coordinate mapper does, with the same results, from the Kinect's own calibration:
+- the colour pixel of a depth pixel, or of every pixel of a depth frame;
+- the depth pixel of every colour pixel;
+- depth pixels to 3-D points in metres and back, and 3-D points to colour pixels.
+
+Depth can be 640×480, 320×240 or 80×60; colour 640×480 or 1280×960. Coordinates are those of libfreenect's images; `freenect_mapper_set_mirrored()` switches to mirrored ones, as the SDK delivers. The SDK's equivalents and the few deliberate differences are described in `src/coordinate_mapper.c`.
+
+```c
+freenect_coordinate_mapper *m = freenect_create_coordinate_mapper(dev);
+freenect_depth_point p = { 320, 240, depth_mm[240 * 640 + 320] };
+freenect_color_point c;
+freenect_map_depth_point_to_color(m, FREENECT_RESOLUTION_MEDIUM, FREENECT_RESOLUTION_MEDIUM, p, &c);
+freenect_destroy_coordinate_mapper(m);
+```
+
+To map recordings later without the Kinect, save its calibration with `freenect_mapper_get_calibration()` (152 bytes) and load it with `freenect_create_coordinate_mapper_from_calibration()`.
+
 ## Colour camera settings (Kinect for Windows)
 
 The Kinect for Windows (model 1517) has the colour controls of Microsoft's SDK: auto exposure, exposure time, frame interval, gain, brightness, power-line frequency, backlight compensation, auto white balance, white balance, contrast, hue, saturation, gamma and sharpness. Set them with `freenect_set_color_setting()`, with the SDK's values, ranges and defaults (listed with `freenect_color_setting` in `libfreenect.h`). The camera accepts them only while video streams, so libfreenect keeps them and sends them once frames arrive, and again after every video start. On the Xbox 360 models the functions return `-ENOTSUP`, as the SDK does.

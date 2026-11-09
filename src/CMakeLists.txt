@@ -20,7 +20,7 @@ ELSE(BUILD_REDIST_PACKAGE)
   install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/libfreenect")
 ENDIF()
 
-LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c audio.c loader.c kinect_type.c hotplug.c iso_diag.c stream.c color.c timing.c)
+LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c coordinate_mapper.c audio.c loader.c kinect_type.c hotplug.c iso_diag.c stream.c color.c timing.c)
 
 add_library (freenect SHARED ${SRC})
 set_target_properties ( freenect PROPERTIES
@@ -51,7 +51,7 @@ if (UNIX)
 endif ()
 
 # Install the header files
-install (FILES "../include/libfreenect.h" "../include/libfreenect_registration.h" "../include/libfreenect_audio.h"
+install (FILES "../include/libfreenect.h" "../include/libfreenect_registration.h" "../include/libfreenect_coordinate_mapper.h" "../include/libfreenect_audio.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 
 IF(UNIX)
@@ -60,3 +60,9 @@ IF(UNIX)
   install (FILES "${CMAKE_CURRENT_BINARY_DIR}/libfreenect.pc"
     DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/pkgconfig")
 ENDIF()
+
+# The coordinate mapper reproduces Microsoft's single-precision results to the
+# bit; a fused multiply-add (GCC's default on arm64) would change them.
+if (NOT MSVC)
+  set_source_files_properties (coordinate_mapper.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+endif ()

@@ -71,3 +71,14 @@ add_test(NAME near_ir COMMAND test_near_ir)
 # value and Kinect10's phase estimate.
 add_executable(test_stream_timing test_stream_timing.c)
 add_test(NAME stream_timing COMMAND test_stream_timing)
+
+# The coordinate mapper (src/coordinate_mapper.c) against Microsoft's runtime
+# (§20.5): vectors from the reference's tools/kinect10_depth_ref.py, to the bit.
+add_executable(test_coordinate_mapper test_coordinate_mapper.c)
+if (NOT MSVC)
+  target_compile_options(test_coordinate_mapper PRIVATE -ffp-contract=off)
+endif ()
+if (UNIX)
+  target_link_libraries(test_coordinate_mapper m)
+endif ()
+add_test(NAME coordinate_mapper COMMAND test_coordinate_mapper)
