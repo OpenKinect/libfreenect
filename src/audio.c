@@ -26,6 +26,7 @@
 #include "libfreenect.h"
 #include "libfreenect_audio.h"
 #include "freenect_internal.h"
+#include "mic_geometry.h"
 
 #include <string.h>
 #include <stdlib.h>
@@ -151,6 +152,58 @@ void freenect_set_audio_out_callback(freenect_device *dev, freenect_audio_out_cb
 	dev->audio_out_cb = callback;
 }
 
+// Safety guard. In a hardware test on Windows 11 (WinUSB, Xbox 1414 with
+// audios.bin), the audio isochronous streams reported stalls, and the
+// outstanding transfers were never completed by the kernel. The process could
+// then not be terminated, and Windows hung during restart, because shutdown
+// waits for that I/O. Until the audio path is understood and verified on
+// Windows, audio streaming is refused unless explicitly requested.
+static int windows_audio_allowed(void)
+{
+#ifdef _WIN32
+	char value[8];
+	DWORD n = GetEnvironmentVariableA("LIBFREENECT_WINDOWS_AUDIO_UNSAFE", value, sizeof(value));
+	return n > 0 && n < sizeof(value) && value[0] == '1';
+#else
+	return 1;
+#endif
+}
+
+int freenect_audio_streaming_available(freenect_device* dev)
+{
+	if (!dev || !dev->usb_audio.dev || dev->usb_audio.device_dead)
+		return 0;
+	// Microsoft's UAC firmware: a standard USB audio device instead
+	if (fnusb_has_audio_class(&dev->usb_audio))
+		return 0;
+	return windows_audio_allowed();
+}
+
+int freenect_get_mic_geometry(freenect_device* dev, freenect_mic_geometry* out)
+{
+	uint8_t buf[FN_MIC_GEOMETRY_SIZE];
+	int res;
+	if (!out)
+		return -1;
+	fn_mic_geometry_default(out);
+	if (!dev || !dev->usb_audio.dev || dev->usb_audio.device_dead)
+		return 0;
+	// GET_MEM (§40.5.3). The operating system asks for it on the audio
+	// streaming interface (entity 1, interface 2), which belongs to its
+	// audio driver; the firmware answers whatever the index, so this asks
+	// through interface 0, which libfreenect has claimed.
+	res = fnusb_control(&dev->usb_audio, FN_MIC_GEOMETRY_REQUEST_TYPE, FN_MIC_GEOMETRY_REQUEST,
+	                    0, (1 << 8) | 0, buf, sizeof(buf));
+	if (res < 0 || fn_mic_geometry_parse(buf, res, out) < 0) {
+		freenect_context *ctx = dev->parent;
+		FN_INFO("freenect_get_mic_geometry(): no microphone array descriptor from the Kinect (%d); "
+		        "using the standard geometry\n", res);
+		fn_mic_geometry_default(out);
+		return 0;
+	}
+	return 1;
+}
+
 int freenect_start_audio(freenect_device* dev) {
 	freenect_context *ctx = dev->parent;
 	int res;
@@ -169,23 +222,13 @@ int freenect_start_audio(freenect_device* dev) {
 	}
 
 #ifdef _WIN32
-	// Safety guard. In a hardware test on Windows 11 (WinUSB, Xbox 1414 with
-	// audios.bin), the audio isochronous streams reported stalls, and the
-	// outstanding transfers were never completed by the kernel. The process
-	// could then not be terminated, and Windows hung during restart, because
-	// shutdown waits for that I/O. Until the audio path is understood and
-	// verified on Windows, refuse to start it unless explicitly requested.
-	{
-		char value[8];
-		DWORD n = GetEnvironmentVariableA("LIBFREENECT_WINDOWS_AUDIO_UNSAFE", value, sizeof(value));
-		if (!(n > 0 && n < sizeof(value) && value[0] == '1')) {
-			FN_ERROR("Audio streaming is disabled on Windows: in testing it left USB transfers that never "
-			         "completed, which made the process unkillable and hung Windows shutdown. "
-			         "Set LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1 only on a machine you can hard-reset.\n");
-			return -1;
-		}
-		FN_WARNING("LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1: starting audio streaming on Windows. This can hang the machine.\n");
+	if (!windows_audio_allowed()) {
+		FN_ERROR("Audio streaming is disabled on Windows: in testing it left USB transfers that never "
+		         "completed, which made the process unkillable and hung Windows shutdown. "
+		         "Set LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1 only on a machine you can hard-reset.\n");
+		return -1;
 	}
+	FN_WARNING("LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1: starting audio streaming on Windows. This can hang the machine.\n");
 #endif
 
 	// Allocate buffers

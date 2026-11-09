@@ -82,3 +82,7 @@ if (UNIX)
   target_link_libraries(test_coordinate_mapper m)
 endif ()
 add_test(NAME coordinate_mapper COMMAND test_coordinate_mapper)
+
+# The microphone array descriptor of the audio firmware (src/mic_geometry.h, §40.5.3)
+add_executable(test_mic_geometry test_mic_geometry.c)
+add_test(NAME mic_geometry COMMAND test_mic_geometry)
