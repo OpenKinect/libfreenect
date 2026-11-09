@@ -166,7 +166,8 @@ float fn_nui_quat_between(const v3 b0[3], const v3 b1[3], float q[4])
 }
 
 freenect_nui_grip fn_nui_grip_of(freenect_nui_grip allowed, int tracked_l, int tracked_r, freenect_nui_hand_state state_l,
-                                 freenect_nui_hand_state state_r, v3 L, v3 R, v3 normal_l, v3 normal_r, v3 shoulder)
+                                 freenect_nui_hand_state state_r, v3 L, v3 R, v3 normal_l, v3 normal_r, v3 thumb_l, v3 thumb_r,
+                                 v3 shoulder)
 {
 	v3 d = v3sub(R, L);
 	float apart = fn_nui_v3len(d);
@@ -177,6 +178,11 @@ freenect_nui_grip fn_nui_grip_of(freenect_nui_grip allowed, int tracked_l, int t
 	u = v3scale(d, 1.0f / apart);
 	if (state_l == FREENECT_NUI_HAND_CLOSED && state_r == FREENECT_NUI_HAND_CLOSED)
 		return (allowed & FREENECT_NUI_GRIP_CLOSED) ? FREENECT_NUI_GRIP_CLOSED : FREENECT_NUI_GRIP_NONE;
+	// the triangle: thumb and index out on both hands, the thumbs pointing
+	// towards each other
+	if (state_l == FREENECT_NUI_HAND_GUN && state_r == FREENECT_NUI_HAND_GUN &&
+	    v3dot(fn_nui_v3norm(v3sub(thumb_l, L)), u) > 0.3f && v3dot(fn_nui_v3norm(v3sub(thumb_r, R)), u) < -0.3f)
+		return (allowed & FREENECT_NUI_GRIP_TRIANGLE) ? FREENECT_NUI_GRIP_TRIANGLE : FREENECT_NUI_GRIP_NONE;
 	if (state_l != FREENECT_NUI_HAND_UNKNOWN && state_l != FREENECT_NUI_HAND_CLOSED && state_r != FREENECT_NUI_HAND_UNKNOWN &&
 	    state_r != FREENECT_NUI_HAND_CLOSED && fabsf(v3dot(normal_l, u)) >= FACING && fabsf(v3dot(normal_r, u)) >= FACING)
 		return (allowed & FREENECT_NUI_GRIP_HOLD) ? FREENECT_NUI_GRIP_HOLD : FREENECT_NUI_GRIP_NONE;
@@ -235,6 +241,13 @@ void fn_nui_manip_step(fn_nui_manip* m, freenect_nui_grip grip, v3 L, v3 R, v3 d
 	out->scale = out->total_scale = 1.0f;
 	identity(out->rotation);
 	identity(out->total_rotation);
+	// one grip from start to end: another grip counts as none
+	if (m->on && grip != m->grip)
+		grip = FREENECT_NUI_GRIP_NONE;
+	if (!m->on && grip != m->grip) {
+		m->grip = grip; // a new grip starts its count
+		m->hits = 0;
+	}
 	if (grip != FREENECT_NUI_GRIP_NONE) {
 		m->hits++;
 		m->misses = 0;
@@ -264,7 +277,6 @@ void fn_nui_manip_step(fn_nui_manip* m, freenect_nui_grip grip, v3 L, v3 R, v3 d
 		return;
 	} else if (grip != FREENECT_NUI_GRIP_NONE) {
 		// while the grip flickers off for a frame or two, hold still
-		m->grip = grip;
 		m->L = lerp(m->L, L, SMOOTH);
 		m->R = lerp(m->R, R, SMOOTH);
 		m->dir = lerp(m->dir, v3add(dir_l, dir_r), SMOOTH);
@@ -294,4 +306,148 @@ void fn_nui_manip_step(fn_nui_manip* m, freenect_nui_grip grip, v3 L, v3 R, v3 d
 	fn_nui_quat_between(m->b0, m->b_ref, out->total_rotation);
 	out->total_scale = m->d0 > 0.0f ? m->d_ref / m->d0 : 1.0f;
 	out->total_translation = P(v3sub(m->c_ref, m->c0));
+}
+
+/*
+ * One hand as a pointer, as the SDK's interaction stream: the cursor maps
+ * the hand's position in a box in front of that side's shoulder onto the
+ * screen; a press is a push towards the Kinect relative to the reach the
+ * arm rests at (which follows slow changes, so leaning in is not a press); a
+ * grip is the hand closing; a swipe is a fast move along one axis.
+ */
+#define ZONE_W 0.60f          // m
+#define ZONE_H 0.45f
+#define ZONE_OUT 0.10f        // the zone's centre outside the shoulder
+#define ZONE_DOWN 0.15f       // and below the shoulder centre
+#define ACTIVE_REACH 0.20f    // m in front of the shoulder to become active
+#define STAY_REACH 0.15f      // and to stay active
+#define PRESS_DEPTH 0.12f     // m of push for press = 1
+#define SWIPE_DIST 0.30f
+#define SWIPE_RATIO 2.0f      // along the axis vs across it
+#define SWIPE_PAUSE 15        // frames
+
+void fn_nui_pointer_reset(fn_nui_pointer* p)
+{
+	memset(p, 0, sizeof(*p));
+}
+
+static float clamp01(float v)
+{
+	return v < 0.0f ? 0.0f : v > 1.0f ? 1.0f : v;
+}
+
+void fn_nui_pointer_step(fn_nui_pointer* p, int right, int tracked, v3 hand, freenect_nui_hand_state state, v3 shoulder_side,
+                         v3 shoulder_center, v3 hip_center, int quiet, freenect_nui_hand_pointer* out)
+{
+	float side = right ? 1.0f : -1.0f, x, y, reach, speed;
+	int closed, k;
+	memset(out, 0, sizeof(*out));
+	if (!tracked) {
+		if (p->gripped)
+			out->events |= FREENECT_NUI_EVENT_GRIP_END;
+		if (p->pressed)
+			out->events |= FREENECT_NUI_EVENT_PRESS_END;
+		if (quiet)
+			out->events = 0;
+		fn_nui_pointer_reset(p);
+		return;
+	}
+	reach = shoulder_side.z - hand.z;
+	x = 0.5f + (hand.x - (shoulder_side.x + side * ZONE_OUT)) / ZONE_W;
+	y = 0.5f - (hand.y - (shoulder_center.y - ZONE_DOWN)) / ZONE_H;
+	if (p->active)
+		p->active = reach >= STAY_REACH && x > -0.4f && x < 1.4f && y > -0.4f && y < 1.4f && hand.y > hip_center.y - 0.1f;
+	else
+		p->active = reach >= ACTIVE_REACH && x > -0.25f && x < 1.25f && y > -0.25f && y < 1.25f && hand.y > hip_center.y;
+
+	// cursor: smoothed, the more the slower the hand moves
+	speed = p->nh ? fn_nui_v3len(v3sub(hand, p->last)) * 30.0f : 0.0f;
+	if (!p->active || p->nh == 0) {
+		p->cx = x;
+		p->cy = y;
+	} else {
+		float a = 0.3f + 0.7f * clamp01(speed / 1.0f);
+		p->cx += a * (x - p->cx);
+		p->cy += a * (y - p->cy);
+	}
+	p->active_frames = p->active ? p->active_frames + 1 : 0;
+	out->active = p->active;
+	out->x = clamp01(p->cx);
+	out->y = clamp01(p->cy);
+
+	// press: the push beyond the resting reach
+	if (!p->active) {
+		if (p->pressed)
+			out->events |= FREENECT_NUI_EVENT_PRESS_END;
+		p->pressed = 0;
+		p->rest_set = 0;
+	} else {
+		float press;
+		if (!p->rest_set) {
+			p->rest = reach;
+			p->rest_set = 1;
+		}
+		press = (reach - p->rest) / PRESS_DEPTH;
+		if (p->active_frames < 10) {
+			// still settling after the hand came up: follow it, no press
+			p->rest += 0.3f * (reach - p->rest);
+			press = (reach - p->rest) / PRESS_DEPTH;
+		} else if (!p->pressed) {
+			// follow slow changes; pulling back resets quickly
+			p->rest += (reach < p->rest ? 0.3f : 0.03f) * (reach - p->rest);
+			if (press >= 1.0f) {
+				p->pressed = 1;
+				out->events |= FREENECT_NUI_EVENT_PRESS;
+			}
+		} else if (press < 0.5f) {
+			p->pressed = 0;
+			out->events |= FREENECT_NUI_EVENT_PRESS_END;
+		}
+		out->press = clamp01(press);
+	}
+	out->pressed = p->pressed;
+
+	// grip: the hand closing while active (an unseen frame changes nothing)
+	closed = state == FREENECT_NUI_HAND_CLOSED || (state == FREENECT_NUI_HAND_UNKNOWN && p->gripped);
+	if (p->active && closed && !p->gripped) {
+		p->gripped = 1;
+		out->events |= FREENECT_NUI_EVENT_GRIP;
+	} else if (p->gripped && (!closed || !p->active)) {
+		p->gripped = 0;
+		out->events |= FREENECT_NUI_EVENT_GRIP_END;
+	}
+	out->gripped = p->gripped;
+
+	// swipe: 30 cm within the last half second, mostly along one axis,
+	// starting in the zone, and neither pressing nor gripping
+	if (p->nh == FN_NUI_POINTER_HISTORY) {
+		memmove(p->hist, p->hist + 1, (FN_NUI_POINTER_HISTORY - 1) * sizeof(v3));
+		memmove(p->hist_active, p->hist_active + 1, (FN_NUI_POINTER_HISTORY - 1) * sizeof(int));
+		p->nh--;
+	}
+	p->hist_active[p->nh] = p->active;
+	p->hist[p->nh++] = hand;
+	if (p->cooldown > 0)
+		p->cooldown--;
+	if (p->cooldown == 0 && reach >= 0.10f && !p->pressed && !p->gripped)
+		for (k = 0; k + 3 < p->nh; k++) {
+			v3 d = v3sub(hand, p->hist[k]);
+			float ax = fabsf(d.x), ay = fabsf(d.y);
+			uint32_t ev = 0;
+			if (!p->hist_active[k]) // started in the zone, not while raising the hand
+				continue;
+			if (ax >= SWIPE_DIST && ax >= SWIPE_RATIO * ay)
+				ev = d.x > 0 ? FREENECT_NUI_EVENT_SWIPE_RIGHT : FREENECT_NUI_EVENT_SWIPE_LEFT;
+			else if (ay >= SWIPE_DIST && ay >= SWIPE_RATIO * ax)
+				ev = d.y > 0 ? FREENECT_NUI_EVENT_SWIPE_UP : FREENECT_NUI_EVENT_SWIPE_DOWN;
+			if (ev) {
+				out->events |= ev;
+				p->cooldown = SWIPE_PAUSE;
+				p->nh = 0;
+				break;
+			}
+		}
+	p->last = hand;
+	if (quiet)
+		out->events = 0;
 }

@@ -220,18 +220,25 @@ FREENECT_NUI_API int freenect_nui_get_clasp(freenect_nui* nui, int user, freenec
 
 /* ------------------------------------------------------------ two-hand manipulation */
 
-/// How an object is held between the two hands.
+/// How an object is held between the two hands. Flags, so that
+/// freenect_nui_set_grip can allow several.
 typedef enum {
 	FREENECT_NUI_GRIP_NONE = 0,
 	FREENECT_NUI_GRIP_CLOSED = 1, ///< both fists closed (grabbing)
 	FREENECT_NUI_GRIP_HOLD = 2,   ///< open hands, palms facing each other (holding a ball)
-	FREENECT_NUI_GRIP_ANY = 3,    ///< for freenect_nui_set_grip: either
+	/// a triangle in front of the Kinect: thumb and index out on both hands
+	/// (the gun state; fingers are seen within about 1.6 m), the thumbs
+	/// pointing towards each other, the index fingers up. Apart zooms in,
+	/// together zooms out; turning or tipping the triangle turns the object.
+	FREENECT_NUI_GRIP_TRIANGLE = 4,
+	FREENECT_NUI_GRIP_ANY = 7,    ///< for freenect_nui_set_grip: all of them
 } freenect_nui_grip;
 
 /// Two hands holding a virtual object in front of the user: turn it, zoom
 /// it (hands apart / together), move it. Starts after 3 frames of a grip
 /// with both hands at least 15 cm in front of the shoulders; ends after 4
-/// frames without. The deltas are the change since the last frame (only
+/// frames without (or with another grip). The deltas are the change since
+/// the last frame (only
 /// reported once they pass about 0.5 degrees, 0.3 % or 3 mm; smaller ones
 /// add up until they do), so applying each frame's delta gives the total.
 typedef struct {
@@ -252,8 +259,42 @@ typedef struct {
 /// (out->active says whether something is held), or -1 if the user has no
 /// skeleton.
 FREENECT_NUI_API int freenect_nui_get_manipulation(freenect_nui* nui, int user, freenect_nui_manipulation* out);
-/// Which grips start a manipulation (default FREENECT_NUI_GRIP_ANY).
+/// Which grips start a manipulation: FREENECT_NUI_GRIP_* flags or'ed
+/// together (default FREENECT_NUI_GRIP_ANY).
 FREENECT_NUI_API int freenect_nui_set_grip(freenect_nui* nui, freenect_nui_grip grip);
+
+/* ------------------------------------------------------------ one-hand gestures */
+
+/// One-hand events (flags; several can happen in one frame).
+#define FREENECT_NUI_EVENT_SWIPE_LEFT 0x01  ///< a fast move to the user's left
+#define FREENECT_NUI_EVENT_SWIPE_RIGHT 0x02
+#define FREENECT_NUI_EVENT_SWIPE_UP 0x04
+#define FREENECT_NUI_EVENT_SWIPE_DOWN 0x08
+#define FREENECT_NUI_EVENT_PRESS 0x10       ///< pushed towards the Kinect (a click)
+#define FREENECT_NUI_EVENT_PRESS_END 0x20   ///< pulled back again
+#define FREENECT_NUI_EVENT_GRIP 0x40        ///< the hand closed (grab; drag with the cursor)
+#define FREENECT_NUI_EVENT_GRIP_END 0x80    ///< and opened again (drop)
+
+/// One hand as a pointer on a screen the user faces (as the SDK's
+/// interaction stream): raise the hand in front of you into its interaction
+/// zone, a box about 60 cm wide and 45 cm high in front of that side's
+/// shoulder. The frame counts assume 30 frames a second.
+typedef struct {
+	int active;                ///< the hand is in its zone, at least 20 cm in front of the shoulder
+	int primary;               ///< the hand to follow: the active one, or of two the one further forward
+	float x, y;                ///< cursor, 0..1 across the zone, as the user sees the screen: (0, 0) top left
+	float press;               ///< how far pushed towards the Kinect: 0 resting .. 1 pressed (about 12 cm)
+	int pressed;               ///< pushed in (from press 1 until it is back under 0.5)
+	int gripped;               ///< closed while active (grabbing; move to drag)
+	uint32_t events;           ///< FREENECT_NUI_EVENT_* of this frame
+} freenect_nui_hand_pointer;
+
+/// Both hands (0: left, 1: right) of users[user] as pointers. Swipes need a
+/// move of 30 cm within half a second, mostly along one axis, and are then
+/// paused for half a second. While two hands manipulate an object or are
+/// clasped, there are no events. Returns 0, or -1 if the user has no
+/// skeleton.
+FREENECT_NUI_API int freenect_nui_get_hand_pointers(freenect_nui* nui, int user, freenect_nui_hand_pointer out[2]);
 
 /* ------------------------------------------------------------ smoothing */
 

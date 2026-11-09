@@ -54,11 +54,35 @@ typedef struct {
 /* Which grip two hands show (FREENECT_NUI_GRIP_NONE if none that `allowed`
  * accepts): palms tracked, both at least 15 cm in front of the shoulder
  * centre, 8 cm to 1.2 m apart; closed fists, or open hands whose palms face
- * each other (normals within about 55 degrees of the line between them). */
+ * each other (normals within about 55 degrees of the line between them), or
+ * the triangle (both hands thumb and index out, thumbs towards each other;
+ * thumb_l, thumb_r: the thumb tips). */
 freenect_nui_grip fn_nui_grip_of(freenect_nui_grip allowed, int tracked_l, int tracked_r, freenect_nui_hand_state state_l,
-                                 freenect_nui_hand_state state_r, v3 L, v3 R, v3 normal_l, v3 normal_r, v3 shoulder);
+                                 freenect_nui_hand_state state_r, v3 L, v3 R, v3 normal_l, v3 normal_r, v3 thumb_l, v3 thumb_r,
+                                 v3 shoulder);
 
 void fn_nui_manip_reset(fn_nui_manip* m);
 /* One frame: grip (NONE if not held), the palms and the hands' directions. */
 void fn_nui_manip_step(fn_nui_manip* m, freenect_nui_grip grip, v3 L, v3 R, v3 dir_l, v3 dir_r,
                        freenect_nui_manipulation* out);
+
+/* One hand as a pointer (cursor, press, grip, swipes). */
+#define FN_NUI_POINTER_HISTORY 15 /* frames: half a second */
+typedef struct {
+	v3 hist[FN_NUI_POINTER_HISTORY]; // raw hand positions, newest last
+	int hist_active[FN_NUI_POINTER_HISTORY]; // and whether the hand was active then
+	int nh;
+	int cooldown;                    // frames until the next swipe
+	float rest;                      // the resting reach towards the Kinect
+	int rest_set;
+	int active, pressed, gripped;
+	int active_frames;               // since the hand entered the zone
+	float cx, cy;                    // smoothed cursor
+	v3 last;
+} fn_nui_pointer;
+
+void fn_nui_pointer_reset(fn_nui_pointer* p);
+/* One frame of one hand (right: 1 for the right hand). hand: the hand
+ * joint; quiet: report no events (two-hand gestures are on). */
+void fn_nui_pointer_step(fn_nui_pointer* p, int right, int tracked, v3 hand, freenect_nui_hand_state state, v3 shoulder_side,
+                         v3 shoulder_center, v3 hip_center, int quiet, freenect_nui_hand_pointer* out);

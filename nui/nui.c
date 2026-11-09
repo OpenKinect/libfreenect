@@ -74,6 +74,8 @@ struct freenect_nui {
 	uint32_t manip_frame[NU];
 	freenect_nui_grip grip;          // grips that start a manipulation
 	freenect_nui_clasp clasp[NU];    // this frame's clasped hands (with hands_frame)
+	fn_nui_pointer ptr[NU][2];       // each hand as a pointer
+	freenect_nui_hand_pointer ptr_out[NU][2];
 };
 
 static void track_hands(freenect_nui* n, int k, freenect_nui_skeleton* S);
@@ -137,6 +139,7 @@ void freenect_nui_reset(freenect_nui* n)
 	memset(n->hand_dir, 0, sizeof(n->hand_dir));
 	memset(n->hand_nrm, 0, sizeof(n->hand_nrm));
 	memset(n->manip, 0, sizeof(n->manip));
+	memset(n->ptr, 0, sizeof(n->ptr));
 	memset(n->manip_frame, 0, sizeof(n->manip_frame));
 	n->frame = 0;
 }
@@ -307,6 +310,8 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 			memset(n->hand_dir[k], 0, sizeof(n->hand_dir[k]));
 			memset(n->hand_nrm[k], 0, sizeof(n->hand_nrm[k]));
 			fn_nui_manip_reset(&n->manip[k]);
+			fn_nui_pointer_reset(&n->ptr[k][0]);
+			fn_nui_pointer_reset(&n->ptr[k][1]);
 			n->hands_id[k] = U->id;
 		}
 		track_hands(n, k, S);
@@ -333,17 +338,37 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 			const freenect_nui_hand* H = n->hands[k];
 			v3 L = v3make(H[0].palm.x, H[0].palm.y, H[0].palm.z), R = v3make(H[1].palm.x, H[1].palm.y, H[1].palm.z);
 			freenect_nui_grip g;
-			if (n->manip_frame[k] + 1 != n->frame)
+			if (n->manip_frame[k] + 1 != n->frame) {
 				fn_nui_manip_reset(&n->manip[k]);
+				fn_nui_pointer_reset(&n->ptr[k][0]);
+				fn_nui_pointer_reset(&n->ptr[k][1]);
+			}
 			g = fn_nui_grip_of(n->grip, S->joint_state[FREENECT_NUI_PALM_LEFT] == FREENECT_NUI_JOINT_TRACKED,
 			                   S->joint_state[FREENECT_NUI_PALM_RIGHT] == FREENECT_NUI_JOINT_TRACKED, H[0].state, H[1].state, L,
 			                   R, v3make(H[0].normal.x, H[0].normal.y, H[0].normal.z),
-			                   v3make(H[1].normal.x, H[1].normal.y, H[1].normal.z), n->fit[k].joint[2]);
+			                   v3make(H[1].normal.x, H[1].normal.y, H[1].normal.z),
+			                   v3make(H[0].fingertips[0].x, H[0].fingertips[0].y, H[0].fingertips[0].z),
+			                   v3make(H[1].fingertips[0].x, H[1].fingertips[0].y, H[1].fingertips[0].z), n->fit[k].joint[2]);
 			if (n->clasp[k].clasped)
 				g = FREENECT_NUI_GRIP_NONE;
 			fn_nui_manip_step(&n->manip[k], g, L, R, v3make(H[0].direction.x, H[0].direction.y, H[0].direction.z),
 			                  v3make(H[1].direction.x, H[1].direction.y, H[1].direction.z), &n->manip_out[k]);
 			n->manip_frame[k] = n->frame;
+		}
+		// each hand as a pointer, from the body's hand joints; quiet while
+		// both hands do something together
+		{
+			const fn_nui_fit* F = &n->fit[k];
+			int quiet = n->manip_out[k].active || n->manip_out[k].ended || n->clasp[k].clasped, h;
+			freenect_nui_hand_pointer* P = n->ptr_out[k];
+			for (h = 0; h < 2; h++)
+				fn_nui_pointer_step(&n->ptr[k][h], h, F->jstate[h ? 11 : 7] != 0, F->joint[h ? 11 : 7], S->hand_state[h],
+				                    F->joint[h ? 8 : 4], F->joint[2], F->joint[0], quiet, &P[h]);
+			// the primary hand: the active one; of two, the one further forward
+			if (P[0].active && P[1].active)
+				P[F->joint[11].z < F->joint[7].z ? 1 : 0].primary = 1;
+			else if (P[0].active || P[1].active)
+				P[P[1].active ? 1 : 0].primary = 1;
 		}
 	}
 	memcpy(n->tracked, now_tracked, sizeof(now_tracked));
@@ -429,6 +454,18 @@ int freenect_nui_get_hands(freenect_nui* n, int user, freenect_nui_hand hands[2]
 		return -1;
 	}
 	memcpy(hands, n->hands[user], 2 * sizeof(freenect_nui_hand));
+	return 0;
+}
+
+int freenect_nui_get_hand_pointers(freenect_nui* n, int user, freenect_nui_hand_pointer out[2])
+{
+	if (!n || !out || user < 0 || user >= NU || !n->seg.u[user].active || n->manip_frame[user] != n->frame ||
+	    n->hands_id[user] != n->seg.u[user].id) {
+		if (out)
+			memset(out, 0, 2 * sizeof(freenect_nui_hand_pointer));
+		return -1;
+	}
+	memcpy(out, n->ptr_out[user], 2 * sizeof(freenect_nui_hand_pointer));
 	return 0;
 }
 

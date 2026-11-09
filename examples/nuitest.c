@@ -237,7 +237,27 @@ static void print_manipulation(const freenect_nui_manipulation* m)
 
 static const char* grip_name(freenect_nui_grip g)
 {
-	return g == FREENECT_NUI_GRIP_CLOSED ? "fists" : g == FREENECT_NUI_GRIP_HOLD ? "palms facing" : "?";
+	return g == FREENECT_NUI_GRIP_CLOSED     ? "fists"
+	       : g == FREENECT_NUI_GRIP_HOLD     ? "palms facing"
+	       : g == FREENECT_NUI_GRIP_TRIANGLE ? "the thumb and index triangle"
+	                                         : "?";
+}
+
+static void print_events(int user, int hand, uint32_t ev)
+{
+	static const struct {
+		uint32_t flag;
+		const char* name;
+	} names[] = {
+		{ FREENECT_NUI_EVENT_SWIPE_LEFT, "swipe left" }, { FREENECT_NUI_EVENT_SWIPE_RIGHT, "swipe right" },
+		{ FREENECT_NUI_EVENT_SWIPE_UP, "swipe up" },     { FREENECT_NUI_EVENT_SWIPE_DOWN, "swipe down" },
+		{ FREENECT_NUI_EVENT_PRESS, "press" },           { FREENECT_NUI_EVENT_PRESS_END, "press end" },
+		{ FREENECT_NUI_EVENT_GRIP, "grip" },             { FREENECT_NUI_EVENT_GRIP_END, "grip end (drop)" },
+	};
+	unsigned i;
+	for (i = 0; i < sizeof(names) / sizeof(names[0]); i++)
+		if (ev & names[i].flag)
+			printf("    [user %d %s hand: %s]\n", user + 1, hand ? "right" : "left", names[i].name);
 }
 
 /* ------------------------------------------------------------ main */
@@ -325,6 +345,15 @@ int main(int argc, char** argv)
 					printf("]\n");
 				}
 			}
+			// one-hand events: swipes, presses, grips
+			for (k = 0; k < FREENECT_NUI_MAX_USERS; k++) {
+				freenect_nui_hand_pointer hp[2];
+				int h;
+				if (freenect_nui_get_hand_pointers(nui, k, hp) < 0)
+					continue;
+				for (h = 0; h < 2; h++)
+					print_events(k, h, hp[h].events);
+			}
 		}
 		t = time(NULL);
 		if (t != last) {
@@ -364,6 +393,16 @@ int main(int argc, char** argv)
 							printf("\n        holding (%s, %.0f cm apart): ", grip_name(m.grip), 100 * m.distance);
 							print_manipulation(&m);
 						}
+					}
+					{
+						freenect_nui_hand_pointer hp[2];
+						int h;
+						if (freenect_nui_get_hand_pointers(nui, k, hp) == 0)
+							for (h = 0; h < 2; h++)
+								if (hp[h].primary)
+									printf("\n        pointer: %s hand, cursor (%.2f %.2f), press %.2f%s%s", h ? "right" : "left",
+									       hp[h].x, hp[h].y, hp[h].press, hp[h].pressed ? ", pressed" : "",
+									       hp[h].gripped ? ", gripped" : "");
 					}
 				}
 				printf("\n");

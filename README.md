@@ -147,7 +147,15 @@ It adds what the SDK didn't have: 12 hand joints in the same skeleton (joints 20
 Each hand also has an orientation (`hand_orientation` in the skeleton): the direction from the wrist to the fingers and the palm's normal. Depth can't tell the palm from the back of the hand, so the normal points to the Kinect's side.
 
 For interfaces you control with your hands, without touching anything:
-- **Two-hand manipulation** (`freenect_nui_get_manipulation()`): hold a virtual object between your hands, either with two fists or with open palms facing each other as around a ball. Turn it, tip it, zoom it (hands apart or together) and move it. Each frame gives the change since the last frame (rotation as a quaternion, scale, translation), plus the totals since the grip began.
+- **Two-hand manipulation** (`freenect_nui_get_manipulation()`): hold a virtual object between your hands with one of three grips. Turn it, tip it, zoom it (hands apart or together) and move it. Each frame gives the change since the last frame (rotation as a quaternion, scale, translation), plus the totals since the grip began. The grips (`freenect_nui_set_grip()` picks which are used):
+  - two fists;
+  - open palms facing each other, as around a ball;
+  - a triangle: thumb and index out on both hands, the thumbs pointing towards each other, the index fingers up. This one needs the fingers, so the hands must be within about 1.6 m of the Kinect.
+- **One hand as a pointer** (`freenect_nui_get_hand_pointers()`): raise a hand in front of your shoulder and it moves a cursor across a screen. Each hand has its own zone; the primary hand is the one further forward. Events:
+  - **press:** push towards the Kinect (a click). Slowly leaning in doesn't count;
+  - **grip:** close the hand, move it to drag, open it to drop;
+  - **swipes:** left, right, up or down, a fast move of 30 cm within half a second.
+  While both hands manipulate an object or are clasped, the one-hand events pause.
 - **Clasped hands** (`freenect_nui_get_clasp()`, `hands_clasped` in the skeleton): both hands together, with nothing out or forming a two-hand gun, with its tip and pointing direction.
 
 Hands are always told apart by arm: the left hand's joints follow the left wrist and elbow, even with the arms crossed.

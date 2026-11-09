@@ -33,6 +33,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "hands.h"
+#include "gestures.h"
 
 static int pass = 1;
 #define CHECK(cond, what) do { int ok_ = (cond); printf("  %-62s %s\n", what, ok_ ? "PASS" : "FAIL"); pass &= ok_; } while (0)
@@ -277,6 +278,52 @@ static void make_clasp(int kind, v3* hl, v3* hr, v3* wl, v3* wr)
 		cap(v3make(x0, y0 + 0.02f, z0 - 0.04f), v3make(x0, y0 + 0.02f, z0 - 0.12f), 0.013f);
 }
 
+/* The triangle: both hands up in front at 1 m, palms to the Kinect, the
+ * other fingers curled, thumbs level pointing towards each other, index
+ * fingers up and tilted 25 degrees inwards. right: 1 for the right hand. */
+static void triangle_hand(int right, v3* hand, v3* wrist)
+{
+	float x0 = right ? 0.13f : -0.13f, y0 = 0.1f, z0 = 1.0f, in = right ? -1.0f : 1.0f, s = sinf(0.436f), c = cosf(0.436f);
+	int i;
+	static const float bx[4] = { -0.027f, -0.009f, 0.009f, 0.027f };
+	*hand = v3make(x0, y0, z0);
+	*wrist = v3make(x0, y0 - 0.08f, z0 + 0.01f);
+	cap(*wrist, v3make(x0, y0 - 0.40f, z0 + 0.03f), 0.03f);
+	for (i = 0; i < 4; i++)
+		cap(v3make(x0 + bx[i], y0 - 0.06f, z0), v3make(x0 + bx[i], y0 + 0.025f, z0), 0.011f);
+	cap(v3make(x0 - 0.02f, y0 + 0.035f, z0 - 0.005f), v3make(x0 + 0.02f, y0 + 0.035f, z0 - 0.005f), 0.013f); // curled fingers
+	cap(v3make(x0 + in * 0.027f, y0 + 0.03f, z0), v3make(x0 + in * (0.027f + s * 0.085f), y0 + 0.03f + c * 0.085f, z0), 0.0085f); // index
+	cap(v3make(x0 + in * 0.035f, y0 - 0.02f, z0), v3make(x0 + in * 0.095f, y0 - 0.015f, z0), 0.01f); // thumb, level, inwards
+}
+
+static void triangle_checks(void)
+{
+	static uint16_t depth[640 * 480];
+	freenect_nui_hand h[2];
+	v3 hand[2], wrist[2], L, R, tl, tr;
+	int k;
+	ncaps = 0;
+	triangle_hand(0, &hand[0], &wrist[0]);
+	triangle_hand(1, &hand[1], &wrist[1]);
+	render(depth);
+	for (k = 0; k < 2; k++) {
+		fn_nui_hand_analyze(depth, hand[k], wrist[k], v3make(0.0f, 0.4f, 1.0f), &h[k]);
+		printf("    (triangle, %s hand: %s, thumb %d (%.3f %.3f), index %d (%.3f %.3f), palm normal (%.2f %.2f %.2f))\n",
+		       k ? "right" : "left", name(h[k].state), h[k].finger_found[0], h[k].fingertips[0].x, h[k].fingertips[0].y,
+		       h[k].finger_found[1], h[k].fingertips[1].x, h[k].fingertips[1].y, h[k].normal.x, h[k].normal.y, h[k].normal.z);
+	}
+	CHECK(h[0].state == FREENECT_NUI_HAND_GUN && h[1].state == FREENECT_NUI_HAND_GUN && h[0].finger_found[0] && h[1].finger_found[0] &&
+	      h[0].fingertips[0].x > hand[0].x + 0.05f && h[1].fingertips[0].x < hand[1].x - 0.05f,
+	      "triangle: both hands thumb and index, thumbs pointing inwards");
+	L = v3make(h[0].palm.x, h[0].palm.y, h[0].palm.z);
+	R = v3make(h[1].palm.x, h[1].palm.y, h[1].palm.z);
+	tl = v3make(h[0].fingertips[0].x, h[0].fingertips[0].y, h[0].fingertips[0].z);
+	tr = v3make(h[1].fingertips[0].x, h[1].fingertips[0].y, h[1].fingertips[0].z);
+	CHECK(fn_nui_grip_of(FREENECT_NUI_GRIP_ANY, 1, 1, h[0].state, h[1].state, L, R, v3make(h[0].normal.x, h[0].normal.y, h[0].normal.z),
+	                     v3make(h[1].normal.x, h[1].normal.y, h[1].normal.z), tl, tr, v3make(0.0f, 0.4f, 1.4f)) == FREENECT_NUI_GRIP_TRIANGLE,
+	      "  read as the triangle grip");
+}
+
 static void clasp_checks(void)
 {
 	static uint16_t depth[640 * 480];
@@ -352,6 +399,7 @@ int main(void)
 	orientation_checks();
 	towards_kinect_checks();
 	clasp_checks();
+	triangle_checks();
 
 	analyze(OPEN, 2.5f, &h);
 	printf("    (open, 2.5 m: %d pixels, extent %.1f cm, palm r %.1f cm, fingers valid %d, %s)\n", h.pixels,
