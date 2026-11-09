@@ -86,3 +86,19 @@ add_test(NAME coordinate_mapper COMMAND test_coordinate_mapper)
 # The microphone array descriptor of the audio firmware (src/mic_geometry.h, §40.5.3)
 add_executable(test_mic_geometry test_mic_geometry.c)
 add_test(NAME mic_geometry COMMAND test_mic_geometry)
+
+# The audio DSP (src/mclt.c, src/audio_dsp.c, §40.6): the filterbank against
+# the reference's tools/mclt_ref.py, the designed beams, direction finding on
+# simulated sources, and the weights file.
+if (BUILD_AUDIO_DSP)
+  add_executable(test_audio_dsp test_audio_dsp.c ${CMAKE_SOURCE_DIR}/src/mclt.c)
+  if (WITH_SPEEXDSP AND SPEEXDSP_INCLUDE_DIR AND SPEEXDSP_LIBRARY)
+    target_compile_definitions(test_audio_dsp PRIVATE HAVE_SPEEXDSP)
+    target_include_directories(test_audio_dsp PRIVATE ${SPEEXDSP_INCLUDE_DIR})
+    target_link_libraries(test_audio_dsp ${SPEEXDSP_LIBRARY})
+  endif ()
+  if (UNIX)
+    target_link_libraries(test_audio_dsp m)
+  endif ()
+  add_test(NAME audio_dsp COMMAND test_audio_dsp)
+endif ()
