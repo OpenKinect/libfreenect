@@ -57,28 +57,39 @@ static void cap(v3 a, v3 b, float r)
 
 enum { OPEN, FIST, POINT, GUN, STICK };
 
-// hand at (x0, y0, z0), fingers up, palm towards the Kinect
+static v3 wrist_at; // where make_hand put the wrist
+
+/*
+ * A right hand at (x0, y0, z0), palm towards the Kinect: the body's midline
+ * is at -x (the user's right hand is at +x in skeleton space), so the thumb
+ * points to -x. Fingers up, forearm down; except the gun, which points
+ * forward along the forearm (to +x) with the thumb up.
+ */
 static void make_hand(int kind, float x0, float y0, float z0)
 {
 	ncaps = 0;
-	cap(v3make(x0, y0 - 0.08f, z0 + 0.01f), v3make(x0, y0 - 0.40f, z0 + 0.03f), 0.03f); // forearm
+	wrist_at = v3make(x0, y0 - 0.08f, z0 + 0.01f);
+	if (kind == GUN) {
+		wrist_at = v3make(x0 - 0.08f, y0, z0 + 0.01f);
+		cap(wrist_at, v3make(x0 - 0.40f, y0 - 0.02f, z0 + 0.03f), 0.03f);                  // forearm, level
+		cap(v3make(x0 - 0.005f, y0, z0), v3make(x0 + 0.005f, y0, z0), 0.045f);             // fist
+		cap(v3make(x0 + 0.035f, y0 + 0.01f, z0), v3make(x0 + 0.125f, y0 + 0.012f, z0), 0.009f); // index, forward
+		cap(v3make(x0 + 0.0f, y0 + 0.035f, z0), v3make(x0 + 0.008f, y0 + 0.095f, z0), 0.0105f);  // thumb, up
+		return;
+	}
+	cap(wrist_at, v3make(x0, y0 - 0.40f, z0 + 0.03f), 0.03f); // forearm
 	if (kind == OPEN) {
 		static const float bx[4] = { -0.027f, -0.009f, 0.009f, 0.027f }, tx[4] = { -0.055f, -0.019f, 0.019f, 0.055f };
 		static const float len[4] = { 0.065f, 0.08f, 0.085f, 0.075f };
 		int i;
 		cap(v3make(x0 - 0.02f, y0 - 0.01f, z0), v3make(x0 + 0.02f, y0 - 0.01f, z0), 0.035f); // palm
-		for (i = 0; i < 4; i++)
+		for (i = 0; i < 4; i++) // index (nearest the thumb) .. little
 			cap(v3make(x0 + bx[i], y0 + 0.03f, z0), v3make(x0 + tx[i], y0 + 0.03f + len[i], z0), 0.0085f);
 		cap(v3make(x0 - 0.035f, y0 - 0.02f, z0), v3make(x0 - 0.09f, y0 + 0.025f, z0), 0.01f); // thumb
 	} else {
 		cap(v3make(x0, y0 - 0.005f, z0), v3make(x0, y0 + 0.005f, z0), 0.045f); // fist
 		if (kind == POINT)
 			cap(v3make(x0 + 0.01f, y0 + 0.03f, z0), v3make(x0 + 0.012f, y0 + 0.125f, z0), 0.009f);
-		if (kind == GUN) {
-			// index finger out to the side, thumb up: a "gun"
-			cap(v3make(x0 + 0.035f, y0 + 0.015f, z0), v3make(x0 + 0.125f, y0 + 0.02f, z0), 0.009f);
-			cap(v3make(x0 - 0.01f, y0 + 0.035f, z0), v3make(x0 - 0.015f, y0 + 0.095f, z0), 0.0105f);
-		}
 		if (kind == STICK) // a stick held across the fist, 60 cm long, 3 cm thick
 			cap(v3make(x0 - 0.30f, y0, z0 - 0.02f), v3make(x0 + 0.30f, y0, z0 - 0.02f), 0.015f);
 	}
@@ -115,7 +126,8 @@ static void analyze(int kind, float z, freenect_nui_hand* h)
 	static uint16_t depth[640 * 480];
 	make_hand(kind, 0.15f, 0.1f, z);
 	render(depth);
-	fn_nui_hand_analyze(depth, v3make(0.15f, 0.1f, z), v3make(0.15f, 0.02f, z + 0.01f), h);
+	// the shoulder centre: 30 cm towards the body's midline, 30 cm up
+	fn_nui_hand_analyze(depth, v3make(0.15f, 0.1f, z), wrist_at, v3make(-0.15f, 0.4f, z), h);
 }
 
 static const char* name(int s)
@@ -123,18 +135,30 @@ static const char* name(int s)
 	return s == 1 ? "open" : s == 2 ? "closed" : s == 3 ? "pointing" : s == 4 ? "gun" : "unknown";
 }
 
+static void show(const freenect_nui_hand* h)
+{
+	static const char* fn[5] = { "thumb", "index", "middle", "ring", "little" };
+	int f;
+	for (f = 0; f < 5; f++)
+		if (h->finger_found[f])
+			printf("      %-6s (%.3f %.3f %.3f)\n", fn[f], h->fingertips[f].x, h->fingertips[f].y, h->fingertips[f].z);
+}
+
 int main(void)
 {
 	freenect_nui_hand h;
-	int i;
 	printf("Hands and fingers (nui/hands.c)\n");
 
 	analyze(OPEN, 1.0f, &h);
 	printf("    (open, 1.0 m: %d pixels, palm r %.1f cm, extent %.1f cm, %d fingers, %s)\n", h.pixels, 100 * h.palm_radius,
 	       100 * h.extent, h.num_fingers, name(h.state));
-	for (i = 0; i < h.num_fingers; i++)
-		printf("      tip (%.3f %.3f %.3f)\n", h.fingertips[i].x, h.fingertips[i].y, h.fingertips[i].z);
-	CHECK(h.fingers_valid && h.num_fingers >= 4 && h.state == FREENECT_NUI_HAND_OPEN, "open hand at 1 m: 4-5 fingers, open");
+	show(&h);
+	CHECK(h.fingers_valid && h.num_fingers == 5 && h.state == FREENECT_NUI_HAND_OPEN, "open hand at 1 m: 5 fingers, open");
+	CHECK(h.finger_found[0] && h.fingertips[0].x < 0.09f && h.fingertips[0].y < 0.15f, "  the thumb is the thumb (out to the side, low)");
+	CHECK(h.finger_found[1] && h.finger_found[2] && h.finger_found[3] && h.finger_found[4] &&
+	      h.fingertips[1].x < h.fingertips[2].x && h.fingertips[2].x < h.fingertips[3].x && h.fingertips[3].x < h.fingertips[4].x,
+	      "  index, middle, ring, little in order from the thumb");
+	CHECK(fabsf(h.fingertips[2].x - 0.131f) < 0.02f && fabsf(h.fingertips[2].y - 0.215f) < 0.025f, "  the middle fingertip within 2 cm of the truth");
 	CHECK(fabsf(h.palm.x - 0.15f) < 0.03f && fabsf(h.palm.y - 0.09f) < 0.04f, "  palm centre within 3-4 cm");
 
 	analyze(FIST, 1.0f, &h);
@@ -144,14 +168,18 @@ int main(void)
 
 	analyze(POINT, 1.0f, &h);
 	printf("    (pointing, 1.0 m: %d pixels, %d fingers, %s)\n", h.pixels, h.num_fingers, name(h.state));
-	CHECK(h.fingers_valid && h.num_fingers == 1 && h.state == FREENECT_NUI_HAND_POINTING, "pointing at 1 m: one finger, pointing");
-	CHECK(h.num_fingers == 1 && h.fingertips[0].y > 0.19f && h.fingertips[0].y < 0.24f, "  the fingertip near the true tip (y 0.225 m)");
+	show(&h);
+	CHECK(h.fingers_valid && h.num_fingers == 1 && h.finger_found[1] && h.state == FREENECT_NUI_HAND_POINTING,
+	      "pointing at 1 m: the index finger, pointing");
+	CHECK(h.finger_found[1] && h.fingertips[1].y > 0.19f && h.fingertips[1].y < 0.24f, "  at the true tip (y 0.225 m)");
 
 	analyze(GUN, 1.0f, &h);
 	printf("    (gun, 1.0 m: %d pixels, %d fingers, %s)\n", h.pixels, h.num_fingers, name(h.state));
-	for (i = 0; i < h.num_fingers; i++)
-		printf("      tip (%.3f %.3f %.3f)\n", h.fingertips[i].x, h.fingertips[i].y, h.fingertips[i].z);
-	CHECK(h.fingers_valid && h.num_fingers == 2 && h.state == FREENECT_NUI_HAND_GUN, "gun shape at 1 m: index and thumb, gun");
+	show(&h);
+	CHECK(h.fingers_valid && h.num_fingers == 2 && h.finger_found[0] && h.finger_found[1] && h.state == FREENECT_NUI_HAND_GUN,
+	      "gun shape at 1 m: thumb and index, gun");
+	CHECK(h.finger_found[0] && h.finger_found[1] && h.fingertips[0].y > 0.17f && h.fingertips[1].x > 0.25f,
+	      "  thumb up, index forward");
 
 	analyze(STICK, 1.0f, &h);
 	printf("    (stick, 1.0 m: %d pixels, %d fingers, holding %d, %s)\n", h.pixels, h.num_fingers, h.holding, name(h.state));
@@ -165,7 +193,7 @@ int main(void)
 	analyze(OPEN, 2.5f, &h);
 	printf("    (open, 2.5 m: %d pixels, extent %.1f cm, palm r %.1f cm, fingers valid %d, %s)\n", h.pixels,
 	       100 * h.extent, 100 * h.palm_radius, h.fingers_valid, name(h.state));
-	CHECK(!h.fingers_valid && h.state == FREENECT_NUI_HAND_OPEN, "open hand at 2.5 m: no fingers reported, open");
+	CHECK(!h.fingers_valid && h.num_fingers == 0 && h.state == FREENECT_NUI_HAND_OPEN, "open hand at 2.5 m: no fingers reported, open");
 	analyze(FIST, 2.5f, &h);
 	printf("    (fist, 2.5 m: %d pixels, extent %.1f cm, palm r %.1f cm, %s)\n", h.pixels, 100 * h.extent, 100 * h.palm_radius, name(h.state));
 	CHECK(!h.fingers_valid && h.state == FREENECT_NUI_HAND_CLOSED, "fist at 2.5 m: closed");
@@ -173,7 +201,7 @@ int main(void)
 	{
 		static uint16_t empty[640 * 480];
 		memset(empty, 0, sizeof(empty));
-		fn_nui_hand_analyze(empty, v3make(0, 0, 1.0f), v3make(0, -0.08f, 1.0f), &h);
+		fn_nui_hand_analyze(empty, v3make(0, 0, 1.0f), v3make(0, -0.08f, 1.0f), v3make(-0.3f, 0.3f, 1.0f), &h);
 		CHECK(h.state == FREENECT_NUI_HAND_UNKNOWN, "no depth: unknown");
 	}
 	printf(pass ? "All passed\n" : "FAILURES\n");

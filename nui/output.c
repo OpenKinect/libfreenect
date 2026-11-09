@@ -47,7 +47,7 @@ typedef struct {
 } joint_filter;
 
 struct freenect_nui_smoother {
-	joint_filter j[NU][NJ];
+	joint_filter j[NU][FREENECT_NUI_JOINTS]; // body and hand joints
 };
 
 freenect_nui_smoother* freenect_nui_smoother_create(void)
@@ -70,7 +70,7 @@ static void filter_user(const freenect_nui_smoothing* P, joint_filter* J, freene
 {
 	float jitter = P->jitter_radius > 1e-4f ? P->jitter_radius : 1e-4f;
 	int j, c;
-	for (j = 0; j < NJ; j++) {
+	for (j = 0; j < FREENECT_NUI_JOINTS; j++) {
 		joint_filter* F = &J[j];
 		float raw[4], in[4], filtered[4], trend[4], pred[4], jr = jitter, md = P->max_deviation_radius, d;
 		raw[0] = s->joints[j].x; raw[1] = s->joints[j].y; raw[2] = s->joints[j].z; raw[3] = 1.0f;
@@ -192,7 +192,7 @@ static int orthonormal(const rot* m)
 
 static int nz(v3 a) { return a.x != 0.0f || a.y != 0.0f || a.z != 0.0f; }
 
-int freenect_nui_bone_orientations(const freenect_nui_skeleton* s, freenect_nui_bone bones[FREENECT_NUI_JOINTS])
+int freenect_nui_bone_orientations(const freenect_nui_skeleton* s, freenect_nui_bone bones[FREENECT_NUI_BODY_JOINTS])
 {
 	rot abs_[NJ];
 	const freenect_nui_joint_state* st;

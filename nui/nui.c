@@ -64,8 +64,12 @@ struct freenect_nui {
 	uint16_t* depth;         // the last 640x480 frame, for the hands
 	int hand_hist[NU][2][5]; // the last hand states, for smoothing
 	int hand_pos[NU][2];
-	uint32_t hand_frame[NU]; // frame the history last took a sample from (+1)
+	freenect_nui_hand hands[NU][2]; // this frame's hands of tracked users
+	uint32_t hands_frame[NU];       // the frame they belong to
+	uint32_t hands_id[NU];          // and the user
 };
+
+static void track_hands(freenect_nui* n, int k, freenect_nui_skeleton* S);
 
 freenect_nui* freenect_nui_create(const char* models_dir, int flags)
 {
@@ -120,6 +124,8 @@ void freenect_nui_reset(freenect_nui* n)
 	memset(n->tried, 0, sizeof(n->tried));
 	memset(n->tracked, 0, sizeof(n->tracked));
 	memset(n->hand_hist, 0, sizeof(n->hand_hist));
+	memset(n->hands_id, 0, sizeof(n->hands_id));
+	memset(n->hands_frame, 0, sizeof(n->hands_frame));
 	n->frame = 0;
 }
 
@@ -284,6 +290,11 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 			S->joints[j].z = n->fit[k].joint[j].z;
 			S->joint_state[j] = (freenect_nui_joint_state)n->fit[k].jstate[j];
 		}
+		if (n->hands_id[k] != U->id) {
+			memset(n->hand_hist[k], 0, sizeof(n->hand_hist[k]));
+			n->hands_id[k] = U->id;
+		}
+		track_hands(n, k, S);
 	}
 	memcpy(n->tracked, now_tracked, sizeof(now_tracked));
 	return 0;
@@ -303,33 +314,50 @@ int freenect_nui_get_player_index(freenect_nui* n, uint8_t* out)
 	return 0;
 }
 
+// Both hands of tracked user k from this frame's full-resolution depth, into
+// the skeleton's hand joints (PALM, THUMB .. LITTLE) and hand states. The
+// state is the most frequent of the last 5 frames.
+static void track_hands(freenect_nui* n, int k, freenect_nui_skeleton* S)
+{
+	static const int hand_joint[2] = { 7, 11 }, wrist_joint[2] = { 6, 10 }, first[2] = { 20, 26 };
+	const fn_nui_fit* F = &n->fit[k];
+	int h;
+	for (h = 0; h < 2; h++) {
+		freenect_nui_hand* H = &n->hands[k][h];
+		int counts[5] = { 0, 0, 0, 0, 0 }, i, best = 0, f;
+		fn_nui_hand_analyze(n->depth, F->joint[hand_joint[h]], F->joint[wrist_joint[h]], F->joint[2], H);
+		n->hand_hist[k][h][n->hand_pos[k][h]] = (int)H->state;
+		n->hand_pos[k][h] = (n->hand_pos[k][h] + 1) % 5;
+		for (i = 0; i < 5; i++)
+			counts[n->hand_hist[k][h][i] % 5]++;
+		for (i = 1; i < 5; i++)
+			if (counts[i] > counts[best])
+				best = i;
+		if (H->state != FREENECT_NUI_HAND_UNKNOWN && counts[best] >= 3)
+			H->state = (freenect_nui_hand_state)best;
+		S->hand_state[h] = H->state;
+		S->hand_holding[h] = H->holding;
+		if (H->state != FREENECT_NUI_HAND_UNKNOWN) {
+			S->joints[first[h]] = H->palm;
+			S->joint_state[first[h]] = FREENECT_NUI_JOINT_TRACKED;
+		}
+		for (f = 0; f < 5; f++)
+			if (H->finger_found[f]) {
+				S->joints[first[h] + 1 + f] = H->fingertips[f];
+				S->joint_state[first[h] + 1 + f] = FREENECT_NUI_JOINT_TRACKED;
+			}
+	}
+	n->hands_frame[k] = n->frame;
+}
+
 int freenect_nui_get_hands(freenect_nui* n, int user, freenect_nui_hand hands[2])
 {
-	static const int hand_joint[2] = { 7, 11 }, wrist_joint[2] = { 6, 10 };
-	int h;
-	if (!n || !hands || user < 0 || user >= NU || n->good[user] < LOCK_FRAMES || !n->seg.u[user].active ||
-	    n->fit_id[user] != n->seg.u[user].id) {
+	if (!n || !hands || user < 0 || user >= NU || !n->seg.u[user].active || n->hands_frame[user] != n->frame ||
+	    n->hands_id[user] != n->seg.u[user].id) {
 		if (hands)
 			memset(hands, 0, 2 * sizeof(freenect_nui_hand));
 		return -1;
 	}
-	for (h = 0; h < 2; h++) {
-		const fn_nui_fit* F = &n->fit[user];
-		int counts[5] = { 0, 0, 0, 0, 0 }, i, best = 0;
-		fn_nui_hand_analyze(n->depth, F->joint[hand_joint[h]], F->joint[wrist_joint[h]], &hands[h]);
-		// one sample per frame into the history, then the most frequent state
-		if (n->hand_frame[user] != n->frame) {
-			n->hand_hist[user][h][n->hand_pos[user][h]] = (int)hands[h].state;
-			n->hand_pos[user][h] = (n->hand_pos[user][h] + 1) % 5;
-		}
-		for (i = 0; i < 5; i++)
-			counts[n->hand_hist[user][h][i] % 5]++;
-		for (i = 1; i < 5; i++)
-			if (counts[i] > counts[best])
-				best = i;
-		if (hands[h].state != FREENECT_NUI_HAND_UNKNOWN && counts[best] >= 3)
-			hands[h].state = (freenect_nui_hand_state)best;
-	}
-	n->hand_frame[user] = n->frame;
+	memcpy(hands, n->hands[user], 2 * sizeof(freenect_nui_hand));
 	return 0;
 }

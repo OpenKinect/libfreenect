@@ -28,5 +28,7 @@
 #include "nui_internal.h"
 
 /* One hand from the 640x480 depth (libfreenect orientation, mm), given its
- * hand and wrist joints in skeleton space. */
-void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, freenect_nui_hand* out);
+ * hand and wrist joints and the body's midline (the shoulder centre), all
+ * in skeleton space. fingertips[] come out as thumb, index, middle, ring,
+ * little, with finger_found[] saying which are there. */
+void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, v3 midline, freenect_nui_hand* out);

@@ -40,7 +40,7 @@
 #define NW FN_NUI_MAP_W            // 320
 #define NH FN_NUI_MAP_H            // 240
 #define NPIX (NW * NH)
-#define NJ FREENECT_NUI_JOINTS     // 20
+#define NJ FREENECT_NUI_BODY_JOINTS // 20: the fit and the bones; hands are joints 20-31
 #define NU FREENECT_NUI_MAX_USERS  // 6
 
 // 320x240 nominal intrinsics (§30.5.4.1.1): f = 285.63 px, centre 159.5/119.5

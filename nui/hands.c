@@ -76,7 +76,114 @@ static v3 from_pixel(int X, int Y, int d_mm)
 	return v3make((xm - 319.5f) * z / F640, -((float)Y - 239.5f) * z / F640, z);
 }
 
-void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, freenect_nui_hand* out)
+/*
+ * Which fingertip is which (into slots thumb, index, middle, ring, little):
+ * - the thumb is the tip that leaves the hand's axis (wrist -> palm) at the
+ *   widest angle, at least 35 degrees and 15 degrees wider than the next;
+ *   a single tip is the thumb when it is more than 50 degrees off the axis
+ *   (a thumbs-up), else the index;
+ * - the others are counted from the thumb's side, or, without a thumb, from
+ *   the side facing the body's midline (as when the palm faces the Kinect):
+ *   index, middle, ring, little; with fewer than four, the first slots.
+ */
+static void name_fingers(freenect_nui_hand* out, v3 wrist, v3 midline)
+{
+	v3 tips[5], palm = v3make(out->palm.x, out->palm.y, out->palm.z), axis, side, d[5];
+	float ang[5], comp[5];
+	int n = out->num_fingers, i, thumb = -1, order[5], k;
+	for (i = 0; i < n; i++)
+		tips[i] = v3make(out->fingertips[i].x, out->fingertips[i].y, out->fingertips[i].z);
+	memset(out->fingertips, 0, sizeof(out->fingertips));
+	memset(out->finger_found, 0, sizeof(out->finger_found));
+	if (n == 0)
+		return;
+	// In the image plane (x, y): the fingers are found on the silhouette, and
+	// the palm centre lies on the hand's front while the wrist joint is
+	// inside the arm, which would tilt a 3-D axis towards the Kinect.
+	axis = v3sub(palm, wrist);
+	axis.z = 0.0f;
+	axis = fn_nui_v3norm(axis);
+	for (i = 0; i < n; i++) {
+		float c;
+		d[i] = v3sub(tips[i], palm);
+		d[i].z = 0.0f;
+		d[i] = fn_nui_v3norm(d[i]);
+		c = v3dot(d[i], axis);
+		ang[i] = acosf(c > 1.0f ? 1.0f : c < -1.0f ? -1.0f : c) * 57.29578f;
+	}
+	if (n == 1) {
+		if (ang[0] > 50.0f)
+			thumb = 0;
+	} else {
+		// signed angles around the axis, then the fan in order: the four
+		// fingers spread evenly, the thumb stands apart at one end
+		float th[5] = { 0 }, gap_lo, gap_hi, other = 0.0f;
+		int ord[5] = { 0 }, a, b;
+		for (i = 0; i < n; i++) {
+			th[i] = atan2f(axis.x * d[i].y - axis.y * d[i].x, v3dot(axis, d[i])) * 57.29578f;
+			ord[i] = i;
+		}
+		for (a = 1; a < n; a++)
+			for (b = a; b > 0 && th[ord[b - 1]] > th[ord[b]]; b--) {
+				int t = ord[b];
+				ord[b] = ord[b - 1];
+				ord[b - 1] = t;
+			}
+		gap_lo = th[ord[1]] - th[ord[0]];
+		gap_hi = th[ord[n - 1]] - th[ord[n - 2]];
+		if (n == 2) {
+			// index and thumb (a gun) are far apart, two fingers (a V) are not;
+			// the thumb is the one farther off the axis
+			if (gap_lo >= 50.0f)
+				thumb = ang[ord[0]] > ang[ord[1]] ? ord[0] : ord[1];
+		} else {
+			for (a = 1; a < n - 2; a++)
+				if (th[ord[a + 1]] - th[ord[a]] > other)
+					other = th[ord[a + 1]] - th[ord[a]];
+			if (gap_hi >= gap_lo && gap_hi >= 25.0f && gap_hi >= 1.4f * (other > gap_lo ? other : gap_lo))
+				thumb = ord[n - 1];
+			else if (gap_lo > gap_hi && gap_lo >= 25.0f && gap_lo >= 1.4f * (other > gap_hi ? other : gap_hi))
+				thumb = ord[0];
+		}
+	}
+	if (thumb >= 0) {
+		side = v3sub(d[thumb], v3scale(axis, v3dot(d[thumb], axis)));
+	} else {
+		v3 m = v3sub(midline, palm);
+		m.z = 0.0f;
+		side = v3sub(m, v3scale(axis, v3dot(m, axis)));
+	}
+	side = fn_nui_v3norm(side);
+	for (i = 0, k = 0; i < n; i++)
+		if (i != thumb) {
+			comp[i] = v3dot(d[i], side);
+			order[k++] = i;
+		}
+	// nearest the thumb's side first
+	{
+		int a, b;
+		for (a = 1; a < k; a++)
+			for (b = a; b > 0 && comp[order[b - 1]] < comp[order[b]]; b--) {
+				int t2 = order[b];
+				order[b] = order[b - 1];
+				order[b - 1] = t2;
+			}
+	}
+	if (thumb >= 0) {
+		out->fingertips[0].x = tips[thumb].x;
+		out->fingertips[0].y = tips[thumb].y;
+		out->fingertips[0].z = tips[thumb].z;
+		out->finger_found[0] = 1;
+	}
+	for (i = 0; i < k && i < 4; i++) {
+		out->fingertips[1 + i].x = tips[order[i]].x;
+		out->fingertips[1 + i].y = tips[order[i]].y;
+		out->fingertips[1 + i].z = tips[order[i]].z;
+		out->finger_found[1 + i] = 1;
+	}
+}
+
+void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, v3 midline, freenect_nui_hand* out)
 {
 	static uint8_t in[WIN * WIN];
 	static uint16_t dist[WIN * WIN];
@@ -273,23 +380,20 @@ void fn_nui_hand_analyze(const uint16_t* depth, v3 hand, v3 wrist, freenect_nui_
 				}
 			}
 			out->fingers_valid = 1;
+			name_fingers(out, wrist, midline);
 		}
 	}
 
 	// state
 	{
 		float spread = out->palm_radius > 0.0f ? out->extent / out->palm_radius : 0.0f;
-		v3 palm = v3make(out->palm.x, out->palm.y, out->palm.z);
 		if (out->holding) {
 			out->state = FREENECT_NUI_HAND_CLOSED; // gripping something
 		} else if (out->fingers_valid) {
 			if (out->num_fingers >= 3) out->state = FREENECT_NUI_HAND_OPEN;
 			else if (out->num_fingers == 1) out->state = FREENECT_NUI_HAND_POINTING;
-			else if (out->num_fingers == 2) {
-				v3 a = fn_nui_v3norm(v3sub(v3make(out->fingertips[0].x, out->fingertips[0].y, out->fingertips[0].z), palm));
-				v3 b = fn_nui_v3norm(v3sub(v3make(out->fingertips[1].x, out->fingertips[1].y, out->fingertips[1].z), palm));
-				out->state = v3dot(a, b) < 0.643f ? FREENECT_NUI_HAND_GUN : FREENECT_NUI_HAND_OPEN; // 50 degrees
-			}
+			else if (out->num_fingers == 2)
+				out->state = out->finger_found[0] && out->finger_found[1] ? FREENECT_NUI_HAND_GUN : FREENECT_NUI_HAND_OPEN;
 			else if (out->num_fingers == 0 && spread < 2.2f) out->state = FREENECT_NUI_HAND_CLOSED;
 			else out->state = spread >= 2.5f ? FREENECT_NUI_HAND_OPEN : FREENECT_NUI_HAND_CLOSED;
 		} else {

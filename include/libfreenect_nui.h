@@ -53,17 +53,34 @@ extern "C" {
  * coordinate mapper's camera space, libfreenect_coordinate_mapper.h).
  */
 
-#define FREENECT_NUI_JOINTS 20
+/// The SDK's 20 body joints come first, in its order; then each hand's
+/// palm and fingertips.
+#define FREENECT_NUI_BODY_JOINTS 20
+#define FREENECT_NUI_JOINTS 32
 #define FREENECT_NUI_MAX_USERS 6
 
-/// The SDK's joint order.
 typedef enum {
 	FREENECT_NUI_HIP_CENTER = 0, FREENECT_NUI_SPINE, FREENECT_NUI_SHOULDER_CENTER, FREENECT_NUI_HEAD,
 	FREENECT_NUI_SHOULDER_LEFT, FREENECT_NUI_ELBOW_LEFT, FREENECT_NUI_WRIST_LEFT, FREENECT_NUI_HAND_LEFT,
 	FREENECT_NUI_SHOULDER_RIGHT, FREENECT_NUI_ELBOW_RIGHT, FREENECT_NUI_WRIST_RIGHT, FREENECT_NUI_HAND_RIGHT,
 	FREENECT_NUI_HIP_LEFT, FREENECT_NUI_KNEE_LEFT, FREENECT_NUI_ANKLE_LEFT, FREENECT_NUI_FOOT_LEFT,
 	FREENECT_NUI_HIP_RIGHT, FREENECT_NUI_KNEE_RIGHT, FREENECT_NUI_ANKLE_RIGHT, FREENECT_NUI_FOOT_RIGHT,
+	/* hands: the palm centre and the fingertips. Fingertips are tracked
+	 * when the hand is close enough to resolve them (about 1.6 m or
+	 * nearer) and the finger is extended; otherwise NOT_TRACKED. */
+	FREENECT_NUI_PALM_LEFT = 20, FREENECT_NUI_THUMB_LEFT, FREENECT_NUI_INDEX_LEFT, FREENECT_NUI_MIDDLE_LEFT,
+	FREENECT_NUI_RING_LEFT, FREENECT_NUI_LITTLE_LEFT,
+	FREENECT_NUI_PALM_RIGHT = 26, FREENECT_NUI_THUMB_RIGHT, FREENECT_NUI_INDEX_RIGHT, FREENECT_NUI_MIDDLE_RIGHT,
+	FREENECT_NUI_RING_RIGHT, FREENECT_NUI_LITTLE_RIGHT,
 } freenect_nui_joint;
+
+typedef enum {
+	FREENECT_NUI_HAND_UNKNOWN = 0,  ///< not seen well enough
+	FREENECT_NUI_HAND_OPEN = 1,
+	FREENECT_NUI_HAND_CLOSED = 2,   ///< fist / grip
+	FREENECT_NUI_HAND_POINTING = 3, ///< one finger out
+	FREENECT_NUI_HAND_GUN = 4,      ///< index and thumb out, the thumb at a wide angle
+} freenect_nui_hand_state;
 
 typedef enum {
 	FREENECT_NUI_JOINT_NOT_TRACKED = 0,
@@ -97,6 +114,8 @@ typedef struct {
 	freenect_nui_point joints[FREENECT_NUI_JOINTS];
 	freenect_nui_joint_state joint_state[FREENECT_NUI_JOINTS];
 	uint32_t quality;                           ///< FREENECT_NUI_CLIPPED_*
+	freenect_nui_hand_state hand_state[2];      ///< left, right
+	int hand_holding[2];                        ///< 1 if that hand holds something (a stick, a handle)
 } freenect_nui_skeleton;
 
 typedef struct {
@@ -137,17 +156,8 @@ FREENECT_NUI_API int freenect_nui_set_tracked_users(freenect_nui* nui, const uin
 
 /* ------------------------------------------------------------ hands */
 
-typedef enum {
-	FREENECT_NUI_HAND_UNKNOWN = 0,  ///< not seen well enough
-	FREENECT_NUI_HAND_OPEN = 1,
-	FREENECT_NUI_HAND_CLOSED = 2,   ///< fist / grip
-	FREENECT_NUI_HAND_POINTING = 3, ///< one finger out
-	FREENECT_NUI_HAND_GUN = 4,      ///< two fingers out at a wide angle (index and thumb)
-} freenect_nui_hand_state;
-
-/// One hand of a tracked user, from the full-resolution depth around its
-/// hand joint. Fingers need the hand close enough to be resolved (about
-/// 1.5 m or nearer); farther away only the open/closed state is estimated.
+/// More about one hand than the skeleton's joints carry (the palm and
+/// fingertip joints and the hand state are in freenect_nui_skeleton).
 typedef struct {
 	freenect_nui_hand_state state;
 	float confidence;                     ///< 0..1, from how many pixels the hand has
@@ -156,14 +166,15 @@ typedef struct {
 	float extent;                         ///< farthest point of the hand from the palm centre, m
 	int fingers_valid;                    ///< 1 if the hand was resolved well enough for fingers
 	int num_fingers;                      ///< extended fingers found, 0..5
-	freenect_nui_point fingertips[5];
+	freenect_nui_point fingertips[5];     ///< thumb, index, middle, ring, little (as the joints)
+	int finger_found[5];                  ///< which of those are extended and seen
 	int pixels;                           ///< hand pixels in the 640x480 depth
 	int holding;                          ///< 1 if the hand holds something that sticks out of it (a stick, a handle)
 } freenect_nui_hand;
 
 /// The hands (0: left, 1: right) of users[user] of the last frame, which
-/// must be TRACKED. The state is smoothed over the last 5 frames. Returns 0,
-/// or -1 if the user has no skeleton.
+/// must be TRACKED: the same analysis that filled the skeleton's hand
+/// joints. Returns 0, or -1 if the user has no skeleton.
 FREENECT_NUI_API int freenect_nui_get_hands(freenect_nui* nui, int user, freenect_nui_hand hands[2]);
 
 /* ------------------------------------------------------------ smoothing */
@@ -199,11 +210,11 @@ typedef struct {
 	freenect_nui_rotation absolute;     ///< relative to the camera
 } freenect_nui_bone;
 
-/// The 20 bone orientations of a tracked user, as
-/// NuiSkeletonCalculateBoneOrientations. Returns 0, or -1 if the user is
-/// not tracked (bones are then identity).
+/// The 20 body bone orientations of a tracked user, as
+/// NuiSkeletonCalculateBoneOrientations (the hand joints have none).
+/// Returns 0, or -1 if the user is not tracked (bones are then identity).
 FREENECT_NUI_API int freenect_nui_bone_orientations(const freenect_nui_skeleton* user,
-                                                    freenect_nui_bone bones[FREENECT_NUI_JOINTS]);
+                                                    freenect_nui_bone bones[FREENECT_NUI_BODY_JOINTS]);
 
 #ifdef __cplusplus
 }

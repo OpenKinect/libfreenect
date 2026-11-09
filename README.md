@@ -137,12 +137,12 @@ arecord -D hw:Kinect -c4 -f S32_LE -r16000 -t wav - | freenect-micbeam --wav -
 ## Skeleton, hand and finger tracking (optional)
 
 `libfreenect_nui.h` (library `freenect_nui`, CMake `-DBUILD_NUI=ON`, off by default) tracks people from the depth stream, with the output of the Kinect for Windows SDK:
-- up to 6 users, the nearest 2 (or the ones you choose) with 20 joints;
+- up to 6 users, the nearest 2 (or the ones you choose) with the SDK's 20 body joints;
 - joint states and clipping flags;
 - the player index image and the floor plane;
 - the SDK's smoothing filter and bone orientations.
 
-It adds what the SDK didn't have: each hand's state (open, closed, pointing, gun shape), whether it holds something, and, closer than about 1.5 m, the fingertips.
+It adds what the SDK didn't have: 12 hand joints in the same skeleton (joints 20–31: each hand's palm, thumb, index, middle, ring and little fingertip), each hand's state (open, closed, pointing, gun shape), and whether it holds something. The palm is tracked whenever the hand is seen. The fingers are tracked closer than about 1.6 m, and each is named, so a raised thumb is reported as the thumb. A finger that is folded or hidden is not tracked. `freenect_nui_get_hands()` gives more detail per hand (palm radius, contour size, all fingertips).
 
 It uses Microsoft's body-part forest from the Kinect Runtime, which libfreenect does not contain. Fetch it once on your machine; Microsoft's licence terms for the Runtime apply to it:
 

@@ -157,6 +157,7 @@ static void render(uint16_t* depth, const person* people, int np)
 
 typedef struct {
 	int frames_tracked, joints, within10;
+	int fingers; // finger joints reported tracked (the rendered bodies have none)
 	double err;
 	int lock_frame;
 	uint32_t ids[MAXP];
@@ -227,6 +228,9 @@ static void run(freenect_nui* n, scene_fn scene, int frames, score* s, freenect_
 				s->err += e;
 				s->within10 += e < 0.10f;
 			}
+			for (j = 0; j < 5; j++)
+				s->fingers += (S->joint_state[FREENECT_NUI_THUMB_LEFT + j] == FREENECT_NUI_JOINT_TRACKED) +
+				              (S->joint_state[FREENECT_NUI_THUMB_RIGHT + j] == FREENECT_NUI_JOINT_TRACKED);
 			(void)all;
 		}
 	}
@@ -292,6 +296,8 @@ int main(void)
 		snprintf(what, sizeof(what), "one user at %.1f m: skeleton, PCK@10cm >= %d %%", dist[i], i == 0 ? 75 : 85);
 		CHECK(s.lock_frame >= 15 && s.lock_frame <= 30 && s.users_max == 1 && s.joints > 0 &&
 		      s.within10 >= (i == 0 ? 0.75 : 0.85) * s.joints, what);
+		if (i > 0)
+			CHECK(s.fingers == 0, "  no finger joints tracked this far away");
 		if (i == 1) {
 			int X, Y, inside = 0, outside = 0, k;
 			printf("    (floor %.3f %.3f %.3f %.3f)\n", fr.floor_plane[0], fr.floor_plane[1], fr.floor_plane[2], fr.floor_plane[3]);

@@ -159,7 +159,6 @@ static void draw(freenect_nui* nui, const freenect_nui_frame* fr)
 	for (k = 0; k < FREENECT_NUI_MAX_USERS; k++) {
 		static const int parent[20] = { 0, 0, 1, 2, 2, 4, 5, 6, 2, 8, 9, 10, 0, 12, 13, 14, 0, 16, 17, 18 };
 		const freenect_nui_skeleton* S = &fr->users[k];
-		freenect_nui_hand hands[2];
 		if (S->state != FREENECT_NUI_USER_TRACKED)
 			continue;
 		for (j = 1; j < 20; j++) {
@@ -174,22 +173,42 @@ static void draw(freenect_nui* nui, const freenect_nui_frame* fr)
 			if (S->joint_state[j] && to_pixel(S->joints[j], &x, &y))
 				dot(x, y, 255, 255, 255, 3);
 		}
-		if (freenect_nui_get_hands(nui, k, hands) == 0)
-			for (i = 0; i < 2; i++)
-				for (j = 0; j < hands[i].num_fingers; j++) {
-					int x, y;
-					if (to_pixel(hands[i].fingertips[j], &x, &y))
-						dot(x, y, 255, 30, 30, 2);
+		// the hand joints: palm to each fingertip, the thumb in yellow
+		for (i = 0; i < 2; i++) {
+			int palm = i ? FREENECT_NUI_PALM_RIGHT : FREENECT_NUI_PALM_LEFT, px, py, f;
+			if (!S->joint_state[palm] || !to_pixel(S->joints[palm], &px, &py))
+				continue;
+			dot(px, py, 255, 255, 255, 2);
+			for (f = 1; f <= 5; f++) {
+				int x, y;
+				if (S->joint_state[palm + f] && to_pixel(S->joints[palm + f], &x, &y)) {
+					line(px, py, x, y, 200);
+					dot(x, y, 255, f == 1 ? 220 : 30, 30, 2);
 				}
+			}
+		}
 	}
 }
-
-/* ------------------------------------------------------------ main */
 
 static const char* hand_name(int s)
 {
 	return s == 1 ? "open" : s == 2 ? "closed" : s == 3 ? "pointing" : s == 4 ? "gun" : "?";
 }
+
+static void print_hand(const char* side, const freenect_nui_skeleton* S, int which)
+{
+	static const char* fn[5] = { "thumb", "index", "middle", "ring", "little" };
+	int palm = which ? FREENECT_NUI_PALM_RIGHT : FREENECT_NUI_PALM_LEFT, f, any = 0;
+	printf("%s %s%s", side, hand_name(S->hand_state[which]), S->hand_holding[which] ? " (holding)" : "");
+	for (f = 0; f < 5; f++)
+		if (S->joint_state[palm + 1 + f] == FREENECT_NUI_JOINT_TRACKED) {
+			printf("%s%s", any ? "," : " [", fn[f]);
+			any = 1;
+		}
+	printf(any ? "]" : "");
+}
+
+/* ------------------------------------------------------------ main */
 
 int main(int argc, char** argv)
 {
@@ -275,15 +294,13 @@ int main(int argc, char** argv)
 				printf("    user %d (id %u) at %.2f m: %s", k + 1, S->tracking_id, S->position.z,
 				       S->state == FREENECT_NUI_USER_TRACKED ? "skeleton" : "position only");
 				if (S->state == FREENECT_NUI_USER_TRACKED) {
-					freenect_nui_hand h[2];
 					printf(", %d joints tracked, head (%+.2f %+.2f %.2f)", nt, S->joints[3].x, S->joints[3].y, S->joints[3].z);
 					if (S->quality)
 						printf(", clipped%s%s%s%s", S->quality & 1 ? " right" : "", S->quality & 2 ? " left" : "",
 						       S->quality & 4 ? " top" : "", S->quality & 8 ? " bottom" : "");
-					if (freenect_nui_get_hands(nui, k, h) == 0)
-						printf("\n        hands: left %s%s, %d fingers; right %s%s, %d fingers", hand_name(h[0].state),
-						       h[0].holding ? " (holding)" : "", h[0].fingers_valid ? h[0].num_fingers : -1,
-						       hand_name(h[1].state), h[1].holding ? " (holding)" : "", h[1].fingers_valid ? h[1].num_fingers : -1);
+					printf("\n        hands: ");
+					print_hand("left", S, 0);
+					print_hand("; right", S, 1);
 				}
 				printf("\n");
 			}
@@ -298,7 +315,7 @@ int main(int argc, char** argv)
 	draw(nui, &fr);
 	snprintf(path, sizeof(path), "%s.bmp", prefix);
 	write_bmp(path);
-	printf("Frames: %u, with a skeleton: %u; %.1f ms per frame. Wrote %s (fingers: -1 = too far to see)\n",
+	printf("Frames: %u, with a skeleton: %u; %.1f ms per frame. Wrote %s\n",
 	       nframes, tracked_frames, nframes ? busy / nframes : 0.0, path);
 	ret = 0;
 out:
