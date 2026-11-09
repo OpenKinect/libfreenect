@@ -56,6 +56,7 @@ set (PROJECT_APIVER
 OPTION(BUILD_REDIST_PACKAGE "Build libfreenect in a legally-redistributable manner (only affects audio)" ON)
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
 OPTION(BUILD_TESTS "Build the unit tests (no Kinect needed; run with ctest)" ON)
+OPTION(BUILD_NUI "Build libfreenect_nui, the optional skeleton tracker (needs Microsoft's models, fetched at install)" OFF)
 OPTION(BUILD_AUDIO_DSP "Build freenect_audio_dsp: beamformer and source localisation for the microphone array" ON)
 OPTION(WITH_SPEEXDSP "freenect_audio_dsp: echo cancellation, noise suppression and AGC with SpeexDSP, if found" ON)
 OPTION(FREENECT_WERROR "GCC/Clang: build with -Wall -Wextra -Werror (CI does)" OFF)
@@ -145,6 +146,9 @@ endif ()
 
 # Add library project
 add_subdirectory (src)
+if (BUILD_NUI)
+  add_subdirectory (nui)
+endif ()
 
 IF(WIN32 AND BUILD_DRIVER_INSTALLER)
   add_subdirectory (platform/windows/driver-install)
