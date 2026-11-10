@@ -44,6 +44,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "nui_internal.h"
 #include "models.h"
 
@@ -53,7 +54,7 @@ static int pass = 1;
 #define FLOOR_Y -1.0f
 #define WALL_Z 4.0f
 #define F640 571.26f
-#define MAXP 2
+#define MAXP 6
 
 typedef struct {
 	v3 a, b;
@@ -64,23 +65,26 @@ typedef struct {
 	v3 J[NJ]; // ground truth, skeleton space
 } person;
 
+static float wall_z = WALL_Z; // the room's back wall
+static int arms_in;            // arms close to the body (for crowded scenes)
+
 // SHOULDER_LEFT etc. at -x: the user's left is on the mirrored image's left
 static void pose(person* P, float t, float x0, float z0)
 {
 	v3* J = P->J;
-	float swing = 0.25f * sinf(t), hip_y = FLOOR_Y + 0.95f;
+	float swing = 0.25f * sinf(t), hip_y = FLOOR_Y + 0.95f, a = arms_in ? 0.4f : 1.0f;
 	J[0] = v3make(x0, hip_y, z0);
 	J[2] = v3make(x0, hip_y + 0.46f, z0);
 	J[1] = v3add(J[0], v3scale(v3sub(J[2], J[0]), 1.0f / 6.0f));
 	J[3] = v3make(x0, hip_y + 0.68f, z0);
 	J[4] = v3make(x0 - 0.17f, hip_y + 0.44f, z0);
-	J[5] = v3make(x0 - 0.30f, hip_y + 0.20f, z0 + swing * 0.3f);
-	J[6] = v3make(x0 - 0.40f, hip_y + 0.0f + swing * 0.2f, z0 - 0.05f);
-	J[7] = v3make(x0 - 0.43f, hip_y - 0.08f + swing * 0.2f, z0 - 0.07f);
+	J[5] = v3make(x0 - 0.17f - 0.13f * a, hip_y + 0.20f, z0 + swing * 0.3f);
+	J[6] = v3make(x0 - 0.17f - 0.23f * a, hip_y + 0.0f + swing * 0.2f, z0 - 0.05f);
+	J[7] = v3make(x0 - 0.17f - 0.26f * a, hip_y - 0.08f + swing * 0.2f, z0 - 0.07f);
 	J[8] = v3make(x0 + 0.17f, hip_y + 0.44f, z0);
-	J[9] = v3make(x0 + 0.30f, hip_y + 0.20f, z0 - swing * 0.3f);
-	J[10] = v3make(x0 + 0.40f, hip_y + 0.0f - swing * 0.2f, z0 - 0.05f);
-	J[11] = v3make(x0 + 0.43f, hip_y - 0.08f - swing * 0.2f, z0 - 0.07f);
+	J[9] = v3make(x0 + 0.17f + 0.13f * a, hip_y + 0.20f, z0 - swing * 0.3f);
+	J[10] = v3make(x0 + 0.17f + 0.23f * a, hip_y + 0.0f - swing * 0.2f, z0 - 0.05f);
+	J[11] = v3make(x0 + 0.17f + 0.26f * a, hip_y - 0.08f - swing * 0.2f, z0 - 0.07f);
 	J[12] = v3make(x0 - 0.09f, hip_y - 0.03f, z0);
 	J[13] = v3make(x0 - 0.11f, hip_y - 0.45f, z0 - 0.03f);
 	J[14] = v3make(x0 - 0.11f, FLOOR_Y + 0.08f, z0);
@@ -138,7 +142,7 @@ static void render(uint16_t* depth, const person* people, int np)
 		for (X = 0; X < 640; X++) {
 			float xm = (float)(639 - X); // libfreenect orientation -> mirrored
 			v3 d = v3make((xm - 319.5f) / F640, -((float)Y - 239.5f) / F640, 1.0f);
-			float t = WALL_Z;
+			float t = wall_z;
 			if (d.y < 0 && FLOOR_Y / d.y < t)
 				t = FLOOR_Y / d.y;
 			for (k = 0; k < n; k++) {
@@ -163,7 +167,17 @@ typedef struct {
 	uint32_t ids[MAXP];
 	int id_changes;
 	int users_max;
+	int skeletons_max; // the most users with skeletons in one frame
+	double ms; // freenect_nui_process time, all frames
+	int frames;
 } score;
+
+static double now_ms(void)
+{
+	struct timespec t;
+	timespec_get(&t, TIME_UTC);
+	return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
+}
 
 // The user (by position) closest to person p.
 static freenect_nui_skeleton* match(freenect_nui_frame* fr, const person* P)
@@ -198,11 +212,29 @@ static void run(freenect_nui* n, scene_fn scene, int frames, score* s, freenect_
 		int users = 0;
 		scene(people, &np, f);
 		render(depth, people, np);
-		freenect_nui_process(n, depth, (uint32_t)f, &fr);
+		{
+			double t0 = now_ms();
+			freenect_nui_process(n, depth, (uint32_t)f, &fr);
+			s->ms += now_ms() - t0;
+			s->frames++;
+		}
 		for (k = 0; k < NU; k++)
 			users += fr.users[k].state != FREENECT_NUI_USER_NOT_TRACKED;
 		if (users > s->users_max)
 			s->users_max = users;
+		{
+			int sk = 0;
+			for (k = 0; k < NU; k++)
+				sk += fr.users[k].state == FREENECT_NUI_USER_TRACKED;
+			if (sk > s->skeletons_max)
+				s->skeletons_max = sk;
+		}
+		if (getenv("NUI_TRACE")) {
+			fprintf(stderr, "f%02d:", f);
+			for (k = 0; k < NU; k++)
+				fprintf(stderr, " %c%.1f", ".pT"[fr.users[k].state], fr.users[k].position.x);
+			fprintf(stderr, "\n");
+		}
 		for (p = 0; p < np; p++) {
 			freenect_nui_skeleton* S = match(&fr, &people[p]);
 			int j, all = 1;
@@ -249,6 +281,15 @@ static void two_users(person* P, int* np, int f)
 	pose(&P[0], 0.2f * f, -0.65f, 2.5f);
 	pose(&P[1], 0.2f * f + 1.0f, 0.65f, 2.7f);
 }
+// six people in a row at 4 m, 0.75 m apart, arms close to the body (with
+// arms out they would hold hands: the Kinect's view is 4.5 m wide there)
+static void six_users(person* P, int* np, int f)
+{
+	int p;
+	*np = f >= 15 ? 6 : 0;
+	for (p = 0; p < 6; p++)
+		pose(&P[p], 0.2f * f + 0.7f * p, -1.875f + 0.75f * p, 4.0f);
+}
 static void walking(person* P, int* np, int f)
 {
 	*np = f >= 15;
@@ -257,9 +298,9 @@ static void walking(person* P, int* np, int f)
 
 static void report(const char* name, const score* s)
 {
-	printf("    (%s: locked at frame %d, %d scored frames, PCK@10cm %.1f %%, mean error %.1f cm, %d users seen)\n", name,
-	       s->lock_frame, s->frames_tracked, s->joints ? 100.0 * s->within10 / s->joints : 0.0,
-	       s->joints ? 100.0 * s->err / s->joints : 0.0, s->users_max);
+	printf("    (%s: locked at frame %d, %d scored frames, PCK@10cm %.1f %%, mean error %.1f cm, %d users seen, %.1f ms per frame)\n",
+	       name, s->lock_frame, s->frames_tracked, s->joints ? 100.0 * s->within10 / s->joints : 0.0,
+	       s->joints ? 100.0 * s->err / s->joints : 0.0, s->users_max, s->frames ? s->ms / s->frames : 0.0);
 }
 
 int main(void)
@@ -352,6 +393,25 @@ int main(void)
 			CHECK(c1 > 3000 && c2 > 3000, "  each has its own player index");
 		}
 	}
+
+	// six people, all with skeletons: the 30 fps target
+	freenect_nui_set_max_tracked(n, 6);
+	wall_z = 5.2f;
+	arms_in = 1;
+	run(n, six_users, 75, &s, &fr, depth);
+	wall_z = WALL_Z;
+	arms_in = 0;
+	report("six users", &s);
+	{
+		char what[120];
+		// at 4 m the two outermost reach the edges of the view and mostly
+		// get only a position; the timing is what this scene is about
+		snprintf(what, sizeof(what), "six people at 4 m: %d users, up to %d skeletons, %.1f ms per frame", s.users_max,
+		         s.skeletons_max, s.frames ? s.ms / s.frames : 0.0);
+		CHECK(s.users_max == 6 && s.skeletons_max >= 4, what);
+		CHECK(s.joints > 0 && s.within10 >= 0.80 * s.joints, "  PCK@10cm >= 80 %");
+	}
+	freenect_nui_set_max_tracked(n, 2);
 
 	run(n, walking, 75, &s, &fr, depth);
 	report("walking", &s);

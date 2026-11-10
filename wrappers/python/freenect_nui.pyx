@@ -175,6 +175,10 @@ cdef extern from "libfreenect_nui.h":
     freenect_nui_smoother* freenect_nui_smoother_create()
     void freenect_nui_smoother_destroy(freenect_nui_smoother* s)
     int freenect_nui_smooth(freenect_nui_smoother* s, freenect_nui_frame* frame, const freenect_nui_smoothing* params)
+    int freenect_nui_smoother_set_holt(freenect_nui_smoother* s)
+    int freenect_nui_smoother_set_one_euro(freenect_nui_smoother* s, float min_cutoff, float beta, float d_cutoff)
+    int freenect_nui_smoother_set_kalman(freenect_nui_smoother* s, float accel_noise, float measurement_noise)
+    int freenect_nui_set_threads(freenect_nui* nui, int threads)
     int freenect_nui_bone_orientations(const freenect_nui_skeleton* user, freenect_nui_bone* bones)
 
 BODY_JOINTS = FREENECT_NUI_BODY_JOINTS
@@ -321,16 +325,32 @@ cdef class Frame:
 
 
 cdef class Smoother:
-    """The SDK's joint smoothing (NuiTransformSmooth, a Holt filter). Pass
-    each Frame through smooth() in order; params: (smoothing, correction,
-    prediction, jitter_radius, max_deviation_radius), default the SDK's
-    (0.5, 0.5, 0.5, 0.05, 0.04)."""
+    """Joint smoothing. Pass each Frame through smooth() in order.
+
+    Smoother() is the SDK's NuiTransformSmooth, a Holt filter; smooth()'s
+    params: (smoothing, correction, prediction, jitter_radius,
+    max_deviation_radius), default the SDK's (0.5, 0.5, 0.5, 0.05, 0.04).
+    Smoother("one_euro", min_cutoff=1.0, beta=1.5, d_cutoff=1.0): smooth
+    when still, little lag when moving. Smoother("kalman",
+    accel_noise=3.0, measurement_noise=0.02): constant velocity, the least
+    error while moving."""
     cdef freenect_nui_smoother* _s
 
-    def __cinit__(self):
+    def __cinit__(self, kind="holt", **params):
         self._s = freenect_nui_smoother_create()
         if self._s == NULL:
             raise MemoryError()
+        if kind == "one_euro":
+            r = freenect_nui_smoother_set_one_euro(self._s, params.get("min_cutoff", 1.0), params.get("beta", 1.5),
+                                                   params.get("d_cutoff", 1.0))
+        elif kind == "kalman":
+            r = freenect_nui_smoother_set_kalman(self._s, params.get("accel_noise", 3.0), params.get("measurement_noise", 0.02))
+        elif kind == "holt":
+            r = freenect_nui_smoother_set_holt(self._s)
+        else:
+            raise ValueError("kind: holt, one_euro or kalman")
+        if r < 0:
+            raise ValueError("invalid filter parameters")
 
     def __dealloc__(self):
         if self._s != NULL:
@@ -387,6 +407,14 @@ cdef class Tracker:
 
     def reset(self):
         freenect_nui_reset(self._n)
+
+    def set_threads(self, int threads):
+        """Threads for the pixel classification (0: one per processor, up
+        to 8; the results are the same with any number). Returns the number."""
+        r = freenect_nui_set_threads(self._n, threads)
+        if r < 0:
+            raise ValueError("threads must be >= 0")
+        return r
 
     def process(self, depth_mm, int timestamp=0):
         """Tracks one 480x640 uint16 depth frame in mm (freenect.DEPTH_MM,

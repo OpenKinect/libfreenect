@@ -46,6 +46,7 @@
 #include <math.h>
 #include <string.h>
 #include "nui_internal.h"
+#include "pool.h"
 
 #define CELL 4
 #define CW (NW / CELL)
@@ -76,135 +77,174 @@ typedef struct {
 	int n;        // pixels with p > 4/255
 } cell;
 
-void fn_nui_proposals(const uint16_t* map, const uint8_t* mask, int slot, const uint8_t* prob,
-                      float scale, fn_nui_props* out)
+// The user's pixels, unprojected once and grouped by 4x4 cell in row order
+// within each cell (the order the sums below have always used).
+static v3 upts[NPIX];
+static int uidx[NPIX];
+static int cell_start[CW * CH + 1];
+static cell cells_of[NJ][CW * CH]; // per joint: the joints run in parallel
+
+typedef struct {
+	const uint16_t* map;
+	const uint8_t* prob;
+	float scale;
+	fn_nui_props* out;
+} prop_job;
+
+static void joint_proposals(const prop_job* J, int j)
 {
-	static cell cells[CW * CH];
-	int j;
-	memset(out, 0, sizeof(*out));
-	for (j = 0; j < NJ; j++) {
-		int ncell = 0, cx, cy, k, nseeds = 0, nmodes = 0;
-		float b = (j == 6 || j == 7 || j == 10 || j == 11) ? 0.045f : 0.065f, b2;
-		fn_nui_cand modes[MAX_SEEDS];
-		int seeds[MAX_SEEDS];
-		if (joint_parts[j][0] < 0)
-			continue;
-		b2 = b * b;
-		// pool the user's pixels into 4x4 cells
-		for (cy = 0; cy < CH; cy++)
-			for (cx = 0; cx < CW; cx++) {
-				cell c;
-				int x, y;
-				double sx = 0, sy = 0, sz = 0;
-				memset(&c, 0, sizeof(c));
-				for (y = cy * CELL; y < cy * CELL + CELL; y++)
-					for (x = cx * CELL; x < cx * CELL + CELL; x++) {
-						int i = y * NW + x, q;
-						float p = 0.0f, w;
-						v3 pt;
-						if (mask[i] != slot + 1 || !map[i])
-							continue;
-						for (q = 0; q < 3 && joint_parts[j][q] >= 0; q++)
-							p += prob[(size_t)i * FN_NUI_PARTS + joint_parts[j][q]];
-						if (p <= 4.0f)
-							continue;
-						p = p > 255.0f ? 1.0f : p / 255.0f;
-						pt = fn_nui_unproject((float)x, (float)y, (float)map[i]);
-						w = p * pt.z * pt.z;
-						sx += w * pt.x; sy += w * pt.y; sz += w * pt.z;
-						c.w += w;
-						c.psum += p;
-						c.n++;
-					}
-				if (c.n == 0)
-					continue;
-				c.p = v3make((float)(sx / c.w), (float)(sy / c.w), (float)(sz / c.w));
-				cells[ncell] = c;
-				ncell++;
-			}
-		if (!ncell)
-			continue;
-		// seeds: the cells with mean probability above 0.14, strongest first
-		for (k = 0; k < ncell; k++) {
-			int s, pos;
-			if (cells[k].psum / (float)cells[k].n < 0.14f)
+	cell* cells = cells_of[j];
+	const uint8_t* prob = J->prob;
+	int ncell = 0, cc, k, nseeds = 0, nmodes = 0;
+	float b = (j == 6 || j == 7 || j == 10 || j == 11) ? 0.045f : 0.065f, b2;
+	fn_nui_cand modes[MAX_SEEDS];
+	int seeds[MAX_SEEDS];
+	if (joint_parts[j][0] < 0)
+		return;
+	b2 = b * b;
+	// pool the user's pixels into 4x4 cells
+	for (cc = 0; cc < CW * CH; cc++) {
+		cell c;
+		int u;
+		double sx = 0, sy = 0, sz = 0;
+		memset(&c, 0, sizeof(c));
+		for (u = cell_start[cc]; u < cell_start[cc + 1]; u++) {
+			int i = uidx[u], q;
+			float p = 0.0f, w;
+			v3 pt = upts[u];
+			for (q = 0; q < 3 && joint_parts[j][q] >= 0; q++)
+				p += prob[(size_t)i * FN_NUI_PARTS + joint_parts[j][q]];
+			if (p <= 4.0f)
 				continue;
-			for (pos = nseeds; pos > 0 && cells[seeds[pos - 1]].w < cells[k].w; pos--)
-				;
-			if (pos >= MAX_SEEDS)
-				continue;
-			for (s = (nseeds < MAX_SEEDS ? nseeds : MAX_SEEDS - 1); s > pos; s--)
-				seeds[s] = seeds[s - 1];
-			seeds[pos] = k;
-			if (nseeds < MAX_SEEDS)
-				nseeds++;
+			p = p > 255.0f ? 1.0f : p / 255.0f;
+			w = p * pt.z * pt.z;
+			sx += w * pt.x; sy += w * pt.y; sz += w * pt.z;
+			c.w += w;
+			c.psum += p;
+			c.n++;
 		}
-		// mean shift from each seed
-		for (k = 0; k < nseeds; k++) {
-			v3 m = cells[seeds[k]].p;
-			int it, c, dup = 0;
-			float f = 0.0f, ps = 0.0f;
-			int n = 0;
-			for (it = 0; it < 12; it++) {
-				double sx = 0, sy = 0, sz = 0, sw = 0;
-				v3 nm;
-				for (c = 0; c < ncell; c++) {
-					v3 d = v3sub(cells[c].p, m);
-					float r2 = v3dot(d, d), w;
-					if (r2 > 9.0f * b2)
-						continue;
-					w = cells[c].w * expf(-r2 / b2);
-					sx += w * cells[c].p.x; sy += w * cells[c].p.y; sz += w * cells[c].p.z;
-					sw += w;
-				}
-				if (sw <= 0.0)
-					break;
-				nm = v3make((float)(sx / sw), (float)(sy / sw), (float)(sz / sw));
-				if (fn_nui_v3len(v3sub(nm, m)) < 0.001f) {
-					m = nm;
-					break;
-				}
-				m = nm;
-			}
-			// support of the mode: pixels within the bandwidth
+		if (c.n == 0)
+			continue;
+		c.p = v3make((float)(sx / c.w), (float)(sy / c.w), (float)(sz / c.w));
+		cells[ncell] = c;
+		ncell++;
+	}
+	if (!ncell)
+		return;
+	// seeds: the cells with mean probability above 0.14, strongest first
+	for (k = 0; k < ncell; k++) {
+		int s, pos;
+		if (cells[k].psum / (float)cells[k].n < 0.14f)
+			continue;
+		for (pos = nseeds; pos > 0 && cells[seeds[pos - 1]].w < cells[k].w; pos--)
+			;
+		if (pos >= MAX_SEEDS)
+			continue;
+		for (s = (nseeds < MAX_SEEDS ? nseeds : MAX_SEEDS - 1); s > pos; s--)
+			seeds[s] = seeds[s - 1];
+		seeds[pos] = k;
+		if (nseeds < MAX_SEEDS)
+			nseeds++;
+	}
+	// mean shift from each seed
+	for (k = 0; k < nseeds; k++) {
+		v3 m = cells[seeds[k]].p;
+		int it, c, dup = 0;
+		float f = 0.0f, ps = 0.0f;
+		int n = 0;
+		for (it = 0; it < 12; it++) {
+			double sx = 0, sy = 0, sz = 0, sw = 0;
+			v3 nm;
 			for (c = 0; c < ncell; c++) {
 				v3 d = v3sub(cells[c].p, m);
-				if (v3dot(d, d) <= b2) {
-					ps += cells[c].psum;
-					n += cells[c].n;
-					f += cells[c].w;
-				}
+				float r2 = v3dot(d, d), w;
+				if (r2 > 9.0f * b2)
+					continue;
+				w = cells[c].w * expf(-r2 / b2);
+				sx += w * cells[c].p.x; sy += w * cells[c].p.y; sz += w * cells[c].p.z;
+				sw += w;
 			}
-			if (n == 0)
-				continue;
-			for (c = 0; c < nmodes; c++)
-				if (fn_nui_v3len(v3sub(modes[c].p, m)) < b) {
-					dup = 1;
-					break;
-				}
-			if (dup)
-				continue;
-			modes[nmodes].p = m;
-			modes[nmodes].conf = (ps / (float)n) * (n >= 32 ? 1.0f : (float)n / 32.0f);
-			nmodes++;
+			if (sw <= 0.0)
+				break;
+			nm = v3make((float)(sx / sw), (float)(sy / sw), (float)(sz / sw));
+			if (fn_nui_v3len(v3sub(nm, m)) < 0.001f) {
+				m = nm;
+				break;
+			}
+			m = nm;
 		}
-		// strongest first, at most FN_NUI_MAX_CAND, pushed back
-		for (k = 0; k < nmodes; k++) {
-			int a, best = k;
-			for (a = k + 1; a < nmodes; a++)
-				if (modes[a].conf > modes[best].conf)
-					best = a;
-			if (best != k) {
-				fn_nui_cand t = modes[k];
-				modes[k] = modes[best];
-				modes[best] = t;
+		// support of the mode: pixels within the bandwidth
+		for (c = 0; c < ncell; c++) {
+			v3 d = v3sub(cells[c].p, m);
+			if (v3dot(d, d) <= b2) {
+				ps += cells[c].psum;
+				n += cells[c].n;
+				f += cells[c].w;
 			}
-			if (k < FN_NUI_MAX_CAND) {
-				fn_nui_cand c = modes[k];
-				c.p.z += 0.5f * pushback[j] * scale;
-				out->c[j][k] = c;
-				out->n[j] = k + 1;
+		}
+		if (n == 0)
+			continue;
+		for (c = 0; c < nmodes; c++)
+			if (fn_nui_v3len(v3sub(modes[c].p, m)) < b) {
+				dup = 1;
+				break;
 			}
+		if (dup)
+			continue;
+		modes[nmodes].p = m;
+		modes[nmodes].conf = (ps / (float)n) * (n >= 32 ? 1.0f : (float)n / 32.0f);
+		nmodes++;
+	}
+	// strongest first, at most FN_NUI_MAX_CAND, pushed back
+	for (k = 0; k < nmodes; k++) {
+		int a, best = k;
+		for (a = k + 1; a < nmodes; a++)
+			if (modes[a].conf > modes[best].conf)
+				best = a;
+		if (best != k) {
+			fn_nui_cand t = modes[k];
+			modes[k] = modes[best];
+			modes[best] = t;
+		}
+		if (k < FN_NUI_MAX_CAND) {
+			fn_nui_cand c = modes[k];
+			c.p.z += 0.5f * pushback[j] * J->scale;
+			J->out->c[j][k] = c;
+			J->out->n[j] = k + 1;
 		}
 	}
+}
+
+static void joints_job(void* ctx, int j0, int j1)
+{
+	int j;
+	for (j = j0; j < j1; j++)
+		joint_proposals((const prop_job*)ctx, j);
+}
+
+void fn_nui_proposals(const uint16_t* map, const uint8_t* mask, int slot, const uint8_t* prob,
+                      float scale, fn_nui_props* out, struct fn_pool* pool)
+{
+	prop_job J;
+	int cx, cy, x, y, u = 0;
+	memset(out, 0, sizeof(*out));
+	for (cy = 0; cy < CH; cy++)
+		for (cx = 0; cx < CW; cx++) {
+			cell_start[cy * CW + cx] = u;
+			for (y = cy * CELL; y < cy * CELL + CELL; y++)
+				for (x = cx * CELL; x < cx * CELL + CELL; x++) {
+					int i = y * NW + x;
+					if (mask[i] != slot + 1 || !map[i])
+						continue;
+					upts[u] = fn_nui_unproject((float)x, (float)y, (float)map[i]);
+					uidx[u] = i;
+					u++;
+				}
+		}
+	cell_start[CW * CH] = u;
+	J.map = map;
+	J.prob = prob;
+	J.scale = scale;
+	J.out = out;
+	fn_pool_run(pool, joints_job, &J, NJ, 1);
 }

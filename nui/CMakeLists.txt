@@ -6,7 +6,11 @@
 # fwfetcher.py --nui extract them from Microsoft's Kinect Runtime download.
 ######################################################################################
 
-set(NUI_SRC inflate.c models.c forest.c segment.c proposals.c fit.c output.c hands.c gestures.c headforest.c nui.c)
+set(NUI_SRC inflate.c models.c forest.c segment.c proposals.c fit.c output.c hands.c gestures.c headforest.c pool.c nui.c)
+
+# the forest runs on a thread pool (pool.c)
+find_package(Threads REQUIRED)
+link_libraries(${CMAKE_THREAD_LIBS_INIT})
 
 add_library(freenect_nui SHARED ${NUI_SRC})
 add_library(freenect_nui_static STATIC ${NUI_SRC})
@@ -77,4 +81,25 @@ if (BUILD_TESTS)
   endif ()
   add_test(NAME nui_heads COMMAND test_nui_heads)
   set_tests_properties(nui_heads PROPERTIES SKIP_RETURN_CODE 77)
+endif ()
+
+if (BUILD_TESTS)
+  # The joint filters (Holt, One-Euro, Kalman); needs no model.
+  add_executable(test_nui_smooth test_nui_smooth.c)
+  target_include_directories(test_nui_smooth PRIVATE ${PROJECT_SOURCE_DIR}/include)
+  target_link_libraries(test_nui_smooth freenect_nui_static)
+  if (UNIX)
+    target_link_libraries(test_nui_smooth m)
+  endif ()
+  add_test(NAME nui_smooth COMMAND test_nui_smooth)
+endif ()
+
+if (BUILD_TESTS)
+  # The skeleton fit's joint limits; needs no model.
+  add_executable(test_nui_fit test_nui_fit.c fit.c segment.c)
+  target_include_directories(test_nui_fit PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
+  if (UNIX)
+    target_link_libraries(test_nui_fit m)
+  endif ()
+  add_test(NAME nui_fit COMMAND test_nui_fit)
 endif ()

@@ -129,8 +129,9 @@ typedef struct {
 
 // Joint proposals for one user from the part probabilities of its pixels
 // (prob[(v * 320 + u) * 31 + part], only where mask == slot + 1).
+struct fn_pool;
 void fn_nui_proposals(const uint16_t* map, const uint8_t* mask, int slot, const uint8_t* prob,
-                      float scale, fn_nui_props* out);
+                      float scale, fn_nui_props* out, struct fn_pool* pool);
 
 /* ------------------------------------------------------------ fitting */
 

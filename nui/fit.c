@@ -43,6 +43,8 @@
  *    and the hips from the shoulders when not seen (§30.5.4.2); the clipping
  *    planes of the depth camera's frustum, which mark joints INFERRED and set
  *    the quality flags (§30.5.5.5).
+ * 5. Joint limits in the refinement: elbows and knees do not fold shut, and
+ *    knees do not bend backwards (see joint_limits).
  */
 
 #include <math.h>
@@ -225,6 +227,54 @@ static int cholesky_solve(double A[NV][NV], double* b, int n)
 	return 0;
 }
 
+/*
+ * Joint-limit priors, one-sided (only when violated):
+ * - elbows and knees fold no tighter than 25 and 35 degrees: a minimum
+ *   distance from shoulder to wrist and from hip to ankle (by the bone
+ *   lengths and the law of cosines);
+ * - knees do not bend backwards: the knee is no more than 2 cm behind the
+ *   hip-ankle line, along the direction the body faces (from the hips; the
+ *   user faces the Kinect as the SDK assumes, so it is the side towards -z).
+ */
+static void joint_limits(normal_eq* E, const v3 x[NJ], const fn_nui_fit* f)
+{
+	static const int mid[4] = { 5, 9, 13, 17 }, end[4] = { 6, 10, 14, 18 }, top[4] = { 4, 8, 12, 16 };
+	static const float min_deg[4] = { 25.0f, 25.0f, 35.0f, 35.0f };
+	v3 across = v3sub(x[16], x[12]), fwd;
+	int i, a;
+	for (i = 0; i < 4; i++) {
+		float l1 = f->bone[mid[i]], l2 = f->bone[end[i]], c = cosf(min_deg[i] * 0.01745329f);
+		float dmin = sqrtf(l1 * l1 + l2 * l2 - 2.0f * l1 * l2 * c);
+		if (fn_nui_v3len(v3sub(x[end[i]], x[top[i]])) < dmin)
+			add_bone_term(E, end[i], top[i], x[end[i]], x[top[i]], dmin, 30.0); // impossible poses outweigh the data
+	}
+	// facing: hip_left -> hip_right, crossed with up, towards the Kinect
+	fwd = v3cross(v3make(0.0f, 1.0f, 0.0f), across);
+	if (fn_nui_v3len(fwd) < 0.05f)
+		return;
+	fwd = fn_nui_v3norm(fwd);
+	if (fwd.z > 0.0f)
+		fwd = v3scale(fwd, -1.0f);
+	for (i = 2; i < 4; i++) {
+		v3 h = x[top[i]], k = x[mid[i]], ak = x[end[i]], d = v3sub(ak, h), onl;
+		float L2 = v3dot(d, d), t, r;
+		if (L2 < 1e-6f)
+			continue;
+		t = v3dot(v3sub(k, h), d) / L2;
+		onl = v3add(h, v3scale(d, t < 0 ? 0 : t > 1 ? 1 : t));
+		r = v3dot(v3sub(k, onl), fwd) + 0.02f; // < 0: more than 2 cm behind
+		if (r < 0.0f) {
+			double w = 30.0, g[3] = { fwd.x, fwd.y, fwd.z };
+			int b2;
+			for (a = 0; a < 3; a++) {
+				for (b2 = 0; b2 < 3; b2++)
+					E->A[3 * mid[i] + a][3 * mid[i] + b2] += w * g[a] * g[b2];
+				E->b[3 * mid[i] + a] -= w * r * g[a];
+			}
+		}
+	}
+}
+
 static void refine(fn_nui_fit* f, v3 x[NJ], const v3 target[NJ], const float wtarget[NJ], const v3 pred[NJ],
                    const int have_pred, const uint16_t* map)
 {
@@ -264,6 +314,7 @@ static void refine(fn_nui_fit* f, v3 x[NJ], const v3 target[NJ], const float wta
 				}
 			}
 		}
+		joint_limits(&E, x, f);
 		// Levenberg-Marquardt damping (also keeps SPINE's empty rows regular)
 		for (j = 0; j < NV; j++)
 			E.A[j][j] = E.A[j][j] * 1.2 + 1e-3;

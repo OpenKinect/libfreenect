@@ -41,18 +41,152 @@
 
 /* ------------------------------------------------------------ smoothing */
 
+enum { F_HOLT, F_ONE_EURO, F_KALMAN };
+#define DT (1.0f / 30.0f)
+
 typedef struct {
-	float raw_prev[4], filtered[4], trend[4];
+	float raw_prev[4], filtered[4], trend[4]; // Holt
+	float x[3], dx[3];                        // One-Euro: estimate and speed
+	float kp[3], kv[3], P[3][3];              // Kalman per axis: position, velocity, covariance (00, 01, 11)
 	int frames;
 } joint_filter;
 
 struct freenect_nui_smoother {
 	joint_filter j[NU][FREENECT_NUI_JOINTS]; // body and hand joints
+	uint32_t id[NU];                         // the user each slot's history belongs to
+	int kind;
+	float min_cutoff, beta, d_cutoff;        // One-Euro
+	float accel_noise, meas_noise;           // Kalman
 };
 
 freenect_nui_smoother* freenect_nui_smoother_create(void)
 {
-	return (freenect_nui_smoother*)calloc(1, sizeof(freenect_nui_smoother));
+	freenect_nui_smoother* s = (freenect_nui_smoother*)calloc(1, sizeof(freenect_nui_smoother));
+	if (s) {
+		s->kind = F_HOLT;
+		s->min_cutoff = 1.0f;
+		s->beta = 1.5f;
+		s->d_cutoff = 1.0f;
+		s->accel_noise = 3.0f;
+		s->meas_noise = 0.02f;
+	}
+	return s;
+}
+
+int freenect_nui_smoother_set_holt(freenect_nui_smoother* s)
+{
+	if (!s)
+		return -1;
+	s->kind = F_HOLT;
+	memset(s->j, 0, sizeof(s->j));
+	return 0;
+}
+
+int freenect_nui_smoother_set_one_euro(freenect_nui_smoother* s, float min_cutoff, float beta, float d_cutoff)
+{
+	if (!s || min_cutoff <= 0.0f || beta < 0.0f || d_cutoff <= 0.0f)
+		return -1;
+	s->kind = F_ONE_EURO;
+	s->min_cutoff = min_cutoff;
+	s->beta = beta;
+	s->d_cutoff = d_cutoff;
+	memset(s->j, 0, sizeof(s->j));
+	return 0;
+}
+
+int freenect_nui_smoother_set_kalman(freenect_nui_smoother* s, float accel_noise, float measurement_noise)
+{
+	if (!s || accel_noise <= 0.0f || measurement_noise <= 0.0f)
+		return -1;
+	s->kind = F_KALMAN;
+	s->accel_noise = accel_noise;
+	s->meas_noise = measurement_noise;
+	memset(s->j, 0, sizeof(s->j));
+	return 0;
+}
+
+// the smoothing factor of a first-order low-pass at `cutoff` Hz
+static float alpha(float cutoff)
+{
+	float tau = 1.0f / (2.0f * 3.14159265f * cutoff);
+	return 1.0f / (1.0f + tau / DT);
+}
+
+static void one_euro_user(const freenect_nui_smoother* sm, joint_filter* J, freenect_nui_skeleton* s)
+{
+	int j, c;
+	for (j = 0; j < FREENECT_NUI_JOINTS; j++) {
+		joint_filter* F = &J[j];
+		float raw[3], speed = 0.0f, a, ad = alpha(sm->d_cutoff);
+		raw[0] = s->joints[j].x; raw[1] = s->joints[j].y; raw[2] = s->joints[j].z;
+		if (!s->joint_state[j] || (raw[0] == 0.0f && raw[1] == 0.0f && raw[2] == 0.0f)) {
+			F->frames = 0;
+			continue;
+		}
+		if (F->frames == 0) {
+			memcpy(F->x, raw, sizeof(raw));
+			memset(F->dx, 0, sizeof(F->dx));
+			F->frames = 1;
+			continue;
+		}
+		// the speed, low-passed, sets the cutoff
+		for (c = 0; c < 3; c++) {
+			F->dx[c] += ad * ((raw[c] - F->x[c]) / DT - F->dx[c]);
+			speed += F->dx[c] * F->dx[c];
+		}
+		a = alpha(sm->min_cutoff + sm->beta * sqrtf(speed));
+		for (c = 0; c < 3; c++)
+			F->x[c] += a * (raw[c] - F->x[c]);
+		s->joints[j].x = F->x[0];
+		s->joints[j].y = F->x[1];
+		s->joints[j].z = F->x[2];
+	}
+}
+
+static void kalman_user(const freenect_nui_smoother* sm, joint_filter* J, freenect_nui_skeleton* s)
+{
+	// white acceleration noise: Q = q^2 [dt^4/4 dt^3/2; dt^3/2 dt^2]
+	float q2 = sm->accel_noise * sm->accel_noise, q00 = q2 * DT * DT * DT * DT / 4, q01 = q2 * DT * DT * DT / 2, q11 = q2 * DT * DT;
+	int j, c;
+	for (j = 0; j < FREENECT_NUI_JOINTS; j++) {
+		joint_filter* F = &J[j];
+		float raw[3], r = sm->meas_noise;
+		raw[0] = s->joints[j].x; raw[1] = s->joints[j].y; raw[2] = s->joints[j].z;
+		if (!s->joint_state[j] || (raw[0] == 0.0f && raw[1] == 0.0f && raw[2] == 0.0f)) {
+			F->frames = 0;
+			continue;
+		}
+		if (s->joint_state[j] == FREENECT_NUI_JOINT_INFERRED)
+			r *= 4.0f;
+		if (F->frames == 0) {
+			for (c = 0; c < 3; c++) {
+				F->kp[c] = raw[c];
+				F->kv[c] = 0.0f;
+				F->P[c][0] = r * r;
+				F->P[c][1] = 0.0f;
+				F->P[c][2] = 1.0f; // speed unknown: (1 m/s)^2
+			}
+			F->frames = 1;
+			continue;
+		}
+		for (c = 0; c < 3; c++) {
+			// predict
+			float p = F->kp[c] + F->kv[c] * DT, v = F->kv[c];
+			float P00 = F->P[c][0] + 2 * DT * F->P[c][1] + DT * DT * F->P[c][2] + q00;
+			float P01 = F->P[c][1] + DT * F->P[c][2] + q01;
+			float P11 = F->P[c][2] + q11;
+			// update with the measured position
+			float S = P00 + r * r, k0 = P00 / S, k1 = P01 / S, e = raw[c] - p;
+			F->kp[c] = p + k0 * e;
+			F->kv[c] = v + k1 * e;
+			F->P[c][0] = (1 - k0) * P00;
+			F->P[c][1] = (1 - k0) * P01;
+			F->P[c][2] = P11 - k1 * P01;
+		}
+		s->joints[j].x = F->kp[0];
+		s->joints[j].y = F->kp[1];
+		s->joints[j].z = F->kp[2];
+	}
 }
 
 void freenect_nui_smoother_destroy(freenect_nui_smoother* s)
@@ -123,10 +257,19 @@ int freenect_nui_smooth(freenect_nui_smoother* s, freenect_nui_frame* frame, con
 	if (!params)
 		params = &def;
 	for (u = 0; u < NU; u++) {
-		if (frame->users[u].state == FREENECT_NUI_USER_TRACKED)
-			filter_user(params, s->j[u], &frame->users[u]);
+		freenect_nui_skeleton* S = &frame->users[u];
+		if (S->state != FREENECT_NUI_USER_TRACKED || S->tracking_id != s->id[u]) {
+			memset(s->j[u], 0, sizeof(s->j[u])); // a new user in this slot: no history
+			s->id[u] = S->state == FREENECT_NUI_USER_TRACKED ? S->tracking_id : 0;
+		}
+		if (S->state != FREENECT_NUI_USER_TRACKED)
+			continue;
+		if (s->kind == F_ONE_EURO)
+			one_euro_user(s, s->j[u], S);
+		else if (s->kind == F_KALMAN)
+			kalman_user(s, s->j[u], S);
 		else
-			memset(s->j[u], 0, sizeof(s->j[u]));
+			filter_user(params, s->j[u], S);
 	}
 	return 0;
 }

@@ -177,6 +177,11 @@ class Nui(unittest.TestCase):
             self.assertTrue(heads is None or heads == [])  # None without HEADPOSITION.MSHDF
         smoother = freenect_nui.Smoother()
         smoother.smooth(frame)
+        for kind in ("one_euro", "kalman"):
+            freenect_nui.Smoother(kind).smooth(frame)
+        with self.assertRaises(ValueError):
+            freenect_nui.Smoother("kalman", accel_noise=0)
+        self.assertGreaterEqual(t.set_threads(2), 1)
         self.assertIsNone(frame.bone_orientations(0))
 
     def test_missing_model(self):

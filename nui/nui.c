@@ -43,6 +43,27 @@
 #include "hands.h"
 #include "gestures.h"
 #include "headforest.h"
+#include "pool.h"
+#include <stdio.h>
+#include <time.h>
+
+// LIBFREENECT_NUI_PROFILE: the time of each stage, printed when the tracker is destroyed
+enum { P_MAP, P_HEADS, P_SEGMENT, P_CLASSIFY, P_PROPOSALS, P_FIT, P_HANDS, P_TOTAL, P_COUNT };
+static const char* prof_names[P_COUNT] = { "map", "heads", "segment", "classify", "proposals", "fit", "hands", "total" };
+
+static double prof_now(void)
+{
+	struct timespec t;
+	timespec_get(&t, TIME_UTC);
+	return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
+}
+#define PROF(n, stage, stmt)                          \
+	do {                                              \
+		double t0_ = (n)->profile ? prof_now() : 0.0; \
+		stmt;                                         \
+		if ((n)->profile)                             \
+			(n)->prof[stage] += prof_now() - t0_;     \
+	} while (0)
 
 #define VERIFY_FRAMES 30
 #define LOCK_FRAMES 3
@@ -78,6 +99,10 @@ struct freenect_nui {
 	fn_nui_pointer ptr[NU][2];       // each hand as a pointer
 	freenect_nui_hand_pointer ptr_out[NU][2];
 	fn_hd* hd;                       // the head detector (seated mode, or FREENECT_NUI_HEADS), NULL without its model
+	fn_pool* pool;                   // threads for the forest
+	int profile;
+	double prof[P_COUNT];
+	unsigned prof_frames;
 };
 
 static void track_hands(freenect_nui* n, int k, freenect_nui_skeleton* S);
@@ -107,6 +132,12 @@ freenect_nui* freenect_nui_create(const char* models_dir, int flags)
 	}
 	n->flags = flags;
 	n->max_tracked = 2;
+	{
+		const char* e = getenv("LIBFREENECT_NUI_THREADS");
+		int t = e ? atoi(e) : fn_pool_cpus();
+		n->pool = fn_pool_create(t < 1 ? 1 : t > 8 && !e ? 8 : t);
+	}
+	n->profile = getenv("LIBFREENECT_NUI_PROFILE") != NULL;
 	n->grip = FREENECT_NUI_GRIP_ANY;
 	// the head detector, in seated mode or on request, when its model is there
 	if (flags & (FREENECT_NUI_SEATED | FREENECT_NUI_HEADS)) {
@@ -127,6 +158,14 @@ void freenect_nui_destroy(freenect_nui* n)
 {
 	if (!n)
 		return;
+	if (n->profile && n->prof_frames) {
+		int s;
+		fprintf(stderr, "freenect_nui: %u frames, %d threads; ms per frame:", n->prof_frames, fn_pool_threads(n->pool));
+		for (s = 0; s < P_COUNT; s++)
+			fprintf(stderr, " %s %.2f", prof_names[s], n->prof[s] / n->prof_frames);
+		fprintf(stderr, "\n");
+	}
+	fn_pool_destroy(n->pool);
 	fn_forest_free(n->forest);
 	if (n->hd) {
 		fn_hd_forest_free(&n->hd->forest);
@@ -185,6 +224,23 @@ int freenect_nui_set_tracked_users(freenect_nui* n, const uint32_t* ids, int k)
 	return 0;
 }
 
+typedef struct {
+	freenect_nui* n;
+	const float* scale;
+	int slot; // user k + 1
+} classify_job;
+
+// The forest on rows [y0, y1) of one user's pixels (one pool chunk).
+static void classify_rows(void* ctx, int y0, int y1)
+{
+	const classify_job* J = ctx;
+	freenect_nui* n = J->n;
+	int i;
+	for (i = y0 * NW; i < y1 * NW; i++)
+		if (n->seg.user[i] == J->slot)
+			fn_forest_classify(n->forest, n->umap, J->scale, i % NW, i / NW, n->prob + (size_t)i * FN_NUI_PARTS);
+}
+
 // The forest on every pixel of user slot k, then proposals and the fit.
 static int track_user(freenect_nui* n, int k)
 {
@@ -196,16 +252,20 @@ static int track_user(freenect_nui* n, int k)
 	scale[1] = scale[2] = 1.0f;
 	for (i = 0; i < NPIX; i++)
 		n->umap[i] = n->seg.user[i] == k + 1 ? (uint16_t)((n->map[i] << 2) | 1) : 0;
-	for (i = 0; i < NPIX; i++)
-		if (n->seg.user[i] == k + 1)
-			fn_forest_classify(n->forest, n->umap, scale, i % NW, i / NW, n->prob + (size_t)i * FN_NUI_PARTS);
-	fn_nui_proposals(n->map, n->seg.user, k, n->prob, scale[0], &props);
+	{
+		classify_job J;
+		J.n = n;
+		J.scale = scale;
+		J.slot = k + 1;
+		PROF(n, P_CLASSIFY, fn_pool_run(n->pool, classify_rows, &J, NH, 4));
+	}
+	PROF(n, P_PROPOSALS, fn_nui_proposals(n->map, n->seg.user, k, n->prob, scale[0], &props, n->pool));
 	if (n->fit_id[k] != U->id) {
 		fn_nui_fit_reset(&n->fit[k], scale[0]);
 		n->fit_id[k] = U->id;
 		n->good[k] = n->bad[k] = n->tried[k] = 0;
 	}
-	good = fn_nui_fit_user(&n->fit[k], &props, n->map, n->seg.user, k, scale[0]);
+	PROF(n, P_FIT, good = fn_nui_fit_user(&n->fit[k], &props, n->map, n->seg.user, k, scale[0]));
 	n->tried[k]++;
 	if (good) {
 		n->good[k]++;
@@ -240,15 +300,16 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 {
 	int k, chosen[NU], fitted[NU], nchosen = 0;
 	uint32_t now_tracked[NU];
+	double t_total;
 	if (!n || !depth || !out)
 		return -1;
+	t_total = n->profile ? prof_now() : 0.0;
 	memcpy(n->depth, depth, 640 * 480 * sizeof(uint16_t));
-	fn_nui_make_map(depth, n->map);
+	PROF(n, P_MAP, fn_nui_make_map(depth, n->map));
 	if (n->hd) {
-		fn_hd_detect(n->hd, n->map);
-		fn_hd_track_update(n->hd);
+		PROF(n, P_HEADS, fn_hd_detect(n->hd, n->map); fn_hd_track_update(n->hd));
 	}
-	fn_nui_segment(&n->seg, n->map, n->flags & FREENECT_NUI_SEATED);
+	PROF(n, P_SEGMENT, fn_nui_segment(&n->seg, n->map, n->flags & FREENECT_NUI_SEATED));
 
 	// users found without motion: the forest has to see a body
 	memset(fitted, 0, sizeof(fitted));
@@ -340,7 +401,7 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 			fn_nui_pointer_reset(&n->ptr[k][1]);
 			n->hands_id[k] = U->id;
 		}
-		track_hands(n, k, S);
+		PROF(n, P_HANDS, track_hands(n, k, S));
 		// the hands clasped together: one region, one state for both; each
 		// hand's own fingers are then not separable
 		fn_nui_clasp_analyze(n->depth, n->fit[k].joint[7], n->fit[k].joint[11], n->fit[k].joint[6], n->fit[k].joint[10],
@@ -398,6 +459,10 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 		}
 	}
 	memcpy(n->tracked, now_tracked, sizeof(now_tracked));
+	if (n->profile) {
+		n->prof[P_TOTAL] += prof_now() - t_total;
+		n->prof_frames++;
+	}
 	return 0;
 }
 
@@ -481,6 +546,21 @@ int freenect_nui_get_hands(freenect_nui* n, int user, freenect_nui_hand hands[2]
 	}
 	memcpy(hands, n->hands[user], 2 * sizeof(freenect_nui_hand));
 	return 0;
+}
+
+int freenect_nui_set_threads(freenect_nui* n, int threads)
+{
+	fn_pool* p;
+	if (!n || threads < 0)
+		return -1;
+	if (threads == 0)
+		threads = fn_pool_cpus() > 8 ? 8 : fn_pool_cpus();
+	p = fn_pool_create(threads);
+	if (!p)
+		return -1;
+	fn_pool_destroy(n->pool);
+	n->pool = p;
+	return fn_pool_threads(p);
 }
 
 int freenect_nui_get_heads(freenect_nui* n, freenect_nui_head heads[FREENECT_NUI_MAX_HEADS])

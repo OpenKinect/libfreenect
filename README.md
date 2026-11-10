@@ -146,6 +146,14 @@ arecord -D hw:Kinect -c4 -f S32_LE -r16000 -t wav - | freenect-micbeam --wav -
   gives the tracked heads, found by their shape alone (`FREENECT_NUI_HEADS` runs
   it when standing too).
 
+Beyond the SDK's tracker: every pixel of each user is classified, on up to 8
+threads (`freenect_nui_set_threads()`, `LIBFREENECT_NUI_THREADS`). In tests,
+one user takes about 3 ms per frame and six about 6 ms on an 8-core laptop.
+The fit keeps elbows and knees within their limits. Besides the SDK's Holt
+filter, the smoother offers a One-Euro filter (smooth when still, little lag
+when moving) and a constant-velocity Kalman filter
+(`freenect_nui_smoother_set_one_euro()`, `_set_kalman()`).
+
 It adds what the SDK didn't have: 12 hand joints in the same skeleton (joints 20–31: each hand's palm, thumb, index, middle, ring and little fingertip), each hand's state (open, closed, pointing, gun shape), and whether it holds something. The palm is tracked whenever the hand is seen. The fingers are tracked closer than about 1.6 m, and each is named, so a raised thumb is reported as the thumb. A finger that is folded or hidden is not tracked. A finger pointing straight at the Kinect is found from depth, where it doesn't stick out of the hand's outline. `freenect_nui_get_hands()` gives more detail per hand (palm radius, contour size, all fingertips).
 
 Each hand also has an orientation (`hand_orientation` in the skeleton): the direction from the wrist to the fingers and the palm's normal. Depth can't tell the palm from the back of the hand, so the normal points to the Kinect's side.

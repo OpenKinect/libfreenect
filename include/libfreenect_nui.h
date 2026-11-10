@@ -171,6 +171,12 @@ FREENECT_NUI_API int freenect_nui_set_max_tracked(freenect_nui* nui, int n);
 /// NuiSkeletonSetTrackedSkeletons. NULL returns to the nearest ones.
 FREENECT_NUI_API int freenect_nui_set_tracked_users(freenect_nui* nui, const uint32_t* ids, int n);
 
+/// How many threads classify the pixels (the results are the same with any
+/// number): 0 for one per processor, up to 8 (the default; the environment
+/// variable LIBFREENECT_NUI_THREADS sets it at create), 1 for none besides
+/// the caller. Returns the number in use, or < 0 on error.
+FREENECT_NUI_API int freenect_nui_set_threads(freenect_nui* nui, int threads);
+
 /* ------------------------------------------------------------ hands */
 
 /// More about one hand than the skeleton's joints carry (the palm and
@@ -334,10 +340,24 @@ typedef struct {
 typedef struct freenect_nui_smoother freenect_nui_smoother;
 FREENECT_NUI_API freenect_nui_smoother* freenect_nui_smoother_create(void);
 FREENECT_NUI_API void freenect_nui_smoother_destroy(freenect_nui_smoother* s);
-/// Smooths the tracked users of a frame in place, as NuiTransformSmooth
-/// (params NULL: the defaults). History is kept per user slot.
+/// Smooths the tracked users of a frame in place, with the smoother's filter
+/// (the SDK's NuiTransformSmooth by default; params NULL: its defaults; the
+/// other filters ignore params). History is kept per user slot and starts
+/// over when the slot's user changes.
 FREENECT_NUI_API int freenect_nui_smooth(freenect_nui_smoother* s, freenect_nui_frame* frame,
                                          const freenect_nui_smoothing* params);
+
+/// The SDK's Holt filter (the default).
+FREENECT_NUI_API int freenect_nui_smoother_set_holt(freenect_nui_smoother* s);
+/// The One-Euro filter (Casiez et al. 2012) per joint: smooth when the joint
+/// is still, little lag when it moves. min_cutoff in Hz (1.0), beta in s/m
+/// (lower: smoother, more lag; 1.5), d_cutoff in Hz (1.0); 30 frames a second.
+FREENECT_NUI_API int freenect_nui_smoother_set_one_euro(freenect_nui_smoother* s, float min_cutoff, float beta, float d_cutoff);
+/// A constant-velocity Kalman filter per joint and axis: accel_noise, the
+/// expected acceleration in m/s^2 (higher: follows faster; 3), and
+/// measurement_noise, the joints' noise in m (0.02; four times that for
+/// INFERRED joints); 30 frames a second.
+FREENECT_NUI_API int freenect_nui_smoother_set_kalman(freenect_nui_smoother* s, float accel_noise, float measurement_noise);
 
 /* ------------------------------------------------------------ orientations */
 
