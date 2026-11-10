@@ -107,6 +107,52 @@ for it to come back; Ctrl+C stops it. To load v4l2loopback at boot, put
 in `/etc/modprobe.d/v4l2loopback.conf`
 (`options v4l2loopback devices=2 video_nr=10,11 card_label="Kinect depth,Kinect video" exclusive_caps=1`).
 
+## One beamformed microphone (PipeWire)
+
+With the UAC firmware running, PipeWire sees the Kinect's 4 microphones as one
+4-channel input. libfreenect turns them into one microphone,
+**Kinect beamformed microphone**, which every PipeWire, PulseAudio and JACK
+application can pick. It follows the talker among 11 fixed beams from −50° to
++50°, as Microsoft's SDK does, and passes less of the room and of other
+directions than any single microphone.
+
+There are two ways, depending on the WirePlumber version (`wireplumber --version`):
+
+**WirePlumber 0.5 or newer** (Ubuntu 25.04 and later, Debian 13, Raspberry Pi
+OS trixie, Fedora). Nothing runs besides PipeWire. `cmake --install` puts in place:
+- `lib/ladspa/freenect_beam.so`: libfreenect's beamformer as a LADSPA plugin;
+- `share/libfreenect/pipewire/kinect-mic.conf`: a PipeWire filter graph with
+  the plugin and a 90 Hz high-pass;
+- `share/wireplumber/wireplumber.conf.d/51-freenect-kinect-mic.conf`: the
+  WirePlumber rules.
+
+When the Kinect's microphones appear, the rules open them as one raw 4-channel
+input, load the filter graph on it and hide the raw input from applications,
+as Asahi Linux does for the MacBook microphone arrays. Restart the session's
+audio after installing: `systemctl --user restart wireplumber pipewire`. The
+graph's controls are in `kinect-mic.conf`: `Mode` 0 follows the talker, 1
+steers continuously, 2 keeps the beam at `Angle` (−50 to 50 degrees). `SDK
+weights` 1 uses Microsoft's beam weights instead of libfreenect's (fetch them
+with `fwfetcher.py --audio-weights`). `Noise suppression` and `AGC` work with
+libfreenect built with SpeexDSP. To keep another microphone as the default,
+lower `priority.session` there.
+
+**WirePlumber 0.4** (Ubuntu 24.04). Use the `freenect-pipewire-mic` program
+(built when the libpipewire-0.3 development files are installed). It does the
+same as a small PipeWire client:
+
+    systemctl --user enable --now freenect-pipewire-mic
+
+Its options: `--beam auto|adaptive|ANGLE`, `--sdk-weights`,
+`--noise-suppression`, `--agc`, `--target NODE` (another source than the
+Kinect), `--name DESCRIPTION`, `--verbose` (reports the beam and the talker's
+direction every 5 s). Don't use both ways at once: the WirePlumber rules hide
+the raw input that the program looks for.
+
+Either way, check with `wpctl status`: "Kinect beamformed microphone" is
+listed under Sources. Angles are positive towards microphone 4, the outer
+one of the three microphones on the same side of the Kinect.
+
 ## Install locations
 
 | Install prefix | udev rules | systemd unit |

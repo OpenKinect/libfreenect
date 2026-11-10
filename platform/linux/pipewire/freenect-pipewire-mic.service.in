@@ -1,0 +1,18 @@
+[Unit]
+Description=The Kinect's microphone array as one beamformed PipeWire microphone
+Documentation=https://github.com/OpenKinect/libfreenect/tree/master/platform/linux
+# For systems whose WirePlumber has no node.software-dsp (0.4, for example
+# Ubuntu 24.04). With WirePlumber 0.5, 51-freenect-kinect-mic.conf does the
+# same inside PipeWire; don't enable both.
+# Enable for your user with: systemctl --user enable --now freenect-pipewire-mic
+After=pipewire.service wireplumber.service
+BindsTo=pipewire.service
+
+[Service]
+ExecStart=@FREENECT_PIPEWIRE_MIC_PATH@
+Restart=on-failure
+RestartSec=2
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=pipewire.service

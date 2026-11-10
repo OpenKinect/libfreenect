@@ -1,0 +1,58 @@
+{
+  # The Kinect's beamformed microphone: a PipeWire filter graph
+  # (libpipewire-module-filter-chain arguments). WirePlumber loads it when the
+  # Kinect's microphone array appears (51-freenect-kinect-mic.conf), and the
+  # raw 4-channel array is then hidden from applications.
+  #
+  # freenect_beam is libfreenect's beamformer (libfreenect_audio_dsp.h) as a
+  # LADSPA plugin. Mode: 0 follows the talker among 11 fixed beams (-50..50
+  # degrees), 1 steers continuously, 2 keeps the beam at Angle. SDK weights,
+  # Noise suppression and AGC (1 = on) are read when the filter starts.
+  # (WirePlumber reads this file as one object: comments only inside the braces)
+  node.description = "Kinect beamformed microphone"
+  media.name = "Kinect beamformed microphone"
+  filter.graph = {
+    nodes = [
+      {
+        type = ladspa
+        name = beam
+        plugin = "@FREENECT_LADSPA_PLUGIN@"
+        label = freenect_beam
+        control = { "Mode" = 0 "Angle" = 0 "SDK weights" = 0 "Noise suppression" = 0 "AGC" = 0 }
+      }
+      {
+        # rumble and handling noise
+        type = builtin
+        name = hpf
+        label = bq_highpass
+        control = { "Freq" = 90.0 "Q" = 0.707 }
+      }
+    ]
+    links = [
+      { output = "beam:Out" input = "hpf:In" }
+    ]
+    inputs = [ "beam:In 1" "beam:In 2" "beam:In 3" "beam:In 4" ]
+    outputs = [ "hpf:Out" ]
+  }
+  capture.props = {
+    node.name = "freenect.kinect-mic.capture"
+    # the raw array, as 51-freenect-kinect-mic.conf names it
+    target.object = "alsa_input.freenect.kinect-mics"
+    audio.channels = 4
+    audio.position = [ AUX0 AUX1 AUX2 AUX3 ]
+    stream.dont-remix = true
+    node.dont-fallback = true
+    node.dont-reconnect = true
+    node.passive = true
+  }
+  playback.props = {
+    node.name = "freenect.kinect-mic"
+    node.description = "Kinect beamformed microphone"
+    media.class = Audio/Source
+    audio.channels = 1
+    audio.position = [ MONO ]
+    device.icon-name = "audio-input-microphone"
+    # preferred over other microphones as the default; lower it to keep yours
+    priority.session = 2005
+  }
+}

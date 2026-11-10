@@ -36,3 +36,8 @@ install (FILES "${CMAKE_CURRENT_SOURCE_DIR}/modprobe.d/kinect.conf"
          DESTINATION "share/doc/libfreenect/linux")
 
 message (STATUS "udev rules will be installed to ${LIBFREENECT_UDEV_RULES_DIR}")
+
+# The beamformed microphone for PipeWire (needs the audio DSP)
+if (BUILD_AUDIO_DSP)
+  add_subdirectory (pipewire)
+endif ()
