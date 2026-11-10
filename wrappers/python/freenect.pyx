@@ -103,7 +103,7 @@ cdef extern from "libfreenect.h":
     int freenect_shutdown(freenect_context *ctx)
     int freenect_process_events(freenect_context *ctx) nogil
     int freenect_num_devices(freenect_context *ctx)
-    int freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs)
+    void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs)
     int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
     int freenect_close_device(freenect_device *dev)
     void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb)
@@ -299,15 +299,14 @@ def get_tilt_degs(StatePtr state):
 def error_open_device():
     print("Error: Can't open device. 1.) is it plugged in? 2.) Read the README")
 
-cpdef init():
+cpdef init(int subdevices=FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA):
+    """A libfreenect context. subdevices: which parts of the Kinect
+    open_device opens (DEVICE_MOTOR | DEVICE_CAMERA by default; add
+    DEVICE_AUDIO for get_mic_geometry). None if libfreenect can't start."""
     cdef freenect_context* ctx
     if freenect_init(&ctx, NULL) < 0:
         return
-    # We take both the motor and camera devices here, since we provide access
-    # to both but haven't wrapped the python API for selecting subdevices yet.
-    # Also, we don't support audio in the python wrapper yet, so no sense claiming
-    # the device.
-    freenect_select_subdevices(ctx, <freenect_device_flags> (FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA))
+    freenect_select_subdevices(ctx, <freenect_device_flags> subdevices)
     cdef CtxPtr ctx_out = CtxPtr.__new__(CtxPtr)
     ctx_out._ptr = ctx
     return ctx_out
@@ -553,3 +552,357 @@ def sync_stop():
     """Terminate the synchronous runloop if running, else this is a NOP
     """
     freenect_sync_stop()
+
+
+# ---------------------------------------------------------------- device
+
+cdef extern from "libfreenect.h":
+    ctypedef enum freenect_depth_range:
+        FREENECT_DEPTH_RANGE_DEFAULT
+        FREENECT_DEPTH_RANGE_NEAR
+        FREENECT_DEPTH_RANGE_FULL
+    ctypedef enum freenect_color_setting:
+        FREENECT_COLOR_AUTO_EXPOSURE
+        FREENECT_COLOR_EXPOSURE_TIME
+        FREENECT_COLOR_FRAME_INTERVAL
+        FREENECT_COLOR_GAIN
+        FREENECT_COLOR_BRIGHTNESS
+        FREENECT_COLOR_POWER_LINE_FREQUENCY
+        FREENECT_COLOR_BACKLIGHT_COMPENSATION
+        FREENECT_COLOR_AUTO_WHITE_BALANCE
+        FREENECT_COLOR_WHITE_BALANCE
+        FREENECT_COLOR_CONTRAST
+        FREENECT_COLOR_HUE
+        FREENECT_COLOR_SATURATION
+        FREENECT_COLOR_GAMMA
+        FREENECT_COLOR_SHARPNESS
+    int freenect_device_connected(freenect_device *dev)
+    const char *freenect_get_device_serial(freenect_device *dev)
+    int freenect_set_depth_range(freenect_device *dev, freenect_depth_range range)
+    freenect_depth_range freenect_get_depth_range(freenect_device *dev)
+    int freenect_set_color_setting(freenect_device *dev, freenect_color_setting setting, double value)
+    int freenect_get_color_setting(freenect_device *dev, freenect_color_setting setting, double *value)
+    int freenect_nudge_stream_timing(freenect_device *dev, int depth_nudge_us)
+    int freenect_set_stream_timing_auto(freenect_device *dev, int on)
+    int freenect_set_ir_emitter(freenect_device *dev, int on)
+
+DEPTH_RANGE_DEFAULT = FREENECT_DEPTH_RANGE_DEFAULT
+DEPTH_RANGE_NEAR = FREENECT_DEPTH_RANGE_NEAR
+DEPTH_RANGE_FULL = FREENECT_DEPTH_RANGE_FULL
+COLOR_AUTO_EXPOSURE = FREENECT_COLOR_AUTO_EXPOSURE
+COLOR_EXPOSURE_TIME = FREENECT_COLOR_EXPOSURE_TIME
+COLOR_FRAME_INTERVAL = FREENECT_COLOR_FRAME_INTERVAL
+COLOR_GAIN = FREENECT_COLOR_GAIN
+COLOR_BRIGHTNESS = FREENECT_COLOR_BRIGHTNESS
+COLOR_POWER_LINE_FREQUENCY = FREENECT_COLOR_POWER_LINE_FREQUENCY
+COLOR_BACKLIGHT_COMPENSATION = FREENECT_COLOR_BACKLIGHT_COMPENSATION
+COLOR_AUTO_WHITE_BALANCE = FREENECT_COLOR_AUTO_WHITE_BALANCE
+COLOR_WHITE_BALANCE = FREENECT_COLOR_WHITE_BALANCE
+COLOR_CONTRAST = FREENECT_COLOR_CONTRAST
+COLOR_HUE = FREENECT_COLOR_HUE
+COLOR_SATURATION = FREENECT_COLOR_SATURATION
+COLOR_GAMMA = FREENECT_COLOR_GAMMA
+COLOR_SHARPNESS = FREENECT_COLOR_SHARPNESS
+
+def select_subdevices(CtxPtr ctx, int subdevices):
+    """Which parts of the Kinect open_device opens (DEVICE_* flags)."""
+    freenect_select_subdevices(ctx._ptr, <freenect_device_flags> subdevices)
+
+def device_connected(DevPtr dev):
+    """False once the Kinect has been unplugged."""
+    return freenect_device_connected(dev._ptr) != 0
+
+def get_device_serial(DevPtr dev):
+    """The camera's serial number, or None."""
+    cdef const char* s = freenect_get_device_serial(dev._ptr)
+    return s.decode('ascii', 'replace') if s != NULL else None
+
+def set_depth_range(DevPtr dev, int depth_range):
+    """DEPTH_RANGE_DEFAULT (800-4000 mm), DEPTH_RANGE_NEAR (400-3000 mm) or
+    DEPTH_RANGE_FULL (every distance the sensor reports)."""
+    return freenect_set_depth_range(dev._ptr, <freenect_depth_range> depth_range)
+
+def get_depth_range(DevPtr dev):
+    return int(freenect_get_depth_range(dev._ptr))
+
+def set_ir_emitter(DevPtr dev, on):
+    """Switch the IR projector on or off (it is off whenever depth is stopped)."""
+    return freenect_set_ir_emitter(dev._ptr, 1 if on else 0)
+
+def set_color_setting(DevPtr dev, int setting, double value):
+    """A colour camera setting of the Kinect for Windows (COLOR_*), with the
+    SDK's values. Returns 0, or < 0 (-ENOTSUP on the Xbox 360 models)."""
+    return freenect_set_color_setting(dev._ptr, <freenect_color_setting> setting, value)
+
+def get_color_setting(DevPtr dev, int setting):
+    """The value of a colour camera setting, or None if there is none."""
+    cdef double v = 0
+    if freenect_get_color_setting(dev._ptr, <freenect_color_setting> setting, &v) < 0:
+        return None
+    return v
+
+def nudge_stream_timing(DevPtr dev, int depth_nudge_us):
+    return freenect_nudge_stream_timing(dev._ptr, depth_nudge_us)
+
+def set_stream_timing_auto(DevPtr dev, on):
+    """Keep depth and colour frames in phase automatically."""
+    return freenect_set_stream_timing_auto(dev._ptr, 1 if on else 0)
+
+
+# ---------------------------------------------------------------- microphones
+
+cdef extern from "libfreenect_audio.h":
+    enum: FREENECT_MAX_MICS
+    ctypedef struct freenect_mic:
+        uint16_t type
+        int16_t x_mm
+        int16_t y_mm
+        int16_t z_mm
+        int16_t vertical_angle
+        int16_t horizontal_angle
+    ctypedef struct freenect_mic_geometry:
+        uint16_t array_type
+        int16_t vertical_angle_begin
+        int16_t vertical_angle_end
+        int16_t horizontal_angle_begin
+        int16_t horizontal_angle_end
+        uint16_t freq_low_hz
+        uint16_t freq_high_hz
+        int num_mics
+        freenect_mic mics[4]
+    int freenect_get_mic_geometry(freenect_device* dev, freenect_mic_geometry* out)
+    int freenect_audio_streaming_available(freenect_device* dev)
+
+def get_mic_geometry(DevPtr dev):
+    """The microphone array as the Kinect describes it (needs DEVICE_AUDIO
+    in init()): a dict with the working ranges and a list of microphones
+    (position in mm, type 2 = cardioid, angles in 1/10000 radian), in the
+    order of the audio channels. None if it can't be read."""
+    cdef freenect_mic_geometry g
+    if freenect_get_mic_geometry(dev._ptr, &g) < 0:
+        return None
+    mics = []
+    for i in range(min(g.num_mics, FREENECT_MAX_MICS)):
+        m = g.mics[i]
+        mics.append(dict(type=m.type, x_mm=m.x_mm, y_mm=m.y_mm, z_mm=m.z_mm,
+                         vertical_angle=m.vertical_angle, horizontal_angle=m.horizontal_angle))
+    return dict(array_type=g.array_type, vertical_angle_range=(g.vertical_angle_begin, g.vertical_angle_end),
+                horizontal_angle_range=(g.horizontal_angle_begin, g.horizontal_angle_end),
+                frequency_range_hz=(g.freq_low_hz, g.freq_high_hz), mics=mics)
+
+def audio_streaming_available(DevPtr dev):
+    """Whether libfreenect's own audio streaming works on this device (with
+    Microsoft's firmware, record the microphones through the OS instead)."""
+    return freenect_audio_streaming_available(dev._ptr) > 0
+
+
+# ---------------------------------------------------------------- coordinate mapper
+
+cdef extern from "libfreenect_coordinate_mapper.h":
+    ctypedef struct freenect_coordinate_mapper
+    ctypedef struct freenect_depth_point:
+        int32_t x
+        int32_t y
+        uint16_t depth_mm
+    ctypedef struct freenect_color_point:
+        int32_t x
+        int32_t y
+    ctypedef struct freenect_camera_point:
+        float x
+        float y
+        float z
+    enum: FREENECT_CALIBRATION_SIZE
+    freenect_coordinate_mapper* freenect_create_coordinate_mapper(freenect_device* dev)
+    freenect_coordinate_mapper* freenect_create_coordinate_mapper_from_calibration(const void* data, size_t size)
+    void freenect_destroy_coordinate_mapper(freenect_coordinate_mapper* m)
+    int freenect_mapper_get_calibration(freenect_coordinate_mapper* m, void* buf, size_t size)
+    void freenect_mapper_set_mirrored(freenect_coordinate_mapper* m, int mirrored)
+    int freenect_map_depth_point_to_color(freenect_coordinate_mapper* m, freenect_resolution depth_res,
+                                          freenect_resolution color_res, freenect_depth_point p, freenect_color_point* out)
+    int freenect_map_depth_frame_to_color(freenect_coordinate_mapper* m, freenect_resolution depth_res,
+                                          freenect_resolution color_res, const uint16_t* depth_mm, freenect_color_point* out)
+    int freenect_map_color_frame_to_depth(freenect_coordinate_mapper* m, freenect_resolution depth_res,
+                                          freenect_resolution color_res, const uint16_t* depth_mm, freenect_depth_point* out)
+    int freenect_map_depth_point_to_camera(freenect_coordinate_mapper* m, freenect_resolution depth_res,
+                                           freenect_depth_point p, freenect_camera_point* out)
+    int freenect_map_depth_frame_to_camera(freenect_coordinate_mapper* m, freenect_resolution depth_res,
+                                           const uint16_t* depth_mm, freenect_camera_point* out)
+    int freenect_map_camera_point_to_depth(freenect_coordinate_mapper* m, freenect_resolution depth_res,
+                                           freenect_camera_point p, freenect_depth_point* out)
+    int freenect_map_camera_point_to_color(freenect_coordinate_mapper* m, freenect_resolution color_res,
+                                           freenect_camera_point p, freenect_color_point* out)
+    int freenect_map_color_frame_to_camera(freenect_coordinate_mapper* m, freenect_resolution depth_res,
+                                           freenect_resolution color_res, const uint16_t* depth_mm, freenect_camera_point* out)
+
+MAPPER_INVALID = -2147483648
+_DEPTH_SIZES = {FREENECT_RESOLUTION_VERY_LOW: (60, 80), FREENECT_RESOLUTION_LOW: (240, 320),
+                FREENECT_RESOLUTION_MEDIUM: (480, 640)}
+_COLOR_SIZES = {FREENECT_RESOLUTION_MEDIUM: (480, 640), FREENECT_RESOLUTION_HIGH: (960, 1280)}
+_DEPTH_POINT = np.dtype([('x', '<i4'), ('y', '<i4'), ('depth_mm', '<u2')], align=True)
+
+def _depth_frame(depth, int res):
+    if res not in _DEPTH_SIZES:
+        raise ValueError("depth resolution: RESOLUTION_VERY_LOW, _LOW or _MEDIUM")
+    a = np.ascontiguousarray(depth, dtype=np.uint16)
+    if a.shape != _DEPTH_SIZES[res]:
+        raise ValueError("depth frame must be %dx%d (rows x columns) for this resolution, not %s"
+                         % (_DEPTH_SIZES[res][0], _DEPTH_SIZES[res][1], a.shape))
+    return a
+
+def _check(int r, what):
+    if r < 0:
+        raise RuntimeError("%s failed (%d)" % (what, r))
+
+cdef class CoordinateMapper:
+    """Maps between depth pixels, colour pixels and camera space (metres), as
+    the Kinect SDK's INuiCoordinateMapper, with the Kinect's own calibration.
+
+    CoordinateMapper(dev) reads it from an open Kinect (with DEVICE_CAMERA);
+    CoordinateMapper.from_calibration(data) uses one saved with .calibration.
+    Depth frames are uint16 arrays in mm (DEPTH_MM), in libfreenect's
+    orientation. Colour resolution RESOLUTION_HIGH is the SDK's 1280x960."""
+    cdef freenect_coordinate_mapper* _m
+
+    def __cinit__(self, DevPtr dev=None):
+        self._m = NULL
+        if dev is not None:
+            self._m = freenect_create_coordinate_mapper(dev._ptr)
+            if self._m == NULL:
+                raise RuntimeError("could not read the Kinect's calibration")
+
+    def __dealloc__(self):
+        if self._m != NULL:
+            freenect_destroy_coordinate_mapper(self._m)
+
+    @staticmethod
+    def from_calibration(data):
+        """A mapper from a calibration saved with .calibration."""
+        cdef bytes b = bytes(data)
+        cdef CoordinateMapper m = CoordinateMapper.__new__(CoordinateMapper)
+        m._m = freenect_create_coordinate_mapper_from_calibration(<const char*> b, len(b))
+        if m._m == NULL:
+            raise ValueError("not a libfreenect calibration (%d bytes)" % len(b))
+        return m
+
+    cdef int _ok(self) except -1:
+        if self._m == NULL:
+            raise RuntimeError("no calibration: use CoordinateMapper(dev) or CoordinateMapper.from_calibration()")
+        return 0
+
+    @property
+    def calibration(self):
+        """The calibration as bytes, to save and load with from_calibration."""
+        cdef char buf[512]
+        self._ok()
+        _check(freenect_mapper_get_calibration(self._m, buf, sizeof(buf)), "get_calibration")
+        return buf[:FREENECT_CALIBRATION_SIZE]
+
+    def set_mirrored(self, mirrored):
+        """Use the SDK's mirrored image orientation (x' = width - 1 - x) for all pixels."""
+        self._ok()
+        freenect_mapper_set_mirrored(self._m, 1 if mirrored else 0)
+
+    def depth_point_to_color(self, int x, int y, int depth_mm, int depth_res=FREENECT_RESOLUTION_MEDIUM,
+                             int color_res=FREENECT_RESOLUTION_MEDIUM):
+        """The colour pixel (x, y) that sees a depth pixel, or None."""
+        cdef freenect_depth_point p
+        cdef freenect_color_point c
+        self._ok()
+        p.x = x
+        p.y = y
+        p.depth_mm = depth_mm
+        if freenect_map_depth_point_to_color(self._m, <freenect_resolution> depth_res, <freenect_resolution> color_res, p, &c) < 0:
+            return None
+        if c.x == MAPPER_INVALID:
+            return None
+        return (c.x, c.y)
+
+    def depth_frame_to_color(self, depth, int depth_res=FREENECT_RESOLUTION_MEDIUM, int color_res=FREENECT_RESOLUTION_MEDIUM):
+        """The colour pixel of every depth pixel: int32 array (rows, columns, 2)
+        of (x, y), MAPPER_INVALID where there is no depth."""
+        self._ok()
+        a = _depth_frame(depth, depth_res)
+        out = np.empty(a.shape + (2,), dtype=np.int32)
+        cdef const uint16_t[:, ::1] d = a
+        cdef int32_t[:, :, ::1] o = out
+        _check(freenect_map_depth_frame_to_color(self._m, <freenect_resolution> depth_res, <freenect_resolution> color_res,
+                                                 &d[0, 0], <freenect_color_point*> &o[0, 0, 0]), "depth_frame_to_color")
+        return out
+
+    def color_frame_to_depth(self, depth, int depth_res=FREENECT_RESOLUTION_MEDIUM, int color_res=FREENECT_RESOLUTION_MEDIUM):
+        """The depth pixel seen by every colour pixel: (xy, depth_mm), an int32
+        array (rows, columns, 2) and a uint16 array (rows, columns) at the
+        colour resolution; MAPPER_INVALID and 0 where no depth pixel lands."""
+        self._ok()
+        if color_res not in _COLOR_SIZES:
+            raise ValueError("colour resolution: RESOLUTION_MEDIUM or RESOLUTION_HIGH")
+        a = _depth_frame(depth, depth_res)
+        out = np.empty(_COLOR_SIZES[color_res], dtype=_DEPTH_POINT)
+        cdef const uint16_t[:, ::1] d = a
+        cdef npc.ndarray arr = out
+        _check(freenect_map_color_frame_to_depth(self._m, <freenect_resolution> depth_res, <freenect_resolution> color_res,
+                                                 &d[0, 0], <freenect_depth_point*> npc.PyArray_DATA(arr)), "color_frame_to_depth")
+        return np.stack([out['x'], out['y']], axis=-1), np.ascontiguousarray(out['depth_mm'])
+
+    def depth_point_to_camera(self, int x, int y, int depth_mm, int depth_res=FREENECT_RESOLUTION_MEDIUM):
+        """The camera space point (x, y, z) in metres of a depth pixel."""
+        cdef freenect_depth_point p
+        cdef freenect_camera_point c
+        self._ok()
+        p.x = x
+        p.y = y
+        p.depth_mm = depth_mm
+        _check(freenect_map_depth_point_to_camera(self._m, <freenect_resolution> depth_res, p, &c), "depth_point_to_camera")
+        return (c.x, c.y, c.z)
+
+    def depth_frame_to_camera(self, depth, int depth_res=FREENECT_RESOLUTION_MEDIUM):
+        """Camera space points of a whole depth frame: float32 (rows, columns, 3), in metres."""
+        self._ok()
+        a = _depth_frame(depth, depth_res)
+        out = np.empty(a.shape + (3,), dtype=np.float32)
+        cdef const uint16_t[:, ::1] d = a
+        cdef float[:, :, ::1] o = out
+        _check(freenect_map_depth_frame_to_camera(self._m, <freenect_resolution> depth_res, &d[0, 0],
+                                                  <freenect_camera_point*> &o[0, 0, 0]), "depth_frame_to_camera")
+        return out
+
+    def camera_point_to_depth(self, float x, float y, float z, int depth_res=FREENECT_RESOLUTION_MEDIUM):
+        """The depth pixel (x, y, depth_mm) a camera space point projects to, or None."""
+        cdef freenect_camera_point p
+        cdef freenect_depth_point o
+        self._ok()
+        p.x = x
+        p.y = y
+        p.z = z
+        if freenect_map_camera_point_to_depth(self._m, <freenect_resolution> depth_res, p, &o) < 0:
+            return None
+        if o.x == MAPPER_INVALID:
+            return None
+        return (o.x, o.y, o.depth_mm)
+
+    def camera_point_to_color(self, float x, float y, float z, int color_res=FREENECT_RESOLUTION_MEDIUM):
+        """The colour pixel (x, y) that sees a camera space point, or None."""
+        cdef freenect_camera_point p
+        cdef freenect_color_point o
+        self._ok()
+        p.x = x
+        p.y = y
+        p.z = z
+        if freenect_map_camera_point_to_color(self._m, <freenect_resolution> color_res, p, &o) < 0:
+            return None
+        if o.x == MAPPER_INVALID:
+            return None
+        return (o.x, o.y)
+
+    def color_frame_to_camera(self, depth, int depth_res=FREENECT_RESOLUTION_MEDIUM, int color_res=FREENECT_RESOLUTION_MEDIUM):
+        """The camera space point seen by every colour pixel: float32 (rows, columns, 3)."""
+        self._ok()
+        if color_res not in _COLOR_SIZES:
+            raise ValueError("colour resolution: RESOLUTION_MEDIUM or RESOLUTION_HIGH")
+        a = _depth_frame(depth, depth_res)
+        out = np.empty(_COLOR_SIZES[color_res] + (3,), dtype=np.float32)
+        cdef const uint16_t[:, ::1] d = a
+        cdef float[:, :, ::1] o = out
+        _check(freenect_map_color_frame_to_camera(self._m, <freenect_resolution> depth_res, <freenect_resolution> color_res,
+                                                  &d[0, 0], <freenect_camera_point*> &o[0, 0, 0]), "color_frame_to_camera")
+        return out
