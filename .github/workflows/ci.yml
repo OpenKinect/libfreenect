@@ -110,7 +110,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake build-essential pkg-config \
             libusb-1.0-0-dev libglfw3-dev freeglut3-dev libgl1-mesa-dev libglu1-mesa-dev \
-            xvfb xauth libgl1-mesa-dri
+            xvfb xauth libgl1-mesa-dri libpipewire-0.3-dev
 
       - name: Configure
         run: >
@@ -124,6 +124,16 @@ jobs:
       - name: Unit tests
         # under Xvfb, so that the viewers' window layer is tested too
         run: xvfb-run -a ctest --test-dir build --output-on-failure
+
+      - uses: astral-sh/setup-uv@v6
+
+      # The Python package as users build it: uv pip install ./wrappers/python
+      - name: Python package
+        run: |
+          set -e
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python ./wrappers/python
+          .venv/bin/python -m unittest discover -s wrappers/python/tests -v
 
       - name: OpenGL viewers were built (GLFW), and with GLUT instead
         run: |
@@ -158,6 +168,19 @@ jobs:
             took=$(( $(date +%s) - start ))
             { test "$code" -eq 0 && test "$took" -le 5; } || { echo "freenect-hotplug ($mode): exit $code after ${took}s"; exit 1; }
           done
+
+      # A private PipeWire and WirePlumber with a fake Kinect source: the
+      # beamformed microphone must favour the talker's direction. Ubuntu
+      # 24.04 has WirePlumber 0.4, so this tests freenect-pipewire-mic; with
+      # WirePlumber 0.5 it also tests the LADSPA plugin and the rule.
+      - name: Beamformed microphone (PipeWire)
+        run: |
+          set +e
+          sudo apt-get install -y --no-install-recommends pipewire pipewire-bin wireplumber dbus python3 >/dev/null
+          dbus-run-session -- bash platform/linux/pipewire/test-pipewire-mic.sh build
+          code=$?
+          if [ "$code" -eq 77 ]; then echo "::notice::PipeWire test skipped"; exit 0; fi
+          exit "$code"
 
       - name: freenect-v4l2 through v4l2loopback (test pattern)
         if: matrix.os == 'ubuntu-24.04'
@@ -291,6 +314,15 @@ jobs:
       - name: Unit tests
         run: ctest --test-dir build --output-on-failure
 
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Python package
+        run: |
+          set -e
+          uv venv --python 3.12 .venv
+          uv pip install --python .venv/bin/python ./wrappers/python
+          .venv/bin/python -m unittest discover -s wrappers/python/tests -v
+
       - name: OpenGL viewers were built (GLFW)
         run: |
           for v in glview regview hiview chunkview micview glpclview cppview cpp_pcview; do
@@ -301,6 +333,48 @@ jobs:
         run: |
           plutil -lint build/platform/macos/org.openkinect.fwloader.plist
           grep -q "<string>/usr/local/bin/freenect-fwloader</string>" build/platform/macos/org.openkinect.fwloader.plist
+
+      # The beamformed microphone: load the plug-in into coreaudiod (the
+      # runners allow sudo), check that its devices appear, and play a tone
+      # through the loop. No Kinect needed. Exit code 3 of the self-test means
+      # all silence, which is what macOS gives a program without microphone
+      # access (the runners may not grant it): a warning, not a failure.
+      - name: Beamformed microphone (Core Audio plug-in)
+        run: |
+          set -e
+          drv=$(find build -maxdepth 4 -name KinectBeamMic.driver -type d | head -1)
+          app=$(find build -maxdepth 4 -name freenect-coreaudio-mic.app -type d | head -1)
+          test -n "$drv" || { echo "::error::KinectBeamMic.driver was not built"; exit 1; }
+          test -n "$app" || { echo "::error::freenect-coreaudio-mic.app was not built"; exit 1; }
+          plutil -lint "$drv/Contents/Info.plist" "$app/Contents/Info.plist" build/platform/macos/org.openkinect.beam-mic.plist
+          codesign --verify --verbose "$drv"
+          codesign --verify --verbose "$app"
+          nm -gU "$drv/Contents/MacOS/KinectBeamMic" | grep -q KinectBeamMic_Create || { echo "::error::the plug-in does not export its factory"; exit 1; }
+          sudo mkdir -p /Library/Audio/Plug-Ins/HAL
+          sudo cp -R "$drv" /Library/Audio/Plug-Ins/HAL/
+          sudo killall coreaudiod || true
+          sleep 10
+          helper="$app/Contents/MacOS/freenect-coreaudio-mic"
+          "$helper" --list | tee "$RUNNER_TEMP/devices.txt"
+          grep -q "Kinect Beamformed Microphone" "$RUNNER_TEMP/devices.txt" || { echo "::error::coreaudiod did not publish Kinect Beamformed Microphone"; log show --last 2m --predicate 'process == "coreaudiod"' | grep -i -E "kinect|plug-?in|error" | tail -30; exit 1; }
+          set +e
+          "$helper" --self-test | tee "$RUNNER_TEMP/selftest.txt"
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" -eq 3 ]; then
+            echo "::warning::beamformed microphone self-test: silence, probably no microphone access on this runner ($(tail -2 "$RUNNER_TEMP/selftest.txt" | tr '\n' ' '))"
+          elif [ "$code" -ne 0 ]; then
+            echo "::error::beamformed microphone self-test failed ($code): $(tr '\n' ' ' < "$RUNNER_TEMP/selftest.txt")"
+            exit 1
+          fi
+          # the helper with no Kinect: starts, waits, and stops on SIGTERM
+          "$helper" --verbose &
+          pid=$!
+          sleep 3
+          kill -TERM "$pid"
+          wait "$pid" || { echo "::error::freenect-coreaudio-mic did not stop cleanly on SIGTERM"; exit 1; }
+          sudo rm -rf /Library/Audio/Plug-Ins/HAL/KinectBeamMic.driver
+          sudo killall coreaudiod || true
 
       - name: Smoke test (no Kinect attached)
         run: |
