@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>KinectBeamMic</string>
+	<key>CFBundleIdentifier</key>
+	<string>org.openkinect.KinectBeamMic</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>Kinect Beamformed Microphone</string>
+	<key>CFBundlePackageType</key>
+	<string>BNDL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>CFPlugInFactories</key>
+	<dict>
+		<key>5E3A9C21-7B6D-4F0A-9E2C-1D8B4A6F3C70</key>
+		<string>KinectBeamMic_Create</string>
+	</dict>
+	<key>CFPlugInTypes</key>
+	<dict>
+		<!-- kAudioServerPlugInTypeUUID -->
+		<key>443ABAB8-E7B3-491A-B985-BEB9187030DB</key>
+		<array>
+			<string>5E3A9C21-7B6D-4F0A-9E2C-1D8B4A6F3C70</string>
+		</array>
+	</dict>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+</dict>
+</plist>
