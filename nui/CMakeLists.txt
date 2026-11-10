@@ -6,7 +6,7 @@
 # fwfetcher.py --nui extract them from Microsoft's Kinect Runtime download.
 ######################################################################################
 
-set(NUI_SRC inflate.c models.c forest.c segment.c proposals.c fit.c output.c hands.c gestures.c nui.c)
+set(NUI_SRC inflate.c models.c forest.c segment.c proposals.c fit.c output.c hands.c gestures.c headforest.c nui.c)
 
 add_library(freenect_nui SHARED ${NUI_SRC})
 add_library(freenect_nui_static STATIC ${NUI_SRC})
@@ -66,4 +66,15 @@ if (BUILD_TESTS)
     target_link_libraries(test_nui_gestures m)
   endif ()
   add_test(NAME nui_gestures COMMAND test_nui_gestures)
+endif ()
+
+if (BUILD_TESTS)
+  # The seated head detector with Microsoft's head forest; skipped without it.
+  add_executable(test_nui_heads test_nui_heads.c headforest.c segment.c models.c inflate.c)
+  target_include_directories(test_nui_heads PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${PROJECT_SOURCE_DIR}/include)
+  if (UNIX)
+    target_link_libraries(test_nui_heads m)
+  endif ()
+  add_test(NAME nui_heads COMMAND test_nui_heads)
+  set_tests_properties(nui_heads PROPERTIES SKIP_RETURN_CODE 77)
 endif ()

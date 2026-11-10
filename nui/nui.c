@@ -42,6 +42,7 @@
 #include "models.h"
 #include "hands.h"
 #include "gestures.h"
+#include "headforest.h"
 
 #define VERIFY_FRAMES 30
 #define LOCK_FRAMES 3
@@ -76,6 +77,7 @@ struct freenect_nui {
 	freenect_nui_clasp clasp[NU];    // this frame's clasped hands (with hands_frame)
 	fn_nui_pointer ptr[NU][2];       // each hand as a pointer
 	freenect_nui_hand_pointer ptr_out[NU][2];
+	fn_hd* hd;                       // the head detector (seated mode, or FREENECT_NUI_HEADS), NULL without its model
 };
 
 static void track_hands(freenect_nui* n, int k, freenect_nui_skeleton* S);
@@ -106,6 +108,18 @@ freenect_nui* freenect_nui_create(const char* models_dir, int flags)
 	n->flags = flags;
 	n->max_tracked = 2;
 	n->grip = FREENECT_NUI_GRIP_ANY;
+	// the head detector, in seated mode or on request, when its model is there
+	if (flags & (FREENECT_NUI_SEATED | FREENECT_NUI_HEADS)) {
+		uint8_t* hdb = fn_nui_read_model(models_dir, FN_NUI_HEAD_FOREST_FILE, &len, NULL, 0);
+		if (hdb) {
+			n->hd = (fn_hd*)calloc(1, sizeof(fn_hd));
+			if (n->hd && fn_hd_forest_load(&n->hd->forest, hdb, len) < 0) {
+				free(n->hd);
+				n->hd = NULL;
+			}
+			free(hdb);
+		}
+	}
 	return n;
 }
 
@@ -114,6 +128,10 @@ void freenect_nui_destroy(freenect_nui* n)
 	if (!n)
 		return;
 	fn_forest_free(n->forest);
+	if (n->hd) {
+		fn_hd_forest_free(&n->hd->forest);
+		free(n->hd);
+	}
 	fn_nui_seg_free(&n->seg);
 	free(n->map);
 	free(n->umap);
@@ -141,6 +159,10 @@ void freenect_nui_reset(freenect_nui* n)
 	memset(n->manip, 0, sizeof(n->manip));
 	memset(n->ptr, 0, sizeof(n->ptr));
 	memset(n->manip_frame, 0, sizeof(n->manip_frame));
+	if (n->hd) {
+		memset(n->hd->track, 0, sizeof(n->hd->track));
+		n->hd->ncand = 0;
+	}
 	n->frame = 0;
 }
 
@@ -222,6 +244,10 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 		return -1;
 	memcpy(n->depth, depth, 640 * 480 * sizeof(uint16_t));
 	fn_nui_make_map(depth, n->map);
+	if (n->hd) {
+		fn_hd_detect(n->hd, n->map);
+		fn_hd_track_update(n->hd);
+	}
 	fn_nui_segment(&n->seg, n->map, n->flags & FREENECT_NUI_SEATED);
 
 	// users found without motion: the forest has to see a body
@@ -455,6 +481,17 @@ int freenect_nui_get_hands(freenect_nui* n, int user, freenect_nui_hand hands[2]
 	}
 	memcpy(hands, n->hands[user], 2 * sizeof(freenect_nui_hand));
 	return 0;
+}
+
+int freenect_nui_get_heads(freenect_nui* n, freenect_nui_head heads[FREENECT_NUI_MAX_HEADS])
+{
+	if (!n || !heads)
+		return -1;
+	if (!n->hd) {
+		memset(heads, 0, FREENECT_NUI_MAX_HEADS * sizeof(freenect_nui_head));
+		return -1;
+	}
+	return fn_hd_output(n->hd, heads);
 }
 
 int freenect_nui_get_hand_pointers(freenect_nui* n, int user, freenect_nui_hand_pointer out[2])

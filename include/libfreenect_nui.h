@@ -142,8 +142,11 @@ typedef struct {
 typedef struct freenect_nui freenect_nui;
 
 /// Track seated users: only the upper body (joints 2-11) is reported, the
-/// others are 0 and NOT_TRACKED (the SDK's seated mode).
+/// others are 0 and NOT_TRACKED (the SDK's seated mode). The head detector
+/// (freenect_nui_get_heads) runs too, if HEADPOSITION.MSHDF is installed.
 #define FREENECT_NUI_SEATED 1
+/// Run the head detector also when not seated.
+#define FREENECT_NUI_HEADS 2
 
 /// A tracker. models_dir: where DATABASE.WSDF is (NULL: where the fetchers
 /// install it, or $LIBFREENECT_NUI_MODELS). NULL if the model is missing or
@@ -295,6 +298,28 @@ typedef struct {
 /// clasped, there are no events. Returns 0, or -1 if the user has no
 /// skeleton.
 FREENECT_NUI_API int freenect_nui_get_hand_pointers(freenect_nui* nui, int user, freenect_nui_hand_pointer out[2]);
+
+/* ------------------------------------------------------------ heads */
+
+/// The seated-mode head detector, as the SDK's (Microsoft's head forest
+/// HEADPOSITION.MSHDF on an 80x60 grid, with its head tracks): heads are
+/// found by shape alone, before and independently of the skeletons.
+#define FREENECT_NUI_MAX_HEADS 16
+
+typedef struct {
+	uint32_t id;                    ///< the head track's id; 0: an empty record
+	int observed;                   ///< seen in this frame
+	int rank;                       ///< 1 = the most likely head; confirmed heads before lost ones
+	float score;
+	freenect_nui_point position;    ///< the head's front surface, skeleton space (m)
+	int bbox[4];                    ///< left, top, right, bottom in 640x480 depth pixels (libfreenect's orientation)
+} freenect_nui_head;
+
+/// The tracked heads of the last frame, by record (each head keeps its
+/// record while tracked). Needs FREENECT_NUI_SEATED or FREENECT_NUI_HEADS
+/// and the head model. Returns how many records are in use, or -1 if the
+/// head detector is not running.
+FREENECT_NUI_API int freenect_nui_get_heads(freenect_nui* nui, freenect_nui_head heads[FREENECT_NUI_MAX_HEADS]);
 
 /* ------------------------------------------------------------ smoothing */
 

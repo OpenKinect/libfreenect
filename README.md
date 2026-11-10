@@ -140,7 +140,11 @@ arecord -D hw:Kinect -c4 -f S32_LE -r16000 -t wav - | freenect-micbeam --wav -
 - up to 6 users, the nearest 2 (or the ones you choose) with the SDK's 20 body joints;
 - joint states and clipping flags;
 - the player index image and the floor plane;
-- the SDK's smoothing filter and bone orientations.
+- the SDK's smoothing filter and bone orientations;
+- seated mode, with the SDK's head detector (Microsoft's head forest
+  `HEADPOSITION.MSHDF`, fetched with the body model): `freenect_nui_get_heads()`
+  gives the tracked heads, found by their shape alone (`FREENECT_NUI_HEADS` runs
+  it when standing too).
 
 It adds what the SDK didn't have: 12 hand joints in the same skeleton (joints 20–31: each hand's palm, thumb, index, middle, ring and little fingertip), each hand's state (open, closed, pointing, gun shape), and whether it holds something. The palm is tracked whenever the hand is seen. The fingers are tracked closer than about 1.6 m, and each is named, so a raised thumb is reported as the thumb. A finger that is folded or hidden is not tracked. A finger pointing straight at the Kinect is found from depth, where it doesn't stick out of the hand's outline. `freenect_nui_get_hands()` gives more detail per hand (palm radius, contour size, all fingertips).
 

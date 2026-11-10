@@ -360,6 +360,21 @@ int main(int argc, char** argv)
 			int k, any = 0;
 			printf("%3ld s: %u frames, %.1f ms per frame; floor %s\n", (long)(t - start), sec_frames,
 			       nframes ? busy / nframes : 0.0, fr.floor_plane[1] != 0.0f ? "found" : "not found");
+			{
+				// the head detector (seated mode)
+				freenect_nui_head heads[FREENECT_NUI_MAX_HEADS];
+				int nh = freenect_nui_get_heads(nui, heads), h2;
+				if (nh >= 0) {
+					printf("    heads: %d", nh);
+					for (h2 = 0; h2 < FREENECT_NUI_MAX_HEADS; h2++)
+						if (heads[h2].id)
+							printf("; #%u%s at (%+.2f %+.2f %.2f), rank %d", heads[h2].id, heads[h2].observed ? "" : " (not seen)",
+							       heads[h2].position.x, heads[h2].position.y, heads[h2].position.z, heads[h2].rank);
+					printf("\n");
+				} else if (seated && t - start <= 1) {
+					printf("    (no head detector: HEADPOSITION.MSHDF is not installed)\n");
+				}
+			}
 			for (k = 0; k < FREENECT_NUI_MAX_USERS; k++) {
 				const freenect_nui_skeleton* S = &fr.users[k];
 				int j, nt = 0;

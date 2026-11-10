@@ -166,6 +166,15 @@ class Nui(unittest.TestCase):
         self.assertEqual(u.joints.shape, (freenect_nui.JOINTS, 3))
         t.set_grip(freenect_nui.GRIP_TRIANGLE | freenect_nui.GRIP_CLOSED)
         t.set_max_tracked(3)
+        self.assertIsNone(t.heads())  # not seated
+        try:
+            seated = freenect_nui.Tracker(seated=True)
+        except FileNotFoundError:
+            seated = None
+        if seated is not None:
+            seated.process(np.zeros((480, 640), np.uint16))
+            heads = seated.heads()
+            self.assertTrue(heads is None or heads == [])  # None without HEADPOSITION.MSHDF
         smoother = freenect_nui.Smoother()
         smoother.smooth(frame)
         self.assertIsNone(frame.bone_orientations(0))

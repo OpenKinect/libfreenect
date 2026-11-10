@@ -55,6 +55,8 @@ cdef extern from "libfreenect_nui.h":
         FREENECT_NUI_JOINTS
         FREENECT_NUI_MAX_USERS
         FREENECT_NUI_SEATED
+        FREENECT_NUI_HEADS
+        FREENECT_NUI_MAX_HEADS
         FREENECT_NUI_EVENT_SWIPE_LEFT
         FREENECT_NUI_EVENT_SWIPE_RIGHT
         FREENECT_NUI_EVENT_SWIPE_UP
@@ -137,6 +139,13 @@ cdef extern from "libfreenect_nui.h":
         int pressed
         int gripped
         uint32_t events
+    ctypedef struct freenect_nui_head:
+        uint32_t id
+        int observed
+        int rank
+        float score
+        freenect_nui_point position
+        int bbox[4]
     ctypedef struct freenect_nui_smoothing:
         float smoothing
         float correction
@@ -162,6 +171,7 @@ cdef extern from "libfreenect_nui.h":
     int freenect_nui_get_manipulation(freenect_nui* nui, int user, freenect_nui_manipulation* out)
     int freenect_nui_set_grip(freenect_nui* nui, freenect_nui_grip grip)
     int freenect_nui_get_hand_pointers(freenect_nui* nui, int user, freenect_nui_hand_pointer* out)
+    int freenect_nui_get_heads(freenect_nui* nui, freenect_nui_head* heads)
     freenect_nui_smoother* freenect_nui_smoother_create()
     void freenect_nui_smoother_destroy(freenect_nui_smoother* s)
     int freenect_nui_smooth(freenect_nui_smoother* s, freenect_nui_frame* frame, const freenect_nui_smoothing* params)
@@ -350,19 +360,21 @@ cdef object _hand(freenect_nui_hand* h):
 
 
 cdef class Tracker:
-    """The skeleton tracker. Tracker(models_dir=None, seated=False):
+    """The skeleton tracker. Tracker(models_dir=None, seated=False, heads=False):
     models_dir is where DATABASE.WSDF is (None: where the fetchers install
-    it, or $LIBFREENECT_NUI_MODELS); seated tracks only the upper body."""
+    it, or $LIBFREENECT_NUI_MODELS); seated tracks only the upper body and
+    runs the head detector (heads() ; heads=True runs it when standing too)."""
     cdef freenect_nui* _n
     cdef Frame _last
 
-    def __cinit__(self, models_dir=None, seated=False):
+    def __cinit__(self, models_dir=None, seated=False, heads=False):
         cdef bytes d
+        cdef int flags = (FREENECT_NUI_SEATED if seated else 0) | (FREENECT_NUI_HEADS if heads else 0)
         if models_dir is None:
-            self._n = freenect_nui_create(NULL, FREENECT_NUI_SEATED if seated else 0)
+            self._n = freenect_nui_create(NULL, flags)
         else:
             d = str(models_dir).encode()
-            self._n = freenect_nui_create(d, FREENECT_NUI_SEATED if seated else 0)
+            self._n = freenect_nui_create(d, flags)
         if self._n == NULL:
             raise FileNotFoundError(
                 "the skeleton tracking model (DATABASE.WSDF) is not installed; fetch it with "
@@ -451,6 +463,24 @@ cdef class Tracker:
                     translation=_pt(m.translation), total_scale=m.total_scale,
                     total_rotation=(m.total_rotation[0], m.total_rotation[1], m.total_rotation[2], m.total_rotation[3]),
                     total_translation=_pt(m.total_translation))
+
+    def heads(self):
+        """The head detector's tracked heads of the last frame (seated mode,
+        or heads=True): a list of dicts (id, observed, rank, score, position
+        of the head's front surface in metres, bbox left, top, right, bottom
+        in 640x480 depth pixels), most likely first. None if the detector is
+        not running (not seated, or HEADPOSITION.MSHDF not installed)."""
+        cdef freenect_nui_head h[16]
+        cdef int i
+        if freenect_nui_get_heads(self._n, h) < 0:
+            return None
+        out = []
+        for i in range(FREENECT_NUI_MAX_HEADS):
+            if h[i].id:
+                out.append(dict(id=h[i].id, observed=bool(h[i].observed), rank=h[i].rank, score=h[i].score,
+                                position=_pt(h[i].position), bbox=(h[i].bbox[0], h[i].bbox[1], h[i].bbox[2], h[i].bbox[3])))
+        out.sort(key=lambda d: d["rank"])
+        return out
 
     def pointers(self, int user):
         """(left, right) hands as pointers: dicts with active, primary, x, y
