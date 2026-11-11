@@ -132,8 +132,8 @@ jobs:
         run: |
           set -e
           uv venv --python 3.12 .venv
-          uv pip install --python .venv/bin/python ./wrappers/python
-          .venv/bin/python -m unittest discover -s wrappers/python/tests -v
+          .github/report-failure.sh "Python package build" uv pip install -v --python .venv/bin/python ./wrappers/python
+          .github/report-failure.sh "Python tests" .venv/bin/python -m unittest discover -s wrappers/python/tests -v
 
       - name: OpenGL viewers were built (GLFW), and with GLUT instead
         run: |
@@ -177,7 +177,7 @@ jobs:
         run: |
           set +e
           sudo apt-get install -y --no-install-recommends pipewire pipewire-bin wireplumber dbus python3 >/dev/null
-          dbus-run-session -- bash platform/linux/pipewire/test-pipewire-mic.sh build
+          .github/report-failure.sh "PipeWire microphone test" dbus-run-session -- bash platform/linux/pipewire/test-pipewire-mic.sh build
           code=$?
           if [ "$code" -eq 77 ]; then echo "::notice::PipeWire test skipped"; exit 0; fi
           exit "$code"
@@ -320,8 +320,8 @@ jobs:
         run: |
           set -e
           uv venv --python 3.12 .venv
-          uv pip install --python .venv/bin/python ./wrappers/python
-          .venv/bin/python -m unittest discover -s wrappers/python/tests -v
+          .github/report-failure.sh "Python package build" uv pip install -v --python .venv/bin/python ./wrappers/python
+          .github/report-failure.sh "Python tests" .venv/bin/python -m unittest discover -s wrappers/python/tests -v
 
       - name: OpenGL viewers were built (GLFW)
         run: |

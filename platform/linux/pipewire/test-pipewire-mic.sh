@@ -48,7 +48,9 @@ cp -r "$PW_SHARE/pipewire" "$T/pwconf"
 mkdir -p "$T/pwconf/pipewire.conf.d"
 echo 'context.properties = { default.clock.rate = 48000 }' > "$T/pwconf/pipewire.conf.d/90-test.conf"
 export XDG_RUNTIME_DIR=$T/run XDG_CONFIG_HOME=$T/cfg XDG_STATE_HOME=$T/state PIPEWIRE_CONFIG_DIR=$T/pwconf
-export WIREPLUMBER_CONFIG_DIR=$T/wpconf:$PW_SHARE/wireplumber
+# WirePlumber 0.5 takes a list of directories here; 0.4 takes only one, so
+# it keeps its own configuration (the program mode needs no rule of ours)
+[ "$WP05" = 1 ] && export WIREPLUMBER_CONFIG_DIR=$T/wpconf:$PW_SHARE/wireplumber
 # Ubuntu's WirePlumber requires a snapd module that a test system may lack
 [ "$WP05" = 1 ] && echo 'wireplumber.profiles = { main = { support.snapd-permission-prompting = disabled } }' \
 	> "$T/wpconf/wireplumber.conf.d/10-test.conf"
@@ -134,7 +136,7 @@ for kind in $MODE; do
 	else
 		echo "FAIL: $kind"
 		fail=1
-		tail -5 "$T"/wp-$kind*.log "$T"/prog-*.log 2> /dev/null
+		tail -5 "$T"/pw-$kind*.log "$T"/wp-$kind*.log "$T"/prog-*.log "$T"/play.log "$T"/rec.log 2> /dev/null
 	fi
 	if [ "$kind" = program ]; then
 		grep " deg" "$T/prog--30.log" | tail -1
