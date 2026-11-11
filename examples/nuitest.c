@@ -73,6 +73,100 @@ static void depth_cb(freenect_device* dev, void* data, uint32_t timestamp)
 	new_frame = 1;
 }
 
+/* ------------------------------------------------------------ recording
+ *
+ * --record FILE keeps every depth frame (640x480, mm), losslessly: per row,
+ * the difference to the pixel before as a zigzag varint, with runs of equal
+ * pixels as 0 followed by the run length - 1. --replay FILE tracks a
+ * recording without a Kinect, as fast as it goes. */
+
+static const char rec_magic[8] = { 'F', 'N', 'D', 'R', 'E', 'C', '1', 0 };
+
+static void put_varint(uint8_t** p, uint32_t v)
+{
+	while (v >= 0x80) {
+		*(*p)++ = (uint8_t)(v | 0x80);
+		v >>= 7;
+	}
+	*(*p)++ = (uint8_t)v;
+}
+
+static int get_varint(const uint8_t** p, const uint8_t* end, uint32_t* v)
+{
+	int s = 0;
+	*v = 0;
+	while (*p < end && s < 35) {
+		uint8_t b = *(*p)++;
+		*v |= (uint32_t)(b & 0x7f) << s;
+		if (!(b & 0x80))
+			return 0;
+		s += 7;
+	}
+	return -1;
+}
+
+static int record_frame(FILE* f, const uint16_t* d, uint32_t ts)
+{
+	static uint8_t buf[640 * 480 * 3 + 16];
+	uint8_t* p = buf;
+	uint32_t hdr[2];
+	int y, x;
+	for (y = 0; y < 480; y++) {
+		const uint16_t* r = d + y * 640;
+		int prev = 0;
+		for (x = 0; x < 640;) {
+			int dv = (int)r[x] - prev;
+			if (dv == 0) {
+				int run = 1;
+				while (x + run < 640 && r[x + run] == r[x])
+					run++;
+				put_varint(&p, 0);
+				put_varint(&p, (uint32_t)(run - 1));
+				x += run;
+				continue;
+			}
+			put_varint(&p, (uint32_t)((dv << 1) ^ (dv >> 31)));
+			prev = r[x];
+			x++;
+		}
+	}
+	hdr[0] = ts;
+	hdr[1] = (uint32_t)(p - buf);
+	return fwrite(hdr, sizeof(hdr), 1, f) == 1 && fwrite(buf, 1, hdr[1], f) == hdr[1] ? 0 : -1;
+}
+
+// 1: a frame, 0: the end, < 0: a damaged file
+static int replay_frame(FILE* f, uint16_t* d)
+{
+	static uint8_t buf[640 * 480 * 3 + 16];
+	uint32_t hdr[2], v;
+	const uint8_t *p = buf, *end;
+	int y, x;
+	if (fread(hdr, sizeof(hdr), 1, f) != 1)
+		return 0;
+	if (hdr[1] > sizeof(buf) || fread(buf, 1, hdr[1], f) != hdr[1])
+		return -1;
+	end = buf + hdr[1];
+	for (y = 0; y < 480; y++) {
+		int prev = 0;
+		for (x = 0; x < 640;) {
+			if (get_varint(&p, end, &v) < 0)
+				return -1;
+			if (v == 0) {
+				uint32_t run;
+				if (get_varint(&p, end, &run) < 0 || x + (int)run + 1 > 640)
+					return -1;
+				for (run++; run > 0; run--)
+					d[y * 640 + x++] = (uint16_t)prev;
+				continue;
+			}
+			prev += (int)((v >> 1) ^ (0u - (v & 1)));
+			d[y * 640 + x++] = (uint16_t)prev;
+		}
+	}
+	return 1;
+}
+
 /* ------------------------------------------------------------ picture */
 
 static uint8_t img[640 * 480 * 3];
@@ -275,15 +369,33 @@ int main(int argc, char** argv)
 	double busy = 0.0;
 	unsigned tracked_frames = 0, nframes = 0, sec_frames = 0;
 	static freenect_nui_manipulation last_manip[FREENECT_NUI_MAX_USERS];
+	const char *record_path = NULL, *replay_path = NULL;
+	FILE* rec = NULL;
 
 	fn_install_exit_handlers();
 	for (i = 1; i < argc; i++) {
 		if (strcmp(argv[i], "--seated") == 0) seated = 1;
 		else if (strcmp(argv[i], "--out") == 0 && i + 1 < argc) prefix = argv[++i];
+		else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) record_path = argv[++i];
+		else if (strcmp(argv[i], "--replay") == 0 && i + 1 < argc) replay_path = argv[++i];
 		else if (argv[i][0] >= '0' && argv[i][0] <= '9') seconds = atoi(argv[i]);
 		else {
-			printf("Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX]\n");
+			printf("Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX] [--record FILE | --replay FILE]\n");
 			return 2;
+		}
+	}
+	if (replay_path) {
+		char magic[8];
+		rec = fopen(replay_path, "rb");
+		if (!rec || fread(magic, 1, 8, rec) != 8 || memcmp(magic, rec_magic, 8) != 0) {
+			printf("%s is not a freenect-nuitest recording\n", replay_path);
+			return 1;
+		}
+	} else if (record_path) {
+		rec = fopen(record_path, "wb");
+		if (!rec || fwrite(rec_magic, 1, 8, rec) != 8) {
+			printf("Could not write %s\n", record_path);
+			return 1;
 		}
 	}
 	nui = freenect_nui_create(NULL, seated ? FREENECT_NUI_SEATED : 0);
@@ -294,6 +406,10 @@ int main(int argc, char** argv)
 		return 1;
 	}
 	memset(&fr, 0, sizeof(fr));
+	if (replay_path) {
+		printf("Replaying %s%s\n", replay_path, seated ? " (seated)" : "");
+		goto run;
+	}
 	if (freenect_init(&ctx, NULL) < 0)
 		goto out;
 	freenect_select_subdevices(ctx, FREENECT_DEVICE_CAMERA);
@@ -308,18 +424,36 @@ int main(int argc, char** argv)
 		printf("Could not start depth\n");
 		goto out;
 	}
-	printf("Tracking%s for %d s; stand 1.5-3.5 m in front of the Kinect\n", seated ? " (seated)" : "", seconds);
+	printf("Tracking%s for %d s; stand 1.5-3.5 m in front of the Kinect%s%s\n", seated ? " (seated)" : "", seconds,
+	       record_path ? "; recording to " : "", record_path ? record_path : "");
 	fflush(stdout);
 
+run:
 	start = last = time(NULL);
-	while (!fn_exit_requested && time(NULL) - start < seconds) {
+	while (!fn_exit_requested && (replay_path || time(NULL) - start < seconds)) {
 		struct timeval tv = { 0, 50000 };
 		time_t t;
-		if (freenect_process_events_timeout(ctx, &tv) < 0)
+		if (replay_path) {
+			int r = replay_frame(rec, depth);
+			if (r <= 0) {
+				if (r < 0)
+					printf("The recording is damaged after %u frames\n", nframes);
+				break;
+			}
+			depth_frames++;
+			new_frame = 1;
+		} else if (freenect_process_events_timeout(ctx, &tv) < 0) {
 			break;
+		}
 		if (new_frame) {
-			double t0 = now_ms();
+			double t0;
 			int k;
+			if (record_path && rec && record_frame(rec, depth, depth_frames) < 0) {
+				printf("Could not write the recording; it stops here\n");
+				fclose(rec);
+				rec = NULL;
+			}
+			t0 = now_ms();
 			new_frame = 0;
 			freenect_nui_process(nui, depth, depth_frames, &fr);
 			busy += now_ms() - t0;
@@ -355,7 +489,7 @@ int main(int argc, char** argv)
 					print_events(k, h, hp[h].events);
 			}
 		}
-		t = time(NULL);
+		t = replay_path ? start + (time_t)(nframes / 30) : time(NULL); // a replay: the recording's own seconds
 		if (t != last) {
 			int k, any = 0;
 			printf("%3ld s: %u frames, %.1f ms per frame; floor %s\n", (long)(t - start), sec_frames,
@@ -429,7 +563,8 @@ int main(int argc, char** argv)
 			last = t;
 		}
 	}
-	freenect_stop_depth(dev);
+	if (dev)
+		freenect_stop_depth(dev);
 	draw(nui, &fr);
 	snprintf(path, sizeof(path), "%s.bmp", prefix);
 	write_bmp(path);
@@ -437,6 +572,8 @@ int main(int argc, char** argv)
 	       nframes, tracked_frames, nframes ? busy / nframes : 0.0, path);
 	ret = 0;
 out:
+	if (rec)
+		fclose(rec);
 	if (dev)
 		freenect_close_device(dev);
 	if (ctx)

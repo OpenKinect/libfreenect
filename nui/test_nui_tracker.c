@@ -67,6 +67,32 @@ typedef struct {
 
 static float wall_z = WALL_Z; // the room's back wall
 static int arms_in;            // arms close to the body (for crowded scenes)
+static int furnished;          // a side wall near the camera, a cupboard and a desk
+
+// ray (from the camera) against an axis-aligned box; 0 if missed
+static float hit_box(v3 d, v3 lo, v3 hi)
+{
+	float t0 = 0.0f, t1 = 1e9f, a, b, tmp;
+	const float o[3] = { 0, 0, 0 }, dd[3] = { d.x, d.y, d.z }, l[3] = { lo.x, lo.y, lo.z }, h[3] = { hi.x, hi.y, hi.z };
+	int i;
+	for (i = 0; i < 3; i++) {
+		if (fabsf(dd[i]) < 1e-9f) {
+			if (o[i] < l[i] || o[i] > h[i])
+				return 0.0f;
+			continue;
+		}
+		a = (l[i] - o[i]) / dd[i];
+		b = (h[i] - o[i]) / dd[i];
+		if (a > b) {
+			tmp = a; a = b; b = tmp;
+		}
+		if (a > t0) t0 = a;
+		if (b < t1) t1 = b;
+		if (t0 > t1)
+			return 0.0f;
+	}
+	return t0;
+}
 
 // SHOULDER_LEFT etc. at -x: the user's left is on the mirrored image's left
 static void pose(person* P, float t, float x0, float z0)
@@ -145,6 +171,23 @@ static void render(uint16_t* depth, const person* people, int np)
 			float t = wall_z;
 			if (d.y < 0 && FLOOR_Y / d.y < t)
 				t = FLOOR_Y / d.y;
+			if (furnished) {
+				// a wall on the user's right 1.3 m from the camera's axis, a
+				// cupboard against the back wall on the left, and a desk at hip
+				// height that the user's left hand touches
+				float h;
+				if (d.x > 0 && 1.3f / d.x < t)
+					t = 1.3f / d.x;
+				h = hit_box(d, v3make(-1.9f, FLOOR_Y, 3.2f), v3make(-0.9f, 0.9f, 3.8f));
+				if (h > 0 && h < t)
+					t = h;
+				h = hit_box(d, v3make(-1.6f, -0.28f, 1.5f), v3make(-0.47f, -0.25f, 2.3f));
+				if (h > 0 && h < t)
+					t = h;
+				h = hit_box(d, v3make(-1.55f, FLOOR_Y, 2.2f), v3make(-1.5f, -0.28f, 2.25f)); // a desk leg
+				if (h > 0 && h < t)
+					t = h;
+			}
 			for (k = 0; k < n; k++) {
 				v3 m = v3scale(v3add(caps[k].a, caps[k].b), 0.5f);
 				float dx = d.x * m.z - m.x, dy = d.y * m.z - m.y, h;
@@ -290,6 +333,12 @@ static void six_users(person* P, int* np, int f)
 	for (p = 0; p < 6; p++)
 		pose(&P[p], 0.2f * f + 0.7f * p, -1.875f + 0.75f * p, 4.0f);
 }
+// one user in a furnished room, 1.9 m away, the left hand on the desk
+static void room(person* P, int* np, int f)
+{
+	*np = f >= 15;
+	pose(&P[0], 0.2f * f, 0.05f, 1.9f);
+}
 static void walking(person* P, int* np, int f)
 {
 	*np = f >= 15;
@@ -412,6 +461,19 @@ int main(void)
 		CHECK(s.joints > 0 && s.within10 >= 0.80 * s.joints, "  PCK@10cm >= 80 %");
 	}
 	freenect_nui_set_max_tracked(n, 2);
+
+	// a furnished room: walls, a cupboard and a desk must not become users
+	furnished = 1;
+	run(n, room, 120, &s, &fr, depth);
+	furnished = 0;
+	report("furnished room", &s);
+	{
+		char what[120];
+		snprintf(what, sizeof(what), "furnished room: %d user(s) seen, PCK@10cm %.0f %%", s.users_max,
+		         s.joints ? 100.0 * s.within10 / s.joints : 0.0);
+		// the hand on the desk joins the desk: the arm is the weak part (65 % for now)
+		CHECK(s.users_max == 1 && s.lock_frame >= 0 && s.joints > 0 && s.within10 >= 0.65 * s.joints, what);
+	}
 
 	run(n, walking, 75, &s, &fr, depth);
 	report("walking", &s);
