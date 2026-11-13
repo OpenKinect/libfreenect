@@ -52,9 +52,18 @@
 
 #define MIN_USER_PIXELS 600
 #define FLOOR_EXCLUDE_MM 50.0f
+#define FLOOR_MIN_POINTS 120      // 4x4 blocks on a plane before it can be the floor (a seat has fewer)
+#define FLOOR_MIN_DROP_MM 350.0f // the floor is at least this far below the Kinect
+#define FLOOR_BELOW_MM 150.0f  // points this far under a plane make it not the floor
 #define USER_MAX_Z_MM 4500
 #define BG_ABSORB_FRAMES 300
 #define USER_TIMEOUT 10
+#define BG_FARTHER_FRAMES 3   // farther depth must stay this long to become background
+#define BG_CONF_FRAMES 30    // matched the background this long: the room, not a user
+#define FG_CONF_FRAMES 10    // background seen this long: in front of it is motion
+#define NEAR_USER_PX 12      // margin around a user where the room is not learned as empty
+#define BG_LEARN_FRAMES 15    // until then, anything person-sized is a candidate
+#define TWO_PEOPLE_WIDTH 0.9f // m: a component narrower than this is one person
 
 float fn_nui_v3len(v3 a) { return sqrtf(v3dot(a, a)); }
 v3 fn_nui_v3norm(v3 a)
@@ -68,11 +77,13 @@ int fn_nui_seg_init(fn_nui_seg* s)
 	memset(s, 0, sizeof(*s));
 	s->bg = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
 	s->bgage = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	s->bgconf = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	s->near_user = (uint8_t*)calloc(NPIX, 1);
 	s->label = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
 	s->user = (uint8_t*)calloc(NPIX, 1);
 	s->prev_user = (uint8_t*)calloc(NPIX, 1);
 	s->parent = (uint32_t*)calloc(NPIX, sizeof(uint32_t));
-	if (!s->bg || !s->bgage || !s->label || !s->user || !s->prev_user || !s->parent) {
+	if (!s->bg || !s->bgage || !s->bgconf || !s->near_user || !s->label || !s->user || !s->prev_user || !s->parent) {
 		fn_nui_seg_free(s);
 		return -1;
 	}
@@ -82,8 +93,9 @@ int fn_nui_seg_init(fn_nui_seg* s)
 
 void fn_nui_seg_free(fn_nui_seg* s)
 {
-	free(s->bg); free(s->bgage); free(s->label); free(s->user); free(s->prev_user); free(s->parent);
-	s->bg = s->bgage = s->label = NULL;
+	free(s->bg); free(s->bgage); free(s->bgconf); free(s->near_user); free(s->label); free(s->user); free(s->prev_user); free(s->parent);
+	s->bg = s->bgage = s->bgconf = s->label = NULL;
+	s->near_user = NULL;
 	s->user = s->prev_user = NULL;
 	s->parent = NULL;
 }
@@ -92,6 +104,7 @@ void fn_nui_seg_reset(fn_nui_seg* s)
 {
 	memset(s->bg, 0, NPIX * sizeof(uint16_t));
 	memset(s->bgage, 0, NPIX * sizeof(uint16_t));
+	memset(s->bgconf, 0, NPIX * sizeof(uint16_t));
 	memset(s->user, 0, NPIX);
 	memset(s->prev_user, 0, NPIX);
 	memset(s->u, 0, sizeof(s->u));
@@ -151,7 +164,12 @@ static int plane_from(v3 a, v3 b, v3 c, float pl[4])
 
 static int plane_ok(const float pl[4])
 {
-	return pl[1] >= 0.8660f && pl[2] <= 0.2588f; // within 30 degrees of vertical (§30.4.5)
+	// within 30 degrees of vertical (§30.4.5), and a plausible distance
+	// below the Kinect: not a lap, a seat or a low table seen up close. The
+	// motor tilts the Kinect forward and back only; sideways it stands level
+	// (within 10 degrees), so a plane rolled further is a slope (a bed, a
+	// cushion), not the floor.
+	return pl[1] >= 0.8660f && pl[2] <= 0.2588f && fabsf(pl[0]) <= 0.1736f && pl[3] >= FLOOR_MIN_DROP_MM;
 }
 
 static int count_inliers(const v3* pts, int n, const float pl[4], float tol)
@@ -161,6 +179,17 @@ static int count_inliers(const v3* pts, int n, const float pl[4], float tol)
 		if (fabsf(pl[0] * pts[i].x + pl[1] * pts[i].y + pl[2] * pts[i].z + pl[3]) < tol)
 			c++;
 	return c;
+}
+
+// Nothing is below the floor: a horizontal plane with many points under it
+// is a table or a bed, not the floor (whose legs it would cut off).
+static int below_floor(const v3* pts, int n, const float pl[4])
+{
+	int i, c = 0;
+	for (i = 0; i < n; i++)
+		if (pl[0] * pts[i].x + pl[1] * pts[i].y + pl[2] * pts[i].z + pl[3] < -FLOOR_BELOW_MM)
+			c++;
+	return c > 20 + n / 50;
 }
 
 // least squares y = a x + b z + c over the inliers
@@ -227,20 +256,44 @@ static void floor_update(fn_nui_seg* s, const uint16_t* map)
 		int a = (int)(lcg(s) % (uint32_t)n), b = (int)(lcg(s) % (uint32_t)n), c = (int)(lcg(s) % (uint32_t)n), in;
 		if (a == b || b == c || a == c || plane_from(pts[a], pts[b], pts[c], pl) < 0 || !plane_ok(pl))
 			continue;
+		if (below_floor(pts, n, pl))
+			continue;
 		in = count_inliers(pts, n, pl, tol);
 		if (in > best_in) {
 			best_in = in;
 			memcpy(best, pl, sizeof(best));
 		}
 	}
-	if (best_in >= 51 && refine(pts, n, best, tol) == 0 && plane_ok(best)) {
+	if (s->floor_valid && below_floor(pts, n, s->floor))
+		s->floor_valid = 0;
+	if (best_in >= FLOOR_MIN_POINTS && refine(pts, n, best, tol) == 0 && plane_ok(best) && !below_floor(pts, n, best)) {
 		int in = count_inliers(pts, n, best, tol);
-		int prev_in = s->floor_valid ? count_inliers(pts, n, s->floor, tol) : 0;
-		if (in >= 51 && in >= prev_in) {
+		// the floor so far, unless it turned out to have things under it
+		int prev_in = s->floor_valid && !below_floor(pts, n, s->floor) ? count_inliers(pts, n, s->floor, tol) : 0;
+		if (in >= FLOOR_MIN_POINTS && in >= prev_in) {
 			memcpy(s->floor, best, sizeof(best));
 			s->floor_valid = 1;
 		}
 	}
+}
+
+/* ------------------------------------------------------------ rejection */
+
+// A candidate the forest did not confirm (a chair, a door frame): its pixels
+// become background, so it is not found again until something there moves.
+void fn_nui_seg_reject(fn_nui_seg* s, int k, const uint16_t* map)
+{
+	int i;
+	for (i = 0; i < NPIX; i++)
+		if (s->user[i] == k + 1) {
+			s->user[i] = s->prev_user[i] = 0;
+			if (map[i]) {
+				s->bg[i] = map[i];
+				s->bgage[i] = 0;
+				s->bgconf[i] = BG_CONF_FRAMES;
+			}
+		}
+	memset(&s->u[k], 0, sizeof(s->u[k]));
 }
 
 /* ------------------------------------------------------------ components */
@@ -271,7 +324,7 @@ static int joined(int a, int b)
 }
 
 typedef struct {
-	int count, fg, overlap[NU];
+	int count, fg, fgsure, overlap[NU];
 	double sx, sy, sz;
 	float ymin, ymax, xmin, xmax, zmin, zmax;
 	int umin, umax, vmin, vmax;
@@ -350,8 +403,11 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 		if (u > C->umax) C->umax = u;
 		if (v < C->vmin) C->vmin = v;
 		if (v > C->vmax) C->vmax = v;
-		if (s->bg[i] && d < s->bg[i] - (60 + d / 50))
+		if (s->bg[i] && d < s->bg[i] - (60 + d / 50)) {
 			C->fg++;
+			if (s->bgconf[i] >= FG_CONF_FRAMES)
+				C->fgsure++; // in front of a background seen empty for a while
+		}
 		if (s->prev_user[i])
 			C->overlap[s->prev_user[i] - 1]++;
 	}
@@ -391,8 +447,27 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 					n2++;
 					C->user = k + 1;
 				}
-			if (n2 > 1)
-				C->user = -1; // split among its choosers
+			if (n2 > 1) {
+				// Two users in one component: two people touching, or one person
+				// that came in as two candidates (an arm and the body, say). Only
+				// a component wide enough for two keeps both; otherwise it goes to
+				// one user (verified first, then the oldest), and the other loses
+				// its pixels and times out.
+				if (C->xmax - C->xmin > TWO_PEOPLE_WIDTH) {
+					C->user = -1; // split among its choosers
+				} else {
+					int keep = -1;
+					for (k = 0; k < NU; k++) {
+						if (!(C->choosers & (1u << k)))
+							continue;
+						if (keep < 0 || (s->u[k].verified && !s->u[keep].verified) ||
+						    (s->u[k].verified == s->u[keep].verified && s->u[k].age > s->u[keep].age))
+							keep = k;
+					}
+					C->user = keep + 1;
+					C->choosers = 1u << keep;
+				}
+			}
 			continue;
 		}
 		if (C->count < MIN_USER_PIXELS / 4)
@@ -402,6 +477,10 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			float zc = (float)(C->sz / C->count);
 			int person = C->count >= MIN_USER_PIXELS && h > 0.4f && h < 2.4f && w > 0.15f && w < 1.6f &&
 			             dz < 1.5f && zc < USER_MAX_Z_MM * 0.001f;
+			// once the background is known, only something that moved can be a
+			// new user: furniture, walls and rejected candidates never did
+			if (s->frames > BG_LEARN_FRAMES && C->fg * 3 < C->count)
+				person = 0;
 			if (!person)
 				continue;
 			for (k = 0; k < NU && s->u[k].active; k++)
@@ -414,10 +493,21 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			if (s->next_id == 0)
 				s->next_id = 1;
 			s->u[k].index = k + 1;
-			// moved against the background: a user at once; otherwise the
-			// forest has to confirm a body first (nui.c)
-			s->u[k].verified = C->fg * 4 >= C->count && s->frames > 15;
+			// mostly in front of a background seen empty for a while: it
+			// came in, a user at once (even if the forest cannot see a body,
+			// cut off at the edge of the view, say). Otherwise the forest has
+			// to confirm a body first (nui.c), and if it does not, the
+			// candidate becomes background (a chair, a door frame).
+			s->u[k].verified = C->fgsure * 2 >= C->count; // (fgsure needs FG_CONF_FRAMES of background)
 			C->user = k + 1;
+			// what was learned as the room where the new user is may have been
+			// the user (sitting there from the start, say): forget it
+			{
+				int u2, v2;
+				for (v2 = C->vmin; v2 <= C->vmax; v2++)
+					for (u2 = C->umin; u2 <= C->umax; u2++)
+						s->bgconf[v2 * NW + u2] = 0;
+			}
 		}
 	}
 
@@ -425,6 +515,10 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 	for (i = 0; i < NPIX; i++) {
 		int c = s->label[i], k2 = 0;
 		if (!c || !cs[c].user)
+			continue;
+		// the empty room, as seen for a while: never a user, even where a
+		// user touches it (a hand on the wall, an arm against a cupboard)
+		if (s->bgconf[i] >= BG_CONF_FRAMES && abs((int)map[i] - (int)s->bg[i]) < 60 + map[i] / 50)
 			continue;
 		if (cs[c].user > 0) {
 			k2 = cs[c].user - 1;
@@ -496,6 +590,23 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 		}
 	}
 
+	// near a user (a margin around the box of each) moving limbs come and
+	// go: the room seen there is not trusted as empty
+	memset(s->near_user, 0, NPIX);
+	for (k = 0; k < NU; k++) {
+		const fn_nui_user_seg* U = &s->u[k];
+		int u0, u1, v0, v1, v2;
+		if (!U->active || U->pixels == 0)
+			continue;
+		u0 = U->umin - NEAR_USER_PX; u1 = U->umax + NEAR_USER_PX;
+		v0 = U->vmin - NEAR_USER_PX; v1 = U->vmax + NEAR_USER_PX;
+		if (u0 < 0) u0 = 0;
+		if (v0 < 0) v0 = 0;
+		if (u1 >= NW) u1 = NW - 1;
+		if (v1 >= NH) v1 = NH - 1;
+		for (v2 = v0; v2 <= v1; v2++)
+			memset(s->near_user + v2 * NW + u0, 1, (size_t)(u1 - u0 + 1));
+	}
 	// background: farthest stable depth; user pixels never enter it
 	for (i = 0; i < NPIX; i++) {
 		int d = map[i], b = s->bg[i];
@@ -505,17 +616,29 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			s->bgage[i] = 0;
 			continue;
 		}
-		if (!b || d > b + 30) {
+		if (!b) {
 			s->bg[i] = (uint16_t)d;
 			s->bgage[i] = 0;
+			s->bgconf[i] = 0;
+		} else if (d > b + 30) {
+			if (++s->bgage[i] > BG_FARTHER_FRAMES) { // stays farther: what was in front left
+				s->bg[i] = (uint16_t)d;
+				s->bgage[i] = 0;
+				s->bgconf[i] = 0;
+			}
 		} else if (d + 100 < b) {
 			if (++s->bgage[i] > BG_ABSORB_FRAMES) {
 				s->bg[i] = (uint16_t)d; // something that stays put becomes background
 				s->bgage[i] = 0;
+				s->bgconf[i] = 0;
 			}
 		} else {
 			s->bg[i] = (uint16_t)(b + (d - b) / 32);
 			s->bgage[i] = 0;
+			// next to a user nothing new is learned, but what was seen of the
+			// room before the user came stays (the wall a user steps up to)
+			if (!s->near_user[i] && s->bgconf[i] < 65535)
+				s->bgconf[i]++;
 		}
 	}
 	memcpy(s->prev_user, s->user, NPIX);

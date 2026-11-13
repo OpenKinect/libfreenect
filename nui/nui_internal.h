@@ -91,6 +91,8 @@ typedef struct {
 typedef struct {
 	uint16_t* bg;          // background depth per map pixel (mm, 0 unknown)
 	uint16_t* bgage;
+	uint16_t* bgconf; // frames the pixel matched the background while no user was there
+	uint8_t* near_user; // this frame: within a margin of a user
 	uint16_t* label;       // component per map pixel
 	uint8_t* user;         // user slot + 1 per map pixel (0: none), this frame
 	uint8_t* prev_user;    // the same, previous frame
@@ -110,6 +112,7 @@ void fn_nui_seg_reset(fn_nui_seg* s);
 void fn_nui_make_map(const uint16_t* depth, uint16_t* map);
 // Floor, background, components and user identities for one map.
 void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated);
+void fn_nui_seg_reject(fn_nui_seg* s, int k, const uint16_t* map);
 // Distance of a map point from the floor (mm); large if no floor
 float fn_nui_floor_dist(const fn_nui_seg* s, v3 p_m);
 
@@ -148,6 +151,7 @@ typedef struct {
 	int bones_locked;
 	int learn_frames;             // good frames seen while learning the bones
 	int has_prev;
+	int body_seen;  // frames the head or the shoulder centre was tracked (the strict test)
 	uint32_t quality;
 } fn_nui_fit;
 

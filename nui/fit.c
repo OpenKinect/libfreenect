@@ -387,6 +387,19 @@ static uint32_t clip_flags(v3 p)
 	return q;
 }
 
+// the user's pixels reach the top, left or right edge of the view
+static int touches_edge(const uint8_t* mask, int slot)
+{
+	int x, y, n = 0;
+	if (!mask)
+		return 0;
+	for (x = 0; x < NW; x++)
+		n += mask[x] == slot + 1;
+	for (y = 0; y < NH; y++)
+		n += (mask[y * NW] == slot + 1) + (mask[y * NW + NW - 1] == slot + 1);
+	return n >= 8;
+}
+
 int fn_nui_fit_user(fn_nui_fit* f, const fn_nui_props* P, const uint16_t* map, const uint8_t* mask,
                     int slot, float scale)
 {
@@ -394,8 +407,6 @@ int fn_nui_fit_user(fn_nui_fit* f, const fn_nui_props* P, const uint16_t* map, c
 	v3 x[NJ], target[NJ], pred[NJ];
 	float wt[NJ];
 	static fn_nui_props edge; // P with distrust at the image border
-	(void)mask;
-	(void)slot;
 
 	// A body part cut off by the edge of the view leaves its last visible
 	// pixels there, which the forest may label as the next joint (shins as
@@ -494,5 +505,16 @@ int fn_nui_fit_user(fn_nui_fit* f, const fn_nui_props* P, const uint16_t* map, c
 	// the shoulder centre comes from the upper chest part and can sit a little
 	// high; either it or the head is enough
 	good = tracked >= 8 && (f->jstate[3] == 2 || f->jstate[2] == 2);
+	if (good && f->body_seen < 1000)
+		f->body_seen++;
+	// cut off by the edge of the view (too close, arms up, half out at the
+	// side): the head and the shoulder centre may be out of sight; a
+	// shoulder and the hips will do, for a user whose whole upper body was
+	// seen before (not for a new candidate: a cupboard at the edge)
+	if (!good && f->body_seen >= 3 && tracked >= 7 && (f->jstate[4] == 2 || f->jstate[8] == 2) &&
+	    (f->jstate[0] == 2 || f->jstate[12] == 2 || f->jstate[16] == 2) &&
+	    ((f->quality & (FREENECT_NUI_CLIPPED_TOP | FREENECT_NUI_CLIPPED_LEFT | FREENECT_NUI_CLIPPED_RIGHT)) ||
+	     touches_edge(mask, slot)))
+		good = 1;
 	return good;
 }

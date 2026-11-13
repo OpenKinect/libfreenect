@@ -322,7 +322,7 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 		if (n->good[k] >= LOCK_FRAMES)
 			U->verified = 1;
 		else if (n->tried[k] >= VERIFY_FRAMES)
-			U->active = 0; // not a person
+			fn_nui_seg_reject(&n->seg, k, n->map); // not a person: remembered as background
 	}
 
 	// which users get skeletons: chosen by the app, else the nearest
