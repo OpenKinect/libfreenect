@@ -27,7 +27,7 @@
 // freenect-nuitest: skeleton, hand and finger tracking (libfreenect_nui) on a
 // real Kinect, without a window.
 //
-// Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX]
+// Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX] [--record FILE | --replay FILE]
 //
 // Once a second it prints the users, how many joints each has tracked, the
 // head position, the hands' states and fingers, and the time per frame.
@@ -75,12 +75,24 @@ static void depth_cb(freenect_device* dev, void* data, uint32_t timestamp)
 
 /* ------------------------------------------------------------ recording
  *
- * --record FILE keeps every depth frame (640x480, mm), losslessly: per row,
- * the difference to the pixel before as a zigzag varint, with runs of equal
- * pixels as 0 followed by the run length - 1. --replay FILE tracks a
- * recording without a Kinect, as fast as it goes. */
+ * --record FILE keeps the depth frames compactly enough to share a minute of
+ * them: every frame at 320x240 (each 2x2 block's top-left pixel, in mm),
+ * losslessly at that resolution. Per frame:
+ *   uint32 frame number, uint32 payload size, then the payload:
+ *   - the distinct depth values of the frame, sorted (a varint count, then
+ *     varint differences); the pixels are coded as indices into this table,
+ *     which follow the Kinect's disparity steps, so neighbours differ by
+ *     0 or 1 instead of 10-50 mm;
+ *   - per pixel, the index minus the median edge predictor of its left, upper
+ *     and upper-left neighbours (as in JPEG-LS), zigzagged and Rice-coded
+ *     with an adaptive parameter in 3 contexts (flat, gentle, edge); a
+ *     quotient of 20 or more escapes to the 12-bit value.
+ * --replay FILE tracks a recording without a Kinect, as fast as it goes,
+ * each pixel doubled back to 640x480. */
 
-static const char rec_magic[8] = { 'F', 'N', 'D', 'R', 'E', 'C', '1', 0 };
+static const char rec_magic[8] = { 'F', 'N', 'D', 'R', 'E', 'C', '2', 0 };
+#define REC_W 320
+#define REC_H 240
 
 static void put_varint(uint8_t** p, uint32_t v)
 {
@@ -105,65 +117,199 @@ static int get_varint(const uint8_t** p, const uint8_t* end, uint32_t* v)
 	return -1;
 }
 
-static int record_frame(FILE* f, const uint16_t* d, uint32_t ts)
+typedef struct {
+	uint8_t* p;
+	const uint8_t* end;
+	uint32_t acc;
+	int n;
+} bits;
+
+static void put_bits(bits* b, uint32_t v, int n)
 {
-	static uint8_t buf[640 * 480 * 3 + 16];
-	uint8_t* p = buf;
-	uint32_t hdr[2];
-	int y, x;
-	for (y = 0; y < 480; y++) {
-		const uint16_t* r = d + y * 640;
-		int prev = 0;
-		for (x = 0; x < 640;) {
-			int dv = (int)r[x] - prev;
-			if (dv == 0) {
-				int run = 1;
-				while (x + run < 640 && r[x + run] == r[x])
-					run++;
-				put_varint(&p, 0);
-				put_varint(&p, (uint32_t)(run - 1));
-				x += run;
-				continue;
-			}
-			put_varint(&p, (uint32_t)((dv << 1) ^ (dv >> 31)));
-			prev = r[x];
-			x++;
+	while (n > 0) {
+		int take = n > 16 ? 16 : n;
+		n -= take;
+		b->acc = (b->acc << take) | ((v >> n) & ((1u << take) - 1));
+		b->n += take;
+		while (b->n >= 8) {
+			b->n -= 8;
+			*b->p++ = (uint8_t)(b->acc >> b->n);
 		}
 	}
-	hdr[0] = ts;
-	hdr[1] = (uint32_t)(p - buf);
+}
+
+static int get_bit(bits* b)
+{
+	if (b->n == 0) {
+		if (b->p >= b->end)
+			return -1;
+		b->acc = *b->p++;
+		b->n = 8;
+	}
+	b->n--;
+	return (int)((b->acc >> b->n) & 1);
+}
+
+static int get_bits(bits* b, int n, uint32_t* v)
+{
+	*v = 0;
+	while (n-- > 0) {
+		int bit = get_bit(b);
+		if (bit < 0)
+			return -1;
+		*v = (*v << 1) | (uint32_t)bit;
+	}
+	return 0;
+}
+
+typedef struct {
+	uint32_t A[3], N[3];
+} rice_state;
+
+static void rice_init(rice_state* s)
+{
+	int c;
+	for (c = 0; c < 3; c++) {
+		s->A[c] = 4;
+		s->N[c] = 1;
+	}
+}
+
+static int rice_k(const rice_state* s, int c)
+{
+	int k = 0;
+	while (k < 11 && (s->N[c] << k) < s->A[c])
+		k++;
+	return k;
+}
+
+static void rice_update(rice_state* s, int c, uint32_t u)
+{
+	s->A[c] += u;
+	if (++s->N[c] >= 64) {
+		s->A[c] >>= 1;
+		s->N[c] >>= 1;
+	}
+}
+
+// the predictor and the context of pixel (x, y) of the index image
+static int predict(const uint16_t* q, int x, int y, int* ctx)
+{
+	int a = x ? q[y * REC_W + x - 1] : (y ? q[(y - 1) * REC_W] : 0);
+	int b = y ? q[(y - 1) * REC_W + x] : a;
+	int c = x && y ? q[(y - 1) * REC_W + x - 1] : b;
+	int mx = a > b ? a : b, mn = a < b ? a : b, g = abs(a - c) + abs(b - c);
+	*ctx = g == 0 ? 0 : g < 4 ? 1 : 2;
+	return c >= mx ? mn : c <= mn ? mx : a + b - c;
+}
+
+static int record_frame(FILE* f, const uint16_t* d, uint32_t frame)
+{
+	static uint8_t buf[REC_W * REC_H * 5 + 8192];
+	static uint16_t q[REC_W * REC_H], index_of[65536];
+	static uint8_t seen[65536];
+	uint8_t* p = buf;
+	uint32_t hdr[2], nv = 0, prev = 0, v;
+	rice_state rs;
+	bits b;
+	int x, y;
+	memset(seen, 0, sizeof(seen));
+	for (y = 0; y < REC_H; y++)
+		for (x = 0; x < REC_W; x++)
+			seen[d[2 * y * 640 + 2 * x]] = 1;
+	for (v = 0; v < 65536; v++)
+		if (seen[v])
+			index_of[v] = (uint16_t)nv++;
+	put_varint(&p, nv);
+	for (v = 0; v < 65536; v++)
+		if (seen[v]) {
+			put_varint(&p, v - prev);
+			prev = v;
+		}
+	for (y = 0; y < REC_H; y++)
+		for (x = 0; x < REC_W; x++)
+			q[y * REC_W + x] = index_of[d[2 * y * 640 + 2 * x]];
+	b.p = p;
+	b.end = buf + sizeof(buf);
+	b.acc = 0;
+	b.n = 0;
+	rice_init(&rs);
+	for (y = 0; y < REC_H; y++)
+		for (x = 0; x < REC_W; x++) {
+			int c, k, r = (int)q[y * REC_W + x] - predict(q, x, y, &c);
+			uint32_t u = (uint32_t)((r << 1) ^ (r >> 31)), qq;
+			k = rice_k(&rs, c);
+			qq = u >> k;
+			if (qq < 20) {
+				put_bits(&b, (1u << (qq + 1)) - 2, (int)qq + 1); // qq ones, then a zero
+				put_bits(&b, u & ((1u << k) - 1), k);
+			} else {
+				put_bits(&b, (1u << 20) - 1, 20);
+				put_bits(&b, u, 12);
+			}
+			rice_update(&rs, c, u);
+		}
+	if (b.n)
+		put_bits(&b, 0, 8 - b.n);
+	hdr[0] = frame;
+	hdr[1] = (uint32_t)(b.p - buf);
 	return fwrite(hdr, sizeof(hdr), 1, f) == 1 && fwrite(buf, 1, hdr[1], f) == hdr[1] ? 0 : -1;
 }
 
 // 1: a frame, 0: the end, < 0: a damaged file
-static int replay_frame(FILE* f, uint16_t* d)
+static int replay_frame(FILE* f, uint16_t* d, uint32_t* frame)
 {
-	static uint8_t buf[640 * 480 * 3 + 16];
-	uint32_t hdr[2], v;
+	static uint8_t buf[REC_W * REC_H * 5 + 8192];
+	static uint16_t q[REC_W * REC_H], value[65536];
+	uint32_t hdr[2], nv, v, i, acc = 0;
 	const uint8_t *p = buf, *end;
-	int y, x;
+	rice_state rs;
+	bits b;
+	int x, y;
 	if (fread(hdr, sizeof(hdr), 1, f) != 1)
 		return 0;
 	if (hdr[1] > sizeof(buf) || fread(buf, 1, hdr[1], f) != hdr[1])
 		return -1;
 	end = buf + hdr[1];
-	for (y = 0; y < 480; y++) {
-		int prev = 0;
-		for (x = 0; x < 640;) {
-			if (get_varint(&p, end, &v) < 0)
-				return -1;
-			if (v == 0) {
-				uint32_t run;
-				if (get_varint(&p, end, &run) < 0 || x + (int)run + 1 > 640)
-					return -1;
-				for (run++; run > 0; run--)
-					d[y * 640 + x++] = (uint16_t)prev;
-				continue;
-			}
-			prev += (int)((v >> 1) ^ (0u - (v & 1)));
-			d[y * 640 + x++] = (uint16_t)prev;
-		}
+	*frame = hdr[0];
+	if (get_varint(&p, end, &nv) < 0 || nv == 0 || nv > 65536)
+		return -1;
+	for (i = 0; i < nv; i++) {
+		if (get_varint(&p, end, &v) < 0 || (acc += v) > 65535)
+			return -1;
+		value[i] = (uint16_t)acc;
 	}
+	b.p = (uint8_t*)p;
+	b.end = end;
+	b.acc = 0;
+	b.n = 0;
+	rice_init(&rs);
+	for (y = 0; y < REC_H; y++)
+		for (x = 0; x < REC_W; x++) {
+			int c, k, pr = predict(q, x, y, &c), r, bit = 0;
+			uint32_t u, qq = 0, low;
+			k = rice_k(&rs, c);
+			while (qq < 20 && (bit = get_bit(&b)) == 1)
+				qq++;
+			if (qq < 20 && bit < 0)
+				return -1;
+			if (qq == 20) {
+				if (get_bits(&b, 12, &u) < 0)
+					return -1;
+			} else {
+				if (get_bits(&b, k, &low) < 0)
+					return -1;
+				u = (qq << k) | low;
+			}
+			r = (int)(u >> 1) ^ -(int)(u & 1);
+			if (pr + r < 0 || (uint32_t)(pr + r) >= nv)
+				return -1;
+			q[y * REC_W + x] = (uint16_t)(pr + r);
+			rice_update(&rs, c, u);
+		}
+	for (y = 0; y < 480; y++)
+		for (x = 0; x < 640; x++)
+			d[y * 640 + x] = value[q[(y / 2) * REC_W + x / 2]];
 	return 1;
 }
 
@@ -367,7 +513,7 @@ int main(int argc, char** argv)
 	freenect_nui_frame fr;
 	time_t start, last;
 	double busy = 0.0;
-	unsigned tracked_frames = 0, nframes = 0, sec_frames = 0;
+	unsigned tracked_frames = 0, nframes = 0, sec_frames = 0, first_frame = 0;
 	static freenect_nui_manipulation last_manip[FREENECT_NUI_MAX_USERS];
 	const char *record_path = NULL, *replay_path = NULL;
 	FILE* rec = NULL;
@@ -434,13 +580,16 @@ run:
 		struct timeval tv = { 0, 50000 };
 		time_t t;
 		if (replay_path) {
-			int r = replay_frame(rec, depth);
+			uint32_t fno = 0;
+			int r = replay_frame(rec, depth, &fno);
 			if (r <= 0) {
 				if (r < 0)
 					printf("The recording is damaged after %u frames\n", nframes);
 				break;
 			}
-			depth_frames++;
+			if (!nframes)
+				first_frame = fno;
+			depth_frames = fno;
 			new_frame = 1;
 		} else if (freenect_process_events_timeout(ctx, &tv) < 0) {
 			break;
@@ -489,7 +638,7 @@ run:
 					print_events(k, h, hp[h].events);
 			}
 		}
-		t = replay_path ? start + (time_t)(nframes / 30) : time(NULL); // a replay: the recording's own seconds
+		t = replay_path ? start + (time_t)((depth_frames - first_frame) / 30) : time(NULL); // a replay: the recording's own seconds
 		if (t != last) {
 			int k, any = 0;
 			printf("%3ld s: %u frames, %.1f ms per frame; floor %s\n", (long)(t - start), sec_frames,
