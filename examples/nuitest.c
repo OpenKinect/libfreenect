@@ -27,7 +27,7 @@
 // freenect-nuitest: skeleton, hand and finger tracking (libfreenect_nui) on a
 // real Kinect, without a window.
 //
-// Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX] [--record FILE | --replay FILE]
+// Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX] [--record FILE [--record-every N] | --replay FILE]
 //
 // Once a second it prints the users, how many joints each has tracked, the
 // head position, the hands' states and fingers, and the time per frame.
@@ -75,242 +75,81 @@ static void depth_cb(freenect_device* dev, void* data, uint32_t timestamp)
 
 /* ------------------------------------------------------------ recording
  *
- * --record FILE keeps the depth frames compactly enough to share a minute of
- * them: every frame at 320x240 (each 2x2 block's top-left pixel, in mm),
- * losslessly at that resolution. Per frame:
- *   uint32 frame number, uint32 payload size, then the payload:
- *   - the distinct depth values of the frame, sorted (a varint count, then
- *     varint differences); the pixels are coded as indices into this table,
- *     which follow the Kinect's disparity steps, so neighbours differ by
- *     0 or 1 instead of 10-50 mm;
- *   - per pixel, the index minus the median edge predictor of its left, upper
- *     and upper-left neighbours (as in JPEG-LS), zigzagged and Rice-coded
- *     with an adaptive parameter in 3 contexts (flat, gentle, edge); a
- *     quotient of 20 or more escapes to the 12-bit value.
- * --replay FILE tracks a recording without a Kinect, as fast as it goes,
- * each pixel doubled back to 640x480. */
+ * --record FILE keeps every depth frame (format: fndrec.h; --record-every N
+ * keeps every Nth), in parts of at most about 18 MB, a minute each: FILE, then
+ * FILE.2.fnd, FILE.3.fnd, ... (with FILE's extension). --replay FILE tracks
+ * a recording, all its parts, without a Kinect, as fast as it goes. */
 
-static const char rec_magic[8] = { 'F', 'N', 'D', 'R', 'E', 'C', '2', 0 };
-#define REC_W 320
-#define REC_H 240
+#include "fndrec.h"
 
-static void put_varint(uint8_t** p, uint32_t v)
+#define REC_PART_BYTES (18L * 1024 * 1024)
+
+static fndrec_state rec_state;
+static FILE* rec;
+static int rec_version, rec_part = 1, rec_every = 1;
+static const char* rec_base;
+
+// part 1: the name as given; part n: NAME.n.EXT
+static void rec_part_name(char* out, size_t n, int part)
 {
-	while (v >= 0x80) {
-		*(*p)++ = (uint8_t)(v | 0x80);
-		v >>= 7;
+	const char* dot = strrchr(rec_base, '.');
+	const char* slash = strrchr(rec_base, '/');
+	const char* bslash = strrchr(rec_base, '\\');
+	if (part == 1) {
+		snprintf(out, n, "%s", rec_base);
+		return;
 	}
-	*(*p)++ = (uint8_t)v;
+	if (!dot || (slash && slash > dot) || (bslash && bslash > dot))
+		snprintf(out, n, "%s.%d", rec_base, part);
+	else
+		snprintf(out, n, "%.*s.%d%s", (int)(dot - rec_base), rec_base, part, dot);
 }
 
-static int get_varint(const uint8_t** p, const uint8_t* end, uint32_t* v)
+static int rec_open(int part, int writing)
 {
-	int s = 0;
-	*v = 0;
-	while (*p < end && s < 35) {
-		uint8_t b = *(*p)++;
-		*v |= (uint32_t)(b & 0x7f) << s;
-		if (!(b & 0x80))
-			return 0;
-		s += 7;
-	}
-	return -1;
+	char path[600], magic[8];
+	rec_part_name(path, sizeof(path), part);
+	rec = fopen(path, writing ? "wb" : "rb");
+	if (!rec)
+		return -1;
+	fndrec_state_init(&rec_state);
+	rec_part = part;
+	if (writing)
+		return fwrite(fndrec_magic3, 1, 8, rec) == 8 ? 0 : -1;
+	if (fread(magic, 1, 8, rec) != 8)
+		return -1;
+	rec_version = memcmp(magic, fndrec_magic3, 8) == 0 ? 3 : memcmp(magic, fndrec_magic2, 8) == 0 ? 2 : 0;
+	return rec_version ? 0 : -1;
 }
 
-typedef struct {
-	uint8_t* p;
-	const uint8_t* end;
-	uint32_t acc;
-	int n;
-} bits;
-
-static void put_bits(bits* b, uint32_t v, int n)
+static int rec_write(const uint16_t* d, uint32_t frame)
 {
-	while (n > 0) {
-		int take = n > 16 ? 16 : n;
-		n -= take;
-		b->acc = (b->acc << take) | ((v >> n) & ((1u << take) - 1));
-		b->n += take;
-		while (b->n >= 8) {
-			b->n -= 8;
-			*b->p++ = (uint8_t)(b->acc >> b->n);
-		}
-	}
-}
-
-static int get_bit(bits* b)
-{
-	if (b->n == 0) {
-		if (b->p >= b->end)
-			return -1;
-		b->acc = *b->p++;
-		b->n = 8;
-	}
-	b->n--;
-	return (int)((b->acc >> b->n) & 1);
-}
-
-static int get_bits(bits* b, int n, uint32_t* v)
-{
-	*v = 0;
-	while (n-- > 0) {
-		int bit = get_bit(b);
-		if (bit < 0)
-			return -1;
-		*v = (*v << 1) | (uint32_t)bit;
-	}
-	return 0;
-}
-
-typedef struct {
-	uint32_t A[3], N[3];
-} rice_state;
-
-static void rice_init(rice_state* s)
-{
-	int c;
-	for (c = 0; c < 3; c++) {
-		s->A[c] = 4;
-		s->N[c] = 1;
-	}
-}
-
-static int rice_k(const rice_state* s, int c)
-{
-	int k = 0;
-	while (k < 11 && (s->N[c] << k) < s->A[c])
-		k++;
-	return k;
-}
-
-static void rice_update(rice_state* s, int c, uint32_t u)
-{
-	s->A[c] += u;
-	if (++s->N[c] >= 64) {
-		s->A[c] >>= 1;
-		s->N[c] >>= 1;
-	}
-}
-
-// the predictor and the context of pixel (x, y) of the index image
-static int predict(const uint16_t* q, int x, int y, int* ctx)
-{
-	int a = x ? q[y * REC_W + x - 1] : (y ? q[(y - 1) * REC_W] : 0);
-	int b = y ? q[(y - 1) * REC_W + x] : a;
-	int c = x && y ? q[(y - 1) * REC_W + x - 1] : b;
-	int mx = a > b ? a : b, mn = a < b ? a : b, g = abs(a - c) + abs(b - c);
-	*ctx = g == 0 ? 0 : g < 4 ? 1 : 2;
-	return c >= mx ? mn : c <= mn ? mx : a + b - c;
-}
-
-static int record_frame(FILE* f, const uint16_t* d, uint32_t frame)
-{
-	static uint8_t buf[REC_W * REC_H * 5 + 8192];
-	static uint16_t q[REC_W * REC_H], index_of[65536];
-	static uint8_t seen[65536];
-	uint8_t* p = buf;
-	uint32_t hdr[2], nv = 0, prev = 0, v;
-	rice_state rs;
-	bits b;
-	int x, y;
-	memset(seen, 0, sizeof(seen));
-	for (y = 0; y < REC_H; y++)
-		for (x = 0; x < REC_W; x++)
-			seen[d[2 * y * 640 + 2 * x]] = 1;
-	for (v = 0; v < 65536; v++)
-		if (seen[v])
-			index_of[v] = (uint16_t)nv++;
-	put_varint(&p, nv);
-	for (v = 0; v < 65536; v++)
-		if (seen[v]) {
-			put_varint(&p, v - prev);
-			prev = v;
-		}
-	for (y = 0; y < REC_H; y++)
-		for (x = 0; x < REC_W; x++)
-			q[y * REC_W + x] = index_of[d[2 * y * 640 + 2 * x]];
-	b.p = p;
-	b.end = buf + sizeof(buf);
-	b.acc = 0;
-	b.n = 0;
-	rice_init(&rs);
-	for (y = 0; y < REC_H; y++)
-		for (x = 0; x < REC_W; x++) {
-			int c, k, r = (int)q[y * REC_W + x] - predict(q, x, y, &c);
-			uint32_t u = (uint32_t)((r << 1) ^ (r >> 31)), qq;
-			k = rice_k(&rs, c);
-			qq = u >> k;
-			if (qq < 20) {
-				put_bits(&b, (1u << (qq + 1)) - 2, (int)qq + 1); // qq ones, then a zero
-				put_bits(&b, u & ((1u << k) - 1), k);
-			} else {
-				put_bits(&b, (1u << 20) - 1, 20);
-				put_bits(&b, u, 12);
-			}
-			rice_update(&rs, c, u);
-		}
-	if (b.n)
-		put_bits(&b, 0, 8 - b.n);
-	hdr[0] = frame;
-	hdr[1] = (uint32_t)(b.p - buf);
-	return fwrite(hdr, sizeof(hdr), 1, f) == 1 && fwrite(buf, 1, hdr[1], f) == hdr[1] ? 0 : -1;
-}
-
-// 1: a frame, 0: the end, < 0: a damaged file
-static int replay_frame(FILE* f, uint16_t* d, uint32_t* frame)
-{
-	static uint8_t buf[REC_W * REC_H * 5 + 8192];
-	static uint16_t q[REC_W * REC_H], value[65536];
-	uint32_t hdr[2], nv, v, i, acc = 0;
-	const uint8_t *p = buf, *end;
-	rice_state rs;
-	bits b;
-	int x, y;
-	if (fread(hdr, sizeof(hdr), 1, f) != 1)
+	if (frame % (uint32_t)rec_every)
 		return 0;
-	if (hdr[1] > sizeof(buf) || fread(buf, 1, hdr[1], f) != hdr[1])
-		return -1;
-	end = buf + hdr[1];
-	*frame = hdr[0];
-	if (get_varint(&p, end, &nv) < 0 || nv == 0 || nv > 65536)
-		return -1;
-	for (i = 0; i < nv; i++) {
-		if (get_varint(&p, end, &v) < 0 || (acc += v) > 65535)
+	if (ftell(rec) > REC_PART_BYTES) {
+		fclose(rec);
+		rec = NULL;
+		if (rec_open(rec_part + 1, 1) < 0)
 			return -1;
-		value[i] = (uint16_t)acc;
 	}
-	b.p = (uint8_t*)p;
-	b.end = end;
-	b.acc = 0;
-	b.n = 0;
-	rice_init(&rs);
-	for (y = 0; y < REC_H; y++)
-		for (x = 0; x < REC_W; x++) {
-			int c, k, pr = predict(q, x, y, &c), r, bit = 0;
-			uint32_t u, qq = 0, low;
-			k = rice_k(&rs, c);
-			while (qq < 20 && (bit = get_bit(&b)) == 1)
-				qq++;
-			if (qq < 20 && bit < 0)
-				return -1;
-			if (qq == 20) {
-				if (get_bits(&b, 12, &u) < 0)
-					return -1;
-			} else {
-				if (get_bits(&b, k, &low) < 0)
-					return -1;
-				u = (qq << k) | low;
-			}
-			r = (int)(u >> 1) ^ -(int)(u & 1);
-			if (pr + r < 0 || (uint32_t)(pr + r) >= nv)
-				return -1;
-			q[y * REC_W + x] = (uint16_t)(pr + r);
-			rice_update(&rs, c, u);
+	return fndrec_write(rec, &rec_state, d, frame);
+}
+
+// 1: a frame, 0: the end of the last part, < 0: a damaged file
+static int rec_read(uint16_t* d, uint32_t* frame)
+{
+	int r = fndrec_read(rec, &rec_state, rec_version, d, frame);
+	if (r == 0) {
+		fclose(rec);
+		rec = NULL;
+		if (rec_open(rec_part + 1, 0) < 0) {
+			if (rec)
+				printf("Part %d of the recording is not a recording\n", rec_part);
+			return 0;
 		}
-	for (y = 0; y < 480; y++)
-		for (x = 0; x < 640; x++)
-			d[y * 640 + x] = value[q[(y / 2) * REC_W + x / 2]];
-	return 1;
+		r = fndrec_read(rec, &rec_state, rec_version, d, frame);
+	}
+	return r;
 }
 
 /* ------------------------------------------------------------ picture */
@@ -328,10 +167,15 @@ static void put(int x, int y, int r, int g, int b)
 
 static int to_pixel(freenect_nui_point p, int* X, int* Y)
 {
-	if (p.z <= 0.1f)
+	float x, y;
+	if (!(p.z > 0.1f && p.z < 100.0f)) // also NaN
 		return 0;
-	*X = 639 - (int)(p.x * 571.26f / p.z + 319.5f);
-	*Y = (int)(-p.y * 571.26f / p.z + 239.5f);
+	x = 639.0f - (p.x * 571.26f / p.z + 319.5f);
+	y = -p.y * 571.26f / p.z + 239.5f;
+	if (!(x > -2000.0f && x < 2000.0f && y > -2000.0f && y < 2000.0f))
+		return 0; // far off the picture (a line to it would take long)
+	*X = (int)x;
+	*Y = (int)y;
 	return 1;
 }
 
@@ -343,8 +187,9 @@ static void line(int x0, int y0, int x1, int y1, int c)
 		put(x0 + 1, y0, c, c, c);
 		if (x0 == x1 && y0 == y1)
 			break;
-		if (2 * e >= dy) { e += dy; x0 += sx; }
-		if (2 * e <= dx) { e += dx; y0 += sy; }
+		int e2 = 2 * e; // both steps test the error from before either (else it can miss the end)
+		if (e2 >= dy) { e += dy; x0 += sx; }
+		if (e2 <= dx) { e += dx; y0 += sy; }
 	}
 }
 
@@ -516,7 +361,6 @@ int main(int argc, char** argv)
 	unsigned tracked_frames = 0, nframes = 0, sec_frames = 0, first_frame = 0;
 	static freenect_nui_manipulation last_manip[FREENECT_NUI_MAX_USERS];
 	const char *record_path = NULL, *replay_path = NULL;
-	FILE* rec = NULL;
 
 	fn_install_exit_handlers();
 	for (i = 1; i < argc; i++) {
@@ -524,22 +368,22 @@ int main(int argc, char** argv)
 		else if (strcmp(argv[i], "--out") == 0 && i + 1 < argc) prefix = argv[++i];
 		else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) record_path = argv[++i];
 		else if (strcmp(argv[i], "--replay") == 0 && i + 1 < argc) replay_path = argv[++i];
+		else if (strcmp(argv[i], "--record-every") == 0 && i + 1 < argc && atoi(argv[i + 1]) > 0) rec_every = atoi(argv[++i]);
 		else if (argv[i][0] >= '0' && argv[i][0] <= '9') seconds = atoi(argv[i]);
 		else {
-			printf("Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX] [--record FILE | --replay FILE]\n");
+			printf("Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX] [--record FILE [--record-every N] | --replay FILE]\n");
 			return 2;
 		}
 	}
 	if (replay_path) {
-		char magic[8];
-		rec = fopen(replay_path, "rb");
-		if (!rec || fread(magic, 1, 8, rec) != 8 || memcmp(magic, rec_magic, 8) != 0) {
+		rec_base = replay_path;
+		if (rec_open(1, 0) < 0) {
 			printf("%s is not a freenect-nuitest recording\n", replay_path);
 			return 1;
 		}
 	} else if (record_path) {
-		rec = fopen(record_path, "wb");
-		if (!rec || fwrite(rec_magic, 1, 8, rec) != 8) {
+		rec_base = record_path;
+		if (rec_open(1, 1) < 0) {
 			printf("Could not write %s\n", record_path);
 			return 1;
 		}
@@ -581,7 +425,7 @@ run:
 		time_t t;
 		if (replay_path) {
 			uint32_t fno = 0;
-			int r = replay_frame(rec, depth, &fno);
+			int r = rec_read(depth, &fno);
 			if (r <= 0) {
 				if (r < 0)
 					printf("The recording is damaged after %u frames\n", nframes);
@@ -597,7 +441,7 @@ run:
 		if (new_frame) {
 			double t0;
 			int k;
-			if (record_path && rec && record_frame(rec, depth, depth_frames) < 0) {
+			if (record_path && rec && rec_write(depth, depth_frames) < 0) {
 				printf("Could not write the recording; it stops here\n");
 				fclose(rec);
 				rec = NULL;
