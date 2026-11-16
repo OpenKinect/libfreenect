@@ -27,7 +27,14 @@
 // freenect-nuitest: skeleton, hand and finger tracking (libfreenect_nui) on a
 // real Kinect, without a window.
 //
-// Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX] [--record FILE [--record-every N] | --replay FILE]
+// Usage: freenect-nuitest [seconds] [--seated] [--frame body|hands] [--tilt DEG] [--out PREFIX]
+//                         [--record FILE [--record-every N] | --replay FILE]
+//
+// --frame tilts the Kinect with its motor to keep the nearest tracked user
+// framed: the whole body, or the upper body with the arms and hands (up
+// when the head is out of view). Each move goes into the recording; a replay
+// makes the same moves (and, with --frame, prints what it would suggest).
+// --tilt DEG first tilts the Kinect to DEG (-27 to 27).
 //
 // Once a second it prints the users, how many joints each has tracked, the
 // head position, the hands' states and fingers, and the time per frame.
@@ -135,10 +142,11 @@ static int rec_write(const uint16_t* d, uint32_t frame)
 	return fndrec_write(rec, &rec_state, d, frame);
 }
 
-// 1: a frame, 0: the end of the last part, < 0: a damaged file
-static int rec_read(uint16_t* d, uint32_t* frame)
+// 1: a frame, 2: a tilt event (*tilt), 0: the end of the last part, < 0: a
+// damaged file
+static int rec_read(uint16_t* d, uint32_t* frame, float* tilt)
 {
-	int r = fndrec_read(rec, &rec_state, rec_version, d, frame);
+	int r = fndrec_read(rec, &rec_state, rec_version, d, frame, tilt);
 	if (r == 0) {
 		fclose(rec);
 		rec = NULL;
@@ -147,7 +155,7 @@ static int rec_read(uint16_t* d, uint32_t* frame)
 				printf("Part %d of the recording is not a recording\n", rec_part);
 			return 0;
 		}
-		r = fndrec_read(rec, &rec_state, rec_version, d, frame);
+		r = fndrec_read(rec, &rec_state, rec_version, d, frame, tilt);
 	}
 	return r;
 }
@@ -361,6 +369,10 @@ int main(int argc, char** argv)
 	unsigned tracked_frames = 0, nframes = 0, sec_frames = 0, first_frame = 0;
 	static freenect_nui_manipulation last_manip[FREENECT_NUI_MAX_USERS];
 	const char *record_path = NULL, *replay_path = NULL;
+	int frame_mode = -1; // --frame: FREENECT_NUI_FRAME_BODY or _UPPER_BODY
+	double tilt_start = -1000.0; // --tilt: the angle to start from (none: as it is)
+	unsigned tilt_moves = 0;
+	float last_suggestion = 0.0f; // a replay prints a suggestion when it changes
 
 	fn_install_exit_handlers();
 	for (i = 1; i < argc; i++) {
@@ -368,10 +380,14 @@ int main(int argc, char** argv)
 		else if (strcmp(argv[i], "--out") == 0 && i + 1 < argc) prefix = argv[++i];
 		else if (strcmp(argv[i], "--record") == 0 && i + 1 < argc) record_path = argv[++i];
 		else if (strcmp(argv[i], "--replay") == 0 && i + 1 < argc) replay_path = argv[++i];
+		else if (strcmp(argv[i], "--frame") == 0 && i + 1 < argc && strcmp(argv[i + 1], "body") == 0) frame_mode = FREENECT_NUI_FRAME_BODY, i++;
+		else if (strcmp(argv[i], "--frame") == 0 && i + 1 < argc && strcmp(argv[i + 1], "hands") == 0) frame_mode = FREENECT_NUI_FRAME_UPPER_BODY, i++;
+		else if (strcmp(argv[i], "--tilt") == 0 && i + 1 < argc) tilt_start = atof(argv[++i]);
 		else if (strcmp(argv[i], "--record-every") == 0 && i + 1 < argc && atoi(argv[i + 1]) > 0) rec_every = atoi(argv[++i]);
 		else if (argv[i][0] >= '0' && argv[i][0] <= '9') seconds = atoi(argv[i]);
 		else {
-			printf("Usage: freenect-nuitest [seconds] [--seated] [--out PREFIX] [--record FILE [--record-every N] | --replay FILE]\n");
+			printf("Usage: freenect-nuitest [seconds] [--seated] [--frame body|hands] [--tilt DEG] [--out PREFIX]\n"
+			       "                        [--record FILE [--record-every N] | --replay FILE]\n");
 			return 2;
 		}
 	}
@@ -402,10 +418,24 @@ int main(int argc, char** argv)
 	}
 	if (freenect_init(&ctx, NULL) < 0)
 		goto out;
-	freenect_select_subdevices(ctx, FREENECT_DEVICE_CAMERA);
+	freenect_select_subdevices(ctx, (freenect_device_flags)(FREENECT_DEVICE_CAMERA |
+	                                                        (frame_mode >= 0 || tilt_start > -100.0 ? FREENECT_DEVICE_MOTOR : 0)));
 	if (freenect_num_devices(ctx) < 1 || freenect_open_device(ctx, &dev, 0) < 0) {
 		printf("No Kinect found\n");
 		goto out;
+	}
+	if (tilt_start > -100.0) {
+		// --tilt: start from this angle; the motor needs up to 2 s
+		double t0 = now_ms();
+		printf("Tilting the Kinect to %+.0f degrees\n", tilt_start);
+		fflush(stdout);
+		if (freenect_set_tilt_degs(dev, tilt_start) < 0)
+			printf("  (the motor did not take the command)\n");
+		while (!fn_exit_requested && now_ms() - t0 < 2000.0) {
+			struct timeval tv = { 0, 50000 };
+			if (freenect_process_events_timeout(ctx, &tv) < 0)
+				break;
+		}
 	}
 	freenect_set_depth_mode(dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM));
 	freenect_set_depth_range(dev, FREENECT_DEPTH_RANGE_FULL);
@@ -416,6 +446,10 @@ int main(int argc, char** argv)
 	}
 	printf("Tracking%s for %d s; stand 1.5-3.5 m in front of the Kinect%s%s\n", seated ? " (seated)" : "", seconds,
 	       record_path ? "; recording to " : "", record_path ? record_path : "");
+	if (frame_mode >= 0 && freenect_update_tilt_state(dev) >= 0)
+		printf("Framing %s with the motor; the Kinect is at %+.0f degrees\n",
+		       frame_mode == FREENECT_NUI_FRAME_BODY ? "the whole body" : "the upper body and hands",
+		       freenect_get_tilt_degs(freenect_get_tilt_state(dev)));
 	fflush(stdout);
 
 run:
@@ -425,7 +459,15 @@ run:
 		time_t t;
 		if (replay_path) {
 			uint32_t fno = 0;
-			int r = rec_read(depth, &fno);
+			float tilt = 0.0f;
+			int r = rec_read(depth, &fno, &tilt);
+			if (r == 2) {
+				// the motor moved here when it was recorded
+				printf("    [the Kinect tilts %+.0f degrees (recorded)]\n", tilt);
+				freenect_nui_tilt_changed(nui, tilt);
+				tilt_moves++;
+				continue;
+			}
 			if (r <= 0) {
 				if (r < 0)
 					printf("The recording is damaged after %u frames\n", nframes);
@@ -450,6 +492,25 @@ run:
 			new_frame = 0;
 			freenect_nui_process(nui, depth, depth_frames, &fr);
 			busy += now_ms() - t0;
+			if (frame_mode >= 0) {
+				float d = freenect_nui_suggest_tilt(nui, (freenect_nui_framing)frame_mode);
+				if (d != 0.0f && replay_path) {
+					if (d != last_suggestion)
+						printf("    [framing would tilt %+.0f degrees here]\n", d);
+				} else if (d != 0.0f && dev && freenect_update_tilt_state(dev) >= 0) {
+					double cur = freenect_get_tilt_degs(freenect_get_tilt_state(dev));
+					double to = cur + d > 27.0 ? 27.0 : cur + d < -27.0 ? -27.0 : cur + d;
+					if (fabs(to - cur) >= 2.0 && freenect_set_tilt_degs(dev, to) >= 0) {
+						printf("    [tilting the Kinect from %+.0f to %+.0f degrees, to frame the %s]\n", cur, to,
+						       frame_mode == FREENECT_NUI_FRAME_BODY ? "whole body" : "upper body");
+						freenect_nui_tilt_changed(nui, (float)(to - cur));
+						if (record_path && rec)
+							fndrec_write_tilt(rec, depth_frames, (float)(to - cur));
+						tilt_moves++;
+					}
+				}
+				last_suggestion = d;
+			}
 			nframes++;
 			sec_frames++;
 			for (k = 0; k < FREENECT_NUI_MAX_USERS; k++)
@@ -563,6 +624,8 @@ run:
 	write_bmp(path);
 	printf("Frames: %u, with a skeleton: %u; %.1f ms per frame. Wrote %s\n",
 	       nframes, tracked_frames, nframes ? busy / nframes : 0.0, path);
+	if (frame_mode >= 0 || tilt_moves)
+		printf("Tilt moves: %u\n", tilt_moves);
 	ret = 0;
 out:
 	if (rec)

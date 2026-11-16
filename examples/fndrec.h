@@ -465,9 +465,24 @@ static int fndrec_read2(const uint8_t* buf, uint32_t len, uint16_t* q, uint16_t*
 	return 0;
 }
 
-// Reads one frame into a 640x480 buffer (each pixel doubled). version is 2
-// or 3 (from the magic). 1: a frame, 0: the end, < 0: a damaged file.
-static int fndrec_read(FILE* f, fndrec_state* s, int version, uint16_t* depth, uint32_t* frame)
+/* ---- events: the tilt motor was told to move (the frame number, then the
+ * size 0x80000004, then int32 hundredths of a degree, positive up) */
+
+#define FNDREC_EVENT_TILT 0x80000004u
+
+static int fndrec_write_tilt(FILE* f, uint32_t frame, float degrees)
+{
+	uint32_t hdr[2];
+	int32_t v = (int32_t)(degrees * 100.0f + (degrees < 0 ? -0.5f : 0.5f));
+	hdr[0] = frame;
+	hdr[1] = FNDREC_EVENT_TILT;
+	return fwrite(hdr, sizeof(hdr), 1, f) == 1 && fwrite(&v, sizeof(v), 1, f) == 1 ? 0 : -1;
+}
+
+// Reads one frame into a 640x480 buffer (each pixel doubled), or an event.
+// version is 2 or 3 (from the magic). 1: a frame, 2: a tilt event (in
+// *tilt, degrees), 0: the end, < 0: a damaged file.
+static int fndrec_read(FILE* f, fndrec_state* s, int version, uint16_t* depth, uint32_t* frame, float* tilt)
 {
 	static uint8_t buf[FNDREC_N * 5 + 65536];
 	static uint16_t tq[FNDREC_N];
@@ -475,6 +490,14 @@ static int fndrec_read(FILE* f, fndrec_state* s, int version, uint16_t* depth, u
 	int x, y, v, nv = 0;
 	if (fread(hdr, sizeof(hdr), 1, f) != 1)
 		return 0;
+	if (hdr[1] == FNDREC_EVENT_TILT) {
+		int32_t c;
+		if (fread(&c, sizeof(c), 1, f) != 1)
+			return feof(f) ? 0 : -1;
+		*frame = hdr[0];
+		*tilt = (float)c / 100.0f;
+		return 2;
+	}
 	if (hdr[1] > sizeof(buf))
 		return -1;
 	if (fread(buf, 1, hdr[1], f) != hdr[1])
