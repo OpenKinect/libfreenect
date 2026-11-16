@@ -177,6 +177,30 @@ FREENECT_NUI_API int freenect_nui_set_tracked_users(freenect_nui* nui, const uin
 /// the caller. Returns the number in use, or < 0 on error.
 FREENECT_NUI_API int freenect_nui_set_threads(freenect_nui* nui, int threads);
 
+/// Framing with the tilt motor. The tracker does not move the motor itself
+/// (it only sees depth frames): it suggests a tilt, the application moves the
+/// motor (freenect_set_tilt_degs, which keeps the motor's limits) and tells
+/// the tracker, which then keeps its users across the move.
+typedef enum {
+	FREENECT_NUI_FRAME_BODY = 0,       ///< the whole body, head to feet (head first when it cannot all fit)
+	FREENECT_NUI_FRAME_UPPER_BODY = 1, ///< head, arms and hands (from the head to below the hips)
+} freenect_nui_framing;
+
+/// The change of the Kinect's tilt, in degrees (positive: up), that would
+/// frame the nearest tracked user as asked; 0 when the framing is fine, no
+/// one is there to frame, the motor moved less than 1.5 s ago, or the last
+/// move has not settled. A user too close for the head to be in view (no
+/// skeleton yet) gets a step up. Add it to the current tilt and clamp to the
+/// motor's range.
+FREENECT_NUI_API float freenect_nui_suggest_tilt(freenect_nui* nui, freenect_nui_framing mode);
+
+/// Tells the tracker that the Kinect's tilt is changing by this many degrees
+/// (positive: up), right after the motor was told to move. Until the depth
+/// image is still again (the move takes up to a second or two) the tracker
+/// returns its last users and skeletons; then it carries its background,
+/// floor and users over to the new view, so users keep their ids.
+FREENECT_NUI_API int freenect_nui_tilt_changed(freenect_nui* nui, float degrees);
+
 /* ------------------------------------------------------------ hands */
 
 /// More about one hand than the skeleton's joints carry (the palm and

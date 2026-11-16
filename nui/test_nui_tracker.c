@@ -68,6 +68,19 @@ typedef struct {
 static float wall_z = WALL_Z; // the room's back wall
 static int arms_in;            // arms close to the body (for crowded scenes)
 static int furnished;          // a side wall near the camera, a cupboard and a desk
+static float cam_pitch;        // the Kinect's tilt (rad, up), as the motor sets it
+
+// a direction or point seen by the tilted Kinect, in the room, and back
+static v3 cam_to_room(v3 d)
+{
+	float c = cosf(cam_pitch), s = sinf(cam_pitch);
+	return v3make(d.x, d.y * c + d.z * s, -d.y * s + d.z * c);
+}
+static v3 room_to_cam(v3 p)
+{
+	float c = cosf(cam_pitch), s = sinf(cam_pitch);
+	return v3make(p.x, p.y * c - p.z * s, p.y * s + p.z * c);
+}
 
 // ray (from the camera) against an axis-aligned box; 0 if missed
 static float hit_box(v3 d, v3 lo, v3 hi)
@@ -167,8 +180,8 @@ static void render(uint16_t* depth, const person* people, int np)
 	for (Y = 0; Y < 480; Y++)
 		for (X = 0; X < 640; X++) {
 			float xm = (float)(639 - X); // libfreenect orientation -> mirrored
-			v3 d = v3make((xm - 319.5f) / F640, -((float)Y - 239.5f) / F640, 1.0f);
-			float t = wall_z;
+			v3 d = cam_to_room(v3make((xm - 319.5f) / F640, -((float)Y - 239.5f) / F640, 1.0f));
+			float t = d.z > 0.05f ? wall_z / d.z : 1e9f;
 			if (d.y < 0 && FLOOR_Y / d.y < t)
 				t = FLOOR_Y / d.y;
 			if (furnished) {
@@ -190,15 +203,16 @@ static void render(uint16_t* depth, const person* people, int np)
 			}
 			for (k = 0; k < n; k++) {
 				v3 m = v3scale(v3add(caps[k].a, caps[k].b), 0.5f);
-				float dx = d.x * m.z - m.x, dy = d.y * m.z - m.y, h;
+				float tp = v3dot(m, d) / v3dot(d, d), h;
+				v3 q = v3sub(m, v3scale(d, tp));
 				float reach = 0.5f * fn_nui_v3len(v3sub(caps[k].a, caps[k].b)) + caps[k].r;
-				if (dx * dx + dy * dy > reach * reach * 1.2f)
+				if (v3dot(q, q) > reach * reach * 1.2f)
 					continue;
 				h = hit_capsule(d, &caps[k]);
 				if (h > 0 && h < t)
 					t = h;
 			}
-			depth[Y * 640 + X] = (uint16_t)(t * 1000.0f + 0.5f);
+			depth[Y * 640 + X] = t < 8.0f ? (uint16_t)(t * 1000.0f + 0.5f) : 0;
 		}
 }
 
@@ -232,7 +246,8 @@ static freenect_nui_skeleton* match(freenect_nui_frame* fr, const person* P)
 		float d;
 		if (S->state == FREENECT_NUI_USER_NOT_TRACKED)
 			continue;
-		d = fabsf(S->position.x - P->J[0].x) + fabsf(S->position.z - P->J[0].z);
+		v3 c0 = room_to_cam(P->J[0]);
+		d = fabsf(S->position.x - c0.x) + fabsf(S->position.z - c0.z);
 		if (d < bd) {
 			bd = d;
 			best = k;
@@ -294,7 +309,7 @@ static void run(freenect_nui* n, scene_fn scene, int frames, score* s, freenect_
 			s->frames_tracked++;
 			for (j = 0; j < NJ; j++) {
 				v3 q = v3make(S->joints[j].x, S->joints[j].y, S->joints[j].z);
-				float e = fn_nui_v3len(v3sub(q, people[p].J[j]));
+				float e = fn_nui_v3len(v3sub(q, room_to_cam(people[p].J[j])));
 				if (S->joint_state[j] != FREENECT_NUI_JOINT_TRACKED) {
 					all = 0;
 					continue;
@@ -479,6 +494,120 @@ int main(void)
 	report("walking", &s);
 	CHECK(s.lock_frame >= 0 && s.id_changes == 0 && s.users_max == 1, "a user walking across: the same id throughout");
 	CHECK(s.joints > 0 && s.within10 >= 0.80 * s.joints, "  PCK@10cm >= 80 %");
+
+	// Framing with the tilt motor: the tracker suggests, the "motor" (the
+	// renderer's camera) moves over 12 frames, the tracker carries its users
+	// over. A: a user at 1 m, the head above the view, framed for the hands.
+	// B: the Kinect tilted 18 degrees down, a user at 2.3 m without a head,
+	// framed whole.
+	{
+		static const struct {
+			const char* name;
+			float z, pitch;
+			freenect_nui_framing mode;
+		} T[2] = { { "a user at 1.2 m (head out of view), upper body", 1.2f, 0.0f, FREENECT_NUI_FRAME_UPPER_BODY },
+		           { "Kinect tilted down, a user at 2.3 m, whole body", 2.3f, -18.0f, FREENECT_NUI_FRAME_BODY } };
+		int t;
+		for (t = 0; t < 2; t++) {
+			person P[1];
+			int f, moved_at = -1, ok_before = 0, joints = 0, within = 0, head_in = 0, after = 0, moves = 0;
+			float sug = 0.0f, from = T[t].pitch, to = from;
+			uint32_t id_before = 0, id_after = 0;
+			char what[160];
+			freenect_nui_reset(n);
+			cam_pitch = from * 3.14159265f / 180.0f;
+			for (f = 0; f < 240; f++) {
+				int np = f >= 15, k;
+				freenect_nui_skeleton* S;
+				pose(&P[0], 0.2f * f, 0.0f, T[t].z);
+				if (moved_at >= 0 && f > moved_at) {
+					float a = f - moved_at >= 12 ? 1.0f : (float)(f - moved_at) / 12.0f;
+					cam_pitch = (from + (to - from) * a) * 3.14159265f / 180.0f;
+				}
+				render(depth, P, np);
+				freenect_nui_process(n, depth, (uint32_t)f, &fr);
+				S = np ? match(&fr, &P[0]) : NULL;
+				if (moved_at < 0 && S && S->state == FREENECT_NUI_USER_TRACKED) {
+					ok_before = 1;
+					id_before = S->tracking_id;
+				}
+				// as an application would: whenever the tracker suggests a move
+				// (up to 3), the motor moves and the tracker is told
+				if (moves < 3 && f >= 45 && (moved_at < 0 || f >= moved_at + 20)) {
+					float s1 = freenect_nui_suggest_tilt(n, T[t].mode);
+					if (s1 != 0.0f) {
+						from = to;
+						to = from + s1;
+						sug += s1;
+						moved_at = f;
+						moves++;
+						after = head_in = joints = within = 0; // scored after the last move
+						freenect_nui_tilt_changed(n, s1);
+					}
+				}
+				if (moved_at >= 0 && f >= moved_at + 50 && S && S->state == FREENECT_NUI_USER_TRACKED) {
+					after++;
+					id_after = S->tracking_id;
+					head_in += S->joint_state[3] == FREENECT_NUI_JOINT_TRACKED;
+					for (k = 0; k < NJ; k++)
+						if (S->joint_state[k] == FREENECT_NUI_JOINT_TRACKED) {
+							v3 q = v3make(S->joints[k].x, S->joints[k].y, S->joints[k].z);
+							joints++;
+							within += fn_nui_v3len(v3sub(q, room_to_cam(P[0].J[k]))) < 0.10f;
+						}
+				}
+			}
+			printf("    (%s: skeleton before the move %s, %d move(s), %+.0f degrees in all, the last at frame %d; after it %d frames with a skeleton,"
+			       " head tracked in %d, PCK@10cm %.0f %%, id %u -> %u)\n",
+			       T[t].name, ok_before ? "yes" : "no", moves, sug, moved_at, after, head_in, joints ? 100.0 * within / joints : 0.0,
+			       id_before, id_after);
+			snprintf(what, sizeof(what), "%s: tilted %s", T[t].name, sug > 0.0f ? "up" : "not up");
+			CHECK(sug >= 3.0f && moved_at >= 0, what);
+			CHECK(after >= 30 && head_in >= after * 3 / 4 && joints > 0 && within >= 0.75 * joints,
+			      "  then a skeleton with the head, PCK@10cm >= 75 %");
+			if (ok_before)
+				CHECK(id_after == id_before, "  the same user id across the move");
+			if (t == 0)
+				CHECK(ok_before, "  a skeleton before the move, without the head");
+		}
+		cam_pitch = 0.0f;
+	}
+	// The motor was told to move but did not (tipped over, too many moves):
+	// the tracker holds up to 3 s, then goes on as before, without turning
+	// its users by a move that never happened.
+	{
+		person P[1];
+		int f, after = 0, joints = 0, within = 0;
+		uint32_t id_before = 0, id_after = 0;
+		freenect_nui_reset(n);
+		for (f = 0; f < 240; f++) {
+			freenect_nui_skeleton* S;
+			int k;
+			pose(&P[0], 0.2f * f, 0.0f, 2.3f);
+			render(depth, P, f >= 15);
+			freenect_nui_process(n, depth, (uint32_t)f, &fr);
+			S = f >= 15 ? match(&fr, &P[0]) : NULL;
+			if (f == 45) {
+				if (S && S->state == FREENECT_NUI_USER_TRACKED)
+					id_before = S->tracking_id;
+				freenect_nui_tilt_changed(n, 10.0f);
+			}
+			if (f >= 150 && S && S->state == FREENECT_NUI_USER_TRACKED) {
+				after++;
+				id_after = S->tracking_id;
+				for (k = 0; k < NJ; k++)
+					if (S->joint_state[k] == FREENECT_NUI_JOINT_TRACKED) {
+						v3 q = v3make(S->joints[k].x, S->joints[k].y, S->joints[k].z);
+						joints++;
+						within += fn_nui_v3len(v3sub(q, P[0].J[k])) < 0.10f;
+					}
+			}
+		}
+		printf("    (a move that did not happen: %d of 90 frames with a skeleton afterwards, PCK@10cm %.0f %%, id %u -> %u)\n", after,
+		       joints ? 100.0 * within / joints : 0.0, id_before, id_after);
+		CHECK(id_before && id_after == id_before && after >= 80 && joints > 0 && within >= 0.85 * joints,
+		      "a move the motor did not make: tracking goes on unchanged");
+	}
 
 	freenect_nui_destroy(n);
 	printf(pass ? "All passed\n" : "FAILURES\n");

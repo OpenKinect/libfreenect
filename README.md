@@ -172,6 +172,10 @@ For interfaces you control with your hands, without touching anything:
 
 Hands are always told apart by arm: the left hand's joints follow the left wrist and elbow, even with the arms crossed.
 
+**Close to the Kinect, and framing with the motor.** A user too close for the head to be in view is still tracked, from the shoulders or elbows and the hips, and from the head and shoulders when the legs are below the view. The tracker can also keep the nearest user framed with the tilt motor. `freenect_nui_suggest_tilt()` gives the change of tilt that would show the whole body (`FREENECT_NUI_FRAME_BODY`) or the head, arms and hands (`FREENECT_NUI_FRAME_UPPER_BODY`). It asks for a move only after the same change has been wanted for 10 frames, and not within 1.5 s of the last one. The application moves the motor (`freenect_set_tilt_degs()`, which keeps the motor's limits) and calls `freenect_nui_tilt_changed()`. The tracker then holds its users while the view moves, and afterwards carries its background, floor and users over to the new view, so users keep their ids. If the view never moves (the motor refused), nothing is carried over. `freenect-nuitest --frame body` or `--frame hands` does this live, and `--tilt DEG` starts from a given angle.
+
+**Recordings.** `freenect-nuitest --record FILE` keeps the depth frames losslessly at 320×240 (about 19 MB a minute, split into parts of up to 18 MB) together with the motor's moves; `--replay FILE` tracks them again without a Kinect.
+
 It uses Microsoft's body-part forest from the Kinect Runtime, which libfreenect does not contain. Fetch it once on your machine; Microsoft's licence terms for the Runtime apply to it:
 
 ```bash

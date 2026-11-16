@@ -303,6 +303,75 @@ void fn_nui_seg_reject(fn_nui_seg* s, int k, const uint16_t* map)
 	memset(&s->u[k], 0, sizeof(s->u[k]));
 }
 
+/* ------------------------------------------------------------ tilt */
+
+// The Kinect tilted (the motor): what the segmentation knows moves with the
+// view. Every pixel of the background and of the users (at its depth in the
+// last frame before the move) is rotated and projected into the new view;
+// pixels nothing lands on start unknown. The floor plane turns with it.
+void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map)
+{
+	float c = cosf(angle), sn = sinf(angle);
+	uint16_t* bg = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	uint16_t* conf = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	uint8_t* users = (uint8_t*)calloc(NPIX, 1);
+	int i, k, pass;
+	if (!bg || !conf || !users) {
+		free(bg); free(conf); free(users);
+		fn_nui_seg_reset(s); // out of memory: start over
+		return;
+	}
+	// two passes: the background, then the users (their depth is the map's)
+	for (pass = 0; pass < 2; pass++)
+		for (i = 0; i < NPIX; i++) {
+			int d = pass ? (s->prev_user[i] ? map[i] : 0) : s->bg[i];
+			float u2, v2;
+			v3 p;
+			int x, y, dy;
+			if (!d)
+				continue;
+			p = fn_nui_tilt_point(fn_nui_unproject((float)(i % NW), (float)(i / NW), (float)d), c, sn);
+			if (p.z <= 0.1f)
+				continue;
+			fn_nui_project(p, &u2, &v2);
+			x = (int)lrintf(u2);
+			y = (int)lrintf(v2);
+			// and the pixel below, so that the rows a tilt stretches apart
+			// leave no gaps
+			for (dy = 0; dy < 2; dy++) {
+				int j;
+				if (x < 0 || x >= NW || y + dy < 0 || y + dy >= NH)
+					continue;
+				j = (y + dy) * NW + x;
+				if (pass) {
+					if (!users[j] || dy == 0)
+						users[j] = s->prev_user[i];
+				} else if (!bg[j] || dy == 0) {
+					bg[j] = (uint16_t)(p.z * 1000.0f + 0.5f);
+					conf[j] = s->bgconf[i];
+				}
+			}
+		}
+	memcpy(s->bg, bg, NPIX * sizeof(uint16_t));
+	memcpy(s->bgconf, conf, NPIX * sizeof(uint16_t));
+	memcpy(s->prev_user, users, NPIX);
+	memcpy(s->user, users, NPIX);
+	memset(s->bgage, 0, NPIX * sizeof(uint16_t));
+	memset(s->prev_map, 0, NPIX * sizeof(uint16_t)); // movement is measured from the new view on
+	free(bg);
+	free(conf);
+	free(users);
+	if (s->floor_valid) {
+		v3 nrm = fn_nui_tilt_point(v3make(s->floor[0], s->floor[1], s->floor[2]), c, sn);
+		s->floor[0] = nrm.x;
+		s->floor[1] = nrm.y;
+		s->floor[2] = nrm.z; // D: the distance from the Kinect stays
+	}
+	for (k = 0; k < NU; k++)
+		if (s->u[k].active)
+			s->u[k].centre = fn_nui_tilt_point(s->u[k].centre, c, sn);
+}
+
 /* ------------------------------------------------------------ components */
 
 static uint32_t find(uint32_t* p, uint32_t i)

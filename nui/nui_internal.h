@@ -67,6 +67,12 @@ static inline v3 fn_nui_unproject(float u, float v, float z_mm)
 	float z = z_mm * 0.001f;
 	return v3make((u - FN_NUI_CX) * z / FN_NUI_F, -(v - FN_NUI_CY) * z / FN_NUI_F, z);
 }
+// a point seen from the Kinect after its tilt changed by an angle with this
+// cosine and sine (positive: up; the motor turns it about its x axis)
+static inline v3 fn_nui_tilt_point(v3 p, float c, float s)
+{
+	return v3make(p.x, p.y * c - p.z * s, p.y * s + p.z * c);
+}
 // and back (pixel coordinates in the mirrored 320x240 map)
 static inline void fn_nui_project(v3 p, float* u, float* v)
 {
@@ -115,6 +121,9 @@ void fn_nui_make_map(const uint16_t* depth, uint16_t* map);
 // Floor, background, components and user identities for one map.
 void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated);
 void fn_nui_seg_reject(fn_nui_seg* s, int k, const uint16_t* map);
+// The Kinect tilted by this angle (rad, positive: up): carry the background,
+// the users (from map, the last frame before the move) and the floor over.
+void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map);
 // Distance of a map point from the floor (mm); large if no floor
 float fn_nui_floor_dist(const fn_nui_seg* s, v3 p_m);
 
@@ -154,6 +163,7 @@ typedef struct {
 	int learn_frames;             // good frames seen while learning the bones
 	int has_prev;
 	int body_seen;  // frames the head or the shoulder centre was tracked (the strict test)
+	int fail_run;   // failed fits in a row
 	uint32_t quality;
 } fn_nui_fit;
 

@@ -179,6 +179,11 @@ cdef extern from "libfreenect_nui.h":
     int freenect_nui_smoother_set_one_euro(freenect_nui_smoother* s, float min_cutoff, float beta, float d_cutoff)
     int freenect_nui_smoother_set_kalman(freenect_nui_smoother* s, float accel_noise, float measurement_noise)
     int freenect_nui_set_threads(freenect_nui* nui, int threads)
+    ctypedef enum freenect_nui_framing:
+        FREENECT_NUI_FRAME_BODY
+        FREENECT_NUI_FRAME_UPPER_BODY
+    float freenect_nui_suggest_tilt(freenect_nui* nui, freenect_nui_framing mode)
+    int freenect_nui_tilt_changed(freenect_nui* nui, float degrees)
     int freenect_nui_bone_orientations(const freenect_nui_skeleton* user, freenect_nui_bone* bones)
 
 BODY_JOINTS = FREENECT_NUI_BODY_JOINTS
@@ -415,6 +420,24 @@ cdef class Tracker:
         if r < 0:
             raise ValueError("threads must be >= 0")
         return r
+
+    def suggest_tilt(self, framing="body"):
+        """The change of the Kinect's tilt in degrees (up positive) that would
+        frame the nearest tracked user: framing "body" (head to feet) or
+        "hands" (head, arms and hands; up when the head is out of view).
+        0.0 when nothing should move. Move the motor (freenect.set_tilt_degs,
+        current tilt + this, within +-27) and then call tilt_changed."""
+        if framing not in ("body", "hands"):
+            raise ValueError('framing is "body" or "hands"')
+        return freenect_nui_suggest_tilt(self._n, FREENECT_NUI_FRAME_BODY if framing == "body"
+                                         else FREENECT_NUI_FRAME_UPPER_BODY)
+
+    def tilt_changed(self, float degrees):
+        """Tells the tracker the motor was told to tilt by this many degrees
+        (up positive): it holds its users while the view moves and keeps
+        their ids afterwards."""
+        if freenect_nui_tilt_changed(self._n, degrees) < 0:
+            raise ValueError("degrees out of range")
 
     def process(self, depth_mm, int timestamp=0):
         """Tracks one 480x640 uint16 depth frame in mm (freenect.DEPTH_MM,

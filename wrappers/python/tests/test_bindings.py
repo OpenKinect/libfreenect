@@ -165,6 +165,14 @@ class Nui(unittest.TestCase):
         u = frame.users[0]
         self.assertEqual(u.joints.shape, (freenect_nui.JOINTS, 3))
         t.set_grip(freenect_nui.GRIP_TRIANGLE | freenect_nui.GRIP_CLOSED)
+        # framing: nobody there, nothing to move; a move is accepted
+        self.assertEqual(t.suggest_tilt("body"), 0.0)
+        self.assertEqual(t.suggest_tilt("hands"), 0.0)
+        with self.assertRaises(ValueError):
+            t.suggest_tilt("feet")
+        t.tilt_changed(5.0)
+        t.process(np.zeros((480, 640), np.uint16))  # held while the view settles
+        self.assertEqual(t.suggest_tilt("body"), 0.0)
         t.set_max_tracked(3)
         self.assertIsNone(t.heads())  # not seated
         try:

@@ -67,6 +67,7 @@ static const int mirror_joint[NJ] = { 0, 1, 2, 3, 8, 9, 10, 11, 4, 5, 6, 7, 16, 
 #define S_MISSING 8 // state index for "no candidate"
 #define TRACKED_CONF 0.2f
 #define LEARN_FRAMES 90
+#define RELEARN_FAILS 15 // failed fits in a row with locked bones: learn them again
 
 void fn_nui_fit_reset(fn_nui_fit* f, float scale)
 {
@@ -334,6 +335,15 @@ static void refine(fn_nui_fit* f, v3 x[NJ], const v3 target[NJ], const float wta
 	}
 }
 
+static int near_edge(v3 p)
+{
+	float u, v;
+	if (p.z <= 0.1f)
+		return 1;
+	fn_nui_project(p, &u, &v);
+	return u < 6.0f || u > NW - 7.0f || v < 6.0f || v > NH - 7.0f;
+}
+
 static void learn_bones(fn_nui_fit* f, const fn_nui_props* P, const int sel[NJ], float scale)
 {
 	int j;
@@ -345,6 +355,10 @@ static void learn_bones(fn_nui_fit* f, const fn_nui_props* P, const int sel[NJ],
 		if (p < 0 || sel[j] == S_MISSING || sel[p] == S_MISSING)
 			continue;
 		if (P->c[j][sel[j]].conf < 0.4f || P->c[p][sel[p]].conf < 0.4f)
+			continue;
+		// not where the edge of the view cuts the body: a bone ending there
+		// is too short (and stays so once the lengths are locked)
+		if (near_edge(P->c[j][sel[j]].p) || near_edge(P->c[p][sel[p]].p))
 			continue;
 		l = fn_nui_v3len(v3sub(P->c[j][sel[j]].p, P->c[p][sel[p]].p));
 		if (l < 0.5f * default_len[j] * scale || l > 1.6f * default_len[j] * scale)
@@ -505,16 +519,32 @@ int fn_nui_fit_user(fn_nui_fit* f, const fn_nui_props* P, const uint16_t* map, c
 	// the shoulder centre comes from the upper chest part and can sit a little
 	// high; either it or the head is enough
 	good = tracked >= 8 && (f->jstate[3] == 2 || f->jstate[2] == 2);
+	// the upper body alone (close to the Kinect, the legs below the view):
+	// the head and a shoulder, with the arms, are a person
+	if (!good && tracked >= 6 && f->jstate[3] == 2 && (f->jstate[4] == 2 || f->jstate[8] == 2))
+		good = 1;
 	if (good && f->body_seen < 1000)
 		f->body_seen++;
 	// cut off by the edge of the view (too close, arms up, half out at the
 	// side): the head and the shoulder centre may be out of sight; a
 	// shoulder and the hips will do, for a user whose whole upper body was
 	// seen before (not for a new candidate: a cupboard at the edge)
-	if (!good && f->body_seen >= 3 && tracked >= 7 && (f->jstate[4] == 2 || f->jstate[8] == 2) &&
+	if (!good && f->body_seen >= 3 && tracked >= 6 && (f->jstate[4] == 2 || f->jstate[8] == 2 || f->jstate[5] == 2 || f->jstate[9] == 2) &&
 	    (f->jstate[0] == 2 || f->jstate[12] == 2 || f->jstate[16] == 2) &&
 	    ((f->quality & (FREENECT_NUI_CLIPPED_TOP | FREENECT_NUI_CLIPPED_LEFT | FREENECT_NUI_CLIPPED_RIGHT)) ||
 	     touches_edge(mask, slot)))
 		good = 1;
+	// Bone lengths that keep the fit from matching (learned from a poor view:
+	// too close, half cut off) are learned again from the defaults.
+	f->fail_run = good ? 0 : f->fail_run + 1;
+	if (f->bones_locked && f->fail_run >= RELEARN_FAILS) {
+		for (j = 0; j < NJ; j++) {
+			f->bone[j] = default_len[j] * (scale > 0.5f ? scale : 1.0f);
+			f->bone_n[j] = 0;
+		}
+		f->bones_locked = 0;
+		f->learn_frames = 0;
+		f->fail_run = 0;
+	}
 	return good;
 }
