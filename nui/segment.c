@@ -62,6 +62,10 @@
 #define BG_CONF_FRAMES 30    // matched the background this long: the room, not a user
 #define FG_CONF_FRAMES 10    // background seen this long: in front of it is motion
 #define NEAR_USER_PX 12      // margin around a user where the room is not learned as empty
+#define MOVING_STEP(d) (30 + 9 * (d) / 1000 * (d) / 1000) // mm nearer than MOVING_REF_FRAMES ago: 30 mm and 3 of the
+                                                       // Kinect's depth steps (about 3 mm x z^2 in m): movement, not noise
+#define MOVING_REF_FRAMES 8   // the depth this many frames ago is what movement is measured against (slow hands)
+#define MOVING_PIXELS 40      // pixels a user gains in a frame when an arm or a hand moves
 #define BG_LEARN_FRAMES 15    // until then, anything person-sized is a candidate
 #define TWO_PEOPLE_WIDTH 0.9f // m: a component narrower than this is one person
 
@@ -79,11 +83,12 @@ int fn_nui_seg_init(fn_nui_seg* s)
 	s->bgage = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
 	s->bgconf = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
 	s->near_user = (uint8_t*)calloc(NPIX, 1);
+	s->prev_map = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
 	s->label = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
 	s->user = (uint8_t*)calloc(NPIX, 1);
 	s->prev_user = (uint8_t*)calloc(NPIX, 1);
 	s->parent = (uint32_t*)calloc(NPIX, sizeof(uint32_t));
-	if (!s->bg || !s->bgage || !s->bgconf || !s->near_user || !s->label || !s->user || !s->prev_user || !s->parent) {
+	if (!s->bg || !s->bgage || !s->bgconf || !s->near_user || !s->prev_map || !s->label || !s->user || !s->prev_user || !s->parent) {
 		fn_nui_seg_free(s);
 		return -1;
 	}
@@ -93,9 +98,10 @@ int fn_nui_seg_init(fn_nui_seg* s)
 
 void fn_nui_seg_free(fn_nui_seg* s)
 {
-	free(s->bg); free(s->bgage); free(s->bgconf); free(s->near_user); free(s->label); free(s->user); free(s->prev_user); free(s->parent);
+	free(s->bg); free(s->bgage); free(s->bgconf); free(s->near_user); free(s->prev_map); free(s->label); free(s->user); free(s->prev_user); free(s->parent);
 	s->bg = s->bgage = s->bgconf = s->label = NULL;
 	s->near_user = NULL;
+	s->prev_map = NULL;
 	s->user = s->prev_user = NULL;
 	s->parent = NULL;
 }
@@ -107,6 +113,7 @@ void fn_nui_seg_reset(fn_nui_seg* s)
 	memset(s->bgconf, 0, NPIX * sizeof(uint16_t));
 	memset(s->user, 0, NPIX);
 	memset(s->prev_user, 0, NPIX);
+	memset(s->prev_map, 0, NPIX * sizeof(uint16_t));
 	memset(s->u, 0, sizeof(s->u));
 	memset(s->floor, 0, sizeof(s->floor));
 	s->floor_valid = 0;
@@ -324,7 +331,7 @@ static int joined(int a, int b)
 }
 
 typedef struct {
-	int count, fg, fgsure, overlap[NU];
+	int count, fg, fgsure, nearer, overlap[NU];
 	double sx, sy, sz;
 	float ymin, ymax, xmin, xmax, zmin, zmax;
 	int umin, umax, vmin, vmax;
@@ -408,6 +415,8 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			if (s->bgconf[i] >= FG_CONF_FRAMES)
 				C->fgsure++; // in front of a background seen empty for a while
 		}
+		if (s->prev_map[i] && d + MOVING_STEP(d) < s->prev_map[i])
+			C->nearer++; // came nearer since the frame before: something moves
 		if (s->prev_user[i])
 			C->overlap[s->prev_user[i] - 1]++;
 	}
@@ -479,8 +488,8 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			             dz < 1.5f && zc < USER_MAX_Z_MM * 0.001f;
 			// once the background is known, only something that moved can be a
 			// new user: furniture, walls and rejected candidates never did
-			if (s->frames > BG_LEARN_FRAMES && C->fg * 3 < C->count)
-				person = 0;
+			if (s->frames > BG_LEARN_FRAMES && C->fg * 3 < C->count && C->nearer < MOVING_PIXELS + C->count / 100)
+				person = 0; // (or moves inside: a person stored as room after standing still at the start)
 			if (!person)
 				continue;
 			for (k = 0; k < NU && s->u[k].active; k++)
@@ -545,6 +554,7 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 	// per-user statistics
 	{
 		double sx[NU] = { 0 }, sy[NU] = { 0 }, sz[NU] = { 0 };
+		int gained[NU] = { 0 };
 		for (k = 0; k < NU; k++) {
 			s->u[k].pixels = 0;
 			s->u[k].umin = s->u[k].vmin = 100000;
@@ -562,6 +572,16 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			sy[s->user[i] - 1] += p.y;
 			sz[s->user[i] - 1] += p.z;
 			U->pixels++;
+			// moving: its pixels that came nearer since the frame before (a
+			// hand moving forward, in front of the body or of the wall).
+			// Furniture never comes nearer by itself, and a wall only gets
+			// farther where an arm leaves it.
+			// (inside it, two pixels from its outline: along an outline
+			// the depth flickers between the user and what is behind)
+			if (s->prev_map[i] && map[i] + MOVING_STEP(map[i]) < s->prev_map[i] && u >= 2 && u < NW - 2 && v >= 2 &&
+			    v < NH - 2 && s->user[i - 2] == s->user[i] && s->user[i + 2] == s->user[i] &&
+			    s->user[i - 2 * NW] == s->user[i] && s->user[i + 2 * NW] == s->user[i])
+				gained[s->user[i] - 1]++;
 			if (u < U->umin) U->umin = u;
 			if (u > U->umax) U->umax = u;
 			if (v < U->vmin) U->vmin = v;
@@ -578,6 +598,8 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			}
 			U->missing = 0;
 			U->age++;
+			if (U->age > 1 && gained[k] >= MOVING_PIXELS + U->pixels / 100)
+				U->moving++;
 			U->centre = v3make((float)(sx[k] / U->pixels), (float)(sy[k] / U->pixels), (float)(sz[k] / U->pixels));
 			// Kinect10's size factor for new players (§30.4.7): area from the
 			// pixel count at the user's depth, at 320x240
@@ -642,5 +664,7 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 		}
 	}
 	memcpy(s->prev_user, s->user, NPIX);
+	if (s->frames % MOVING_REF_FRAMES == 0)
+		memcpy(s->prev_map, map, NPIX * sizeof(uint16_t)); // the reference for movement
 	s->frames++;
 }

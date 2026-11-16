@@ -67,6 +67,8 @@ static double prof_now(void)
 
 #define VERIFY_FRAMES 30
 #define LOCK_FRAMES 3
+#define MIN_PERSON_HEIGHT 1.0f // m, for a new user (seated, from the seat up)
+#define MOVING_FRAMES 5 // a candidate this often moving its outline: a person
 #define LOSE_FRAMES 15
 
 struct freenect_nui {
@@ -265,6 +267,12 @@ static int track_user(freenect_nui* n, int k)
 		n->fit_id[k] = U->id;
 		n->good[k] = n->bad[k] = n->tried[k] = 0;
 	}
+	// A candidate that keeps moving its outline (arms, hands) is a person
+	// even when the view cuts off the head (standing close): the fit may
+	// then confirm it from the shoulders and the hips, as for a user whose
+	// upper body it has seen. A cupboard at the edge never moves.
+	if (!U->verified && U->moving >= MOVING_FRAMES && n->fit[k].body_seen < 3)
+		n->fit[k].body_seen = 3;
 	PROF(n, P_FIT, good = fn_nui_fit_user(&n->fit[k], &props, n->map, n->seg.user, k, scale[0]));
 	n->tried[k]++;
 	if (good) {
@@ -319,10 +327,14 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 			continue;
 		track_user(n, k);
 		fitted[k] = 1;
-		if (n->good[k] >= LOCK_FRAMES)
+		// a person is at least 1 m tall from the seat or the floor up, unless
+		// the view cuts it off at the top: a chair or a box is not
+		if (n->good[k] >= LOCK_FRAMES && (U->vmin <= 1 || (U->vmax - U->vmin) * U->centre.z / FN_NUI_F >= MIN_PERSON_HEIGHT))
 			U->verified = 1;
-		else if (n->tried[k] >= VERIFY_FRAMES)
+		else if (n->tried[k] >= VERIFY_FRAMES && U->moving * 4 < n->tried[k])
 			fn_nui_seg_reject(&n->seg, k, n->map); // not a person: remembered as background
+		// (one that keeps moving keeps being tried: a person the forest
+		// cannot see well yet, too close or turned away)
 	}
 
 	// which users get skeletons: chosen by the app, else the nearest

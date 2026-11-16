@@ -81,6 +81,7 @@ typedef struct {
 	uint32_t id;           // tracking id (never 0)
 	int index;             // player index 1..6 (slot + 1)
 	int age, missing;      // frames seen, frames since last seen
+	int moving;            // frames in which its outline changed (arms, hands: not furniture)
 	int verified;          // the forest found a body here at least once
 	v3 centre;             // mean of its pixels (m)
 	int pixels;
@@ -93,6 +94,7 @@ typedef struct {
 	uint16_t* bgage;
 	uint16_t* bgconf; // frames the pixel matched the background while no user was there
 	uint8_t* near_user; // this frame: within a margin of a user
+	uint16_t* prev_map; // the depth up to MOVING_REF_FRAMES ago (segment.c), to see movement
 	uint16_t* label;       // component per map pixel
 	uint8_t* user;         // user slot + 1 per map pixel (0: none), this frame
 	uint8_t* prev_user;    // the same, previous frame
