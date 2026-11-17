@@ -184,6 +184,7 @@ cdef extern from "libfreenect_nui.h":
         FREENECT_NUI_FRAME_UPPER_BODY
     float freenect_nui_suggest_tilt(freenect_nui* nui, freenect_nui_framing mode)
     int freenect_nui_tilt_changed(freenect_nui* nui, float degrees)
+    float freenect_nui_tilt_measured(freenect_nui* nui)
     int freenect_nui_bone_orientations(const freenect_nui_skeleton* user, freenect_nui_bone* bones)
 
 BODY_JOINTS = FREENECT_NUI_BODY_JOINTS
@@ -438,6 +439,15 @@ cdef class Tracker:
         their ids afterwards."""
         if freenect_nui_tilt_changed(self._n, degrees) < 0:
             raise ValueError("degrees out of range")
+
+    @property
+    def tilt_measured(self):
+        """How far the last move turned the view, measured in the depth
+        image (degrees, up positive): None while it settles, 0.0 when the
+        motor did not move. The motor seldom turns by exactly what it was
+        told; the tracker uses this."""
+        cdef float m = freenect_nui_tilt_measured(self._n)
+        return None if m != m else m
 
     def process(self, depth_mm, int timestamp=0):
         """Tracks one 480x640 uint16 depth frame in mm (freenect.DEPTH_MM,

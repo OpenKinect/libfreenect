@@ -89,7 +89,11 @@ typedef struct {
 	int age, missing;      // frames seen, frames since last seen
 	int moving;            // frames in which its outline changed (arms, hands: not furniture)
 	int verified;          // the forest found a body here at least once
+	int came_in;           // it appeared in front of a room seen empty (a person walking in)
 	v3 centre;             // mean of its pixels (m)
+	int zmed;              // median depth of its pixels (mm; 0: not known yet)
+	float flat_mm;         // RMS distance of its pixels from the plane that fits them best (a wall: a few mm)
+	int still;             // frames since it last moved
 	int pixels;
 	float scale;           // body size factor for the forest (§30.4.7)
 	int umin, umax, vmin, vmax;
@@ -122,8 +126,9 @@ void fn_nui_make_map(const uint16_t* depth, uint16_t* map);
 void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated);
 void fn_nui_seg_reject(fn_nui_seg* s, int k, const uint16_t* map);
 // The Kinect tilted by this angle (rad, positive: up): carry the background,
-// the users (from map, the last frame before the move) and the floor over.
-void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map);
+// the users (from map, the last frame before the move) and the floor over;
+// now is the first frame after it, for what the move brought into view.
+void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map, const uint16_t* now);
 // Distance of a map point from the floor (mm); large if no floor
 float fn_nui_floor_dist(const fn_nui_seg* s, v3 p_m);
 

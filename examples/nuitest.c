@@ -372,6 +372,7 @@ int main(int argc, char** argv)
 	int frame_mode = -1; // --frame: FREENECT_NUI_FRAME_BODY or _UPPER_BODY
 	double tilt_start = -1000.0; // --tilt: the angle to start from (none: as it is)
 	unsigned tilt_moves = 0;
+	int tilt_pending = 0; // a move whose measured angle is not printed yet
 	float last_suggestion = 0.0f; // a replay prints a suggestion when it changes
 
 	fn_install_exit_handlers();
@@ -465,6 +466,7 @@ run:
 				// the motor moved here when it was recorded
 				printf("    [the Kinect tilts %+.0f degrees (recorded)]\n", tilt);
 				freenect_nui_tilt_changed(nui, tilt);
+				tilt_pending = 1;
 				tilt_moves++;
 				continue;
 			}
@@ -492,6 +494,14 @@ run:
 			new_frame = 0;
 			freenect_nui_process(nui, depth, depth_frames, &fr);
 			busy += now_ms() - t0;
+			if (tilt_pending && !isnan(freenect_nui_tilt_measured(nui))) {
+				float m = freenect_nui_tilt_measured(nui);
+				if (m == 0.0f)
+					printf("    [the view did not move]\n");
+				else
+					printf("    [the view moved %+.1f degrees]\n", m);
+				tilt_pending = 0;
+			}
 			if (frame_mode >= 0) {
 				float d = freenect_nui_suggest_tilt(nui, (freenect_nui_framing)frame_mode);
 				if (d != 0.0f && replay_path) {
@@ -504,6 +514,7 @@ run:
 						printf("    [tilting the Kinect from %+.0f to %+.0f degrees, to frame the %s]\n", cur, to,
 						       frame_mode == FREENECT_NUI_FRAME_BODY ? "whole body" : "upper body");
 						freenect_nui_tilt_changed(nui, (float)(to - cur));
+						tilt_pending = 1;
 						if (record_path && rec)
 							fndrec_write_tilt(rec, depth_frames, (float)(to - cur));
 						tilt_moves++;

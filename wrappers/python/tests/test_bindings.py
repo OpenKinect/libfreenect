@@ -171,6 +171,7 @@ class Nui(unittest.TestCase):
         with self.assertRaises(ValueError):
             t.suggest_tilt("feet")
         t.tilt_changed(5.0)
+        self.assertIsNone(t.tilt_measured)  # settling
         t.process(np.zeros((480, 640), np.uint16))  # held while the view settles
         self.assertEqual(t.suggest_tilt("body"), 0.0)
         t.set_max_tracked(3)

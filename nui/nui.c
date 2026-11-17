@@ -69,6 +69,11 @@ static double prof_now(void)
 #define VERIFY_FRAMES 30
 #define LOCK_FRAMES 3
 #define MIN_PERSON_HEIGHT 1.0f // m, for a new user (seated, from the seat up)
+#define MIN_PERSON_WIDTH 0.25f // m: the shoulders, or a body seen from the side (not a strip of wall)
+#define MAX_PERSON_WIDTH 2.1f  // m: wider than the arms spread out
+#define STATIC_FRAMES 150      // a user 2 m wide that has not moved for this long (5 s) is the room
+#define NEVER_MOVED_FRAMES 300 // a user that never moved in this long (10 s) is not a person (framing ignores it before)
+#define FRAME_MOVED 2          // framing follows only users that moved at least this often (not a wall)
 #define MOVING_FRAMES 5 // a candidate this often moving its outline: a person
 #define LOSE_FRAMES 15
 // framing with the tilt motor
@@ -78,9 +83,13 @@ static double prof_now(void)
 #define TILT_UNKNOWN_STEP 6.0f // up, for a head out of view and nothing to estimate it from
 #define TILT_REST_FRAMES 45   // no new suggestion this soon after a move (1.5 s)
 #define TILT_PERSIST_FRAMES 10 // the same move wanted this many frames in a row
-#define SETTLE_MIN_FRAMES 5   // a move takes at least this long
+#define SETTLE_MIN_FRAMES 8   // a move takes at least this long
+#define SETTLE_START_FRAMES 20 // a small move may change little of the view: still after this long, it is over
 #define SETTLE_MAX_FRAMES 90  // and is taken as done after this long (3 s)
-#define SETTLE_STILL_FRAMES 3 // still depth frames in a row: the motor stopped
+#define SETTLE_STILL_FRAMES 3 // frames in a row the measured angle stays: the motor stopped
+#define SETTLE_STILL_DEG 0.2f // degrees it may change in them
+#define TILT_MOVED_MIN 0.75f  // degrees: a smaller measured move is no move (the motor refused)
+#define TILT_BLIND_MOVES 2    // moves in a row the same way without seeing the top of the user
 
 struct freenect_nui {
 	fn_forest* forest;
@@ -117,11 +126,12 @@ struct freenect_nui {
 	// output is repeated; then everything is carried over to the new view
 	float tilt_deg;                  // the change on its way (degrees, up)
 	int settling;                    // frames since the move began (0: none)
-	int still;                       // still frames in a row while settling
-	int settle_moved;                // the view did shift since the move began
+	int still;                       // frames in a row the measured angle stayed, while settling
+	float settle_angle;              // the measured angle they stayed at
 	uint32_t tilt_frame;             // the frame the last move began
 	uint16_t* tilt_map;              // the last map before the move
-	uint16_t* settle_map;            // the frame before, while settling
+	float measured_tilt;             // the last move as measured in the depth image (degrees, up)
+	int blind_moves;                 // moves in a row one way while the user's top was out of view
 	float want_tilt;                 // the last suggestion (freenect_nui_suggest_tilt)
 	int want_frames;                 // how many frames in a row it was wanted
 	uint32_t want_frame;             // the frame it was asked in
@@ -153,8 +163,7 @@ freenect_nui* freenect_nui_create(const char* models_dir, int flags)
 	n->prob = (uint8_t*)calloc((size_t)NPIX * FN_NUI_PARTS, 1);
 	n->depth = (uint16_t*)calloc(640 * 480, sizeof(uint16_t));
 	n->tilt_map = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
-	n->settle_map = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
-	if (!n->forest || !n->map || !n->umap || !n->prob || !n->depth || !n->tilt_map || !n->settle_map ||
+	if (!n->forest || !n->map || !n->umap || !n->prob || !n->depth || !n->tilt_map ||
 	    fn_nui_seg_init(&n->seg) < 0) {
 		freenect_nui_destroy(n);
 		return NULL;
@@ -206,7 +215,6 @@ void freenect_nui_destroy(freenect_nui* n)
 	free(n->prob);
 	free(n->depth);
 	free(n->tilt_map);
-	free(n->settle_map);
 	free(n);
 }
 
@@ -237,6 +245,8 @@ void freenect_nui_reset(freenect_nui* n)
 	n->settling = 0;
 	n->tilt_deg = 0.0f;
 	n->tilt_frame = 0;
+	n->measured_tilt = 0.0f;
+	n->blind_moves = 0;
 	memset(&n->held, 0, sizeof(n->held));
 }
 
@@ -340,6 +350,11 @@ static int was_tracked(const freenect_nui* n, uint32_t id)
 
 /* ------------------------------------------------------------ tilt */
 
+float freenect_nui_tilt_measured(freenect_nui* n)
+{
+	return n ? n->measured_tilt : 0.0f;
+}
+
 int freenect_nui_tilt_changed(freenect_nui* n, float degrees)
 {
 	if (!n || !(degrees > -60.0f && degrees < 60.0f))
@@ -347,11 +362,11 @@ int freenect_nui_tilt_changed(freenect_nui* n, float degrees)
 	if (!n->settling)
 		memcpy(n->tilt_map, n->map, NPIX * sizeof(uint16_t)); // the view before the move
 	n->tilt_deg += degrees;
+	n->measured_tilt = NAN;
 	n->settling = 1;
-	n->settle_moved = 0;
 	n->still = 0;
+	n->settle_angle = 0.0f;
 	n->tilt_frame = n->frame;
-	memcpy(n->settle_map, n->map, NPIX * sizeof(uint16_t));
 	return 0;
 }
 
@@ -364,7 +379,7 @@ static void tilt_done(freenect_nui* n)
 {
 	float a = n->tilt_deg * 3.14159265f / 180.0f, c = cosf(a), sn = sinf(a);
 	int k, h;
-	fn_nui_seg_tilt(&n->seg, a, n->tilt_map);
+	fn_nui_seg_tilt(&n->seg, a, n->tilt_map, n->map);
 	for (k = 0; k < NU; k++) {
 		const fn_nui_user_seg* U = &n->seg.u[k];
 		fn_nui_fit_reset(&n->fit[k], U->scale > 0.0f ? U->scale : 1.0f);
@@ -383,36 +398,104 @@ static void tilt_done(freenect_nui* n)
 	n->settling = 0;
 }
 
+// How far the view turned: the angle that best maps the view before the
+// move onto this one (most of a room stands still). The motor does not move
+// by the angle it is told: a 19-degree move turns the Kinect by about 17, one
+// near the end of its range by much less, and carrying the background over
+// by the wrong angle turns walls and floor into users.
+// Only points where the depth changes from row to row tell how far the view
+// turned up or down (the floor, edges, furniture): a flat wall facing the
+// Kinect looks the same a few degrees higher or lower.
+static float score_tilt(const freenect_nui* n, float deg, int structured)
+{
+	float a = deg * 3.14159265f / 180.0f, c = cosf(a), sn = sinf(a);
+	int u, v, both = 0, same = 0;
+	for (v = 3; v < NH - 2; v += 3)
+		for (u = 1; u < NW; u += 3) {
+			int d = n->tilt_map[v * NW + u], x, y, now, up, down;
+			float u2, v2;
+			v3 p;
+			if (!d)
+				continue;
+			up = n->tilt_map[(v - 2) * NW + u];
+			down = n->tilt_map[(v + 2) * NW + u];
+			if (structured && (!up || !down || abs(up - down) < 8 + d / 100))
+				continue;
+			p = fn_nui_tilt_point(fn_nui_unproject((float)u, (float)v, (float)d), c, sn);
+			if (p.z <= 0.1f)
+				continue;
+			fn_nui_project(p, &u2, &v2);
+			x = (int)lrintf(u2);
+			y = (int)lrintf(v2);
+			if (x < 0 || x >= NW || y < 0 || y >= NH || !(now = n->map[y * NW + x]))
+				continue;
+			both++;
+			same += abs(now - (int)(p.z * 1000.0f)) < 15 + now / 80;
+		}
+	return both > 200 ? (float)same / (float)both : -1.0f;
+}
+
+// the best angle from lo to hi in steps; of angles that score the same (to
+// within TILT_SCORE_TIE), the one nearest the angle the motor was told
+#define TILT_SCORE_TIE 0.01f
+static float best_tilt(const freenect_nui* n, float lo, float hi, float step, float told, int structured, float* score)
+{
+	float sc[128], a, bs = -1.0f, best = lo;
+	int i, m = 0, found = 0;
+	for (a = lo; a <= hi + step * 0.1f && m < 128; a += step)
+		sc[m++] = score_tilt(n, a, structured);
+	for (i = 0; i < m; i++)
+		if (sc[i] > bs)
+			bs = sc[i];
+	for (i = 0; i < m; i++) {
+		a = lo + step * (float)i;
+		if (sc[i] >= bs - TILT_SCORE_TIE && (!found || fabsf(a - told) < fabsf(best - told))) {
+			best = a;
+			found = 1;
+		}
+	}
+	*score = bs;
+	return best;
+}
+
+static float measure_tilt(const freenect_nui* n, float told)
+{
+	float lo = (told < 0.0f ? told : 0.0f) - 4.0f, hi = (told > 0.0f ? told : 0.0f) + 4.0f, best, bs, at0;
+	int structured = score_tilt(n, 0.0f, 1) >= 0.0f; // enough of them
+	at0 = score_tilt(n, 0.0f, structured);
+	best = best_tilt(n, lo, hi, 0.5f, told, structured, &bs);
+	best = best_tilt(n, best - 0.4f, best + 0.4f, 0.1f, told, structured, &bs);
+	// no better than not moving at all: it did not move
+	if (bs < at0 + 0.05f)
+		return 0.0f;
+	return best;
+}
+
 // One frame while the motor moves: 1 to hold the output, 0 when the move
 // is over (and carried over) and the frame is to be processed.
+// The move is over when the measured angle stops changing: a slow turn
+// changes a flat wall too little from one frame to the next to tell.
 static int settle_step(freenect_nui* n)
 {
-	int i, both = 0, changed = 0, both0 = 0, changed0 = 0;
-	for (i = 0; i < NPIX; i += 3) {
-		int a = n->map[i], b = n->settle_map[i], c = n->tilt_map[i];
-		if (a && c) {
-			both0++;
-			changed0 += abs(a - c) > 40 + a / 40;
-		}
-		if (!a || !b)
-			continue;
-		both++;
-		changed += abs(a - b) > 40 + a / 40;
+	float m = measure_tilt(n, n->tilt_deg);
+	if (n->settling > 1 && fabsf(m - n->settle_angle) < SETTLE_STILL_DEG) {
+		n->still++;
+	} else {
+		n->settle_angle = m;
+		n->still = 0;
 	}
-	memcpy(n->settle_map, n->map, NPIX * sizeof(uint16_t));
-	n->still = both > 1000 && changed * 100 < both ? n->still + 1 : 0;
-	if (both0 > 1000 && changed0 * 4 > both0)
-		n->settle_moved = 1; // a quarter of the view differs from before the move: it moved (a person changes less)
 	n->settling++;
-	if (n->settle_moved && n->settling > SETTLE_MIN_FRAMES && n->still >= SETTLE_STILL_FRAMES) {
-		tilt_done(n);
-		return 0;
-	}
-	if (n->settling > SETTLE_MAX_FRAMES) {
-		// the view never moved (the motor refused: tipped over, or too many
-		// moves) or never came to rest: carry over only a move that was seen
-		if (n->settle_moved)
+	if ((n->settling > SETTLE_MIN_FRAMES && n->still >= SETTLE_STILL_FRAMES &&
+	     (fabsf(m) >= TILT_MOVED_MIN || n->settling > SETTLE_START_FRAMES)) ||
+	    n->settling > SETTLE_MAX_FRAMES) {
+		// over (or never came to rest): carry over the move as measured; none
+		// at all when the motor refused (tipped over, or too many moves)
+		n->measured_tilt = m;
+		if (fabsf(n->measured_tilt) >= TILT_MOVED_MIN) {
+			n->tilt_deg = n->measured_tilt;
 			tilt_done(n);
+		} else
+			n->measured_tilt = 0.0f;
 		n->settling = 0;
 		n->tilt_deg = 0.0f;
 		return 0;
@@ -432,7 +515,14 @@ static float row_elevation(float v)
 	return atanf((FN_NUI_CY - v) / FN_NUI_F) * 57.29578f;
 }
 
-static float suggest_raw(freenect_nui* n, freenect_nui_framing mode)
+// a user at least this wide (m): a person, not a strip of wall along an
+// edge where the depth flickers
+static int wide_enough(const fn_nui_user_seg* U)
+{
+	return (float)(U->umax - U->umin + 1) * U->centre.z / FN_NUI_F >= MIN_PERSON_WIDTH;
+}
+
+static float suggest_raw(freenect_nui* n, freenect_nui_framing mode, int* blind)
 {
 	int k, best = -1;
 	float bd = 1e9f, top, bot, lim = TILT_HALF_FOV - TILT_MARGIN, delta;
@@ -443,7 +533,8 @@ static float suggest_raw(freenect_nui* n, freenect_nui_framing mode)
 	for (k = 0; k < NU; k++) {
 		const fn_nui_user_seg* u = &n->seg.u[k];
 		float d;
-		if (!u->active || !u->verified || u->pixels == 0 || n->fit_id[k] != u->id || n->good[k] < LOCK_FRAMES ||
+		if (!u->active || !u->verified || u->pixels == 0 || (u->moving < FRAME_MOVED && !u->came_in) || n->fit_id[k] != u->id ||
+		    n->good[k] < LOCK_FRAMES ||
 		    n->bad[k] != 0)
 			continue;
 		d = fn_nui_v3len(u->centre);
@@ -456,8 +547,10 @@ static float suggest_raw(freenect_nui* n, freenect_nui_framing mode)
 		// no skeleton yet: someone moving whose head is above the view
 		for (k = 0; k < NU; k++) {
 			const fn_nui_user_seg* u = &n->seg.u[k];
-			if (u->active && u->pixels > 0 && u->vmin <= 1 && (u->verified || u->moving >= MOVING_FRAMES))
+			if (u->active && u->pixels > 0 && u->vmin <= 1 && wide_enough(u) && (u->moving >= MOVING_FRAMES || u->came_in)) {
+				*blind = 1;
 				return TILT_UNKNOWN_STEP;
+			}
 		}
 		return 0.0f;
 	}
@@ -465,6 +558,7 @@ static float suggest_raw(freenect_nui* n, freenect_nui_framing mode)
 	U = &n->seg.u[best];
 	// the top: the user's outline, or where the head must be when the view
 	// cuts it off
+	*blind = U->vmin <= 1;
 	if (U->vmin > 1)
 		top = row_elevation((float)U->vmin);
 	else if (F->jstate[4] == 2 || F->jstate[8] == 2) {
@@ -510,19 +604,31 @@ static float suggest_raw(freenect_nui* n, freenect_nui_framing mode)
 float freenect_nui_suggest_tilt(freenect_nui* n, freenect_nui_framing mode)
 {
 	float d;
+	int blind = 0;
 	if (!n)
 		return 0.0f;
 	if (n->settling || (n->tilt_frame && n->frame - n->tilt_frame < TILT_REST_FRAMES)) {
 		n->want_frames = 0;
 		return 0.0f;
 	}
-	d = suggest_raw(n, mode);
+	d = suggest_raw(n, mode, &blind);
+	// Moves that cannot see where the user ends (the top out of view) stop
+	// after TILT_BLIND_MOVES the same way: a person's head comes into view by
+	// then, but what grows with every move up (a wall taken for a user, a
+	// tall cupboard) would take the Kinect to the end of its range.
+	if (!blind)
+		n->blind_moves = 0;
+	else if (d != 0.0f && n->blind_moves >= TILT_BLIND_MOVES)
+		d = 0.0f;
 	if (d == 0.0f || (d > 0.0f) != (n->want_tilt > 0.0f) || n->want_frame + 1 != n->frame)
 		n->want_frames = 0;
 	n->want_frames += d != 0.0f;
 	n->want_tilt = d;
 	n->want_frame = n->frame;
-	return n->want_frames >= TILT_PERSIST_FRAMES ? d : 0.0f;
+	if (n->want_frames < TILT_PERSIST_FRAMES)
+		return 0.0f;
+	n->blind_moves = blind ? n->blind_moves + 1 : 0;
+	return d;
 }
 
 int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timestamp, freenect_nui_frame* out)
@@ -547,6 +653,21 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 	}
 	PROF(n, P_SEGMENT, fn_nui_segment(&n->seg, n->map, n->flags & FREENECT_NUI_SEATED));
 
+	// What never moves is not a person, whatever the forest saw in it: a
+	// strip of wall along an edge where the depth flickers, taken in the
+	// first frames, before the room was known. And no person is 2 m wide: a
+	// user that is, and has stood still for a while, is the wall a user left
+	// behind (it walked away from where the room had not been learned).
+	for (k = 0; k < NU; k++) {
+		fn_nui_user_seg* U = &n->seg.u[k];
+		if (U->active && U->verified && U->pixels &&
+		    ((U->moving == 0 && !U->came_in && U->age >= NEVER_MOVED_FRAMES) ||
+		     (U->still >= STATIC_FRAMES && (float)(U->umax - U->umin + 1) * U->centre.z / FN_NUI_F > MAX_PERSON_WIDTH))) {
+			fn_nui_seg_reject(&n->seg, k, n->map);
+			n->fit_id[k] = 0;
+		}
+	}
+
 	// users found without motion: the forest has to see a body
 	memset(fitted, 0, sizeof(fitted));
 	for (k = 0; k < NU; k++) {
@@ -556,8 +677,12 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 		track_user(n, k);
 		fitted[k] = 1;
 		// a person is at least 1 m tall from the seat or the floor up, unless
-		// the view cuts it off at the top: a chair or a box is not
-		if (n->good[k] >= LOCK_FRAMES && (U->vmin <= 1 || (U->vmax - U->vmin) * U->centre.z / FN_NUI_F >= MIN_PERSON_HEIGHT))
+		// the view cuts it off at the top, or at the bottom below a head the
+		// fit tracks (someone close, with the Kinect tilted up): a chair or a
+		// box is not
+		if (n->good[k] >= LOCK_FRAMES && wide_enough(U) &&
+		    (U->vmin <= 1 || (U->vmax - U->vmin) * U->centre.z / FN_NUI_F >= MIN_PERSON_HEIGHT ||
+		     (U->vmax >= NH - 2 && n->fit[k].jstate[3] == 2)))
 			U->verified = 1;
 		else if (n->tried[k] >= VERIFY_FRAMES && U->moving * 4 < n->tried[k])
 			fn_nui_seg_reject(&n->seg, k, n->map); // not a person: remembered as background

@@ -511,7 +511,7 @@ int main(void)
 		for (t = 0; t < 2; t++) {
 			person P[1];
 			int f, moved_at = -1, ok_before = 0, joints = 0, within = 0, head_in = 0, after = 0, moves = 0;
-			float sug = 0.0f, from = T[t].pitch, to = from;
+			float sug = 0.0f, from = T[t].pitch, to = from, measured = 0.0f;
 			uint32_t id_before = 0, id_after = 0;
 			char what[160];
 			freenect_nui_reset(n);
@@ -526,6 +526,8 @@ int main(void)
 				}
 				render(depth, P, np);
 				freenect_nui_process(n, depth, (uint32_t)f, &fr);
+				if (moved_at >= 0 && !isnan(freenect_nui_tilt_measured(n)))
+					measured = freenect_nui_tilt_measured(n);
 				S = np ? match(&fr, &P[0]) : NULL;
 				if (moved_at < 0 && S && S->state == FREENECT_NUI_USER_TRACKED) {
 					ok_before = 1;
@@ -558,9 +560,9 @@ int main(void)
 				}
 			}
 			printf("    (%s: skeleton before the move %s, %d move(s), %+.0f degrees in all, the last at frame %d; after it %d frames with a skeleton,"
-			       " head tracked in %d, PCK@10cm %.0f %%, id %u -> %u)\n",
+			       " head tracked in %d, PCK@10cm %.0f %%, id %u -> %u; the last move measured %+.1f of %+.1f)\n",
 			       T[t].name, ok_before ? "yes" : "no", moves, sug, moved_at, after, head_in, joints ? 100.0 * within / joints : 0.0,
-			       id_before, id_after);
+			       id_before, id_after, measured, to - from);
 			snprintf(what, sizeof(what), "%s: tilted %s", T[t].name, sug > 0.0f ? "up" : "not up");
 			CHECK(sug >= 3.0f && moved_at >= 0, what);
 			CHECK(after >= 30 && head_in >= after * 3 / 4 && joints > 0 && within >= 0.75 * joints,

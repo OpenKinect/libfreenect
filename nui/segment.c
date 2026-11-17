@@ -68,6 +68,9 @@
 #define MOVING_PIXELS 40      // pixels a user gains in a frame when an arm or a hand moves
 #define BG_LEARN_FRAMES 15    // until then, anything person-sized is a candidate
 #define TWO_PEOPLE_WIDTH 0.9f // m: a component narrower than this is one person
+#define REVEAL_BEHIND_M 0.4f  // after a tilt, what came into view this far behind every user is the room
+#define USER_DEPTH_SPAN 600   // mm: farther than this behind a user's median depth is not the user (the wall)
+#define ZBIN 20               // mm per bin of the depth histogram for the median
 
 float fn_nui_v3len(v3 a) { return sqrtf(v3dot(a, a)); }
 v3 fn_nui_v3norm(v3 a)
@@ -303,13 +306,41 @@ void fn_nui_seg_reject(fn_nui_seg* s, int k, const uint16_t* map)
 	memset(&s->u[k], 0, sizeof(s->u[k]));
 }
 
+/* ------------------------------------------------------------ flatness */
+
+// RMS (mm) of the points from the least-squares plane z = a x + b y + c,
+// from the sums q (see fn_nui_segment)
+static float plane_rms(const double* q)
+{
+	// normal equations [xx xy x; xy yy y; x y n] [a b c] = [xz yz z]
+	double A[3][3] = { { q[0], q[1], q[2] }, { q[1], q[3], q[4] }, { q[2], q[4], q[5] } }, r[3] = { q[6], q[7], q[8] };
+	double det, a, b, c, ss;
+	if (q[5] < 10.0)
+		return 0.0f;
+	det = A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+	      A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+	if (fabs(det) < 1e-12)
+		return 0.0f;
+	a = (r[0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (r[1] * A[2][2] - A[1][2] * r[2]) +
+	     A[0][2] * (r[1] * A[2][1] - A[1][1] * r[2])) / det;
+	b = (A[0][0] * (r[1] * A[2][2] - A[1][2] * r[2]) - r[0] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+	     A[0][2] * (A[1][0] * r[2] - r[1] * A[2][0])) / det;
+	c = (A[0][0] * (A[1][1] * r[2] - r[1] * A[2][1]) - A[0][1] * (A[1][0] * r[2] - r[1] * A[2][0]) +
+	     r[0] * (A[1][0] * A[2][1] - A[1][1] * A[2][0])) / det;
+	// sum of (z - a x - b y - c)^2 from the sums
+	ss = q[9] - 2.0 * (a * q[6] + b * q[7] + c * q[8]) + a * a * q[0] + 2.0 * a * b * q[1] + 2.0 * a * c * q[2] +
+	     b * b * q[3] + 2.0 * b * c * q[4] + c * c * q[5];
+	return ss > 0.0 ? (float)(sqrt(ss / q[5]) * 1000.0) : 0.0f;
+}
+
 /* ------------------------------------------------------------ tilt */
 
 // The Kinect tilted (the motor): what the segmentation knows moves with the
 // view. Every pixel of the background and of the users (at its depth in the
 // last frame before the move) is rotated and projected into the new view;
-// pixels nothing lands on start unknown. The floor plane turns with it.
-void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map)
+// pixels nothing lands on are what the move brought into view. The floor
+// plane turns with it.
+void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map, const uint16_t* now)
 {
 	float c = cosf(angle), sn = sinf(angle);
 	uint16_t* bg = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
@@ -352,6 +383,27 @@ void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map)
 				}
 			}
 		}
+	// What the move brought into view: well behind every user it is the
+	// room (a wall, the ceiling), known at once. Otherwise it would not be
+	// learned for as long as a user stands next to it, and the first arm
+	// that touches it (or an edge where the depth flickers) would join it to
+	// the user for good. Nearer it may be a user's head the move was made
+	// to see, so it stays to be learned.
+	{
+		float behind = 0.0f;
+		for (k = 0; k < NU; k++)
+			if (s->u[k].active && s->u[k].pixels) {
+				float z = fn_nui_tilt_point(s->u[k].centre, c, sn).z;
+				if (z > behind)
+					behind = z;
+			}
+		behind = behind > 0.0f ? (behind + REVEAL_BEHIND_M) * 1000.0f : 0.0f;
+		for (i = 0; i < NPIX; i++)
+			if (!bg[i] && now[i]) {
+				bg[i] = now[i];
+				conf[i] = (float)now[i] > behind ? BG_CONF_FRAMES : 0;
+			}
+	}
 	memcpy(s->bg, bg, NPIX * sizeof(uint16_t));
 	memcpy(s->bgconf, conf, NPIX * sizeof(uint16_t));
 	memcpy(s->prev_user, users, NPIX);
@@ -368,8 +420,12 @@ void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map)
 		s->floor[2] = nrm.z; // D: the distance from the Kinect stays
 	}
 	for (k = 0; k < NU; k++)
-		if (s->u[k].active)
-			s->u[k].centre = fn_nui_tilt_point(s->u[k].centre, c, sn);
+		if (s->u[k].active) {
+			v3 was = s->u[k].centre;
+			s->u[k].centre = fn_nui_tilt_point(was, c, sn);
+			if (was.z > 0.1f)
+				s->u[k].zmed = (int)((float)s->u[k].zmed * s->u[k].centre.z / was.z);
+		}
 }
 
 /* ------------------------------------------------------------ components */
@@ -557,7 +613,7 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			             dz < 1.5f && zc < USER_MAX_Z_MM * 0.001f;
 			// once the background is known, only something that moved can be a
 			// new user: furniture, walls and rejected candidates never did
-			if (s->frames > BG_LEARN_FRAMES && C->fg * 3 < C->count && C->nearer < MOVING_PIXELS + C->count / 100)
+			if (s->frames > BG_LEARN_FRAMES && C->fg * 3 < C->count && C->nearer < MOVING_PIXELS + C->count / 400)
 				person = 0; // (or moves inside: a person stored as room after standing still at the start)
 			if (!person)
 				continue;
@@ -576,7 +632,7 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			// cut off at the edge of the view, say). Otherwise the forest has
 			// to confirm a body first (nui.c), and if it does not, the
 			// candidate becomes background (a chair, a door frame).
-			s->u[k].verified = C->fgsure * 2 >= C->count; // (fgsure needs FG_CONF_FRAMES of background)
+			s->u[k].verified = s->u[k].came_in = C->fgsure * 2 >= C->count; // (fgsure needs FG_CONF_FRAMES of background)
 			C->user = k + 1;
 			// what was learned as the room where the new user is may have been
 			// the user (sitting there from the start, say): forget it
@@ -617,6 +673,12 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 				}
 			}
 		}
+		// far behind the user's body: the wall or the furniture behind it,
+		// joined through the mixed depths along its outline or a chair (where
+		// the room is not known yet: what a tilt brought into view, or where
+		// the user stood from the start)
+		if (s->u[k2].zmed && map[i] > s->u[k2].zmed + USER_DEPTH_SPAN)
+			continue;
 		s->user[i] = (uint8_t)(k2 + 1);
 	}
 
@@ -624,6 +686,10 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 	{
 		double sx[NU] = { 0 }, sy[NU] = { 0 }, sz[NU] = { 0 };
 		int gained[NU] = { 0 };
+		static int hist[NU][USER_MAX_Z_MM / ZBIN + 1];
+		double m[NU][10]; // sums for the plane z = a x + b y + c: xx xy x yy y n xz yz z zz (m, about the centre of the view)
+		memset(hist, 0, sizeof(hist));
+		memset(m, 0, sizeof(m));
 		for (k = 0; k < NU; k++) {
 			s->u[k].pixels = 0;
 			s->u[k].umin = s->u[k].vmin = 100000;
@@ -641,6 +707,13 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			sy[s->user[i] - 1] += p.y;
 			sz[s->user[i] - 1] += p.z;
 			U->pixels++;
+			hist[s->user[i] - 1][map[i] < USER_MAX_Z_MM ? map[i] / ZBIN : USER_MAX_Z_MM / ZBIN]++;
+			{
+				double* q = m[s->user[i] - 1];
+				q[0] += (double)p.x * p.x; q[1] += (double)p.x * p.y; q[2] += p.x;
+				q[3] += (double)p.y * p.y; q[4] += p.y; q[5] += 1.0;
+				q[6] += (double)p.x * p.z; q[7] += (double)p.y * p.z; q[8] += p.z; q[9] += (double)p.z * p.z;
+			}
 			// moving: its pixels that came nearer since the frame before (a
 			// hand moving forward, in front of the body or of the wall).
 			// Furniture never comes nearer by itself, and a wall only gets
@@ -667,9 +740,19 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			}
 			U->missing = 0;
 			U->age++;
-			if (U->age > 1 && gained[k] >= MOVING_PIXELS + U->pixels / 100)
+			if (U->age > 1 && gained[k] >= MOVING_PIXELS + U->pixels / 100) {
 				U->moving++;
+				U->still = 0;
+			} else
+				U->still++;
+			U->flat_mm = plane_rms(m[k]);
 			U->centre = v3make((float)(sx[k] / U->pixels), (float)(sy[k] / U->pixels), (float)(sz[k] / U->pixels));
+			{
+				int b, acc = 0;
+				for (b = 0; b <= USER_MAX_Z_MM / ZBIN && acc * 2 < U->pixels; b++)
+					acc += hist[k][b];
+				U->zmed = b * ZBIN;
+			}
 			// Kinect10's size factor for new players (§30.4.7): area from the
 			// pixel count at the user's depth, at 320x240
 			{

@@ -201,6 +201,13 @@ FREENECT_NUI_API float freenect_nui_suggest_tilt(freenect_nui* nui, freenect_nui
 /// floor and users over to the new view, so users keep their ids.
 FREENECT_NUI_API int freenect_nui_tilt_changed(freenect_nui* nui, float degrees);
 
+/// How far the last move turned the view, measured in the depth image
+/// (degrees, positive up): NAN while it is still settling, 0 when the view
+/// did not move (the motor refused). The motor seldom turns by exactly the
+/// angle it was told, least of all near the ends of its range; the tracker
+/// carries its model over by this measured angle.
+FREENECT_NUI_API float freenect_nui_tilt_measured(freenect_nui* nui);
+
 /* ------------------------------------------------------------ hands */
 
 /// More about one hand than the skeleton's joints carry (the palm and
