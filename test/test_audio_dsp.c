@@ -29,7 +29,8 @@
  * - the MCLT against the reference's tools/mclt_ref.py self-tests (relation
  *   to the textbook MCLT, reconstruction, Parseval, phase alignment, gain);
  * - the designed beams: distortionless, white noise gain, directivity;
- * - direction finding and beam choice on simulated sources;
+ * - direction finding and beam choice on simulated sources, also a quiet
+ *   speaker who moves after a loud click;
  * - loading a weights file.
  */
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
@@ -241,6 +242,9 @@ static void test_beams(freenect_dsp* d)
 /* 4 microphone signals of a noise-like source (sum of tones, 300-3500 Hz)
  * at angle theta, 1.5 m away, plus a little sensor noise; full scale 1.
  * on: whether the source sounds in this sample. */
+static double sim_noise = 1e-4; // sensor noise, full scale 1
+static int sim_syllables;      // 1: sounds 250 ms in every 400 ms, as speech does
+
 static void simulate(const freenect_dsp* d, double theta, float* out, int n, int t0, double amp, int silent_until)
 {
 	static double fr[60], ph[60];
@@ -260,10 +264,10 @@ static void simulate(const freenect_dsp* d, double theta, float* out, int n, int
 		double t = (t0 + i) / 16000.0;
 		for (m = 0; m < d->nm; m++) {
 			double s = 0.0;
-			if (t0 + i >= silent_until)
+			if (t0 + i >= silent_until && (!sim_syllables || (t0 + i) % 6400 < 4000))
 				for (j = 0; j < 60; j++)
 					s += cos(2 * M_PI * fr[j] * (t - tau[m]) + ph[j]);
-			out[4 * i + m] = (float)(amp * s / sqrt(30.0) + 1e-4 * grand());
+			out[4 * i + m] = (float)(amp * s / sqrt(30.0) + sim_noise * grand());
 		}
 	}
 }
@@ -317,6 +321,54 @@ static void test_direction(void)
 		CHECK(freenect_dsp_get_source_angle(d, NULL, NULL) == -1, "no source in silence");
 		freenect_dsp_destroy(d);
 	}
+}
+
+/* A speaker at the level the hardware tests recorded through WASAPI (-60
+ * dBFS, 1.5 m), after a loud click from elsewhere (a key press at -48
+ * degrees), who then moves: the direction must follow, not stay on the click
+ * (the runtime's absolute levels let only the click through). */
+static void quiet_run(freenect_dsp* d, double theta, double amp, int* t, int n)
+{
+	static float in[4 * 160];
+	static int16_t out[160];
+	int end = *t + n;
+	for (; *t < end; *t += 160) {
+		simulate(d, theta, in, 160, *t, amp, 0);
+		freenect_dsp_process_float(d, in, 160, out);
+	}
+}
+
+static void test_quiet_speaker(void)
+{
+	static const double where[2] = { -30.0, 35.0 };
+	freenect_dsp* d = freenect_dsp_create(NULL);
+	double ang = -99, conf = 0;
+	int t = 0, s, r;
+	char what[100];
+
+	printf("A quiet speaker (-60 dBFS) who moves, after a loud click\n");
+	sim_noise = 3e-5; // -90 dBFS
+	quiet_run(d, 0.0, 0.0, &t, 4800);                       // 0.3 s of room noise
+	quiet_run(d, -48.0 * M_PI / 180.0, 0.03, &t, 800);      // a 50 ms click at -30 dBFS
+	sim_syllables = 1;
+	for (s = 0; s < 2; s++) {
+		quiet_run(d, where[s] * M_PI / 180.0, 0.001, &t, 16000 * 5);
+		r = freenect_dsp_get_source_angle(d, &ang, &conf);
+		printf("    (speaker at %+.0f deg: found %+.1f deg, confidence %.2f)\n", where[s], ang * 180 / M_PI, conf);
+		snprintf(what, sizeof(what), "quiet speaker at %+.0f degrees: found within 6 degrees", where[s]);
+		CHECK(r == 0 && fabs(ang * 180 / M_PI - where[s]) < 6.0, what);
+		CHECK(conf > SEL_MIN_CONF, "  and confident");
+	}
+	freenect_dsp_destroy(d);
+
+	/* the array's own noise alone gives no direction */
+	d = freenect_dsp_create(NULL);
+	t = 0;
+	quiet_run(d, 0.0, 0.0, &t, 16000 * 3);
+	CHECK(freenect_dsp_get_source_angle(d, NULL, NULL) == -1, "no source in the array's own noise");
+	freenect_dsp_destroy(d);
+	sim_syllables = 0;
+	sim_noise = 1e-4;
 }
 
 /* end to end: a tone straight ahead through the centre beam */
@@ -446,6 +498,7 @@ int main(void)
 	test_beams(d);
 	freenect_dsp_destroy(d);
 	test_direction();
+	test_quiet_speaker();
 	test_gain();
 	test_weights_file();
 	{

@@ -99,6 +99,21 @@
 #define TRK_RECORDS 40
 #define TRK_WINDOW_S 2.5
 #define TRK_UPDATE_S 0.2
+/*
+ * Which frames give a direction. The runtime asks for E > 5.29 F (F: the
+ * noise floor) and two absolute levels, E > 82.3 and a winning direction
+ * worth c > 0.2716. Through WASAPI, speech 1.5 m away arrives at -55 to
+ * -65 dBFS, E 10..60: under 82.3, so only a key click at the start passed and
+ * the direction froze there (hardware tests of 2026-11-13..17). Here:
+ * - the floor test as the runtime's;
+ * - E above DOA_E_MIN, just over the array's own noise (E about 1);
+ * - the winning direction's share of the frame, not its level: the
+ *   runtime's c > 0.2716 at its E = 82.3 is a share of 0.2716 x 18 / 82.3
+ *   (DOA_MIN_SHARE; 1/18 when every direction is alike).
+ */
+#define DOA_E_REL 5.29079
+#define DOA_E_MIN 2.0
+#define DOA_MIN_SHARE 0.0594
 
 // Beam choice (§40.6.4)
 #define SEL_MIN_CONF 0.43195
@@ -487,7 +502,7 @@ static void doa_frame(freenect_dsp* d, fn_cplx X[MAXM][NK])
 	if (E > 3.5 * F) d->speech = 1;
 	else if (E < 1.5 * F) d->speech = 0;
 
-	if (E > 5.29079 * F && E > 82.30574) {
+	if (E > DOA_E_REL * F && E > DOA_E_MIN) {
 		double hist[DOA_NGRID];
 		memset(hist, 0, sizeof(hist));
 		for (k = DOA_K0; k <= DOA_K1; k++) {
@@ -513,7 +528,9 @@ static void doa_frame(freenect_dsp* d, fn_cplx X[MAXM][NK])
 		}
 		{
 			int im = 0;
-			double theta, c;
+			double theta, c, total = 0.0;
+			for (i = 0; i < DOA_NGRID; i++)
+				total += hist[i];
 			for (i = 1; i < DOA_NGRID; i++)
 				if (hist[i] > hist[im])
 					im = i;
@@ -523,8 +540,8 @@ static void doa_frame(freenect_dsp* d, fn_cplx X[MAXM][NK])
 				if (den < 0.0)
 					theta += 0.5 * (hist[im - 1] - hist[im + 1]) / den * (M_PI / 17.0);
 			}
-			c = (hist[im] / DOA_NK) * (1.0 / 18.0);
-			if (fabs(theta) <= 50.0 * M_PI / 180.0 + 1e-9 && c > 0.2716) {
+			c = (hist[im] / DOA_NK) * (1.0 / 18.0); // the record's weight
+			if (fabs(theta) <= 50.0 * M_PI / 180.0 + 1e-9 && total > 0.0 && hist[im] > DOA_MIN_SHARE * total) {
 				doa_record* r;
 				if (d->nrec == TRK_RECORDS) {
 					d->rec_head = (d->rec_head + 1) % TRK_RECORDS;
