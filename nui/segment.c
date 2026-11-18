@@ -67,9 +67,13 @@
 #define MOVING_REF_FRAMES 8   // the depth this many frames ago is what movement is measured against (slow hands)
 #define MOVING_PIXELS 40      // pixels a user gains in a frame when an arm or a hand moves
 #define BG_LEARN_FRAMES 15    // until then, anything person-sized is a candidate
+#define TILT_CAME_IN_FRAMES 90 // after a tilt, this long (3 s) before something new counts as having come in
 #define TWO_PEOPLE_WIDTH 0.9f // m: a component narrower than this is one person
 #define REVEAL_BEHIND_M 0.4f  // after a tilt, what came into view this far behind every user is the room
 #define USER_DEPTH_SPAN 600   // mm: farther than this behind a user's median depth is not the user (the wall)
+#define CLIP_GROW 12          // pixels: a user in a component with the room grows this far a frame (7 cm at 1.8 m)
+#define CLIP_FRONT_MM 1000    // and takes nothing this far in front of its median depth
+#define CLIP_HALF_WIDTH 1.2f  // m, nor farther to the side of its centre
 #define ZBIN 20               // mm per bin of the depth histogram for the median
 
 float fn_nui_v3len(v3 a) { return sqrtf(v3dot(a, a)); }
@@ -123,6 +127,7 @@ void fn_nui_seg_reset(fn_nui_seg* s)
 	s->rng = 0x12345678u;
 	s->next_id = 1;
 	s->frames = 0;
+	s->tilt_frames = -100000;
 }
 
 // The CDRP stage's map (§30.1.4): mirrored, 2x2 max pool.
@@ -347,6 +352,7 @@ void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map, const uint
 	uint16_t* conf = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
 	uint8_t* users = (uint8_t*)calloc(NPIX, 1);
 	int i, k, pass;
+	s->tilt_frames = s->frames;
 	if (!bg || !conf || !users) {
 		free(bg); free(conf); free(users);
 		fn_nui_seg_reset(s); // out of memory: start over
@@ -462,6 +468,7 @@ typedef struct {
 	int umin, umax, vmin, vmax;
 	int user;               // assigned user slot + 1 (-1: split)
 	unsigned choosers;      // users that continue in this component (bit k)
+	unsigned clipped;       // of them, users that take only the part of it where they were (bit k)
 } comp;
 
 #define MAXCOMP 4096
@@ -553,14 +560,18 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 	memset(s->user, 0, NPIX);
 	for (i = 1; i <= ncomp; i++) {
 		cs[i].user = 0;
-		cs[i].choosers = 0;
+		cs[i].choosers = cs[i].clipped = 0;
 	}
 	for (k = 0; k < NU; k++) {
-		int best = 0, bo = 0;
+		int best = 0, bo = 0, most = 0, mo = 0;
 		if (!s->u[k].active)
 			continue;
 		for (i = 1; i <= ncomp; i++) {
 			float zc;
+			if (cs[i].overlap[k] > mo) {
+				mo = cs[i].overlap[k];
+				most = i;
+			}
 			if (cs[i].overlap[k] <= bo || cs[i].count < MIN_USER_PIXELS / 4)
 				continue;
 			zc = (float)(cs[i].sz / cs[i].count);
@@ -571,6 +582,14 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 		}
 		if (best && (bo * 5 >= cs[best].count || bo * 3 >= s->u[k].pixels + 1))
 			cs[best].choosers |= 1u << k;
+		else if (most && s->u[k].verified && (s->u[k].moving >= 2 || s->u[k].came_in) && s->u[k].pixels && mo * 2 >= s->u[k].pixels) {
+			// Most of a verified user that moved (a person: furniture taken for
+			// one after a tilt never did) is now in a component that also holds much of
+			// the room (joined through the mixed depths along its outline, or
+			// its feet on the floor): it keeps the part of it where it was.
+			cs[most].choosers |= 1u << k;
+			cs[most].clipped |= 1u << k;
+		}
 	}
 	for (i = 1; i <= ncomp; i++) {
 		comp* C = &cs[i];
@@ -632,7 +651,11 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 			// cut off at the edge of the view, say). Otherwise the forest has
 			// to confirm a body first (nui.c), and if it does not, the
 			// candidate becomes background (a chair, a door frame).
-			s->u[k].verified = s->u[k].came_in = C->fgsure * 2 >= C->count; // (fgsure needs FG_CONF_FRAMES of background)
+			// For a while after a tilt the room carried over into the new view is
+			// a few degrees off (the measured angle), and what stands in it seems
+			// to stand in front of it: then the forest has to confirm a body.
+			s->u[k].verified = s->u[k].came_in = C->fgsure * 2 >= C->count && s->frames - s->tilt_frames > TILT_CAME_IN_FRAMES;
+			// (fgsure needs FG_CONF_FRAMES of background)
 			C->user = k + 1;
 			// what was learned as the room where the new user is may have been
 			// the user (sitting there from the start, say): forget it
@@ -679,6 +702,16 @@ void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
 		// the user stood from the start)
 		if (s->u[k2].zmed && map[i] > s->u[k2].zmed + USER_DEPTH_SPAN)
 			continue;
+		if (cs[c].clipped & (1u << k2)) {
+			// in a component with the room: near where the user was in the
+			// last frame (its box, u/vmin/max, is still last frame's here)
+			const fn_nui_user_seg* U = &s->u[k2];
+			int u = i % NW, v = i / NW;
+			if (u < U->umin - CLIP_GROW || u > U->umax + CLIP_GROW || v < U->vmin - CLIP_GROW || v > U->vmax + CLIP_GROW ||
+			    (U->zmed && map[i] + CLIP_FRONT_MM < U->zmed) ||
+			    fabsf(fn_nui_unproject((float)u, (float)v, (float)map[i]).x - U->centre.x) > CLIP_HALF_WIDTH)
+				continue;
+		}
 		s->user[i] = (uint8_t)(k2 + 1);
 	}
 

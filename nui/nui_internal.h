@@ -114,6 +114,7 @@ typedef struct {
 	uint32_t rng;
 	uint32_t next_id;
 	int frames;
+	int tilt_frames;     // frames when the view last moved (the motor), for came_in
 	fn_nui_user_seg u[NU];
 } fn_nui_seg;
 
