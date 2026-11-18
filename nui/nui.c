@@ -76,6 +76,14 @@ static double prof_now(void)
 #define FRAME_MOVED 2          // framing follows only users that moved at least this often (not a wall)
 #define MOVING_FRAMES 5 // a candidate this often moving its outline: a person
 #define LOSE_FRAMES 15
+// A person whose outline stays still holds the head still (under 1 cm a
+// frame in the recordings); a skeleton fitted to furniture or a doorway
+// wanders over it, 5 to 40 cm a frame.
+#define JITTER_STILL_FRAMES 30 // the outline still this long before it counts
+#define JITTER_STEP_M 0.04f    // a head step larger than this (m per frame) is a jump
+#define JITTER_FRAMES 90       // after this many frames (3 s), jumps in over 2/3 of them: not a person (80 % seen; a person with the head cut off, up to 50 %)
+// framing stays with the user it follows until that user has been gone this long (2 s)
+#define FRAME_KEEP_FRAMES 60
 // framing with the tilt motor
 #define TILT_HALF_FOV 22.8f   // degrees from the centre to the top or bottom of the view
 #define TILT_MARGIN 3.0f      // keep the framed body this far inside the view
@@ -101,6 +109,12 @@ struct freenect_nui {
 	fn_nui_fit fit[NU];
 	uint32_t fit_id[NU];     // the user id each fit belongs to
 	int good[NU], bad[NU], tried[NU];
+	// the head of a fit while the user's outline stays still: how often it
+	// jumped (a skeleton wandering over a still outline is not a person)
+	int jumpy[NU], jcount[NU]; // jcount < 0: no last position yet
+	v3 jlast[NU];
+	uint32_t frame_id;       // the user framing follows (0: none yet)
+	uint32_t frame_seen;     // the last frame that user could be framed
 	int max_tracked;
 	uint32_t want[NU];       // app-chosen tracking ids (0: free)
 	int nwant;
@@ -246,6 +260,8 @@ void freenect_nui_reset(freenect_nui* n)
 	n->tilt_deg = 0.0f;
 	n->tilt_frame = 0;
 	n->measured_tilt = 0.0f;
+	n->frame_id = 0;
+	n->frame_seen = 0;
 	n->blind_moves = 0;
 	memset(&n->held, 0, sizeof(n->held));
 }
@@ -309,6 +325,8 @@ static int track_user(freenect_nui* n, int k)
 		fn_nui_fit_reset(&n->fit[k], scale[0]);
 		n->fit_id[k] = U->id;
 		n->good[k] = n->bad[k] = n->tried[k] = 0;
+		n->jumpy[k] = 0;
+		n->jcount[k] = -1;
 	}
 	// A user that came in, or a candidate that keeps moving (arms, hands),
 	// is a person even when the view cuts off the head (standing close):
@@ -320,8 +338,19 @@ static int track_user(freenect_nui* n, int k)
 	PROF(n, P_FIT, good = fn_nui_fit_user(&n->fit[k], &props, n->map, n->seg.user, k, scale[0]));
 	n->tried[k]++;
 	if (good) {
+		const fn_nui_fit* F = &n->fit[k];
+		v3 p = F->jstate[3] ? F->joint[3] : F->joint[2];
 		n->good[k]++;
 		n->bad[k] = 0;
+		if (U->still < JITTER_STILL_FRAMES || n->settling) {
+			n->jumpy[k] = 0;
+			n->jcount[k] = -1;
+		} else if (n->jcount[k] >= 0) {
+			n->jcount[k]++;
+			n->jumpy[k] += fn_nui_v3len(v3sub(p, n->jlast[k])) > JITTER_STEP_M;
+		} else
+			n->jcount[k] = 0;
+		n->jlast[k] = p;
 	} else {
 		n->bad[k]++;
 		if (n->bad[k] > LOSE_FRAMES)
@@ -538,10 +567,22 @@ static float suggest_raw(freenect_nui* n, freenect_nui_framing mode, int* blind)
 		    n->bad[k] != 0)
 			continue;
 		d = fn_nui_v3len(u->centre);
+		if (u->id == n->frame_id && n->frame_id) {
+			best = k; // the user it already follows
+			break;
+		}
 		if (d < bd) {
 			bd = d;
 			best = k;
 		}
+	}
+	// Stay with the user it follows: a moment without a good fit is no reason
+	// to frame someone (or something) else.
+	if (n->frame_id && (best < 0 || n->seg.u[best].id != n->frame_id) && n->frame - n->frame_seen < FRAME_KEEP_FRAMES)
+		return 0.0f;
+	if (best >= 0) {
+		n->frame_id = n->seg.u[best].id;
+		n->frame_seen = n->frame;
 	}
 	if (best < 0) {
 		// no skeleton yet: someone moving whose head is above the view
@@ -604,9 +645,13 @@ static float suggest_raw(freenect_nui* n, freenect_nui_framing mode, int* blind)
 float freenect_nui_suggest_tilt(freenect_nui* n, freenect_nui_framing mode)
 {
 	float d;
-	int blind = 0;
+	int blind = 0, k;
 	if (!n)
 		return 0.0f;
+	// the user framing follows is still there (with or without a skeleton)
+	for (k = 0; k < NU && n->frame_id; k++)
+		if (n->seg.u[k].active && n->seg.u[k].pixels && n->seg.u[k].id == n->frame_id)
+			n->frame_seen = n->frame;
 	if (n->settling || (n->tilt_frame && n->frame - n->tilt_frame < TILT_REST_FRAMES)) {
 		n->want_frames = 0;
 		return 0.0f;
@@ -662,6 +707,7 @@ int freenect_nui_process(freenect_nui* n, const uint16_t* depth, uint32_t timest
 		fn_nui_user_seg* U = &n->seg.u[k];
 		if (U->active && U->verified && U->pixels &&
 		    ((U->moving == 0 && !U->came_in && U->age >= NEVER_MOVED_FRAMES) ||
+		     (n->fit_id[k] == U->id && n->jcount[k] >= JITTER_FRAMES && n->jumpy[k] * 3 > n->jcount[k] * 2) ||
 		     (U->still >= STATIC_FRAMES && (float)(U->umax - U->umin + 1) * U->centre.z / FN_NUI_F > MAX_PERSON_WIDTH))) {
 			fn_nui_seg_reject(&n->seg, k, n->map);
 			n->fit_id[k] = 0;
