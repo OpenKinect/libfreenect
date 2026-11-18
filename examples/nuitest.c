@@ -34,7 +34,9 @@
 // framed: the whole body, or the upper body with the arms and hands (up
 // when the head is out of view). Each move goes into the recording; a replay
 // makes the same moves (and, with --frame, prints what it would suggest).
-// --tilt DEG first tilts the Kinect to DEG (-27 to 27).
+// --tilt DEG first tilts the Kinect to DEG (-27 to 27) and waits until the
+// motor has stopped there; at the end (also on Ctrl+C) it tilts back to DEG,
+// so the next run starts there too. With 0 seconds it only tilts and exits.
 //
 // Once a second it prints the users, how many joints each has tracked, the
 // head position, the hands' states and fingers, and the time per frame.
@@ -48,6 +50,7 @@
 #if defined(_MSC_VER) && !defined(_CRT_SECURE_NO_WARNINGS)
 #define _CRT_SECURE_NO_WARNINGS // fopen
 #endif
+#include <errno.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -67,6 +70,64 @@ static double now_ms(void)
 	return t.tv_sec * 1000.0 + t.tv_nsec / 1e6;
 }
 #endif
+
+// Tilt the Kinect to deg and wait until the motor has stopped there (about
+// 16 degrees per second; up to 8 s in all). The motor often stops short of
+// the command, so one more command follows when it is more than 2 degrees
+// off. A move refused by the rate limit (1 s between moves) is sent again
+// once that has passed. With wait 0 (Ctrl+C) the command is only sent: the
+// motor finishes the move by itself. Prints and returns the angle reached
+// (-1000: unknown).
+static double tilt_to(freenect_context* ctx, freenect_device* dev, double deg, int wait)
+{
+	double t0 = now_ms(), angle = -1000.0, sent = -1.0;
+	int tries = 0, stopped = 0, r;
+
+	while (tries < 2 && now_ms() - t0 < 8000.0) {
+		if (sent < 0.0) {
+			r = freenect_set_tilt_degs(dev, deg);
+			if (r == -EAGAIN && wait && !fn_exit_requested) {
+				fn_sleep_ms(200);
+				continue;
+			}
+			if (r < 0) {
+				printf("  (the motor did not take the command)\n");
+				break;
+			}
+			sent = now_ms();
+			tries++;
+			stopped = 0;
+		}
+		if (!wait || fn_exit_requested)
+			return angle;
+		{
+			struct timeval tv = { 0, 100000 };
+			if (freenect_process_events_timeout(ctx, &tv) < 0)
+				break;
+		}
+		if (now_ms() - sent < 400.0 || freenect_update_tilt_state(dev) < 0)
+			continue;
+		{
+			freenect_raw_tilt_state* st = freenect_get_tilt_state(dev);
+			if (freenect_get_tilt_status(st) == TILT_STATUS_MOVING || st->tilt_angle == -128) {
+				stopped = 0;
+				continue;
+			}
+			angle = freenect_get_tilt_degs(st);
+		}
+		if (++stopped < 3) // three readings in a row: it has really stopped
+			continue;
+		if (fabs(angle - deg) <= 2.0)
+			break;
+		sent = -1.0; // stopped short: command it again
+	}
+	if (angle > -100.0)
+		printf("  the Kinect is at %+.0f degrees\n", angle);
+	else
+		printf("  (could not read the Kinect's angle)\n");
+	fflush(stdout);
+	return angle;
+}
 
 static uint16_t depth[640 * 480];
 static unsigned depth_frames;
@@ -405,6 +466,10 @@ int main(int argc, char** argv)
 			return 1;
 		}
 	}
+	if (seconds == 0 && !replay_path && tilt_start > -100.0) {
+		nui = NULL; // only tilt the Kinect
+		goto open;
+	}
 	nui = freenect_nui_create(NULL, seated ? FREENECT_NUI_SEATED : 0);
 	if (!nui) {
 		printf("The skeleton tracking model is not installed. Fetch it with\n"
@@ -417,6 +482,7 @@ int main(int argc, char** argv)
 		printf("Replaying %s%s\n", replay_path, seated ? " (seated)" : "");
 		goto run;
 	}
+open:
 	if (freenect_init(&ctx, NULL) < 0)
 		goto out;
 	freenect_select_subdevices(ctx, (freenect_device_flags)(FREENECT_DEVICE_CAMERA |
@@ -426,16 +492,13 @@ int main(int argc, char** argv)
 		goto out;
 	}
 	if (tilt_start > -100.0) {
-		// --tilt: start from this angle; the motor needs up to 2 s
-		double t0 = now_ms();
+		// --tilt: start from this angle, once the motor has stopped there
 		printf("Tilting the Kinect to %+.0f degrees\n", tilt_start);
 		fflush(stdout);
-		if (freenect_set_tilt_degs(dev, tilt_start) < 0)
-			printf("  (the motor did not take the command)\n");
-		while (!fn_exit_requested && now_ms() - t0 < 2000.0) {
-			struct timeval tv = { 0, 50000 };
-			if (freenect_process_events_timeout(ctx, &tv) < 0)
-				break;
+		tilt_to(ctx, dev, tilt_start, 1);
+		if (!nui) { // 0 seconds: only tilt
+			ret = 0;
+			goto out;
 		}
 	}
 	freenect_set_depth_mode(dev, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM));
@@ -637,6 +700,12 @@ run:
 	       nframes, tracked_frames, nframes ? busy / nframes : 0.0, path);
 	if (frame_mode >= 0 || tilt_moves)
 		printf("Tilt moves: %u\n", tilt_moves);
+	if (dev && tilt_start > -100.0 && tilt_moves) {
+		// leave the Kinect where this run started, for the next one
+		printf("Tilting the Kinect back to %+.0f degrees\n", tilt_start);
+		fflush(stdout);
+		tilt_to(ctx, dev, tilt_start, !fn_exit_requested);
+	}
 	ret = 0;
 out:
 	if (rec)
