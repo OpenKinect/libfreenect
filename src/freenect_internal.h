@@ -276,6 +276,10 @@ typedef struct {
 	uint8_t last_order_flag;     // type of the last out-of-order packet
 	int last_order_pos;          // and where in the frame it came
 	int stall_reported;
+	// A stream that sends only packets without a header (the camera started it
+	// garbled) is restarted from freenect_process_events()
+	unsigned int bad_run;        // packets in a row without the "RB" header
+	int restart_wanted;
 } packet_stream;
 
 // Stream start: stay quiet about lost packets for about a second (one
@@ -283,6 +287,11 @@ typedef struct {
 // after about three.
 #define FN_STREAM_QUIET_PKTS 8000
 #define FN_STREAM_STALL_PKTS 24000
+// A run of this many packets in a row without a header (about two seconds)
+// is a garbled stream: it is restarted, at
+// most FN_STREAM_RESTARTS_MAX times while the device is open.
+#define FN_STREAM_GARBLED_PKTS 16000
+#define FN_STREAM_RESTARTS_MAX 3
 
 // Frame reassembly from the camera's isochronous packets (stream.c).
 // stream_process() returns the size of a completed frame, or 0.
@@ -376,6 +385,7 @@ struct _freenect_device {
 
 	packet_stream depth;
 	packet_stream video;
+	int stream_restarts;         // garbled streams restarted since the device was opened
 
 	// Registration
 	freenect_registration registration;

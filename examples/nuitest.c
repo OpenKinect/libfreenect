@@ -485,7 +485,8 @@ int main(int argc, char** argv)
 open:
 	if (freenect_init(&ctx, NULL) < 0)
 		goto out;
-	freenect_select_subdevices(ctx, (freenect_device_flags)(FREENECT_DEVICE_CAMERA |
+	// only tilting (0 seconds): the motor alone, the camera stays untouched
+	freenect_select_subdevices(ctx, (freenect_device_flags)((nui ? FREENECT_DEVICE_CAMERA : 0) |
 	                                                        (frame_mode >= 0 || tilt_start > -100.0 ? FREENECT_DEVICE_MOTOR : 0)));
 	if (freenect_num_devices(ctx) < 1 || freenect_open_device(ctx, &dev, 0) < 0) {
 		printf("No Kinect found\n");

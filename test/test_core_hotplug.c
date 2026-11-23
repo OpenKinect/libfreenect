@@ -110,6 +110,8 @@ int freenect_camera_teardown(freenect_device *dev) { (void)dev; return 0; }
 int freenect_stop_depth(freenect_device *dev) { (void)dev; stops_depth++; return 0; }
 int freenect_stop_video(freenect_device *dev) { (void)dev; stops_video++; return 0; }
 int freenect_stop_audio(freenect_device *dev) { (void)dev; stops_audio++; return 0; }
+int freenect_start_depth(freenect_device *dev) { (void)dev; return 0; }
+int freenect_start_video(freenect_device *dev) { (void)dev; return 0; }
 int freenect_set_led(freenect_device *dev, freenect_led_options o) { (void)dev; (void)o; return 0; }
 int fn_led_forced_off(void) { return 0; }
 void fn_color_init(freenect_device *dev) { (void)dev; }

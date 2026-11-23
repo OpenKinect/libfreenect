@@ -184,6 +184,23 @@ int main(void)
 	CHECK(s.valid_frames == 0 && s.stall_reported == 1, "no complete frame for a few seconds: reported once");
 	CHECK(s.resyncs_order > 0 && s.last_order_flag == (FLAG | 1) && s.last_order_pos == 3,
 	      "  with the out-of-order packet's type and position");
+	CHECK(!s.restart_wanted, "  (valid headers: no restart)");
+	stop(&s);
+
+	/* a garbled stream: nothing but packets without the "RB" header */
+	start(&s, 0);
+	{
+		int k;
+		for (k = 0; k < FN_STREAM_GARBLED_PKTS - 1; k++)
+			send_pkt(&s, 1, 40, 1, 0);
+		CHECK(!s.restart_wanted, "a run of packets without a header, short of the limit: no restart");
+		send_pkt(&s, 1, 40, 0, 0);
+		for (k = 0; k < FN_STREAM_GARBLED_PKTS - 1; k++)
+			send_pkt(&s, 1, 40, 1, 0);
+		CHECK(!s.restart_wanted, "  one valid packet starts the count again");
+		send_pkt(&s, 1, 40, 1, 0);
+		CHECK(s.restart_wanted, "FN_STREAM_GARBLED_PKTS in a row: the stream asks for a restart");
+	}
 	stop(&s);
 
 	/* a stream that starts mid-frame syncs on the next start of frame */

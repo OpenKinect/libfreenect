@@ -184,6 +184,26 @@ FREENECTAPI int freenect_process_events_timeout(freenect_context *ctx, struct ti
 			fn_timing_process(dev);
 	}
 
+	// A stream that sends nothing but packets without a header (the camera
+	// started it garbled; seen once in 2026-11 on a 1414, for a whole minute)
+	// is stopped and started again.
+	for (dev = ctx->first; dev; dev = dev->next) {
+		int depth = dev->depth.running && dev->depth.restart_wanted;
+		int video = dev->video.running && dev->video.restart_wanted;
+		if (!depth && !video)
+			continue;
+		dev->depth.restart_wanted = dev->video.restart_wanted = 0;
+		if (dev->stream_restarts >= FN_STREAM_RESTARTS_MAX)
+			continue;
+		dev->stream_restarts++;
+		FN_WARNING("The %s stream sends only packets without a header; restarting it (%d of %d)\n",
+		           depth ? "depth" : "video", dev->stream_restarts, FN_STREAM_RESTARTS_MAX);
+		if (depth && (freenect_stop_depth(dev) < 0 || freenect_start_depth(dev) < 0))
+			FN_ERROR("Could not restart the depth stream\n");
+		if (video && (freenect_stop_video(dev) < 0 || freenect_start_video(dev) < 0))
+			FN_ERROR("Could not restart the video stream\n");
+	}
+
 	// An audio controller that rebooted into its bootloader while the rest of
 	// its Kinect is still there gets its firmware again (a few times at most).
 	for (dev = ctx->first; dev; dev = dev->next) {

@@ -119,11 +119,14 @@ FN_INTERNAL int stream_process(freenect_context *ctx, packet_stream *strm, uint8
 	if (hdr->magic[0] != 'R' || hdr->magic[1] != 'B') {
 		// Dropped; the sequence gap it leaves marks the frame incomplete.
 		strm->bad_magic++;
+		if (++strm->bad_run == FN_STREAM_GARBLED_PKTS)
+			strm->restart_wanted = 1;
 		if (is_power_of_ten(strm->bad_magic))
 			FN_LOG(l_notice, "[Stream %02x] Invalid magic %02x%02x in a %d-byte packet (%u so far)\n",
 			       strm->flag, hdr->magic[0], hdr->magic[1], len, strm->bad_magic);
 		return 0;
 	}
+	strm->bad_run = 0;
 
 	FN_FLOOD("[Stream %02x] Packet with flag: %02x\n", strm->flag, hdr->flag);
 
@@ -290,6 +293,8 @@ FN_INTERNAL void stream_init(freenect_context *ctx, packet_stream *strm, int rle
 	strm->last_order_flag = 0;
 	strm->last_order_pos = 0;
 	strm->stall_reported = 0;
+	strm->bad_run = 0;
+	strm->restart_wanted = 0;
 	strm->keep_incomplete = keep && strcmp(keep, "1") == 0;
 	// strm->skip_frames is set by the caller after stream_init()
 
