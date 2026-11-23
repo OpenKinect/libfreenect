@@ -97,6 +97,9 @@ static double prof_now(void)
 #define SETTLE_STILL_FRAMES 3 // frames in a row the measured angle stays: the motor stopped
 #define SETTLE_STILL_DEG 0.2f // degrees it may change in them
 #define TILT_MOVED_MIN 0.75f  // degrees: a smaller measured move is no move (the motor refused)
+#define TILT_STILL_SCORE 0.5f // the view before the move matches this well: it did not move
+#define TILT_REACH 0.8f       // the motor stops short: 19 degrees asked gave 15, 6.5 gave 4.9
+#define SETTLE_FRAMES_PER_DEG 2 // the motor turns about 16 degrees a second
 #define TILT_BLIND_MOVES 2    // moves in a row the same way without seeing the top of the user
 
 struct freenect_nui {
@@ -142,6 +145,7 @@ struct freenect_nui {
 	int settling;                    // frames since the move began (0: none)
 	int still;                       // frames in a row the measured angle stayed, while settling
 	float settle_angle;              // the measured angle they stayed at
+	float settle_last;               // the last angle measured as a move, while settling
 	uint32_t tilt_frame;             // the frame the last move began
 	uint16_t* tilt_map;              // the last map before the move
 	float measured_tilt;             // the last move as measured in the depth image (degrees, up)
@@ -494,10 +498,12 @@ static float measure_tilt(const freenect_nui* n, float told)
 	at0 = score_tilt(n, 0.0f, structured);
 	best = best_tilt(n, lo, hi, 0.5f, told, structured, &bs);
 	best = best_tilt(n, best - 0.4f, best + 0.4f, 0.1f, told, structured, &bs);
-	// no better than not moving at all: it did not move
-	if (bs < at0 + 0.05f)
-		return 0.0f;
-	return best;
+	if (bs >= at0 + 0.05f)
+		return best;
+	// no better than not moving at all, and that matches well: it did not
+	// move. When nothing matches well (a close user fills much of the view,
+	// and turning 7 degrees changes most of it), it cannot tell: NAN.
+	return at0 >= TILT_STILL_SCORE ? 0.0f : NAN;
 }
 
 // One frame while the motor moves: 1 to hold the output, 0 when the move
@@ -507,14 +513,35 @@ static float measure_tilt(const freenect_nui* n, float told)
 static int settle_step(freenect_nui* n)
 {
 	float m = measure_tilt(n, n->tilt_deg);
-	if (n->settling > 1 && fabsf(m - n->settle_angle) < SETTLE_STILL_DEG) {
-		n->still++;
-	} else {
-		n->settle_angle = m;
+	int guessed = 0;
+	if (n->settling <= 1)
+		n->settle_last = 0.0f;
+	if (isnan(m)) {
+		// cannot tell: still moving as far as it knows; once the commanded
+		// move has had time to finish, take the best guess (the last angle
+		// measured, or most of the commanded one: the motor stops short)
 		n->still = 0;
+		n->settling++;
+		if (n->settling <= SETTLE_MIN_FRAMES + SETTLE_FRAMES_PER_DEG * (int)fabsf(n->tilt_deg) + 15 &&
+		    n->settling <= SETTLE_MAX_FRAMES)
+			return 1;
+		m = n->tilt_deg * TILT_REACH;
+		if (fabsf(n->settle_last) > fabsf(m))
+			m = n->settle_last;
+		guessed = 1;
+	} else {
+		if (fabsf(m) >= TILT_MOVED_MIN)
+			n->settle_last = m;
+		if (n->settling > 1 && fabsf(m - n->settle_angle) < SETTLE_STILL_DEG) {
+			n->still++;
+		} else {
+			n->settle_angle = m;
+			n->still = 0;
+		}
+		n->settling++;
 	}
-	n->settling++;
-	if ((n->settling > SETTLE_MIN_FRAMES && n->still >= SETTLE_STILL_FRAMES &&
+	if (guessed ||
+	    (n->settling > SETTLE_MIN_FRAMES && n->still >= SETTLE_STILL_FRAMES &&
 	     (fabsf(m) >= TILT_MOVED_MIN || n->settling > SETTLE_START_FRAMES)) ||
 	    n->settling > SETTLE_MAX_FRAMES) {
 		// over (or never came to rest): carry over the move as measured; none
