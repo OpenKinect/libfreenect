@@ -125,7 +125,7 @@ jobs:
         # under Xvfb, so that the viewers' window layer is tested too
         run: xvfb-run -a ctest --test-dir build --output-on-failure
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0 # Node 24 (no moving major tags after v7)
 
       # The Python package as users build it: uv pip install ./wrappers/python
       - name: Python package
@@ -314,7 +314,7 @@ jobs:
       - name: Unit tests
         run: ctest --test-dir build --output-on-failure
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v10.4.0 # Node 24 (no moving major tags after v7)
 
       - name: Python package
         run: |

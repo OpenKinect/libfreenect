@@ -20,7 +20,9 @@ set_target_properties (freenect_sync PROPERTIES
   SOVERSION ${PROJECT_APIVER})
 
 target_link_libraries (freenect_sync freenect ${CMAKE_THREAD_LIBS_INIT})
-target_link_libraries (freenect_sync_static freenect ${CMAKE_THREAD_LIBS_INIT})
+# the static library with the static libfreenect: whatever links it (the
+# Python package, as3-server) carries no dependency on libfreenect.so/.dylib
+target_link_libraries (freenect_sync_static freenectstatic ${CMAKE_THREAD_LIBS_INIT})
 
 install (TARGETS freenect_sync
   DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}")
