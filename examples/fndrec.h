@@ -34,7 +34,8 @@
 //   between the smallest and the largest, each predicted by whether the
 //   value was present in the frame before; the pixels are indices into this
 //   table, which follow the Kinect's disparity steps;
-// - each pixel (the top-left of each 2x2 block of the 640x480 frame) as the
+// - each pixel (the largest of each 2x2 block of the 640x480 frame, as the
+//   tracker's map; until 2026-11-23 the top-left one) as the
 //   difference to a prediction: the same pixel in the frame before where its
 //   left and upper neighbours did not change, else the median edge predictor
 //   of the left, upper and upper-left neighbours (as in JPEG-LS). The
@@ -328,7 +329,13 @@ static int fndrec_write(FILE* f, fndrec_state* s, const uint16_t* depth, uint32_
 	memset(s->present_now, 0, sizeof(s->present_now));
 	for (y = 0; y < FNDREC_H; y++)
 		for (x = 0; x < FNDREC_W; x++) {
-			int d = depth[2 * y * 640 + 2 * x];
+			// the 2x2 block's largest value, as the tracker's map takes it
+			// (fn_nui_make_map): a replay sees the same map as the live run
+			const uint16_t* b = depth + 2 * y * 640 + 2 * x;
+			int d = b[0];
+			if (b[1] > d) d = b[1];
+			if (b[640] > d) d = b[640];
+			if (b[641] > d) d = b[641];
 			if (d >= FNDREC_VMAX)
 				d = 0;
 			cur[y * FNDREC_W + x] = (uint16_t)d;
