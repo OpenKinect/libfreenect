@@ -27,6 +27,7 @@
 #include "libfreenect.h"
 #include "freenect_internal.h"
 #include "registration.h"
+#include "depth_lut.h"
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -284,10 +285,15 @@ static void freenect_create_dxdy_tables(double* reg_x_table, double* reg_y_table
 	}
 }
 
-static void freenect_init_registration_table(int32_t (*registration_table)[2], freenect_reg_info* reg_info) {
+static int freenect_init_registration_table(int32_t (*registration_table)[2], freenect_reg_info* reg_info) {
 
 	double* regtable_dx = (double*)malloc(DEPTH_X_RES*DEPTH_Y_RES*sizeof(double));
 	double* regtable_dy = (double*)malloc(DEPTH_X_RES*DEPTH_Y_RES*sizeof(double));
+	if (!regtable_dx || !regtable_dy) {
+		free(regtable_dx);
+		free(regtable_dy);
+		return -1;
+	}
 	memset(regtable_dx, 0, DEPTH_X_RES*DEPTH_Y_RES * sizeof(double));
 	memset(regtable_dy, 0, DEPTH_X_RES*DEPTH_Y_RES * sizeof(double));
 	int32_t x,y,index = 0;
@@ -309,37 +315,47 @@ static void freenect_init_registration_table(int32_t (*registration_table)[2], f
 	}
 	free(regtable_dx);
 	free(regtable_dy);
+	return 0;
 }
 
-// These are just constants.
-static double parameter_coefficient = 4;
-static double shift_scale = 10;
-static double pixel_size_factor = 1;
-
-/// convert raw shift value to metric depth (in mm)
-static uint16_t freenect_raw_to_mm(uint16_t raw, freenect_registration* reg)
-{
+/// Compute registration tables. raw_to_mm_shift is Microsoft's depth table
+/// (§20.2), limited to the requested range (src/depth_lut.h).
+static int complete_tables(freenect_registration* reg, freenect_depth_range range) {
 	freenect_zero_plane_info* zpi = &(reg->zero_plane_info);
-	double fixed_ref_x = ((raw - (parameter_coefficient * reg->const_shift / pixel_size_factor)) / parameter_coefficient) - S2D_CONST_OFFSET;
-	double metric = fixed_ref_x * zpi->reference_pixel_size * pixel_size_factor;
-	return shift_scale * ((metric * zpi->reference_distance / (zpi->dcmos_emitter_dist - metric)) + zpi->reference_distance);
-}
-
-/// Compute registration tables.
-static void complete_tables(freenect_registration* reg) {
-	uint16_t i;
-	for (i = 0; i < DEPTH_MAX_RAW_VALUE; i++)
-		reg->raw_to_mm_shift[i] = freenect_raw_to_mm( i, reg);
-	reg->raw_to_mm_shift[DEPTH_NO_RAW_VALUE] = DEPTH_NO_MM_VALUE;
+	fn_build_depth_lut(reg->raw_to_mm_shift, zpi->dcmos_emitter_dist, zpi->reference_distance,
+	                   zpi->reference_pixel_size, (uint16_t)reg->const_shift, range);
 
 	freenect_init_depth_to_rgb( reg->depth_to_rgb_shift, &(reg->zero_plane_info) );
 
-	freenect_init_registration_table( reg->registration_table, &(reg->reg_info) );
+	return freenect_init_registration_table( reg->registration_table, &(reg->reg_info) );
+}
+
+int freenect_set_depth_range(freenect_device* dev, freenect_depth_range range)
+{
+	freenect_registration* reg = &(dev->registration);
+	if (range != FREENECT_DEPTH_RANGE_DEFAULT && range != FREENECT_DEPTH_RANGE_NEAR && range != FREENECT_DEPTH_RANGE_FULL)
+		return -1;
+	dev->depth_range = range;
+	// Rebuild the table at once if depth is streaming; otherwise the next
+	// freenect_start_depth() builds it with this range.
+	if (reg->raw_to_mm_shift) {
+		freenect_zero_plane_info* zpi = &(reg->zero_plane_info);
+		fn_build_depth_lut(reg->raw_to_mm_shift, zpi->dcmos_emitter_dist, zpi->reference_distance,
+		                   zpi->reference_pixel_size, (uint16_t)reg->const_shift, range);
+	}
+	return 0;
+}
+
+freenect_depth_range freenect_get_depth_range(freenect_device* dev)
+{
+	return dev->depth_range;
 }
 
 /// camera -> world coordinate helper function
 void freenect_camera_to_world(freenect_device* dev, int cx, int cy, int wz, double* wx, double* wy)
 {
+	if (!dev || !wx || !wy)
+		return;
 	double ref_pix_size = dev->registration.zero_plane_info.reference_pixel_size;
 	double ref_distance = dev->registration.zero_plane_info.reference_distance;
 	// We multiply cx and cy by these factors because they come from a 640x480 image,
@@ -355,10 +371,23 @@ void freenect_camera_to_world(freenect_device* dev, int cx, int cy, int wz, doub
 /// RGB -> depth mapping function (inverse of default FREENECT_DEPTH_REGISTERED mapping)
 void freenect_map_rgb_to_depth(freenect_device* dev, uint16_t* depth_mm, uint8_t* rgb_raw, uint8_t* rgb_registered)
 {
-	uint32_t target_offset = dev->registration.reg_pad_info.start_lines * DEPTH_Y_RES;
+	uint32_t target_offset;
 	int x,y;
-	int* map = (int*)malloc(DEPTH_Y_RES*DEPTH_X_RES* sizeof(int));
-	unsigned short* zBuffer = (unsigned short*)malloc(DEPTH_Y_RES*DEPTH_X_RES* sizeof(unsigned short));
+	int* map;
+	unsigned short* zBuffer;
+	// The tables exist while depth streams in FREENECT_DEPTH_MM or
+	// FREENECT_DEPTH_REGISTERED.
+	if (!dev || !depth_mm || !rgb_raw || !rgb_registered ||
+	    !dev->registration.registration_table || !dev->registration.depth_to_rgb_shift)
+		return;
+	target_offset = dev->registration.reg_pad_info.start_lines * DEPTH_Y_RES;
+	map = (int*)malloc(DEPTH_Y_RES*DEPTH_X_RES* sizeof(int));
+	zBuffer = (unsigned short*)malloc(DEPTH_Y_RES*DEPTH_X_RES* sizeof(unsigned short));
+	if (!map || !zBuffer) {
+		free(map);
+		free(zBuffer);
+		return;
+	}
 	memset(zBuffer, DEPTH_NO_MM_VALUE, DEPTH_X_RES*DEPTH_Y_RES * sizeof(unsigned short));
 
 	for (y = 0; y < DEPTH_Y_RES; y++) for (x = 0; x < DEPTH_X_RES; x++) {
@@ -369,7 +398,8 @@ void freenect_map_rgb_to_depth(freenect_device* dev, uint16_t* depth_mm, uint8_t
 
 		int wz = depth_mm[index];
 
-		if (wz == DEPTH_NO_MM_VALUE) {
+		// 10000 is FREENECT_DEPTH_MM's "this far or farther": no shift for it
+		if (wz == DEPTH_NO_MM_VALUE || wz >= DEPTH_MAX_METRIC_VALUE) {
 			continue;
 		}
 
@@ -377,7 +407,7 @@ void freenect_map_rgb_to_depth(freenect_device* dev, uint16_t* depth_mm, uint8_t
 		cx = (dev->registration.registration_table[index][0] + dev->registration.depth_to_rgb_shift[wz]) / REG_X_VAL_SCALE;
 		cy =  dev->registration.registration_table[index][1] - target_offset;
 
-		if (cx >= DEPTH_X_RES) continue;
+		if (cx >= DEPTH_X_RES || cy >= DEPTH_Y_RES) continue;
 
 		cindex = cy*DEPTH_X_RES+cx;
 		map[index] = cindex;
@@ -392,7 +422,7 @@ void freenect_map_rgb_to_depth(freenect_device* dev, uint16_t* depth_mm, uint8_t
 		uint32_t cindex = map[index];
 
 		// pixels without depth data or out of bounds are black
-		if (cindex == -1) {
+		if (cindex == (uint32_t)-1) {
 			index *= 3;
 			rgb_registered[index+0] = 0;
 			rgb_registered[index+1] = 0;
@@ -434,9 +464,11 @@ FN_INTERNAL int freenect_init_registration(freenect_device* dev)
 	reg->depth_to_rgb_shift = (int32_t*)malloc( sizeof( int32_t) * DEPTH_MAX_METRIC_VALUE );
 	reg->registration_table = (int32_t (*)[2])malloc( sizeof( int32_t) * DEPTH_X_RES * DEPTH_Y_RES * 2 );
 
-	// Fill tables.
-	complete_tables(reg);
-
+	if (!reg->raw_to_mm_shift || !reg->depth_to_rgb_shift || !reg->registration_table ||
+	    complete_tables(reg, dev->depth_range) < 0) {
+		freenect_destroy_registration(reg);
+		return -1;
+	}
 	return 0;
 }
 
@@ -450,12 +482,16 @@ freenect_registration freenect_copy_registration(freenect_device* dev)
 	retval.raw_to_mm_shift    = (uint16_t*)malloc( sizeof(uint16_t) * DEPTH_MAX_RAW_VALUE );
 	retval.depth_to_rgb_shift = (int32_t*)malloc( sizeof( int32_t) * DEPTH_MAX_METRIC_VALUE );
 	retval.registration_table = (int32_t (*)[2])malloc( sizeof( int32_t) * DEPTH_X_RES * DEPTH_Y_RES * 2 );
-	complete_tables(&retval);
+	if (!retval.raw_to_mm_shift || !retval.depth_to_rgb_shift || !retval.registration_table ||
+	    complete_tables(&retval, dev->depth_range) < 0)
+		freenect_destroy_registration(&retval); // all three NULL: out of memory
 	return retval;
 }
 
 int freenect_destroy_registration(freenect_registration* reg)
 {
+	if (!reg)
+		return -1;
 	if (reg->raw_to_mm_shift) {
 		free(reg->raw_to_mm_shift);
 		reg->raw_to_mm_shift = NULL;

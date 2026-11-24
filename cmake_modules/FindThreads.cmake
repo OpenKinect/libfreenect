@@ -112,6 +112,18 @@ ELSEIF(_Threads_ptwin32)
     SET(CMAKE_THREAD_LIBS_INIT ${THREADS_PTHREADS_WIN32_LIBRARY})
     SET(CMAKE_HAVE_THREADS_LIBRARY 1)
     SET(Threads_FOUND TRUE)
+  ELSE()
+    # No pthreads-win32 installed: fall back to libfreenect's header-only
+    # pthread subset on top of native Win32 threads, SRW locks and condition
+    # variables. It needs no library, so CMAKE_THREAD_LIBS_INIT stays empty.
+    GET_FILENAME_COMPONENT(_Threads_shim_dir
+      "${CMAKE_CURRENT_LIST_DIR}/../platform/windows/pthread" ABSOLUTE)
+    MESSAGE(STATUS "pthreads-win32 not found, using the native Win32 pthread subset in ${_Threads_shim_dir}")
+    SET(THREADS_PTHREADS_INCLUDE_DIR "${_Threads_shim_dir}")
+    SET(CMAKE_THREAD_LIBS_INIT "")
+    SET(CMAKE_USE_WIN32_THREADS_INIT 1)
+    SET(Threads_FOUND TRUE)
+    SET(_Threads_ptwin32 false)
   ENDIF()
 
   MARK_AS_ADVANCED(THREADS_PTHREADS_WIN32_LIBRARY)

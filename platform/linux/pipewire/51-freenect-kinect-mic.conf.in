@@ -1,0 +1,68 @@
+# WirePlumber 0.5: the Kinect's microphone array as one beamformed
+# microphone, "Kinect beamformed microphone".
+#
+# With Microsoft's UAC firmware running, snd-usb-audio offers the array as a
+# 4-channel ALSA device (USB 045e:02bb, or 045e:02c3 on the Kinect for
+# Windows). These rules
+#   1. open it as one raw 4-channel input instead of ALSA card profiles
+#      (which could offer it as stereo),
+#   2. give that input a fixed name, which the filter graph targets,
+#   3. load the filter graph (kinect-mic.conf: libfreenect's beamformer) when
+#      the input appears, and hide the raw input from applications.
+# The same structure as Asahi Linux's microphone arrays (asahi-audio).
+#
+# Installed to share/wireplumber/wireplumber.conf.d/. WirePlumber 0.4 (for
+# example Ubuntu 24.04) has no node.software-dsp; use the
+# freenect-pipewire-mic program there (see the README).
+
+monitor.alsa.rules = [
+  {
+    matches = [
+      { device.vendor.id = "0x045e" device.product.id = "0x02bb" }
+      { device.vendor.id = "0x045e" device.product.id = "0x02c3" }
+      { device.name = "~alsa_card.usb-.*Xbox_NUI_Sensor.*" }
+    ]
+    actions = {
+      update-props = {
+        api.alsa.use-acp = false
+        device.description = "Kinect microphone array"
+      }
+    }
+  }
+  {
+    matches = [
+      { node.name = "~alsa_input.usb-.*Xbox_NUI_Sensor.*" }
+      { media.class = "Audio/Source" alsa.card_name = "~.*Xbox NUI Sensor.*" }
+      { media.class = "Audio/Source" device.vendor.id = "0x045e" device.product.id = "0x02bb" }
+      { media.class = "Audio/Source" device.vendor.id = "0x045e" device.product.id = "0x02c3" }
+    ]
+    actions = {
+      update-props = {
+        node.name = "alsa_input.freenect.kinect-mics"
+        node.description = "Kinect microphone array (raw, 4 channels)"
+        node.nick = "Kinect array"
+        audio.rate = 16000
+      }
+    }
+  }
+]
+
+node.software-dsp.rules = [
+  {
+    matches = [
+      { node.name = "alsa_input.freenect.kinect-mics" }
+    ]
+    actions = {
+      create-filter = {
+        filter-path = "@FREENECT_PIPEWIRE_DATADIR@/kinect-mic.conf"
+        hide-parent = true
+      }
+    }
+  }
+]
+
+wireplumber.profiles = {
+  main = {
+    node.software-dsp = required
+  }
+}

@@ -32,11 +32,7 @@
 #include <stdlib.h>
 #include <math.h>
 
-#if defined(__APPLE__)
-#include <GLUT/glut.h>
-#else
-#include <GL/glut.h>
-#endif
+#include "fn_glut.h" // GLFW, or GLUT with -DFREENECT_GL_VIEWERS=GLUT
 
 int window;
 GLuint gl_rgb_tex;
@@ -179,6 +175,7 @@ void DrawGLScene()
 
 void keyPressed(unsigned char key, int x, int y)
 {
+    (void)y; (void)x;
     if (key == 27) {
         freenect_sync_stop();
         glutDestroyWindow(window);

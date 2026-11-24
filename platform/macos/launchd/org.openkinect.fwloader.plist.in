@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  launchd agent: upload the Kinect's audio firmware when its audio controller
+  appears in its bootloader (USB 045e:02ad, Xbox 360 Kinect; 045e:02be, Kinect
+  for Windows). After the upload the controller comes back as a standard USB
+  audio device, which Core Audio offers as a 4-channel microphone.
+  Install: see platform/macos/README.md.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.openkinect.fwloader</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>@FWLOADER_PATH@</string>
+		<string>--launchd</string>
+		<string>--wait</string>
+		<string>10</string>
+	</array>
+	<key>LaunchEvents</key>
+	<dict>
+		<key>com.apple.iokit.matching</key>
+		<dict>
+			<key>org.openkinect.kinect-audio-bootloader-02ad</key>
+			<dict>
+				<key>IOProviderClass</key>
+				<string>IOUSBHostDevice</string>
+				<key>idVendor</key>
+				<integer>1118</integer>
+				<key>idProduct</key>
+				<integer>685</integer>
+				<key>IOMatchLaunchStream</key>
+				<true/>
+			</dict>
+			<key>org.openkinect.kinect-audio-bootloader-02be</key>
+			<dict>
+				<key>IOProviderClass</key>
+				<string>IOUSBHostDevice</string>
+				<key>idVendor</key>
+				<integer>1118</integer>
+				<key>idProduct</key>
+				<integer>702</integer>
+				<key>IOMatchLaunchStream</key>
+				<true/>
+			</dict>
+		</dict>
+	</dict>
+	<key>ProcessType</key>
+	<string>Background</string>
+	<key>ThrottleInterval</key>
+	<integer>5</integer>
+</dict>
+</plist>

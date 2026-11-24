@@ -31,6 +31,9 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 
 static void dump_bl_cmd(freenect_context* ctx, bootloader_command cmd) {
@@ -56,7 +59,7 @@ static int get_reply(fnusb_dev* dev) {
 	res = fnusb_bulk(dev, 0x81, dump, 512, &transferred);
 	if(res != 0 || transferred != sizeof(bootloader_status_code)) {
 		FN_ERROR("Error reading reply: %d\ttransferred: %d (expected %d)\n", res, transferred, (int)(sizeof(bootloader_status_code)));
-		return res;
+		return res != 0 ? res : -1; // a short reply is an error too
 	}
 	memcpy(&buffer, dump, sizeof(bootloader_status_code));
 	if(fn_le32(buffer.magic) != 0x0a6fe000) {
@@ -68,7 +71,8 @@ static int get_reply(fnusb_dev* dev) {
 		return -1;
 	}
 	if(fn_le32(buffer.status) != 0) {
-		FN_ERROR("Notice reading reply: last uint32_t was nonzero: %d\n", buffer.status);
+		FN_ERROR("Error reading reply: the bootloader reported status %d\n", fn_le32(buffer.status));
+		return -1;
 	}
 	FN_INFO("Reading reply: ");
 	int i;
@@ -79,7 +83,18 @@ static int get_reply(fnusb_dev* dev) {
 	return res;
 }
 
-static int check_version_string(fnusb_dev* dev) {
+// The bootloader answers a rejected command by stalling bulk OUT EP 0x01
+// instead of sending a status (older images also stall IN EP 0x81), so clear
+// both halts before giving up; otherwise the next attempt fails as well.
+static int abort_upload(fnusb_dev *dev) {
+	freenect_context* ctx = dev->parent->parent;
+	fnusb_clear_halt(dev, 0x01);
+	fnusb_clear_halt(dev, 0x81);
+	FN_ERROR("upload_firmware(): upload aborted; the audio controller stays in its bootloader\n");
+	return -1;
+}
+
+FN_UNUSED static int check_version_string(fnusb_dev* dev) {
 	freenect_context* ctx = dev->parent->parent;
 	bootloader_command bootcmd;
 	memset(&bootcmd, 0, sizeof(bootcmd));
@@ -122,113 +137,188 @@ static int check_version_string(fnusb_dev* dev) {
 }
 
 
-FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
-    freenect_context* ctx = dev->parent->parent;
-	/* Search for firmware file (audios.bin) in the following places:
-	 * $LIBFREENECT_FIRMWARE_PATH
-	 * .
-	 * ${HOME}/.libfreenect
-	 * /usr/local/share/libfreenect
-	 * /usr/share/libfreenect
-     * ./../Resources/ ( for OS X )
-	 */
-    
-    //need to add a forward slash
-    char fw_filename[1024];
-    sprintf(fw_filename, "/%s", filename);
-    
-    int filenamelen = strlen(fw_filename);
+// Append "<dir><sub>/<filename>" to the candidate list, using the first
+// dir_len characters of dir (all of it if dir_len < 0). Skipped if dir is NULL
+// or empty, or if the same path is already in the list.
+static void add_firmware_candidate_n(char candidates[][1024], int *count, int max, const char *dir, int dir_len, const char *sub, const char *filename)
+{
 	int i;
-	int searchpathcount;
-	FILE* fw = NULL;
-    
-	for(i = 0, searchpathcount = 6; !fw && i < searchpathcount; i++) {
-		char* fwfile;
-		int needs_free = 0;
-		switch(i) {
-			case 0: {
-				char* envpath = getenv("LIBFREENECT_FIRMWARE_PATH");
-				if (!envpath)
-					continue;
-				int pathlen = strlen(envpath);
-				fwfile = (char *)malloc(pathlen + filenamelen + 1);
-				strcpy(fwfile, envpath);
-				strcat(fwfile, fw_filename);
-				needs_free = 1;
-				}
-				break;
-			case 1:
-				//fwfile = "./audios.bin";
-				fwfile = (char *)malloc(2048);
-                needs_free = 1;
-                sprintf(fwfile, ".%s", fw_filename);
-				break;
-			case 2: {
-				// Construct $HOME/.libfreenect/
-				char* home = getenv("HOME");
-				if (!home)
-					continue;
-				int homelen = strlen(home);
-				char* dotfolder = "/.libfreenect";
-				int locallen = strlen(dotfolder);
-				fwfile = (char*)malloc(homelen + locallen + filenamelen + 1);
-				strcpy(fwfile, home);
-				strcat(fwfile, dotfolder);
-				strcat(fwfile, fw_filename);
-				needs_free = 1;
-				}
-				break;
-			case 3:
-				//fwfile = "/usr/local/share/libfreenect/audios.bin";
-                fwfile = (char *)malloc(2048);
-                needs_free = 1;
-                sprintf(fwfile, "/usr/local/share/libfreenect%s", fw_filename);
-				break;
-			case 4:
-				//fwfile = "/usr/share/libfreenect/audios.bin";
-				fwfile = (char *)malloc(2048);
-                needs_free = 1;
-                sprintf(fwfile, "/usr/share/libfreenect%s", fw_filename);
-				break;
-			case 5:
-                //fwfile = "./../Resources/audios.bin"; //default for OS X equivilant to: "./audios.bin";
-				fwfile = (char *)malloc(2048);
-                needs_free = 1;
-                sprintf(fwfile, "./../Resources%s", fw_filename);
-				break;
-			default: break;
-		}
-		FN_INFO("Trying to open %s as firmware...\n", fwfile);
-		fw = fopen(fwfile, "rb");
-		if (needs_free) {
-			free(fwfile);
-		}
-	}
-	if (!fw) {
-		FN_ERROR("upload_firmware: failed to find firmware file.\n");
-		return -errno;
-	}
-    
-    // get the number of bytes of the file
-    fseek(fw , 0, SEEK_END);
-    int fw_num_bytes = ftell(fw);
-    rewind(fw);
-    
-    if( fw_num_bytes <= 0 ){
-		FN_ERROR("upload_firmware: failed to find file with any data.\n");
-		return -errno;
-    }
-    
-    unsigned char * fw_bytes = (unsigned char *)malloc(fw_num_bytes);
-    int numRead = fread(fw_bytes, 1, fw_num_bytes, fw);
-    fw_num_bytes = numRead; // just in case
+	if (!dir || !*dir || dir_len == 0 || *count >= max)
+		return;
+	if (dir_len < 0)
+		dir_len = (int)strlen(dir);
+	snprintf(candidates[*count], 1024, "%.*s%s/%s", dir_len, dir, sub ? sub : "", filename);
+	for (i = 0; i < *count; i++)
+		if (strcmp(candidates[i], candidates[*count]) == 0)
+			return;
+	(*count)++;
+}
 
-    int retVal = upload_firmware_from_memory(dev, fw_bytes, fw_num_bytes);
-    
-    fclose(fw);
-    fw = NULL;
-    
-    return retVal;
+static void add_firmware_candidate(char candidates[][1024], int *count, int max, const char *dir, const char *sub, const char *filename)
+{
+	add_firmware_candidate_n(candidates, count, max, dir, -1, sub, filename);
+}
+
+// Open the firmware file `filename` from the first search location that has
+// it, or return NULL.
+static FILE *open_firmware_file(freenect_context *ctx, const char *filename) {
+	/* Search locations, in order:
+	 *   $LIBFREENECT_FIRMWARE_PATH
+	 *   .
+	 *   ${HOME}/.libfreenect
+	 *   ${XDG_DATA_HOME:-$HOME/.local/share}/libfreenect      (not Windows)
+	 *   %LOCALAPPDATA%\libfreenect          (Windows)
+	 *   <directory of the executable>       (Windows)
+	 *   %ProgramData%\libfreenect           (Windows)
+	 *   <each $XDG_DATA_DIRS entry>/libfreenect              (not Windows)
+	 *   ${HOME}/Library/Application Support/libfreenect      (macOS)
+	 *   /opt/homebrew/share/libfreenect     (macOS, Homebrew on Apple Silicon)
+	 *   /usr/local/share/libfreenect
+	 *   /usr/share/libfreenect
+	 *   ./../Resources                      (OS X)
+	 */
+	enum { MAX_CANDIDATES = 18 };
+	char candidates[MAX_CANDIDATES][1024];
+	int count = 0;
+	int i;
+	FILE* fw = NULL;
+
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("LIBFREENECT_FIRMWARE_PATH"), NULL, filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, ".", NULL, filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("HOME"), "/.libfreenect", filename);
+#ifndef _WIN32
+	{
+		const char *xdg_home = getenv("XDG_DATA_HOME");
+		if (xdg_home && *xdg_home == '/')
+			add_firmware_candidate(candidates, &count, MAX_CANDIDATES, xdg_home, "/libfreenect", filename);
+		else
+			add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("HOME"), "/.local/share/libfreenect", filename);
+	}
+#else
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("LOCALAPPDATA"), "/libfreenect", filename);
+	{
+		char exe_dir[MAX_PATH];
+		DWORD n = GetModuleFileNameA(NULL, exe_dir, MAX_PATH);
+		if (n > 0 && n < MAX_PATH) {
+			char *slash = strrchr(exe_dir, '\\');
+			if (slash) {
+				*slash = '\0';
+				add_firmware_candidate(candidates, &count, MAX_CANDIDATES, exe_dir, NULL, filename);
+			}
+		}
+	}
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("ProgramData"), "/libfreenect", filename);
+#endif
+#ifndef _WIN32
+	{
+		// $XDG_DATA_DIRS is a colon-separated list; relative entries are ignored.
+		const char *dirs = getenv("XDG_DATA_DIRS");
+		while (dirs && *dirs) {
+			const char *end = strchr(dirs, ':');
+			int len = end ? (int)(end - dirs) : (int)strlen(dirs);
+			if (dirs[0] == '/')
+				add_firmware_candidate_n(candidates, &count, MAX_CANDIDATES, dirs, len, "/libfreenect", filename);
+			dirs = end ? end + 1 : NULL;
+		}
+	}
+#endif
+#ifdef __APPLE__
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, getenv("HOME"), "/Library/Application Support/libfreenect", filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, "/opt/homebrew/share/libfreenect", NULL, filename);
+#endif
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, "/usr/local/share/libfreenect", NULL, filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, "/usr/share/libfreenect", NULL, filename);
+	add_firmware_candidate(candidates, &count, MAX_CANDIDATES, "./../Resources", NULL, filename);
+
+	for (i = 0; !fw && i < count; i++) {
+		FN_INFO("Trying to open %s as firmware...\n", candidates[i]);
+		fw = fopen(candidates[i], "rb");
+		if (fw)
+			FN_NOTICE("Using audio firmware %s\n", candidates[i]);
+	}
+	return fw;
+}
+
+// Read the open firmware file, upload it, and close the file.
+static int upload_firmware_file(fnusb_dev *dev, FILE *fw) {
+	freenect_context* ctx = dev->parent->parent;
+
+	// get the number of bytes of the file
+	fseek(fw, 0, SEEK_END);
+	long fw_num_bytes = ftell(fw);
+	rewind(fw);
+
+	if (fw_num_bytes <= 0) {
+		FN_ERROR("upload_firmware: firmware file is empty.\n");
+		fclose(fw);
+		return -EINVAL;
+	}
+
+	unsigned char * fw_bytes = (unsigned char *)malloc(fw_num_bytes);
+	if (!fw_bytes) {
+		fclose(fw);
+		return -ENOMEM;
+	}
+	size_t num_read = fread(fw_bytes, 1, (size_t)fw_num_bytes, fw);
+	fclose(fw);
+
+	int retVal = upload_firmware_from_memory(dev, fw_bytes, (unsigned int)num_read);
+	free(fw_bytes);
+	return retVal;
+}
+
+FN_INTERNAL int upload_firmware(fnusb_dev* dev, char * filename) {
+	freenect_context* ctx = dev->parent->parent;
+	FILE *fw = open_firmware_file(ctx, filename);
+	if (!fw) {
+		FN_ERROR("upload_firmware: failed to find firmware file %s. Run fwfetcher.py and put the file in one of the search locations, or set LIBFREENECT_FIRMWARE_PATH.\n", filename);
+		return -ENOENT;
+	}
+	return upload_firmware_file(dev, fw);
+}
+
+#define FW_UAC "UACFirmware.bin" // Microsoft's firmware (freenect-driver-install --fetch-firmware)
+#define FW_XBOX "audios.bin"     // Xbox 360 firmware (fwfetcher.py)
+
+/* Upload the audio controller firmware, choosing the image:
+ *   LIBFREENECT_AUDIO_FIRMWARE=uac   only UACFirmware.bin, Microsoft's firmware:
+ *                                    the microphones become a standard USB
+ *                                    Audio device for the operating system
+ *   LIBFREENECT_AUDIO_FIRMWARE=xbox  only audios.bin, for libfreenect's own
+ *                                    audio API (freenect_start_audio)
+ *   unset: Windows prefers UACFirmware.bin, because libfreenect's audio
+ *   streaming is disabled there; other platforms prefer audios.bin, so the
+ *   audio API keeps working. Either falls back to the other image.
+ */
+FN_INTERNAL int upload_default_firmware(fnusb_dev* dev) {
+	freenect_context* ctx = dev->parent->parent;
+	const char *names[2];
+	int n = 0, i;
+	const char *pref = getenv("LIBFREENECT_AUDIO_FIRMWARE");
+	if (pref && strcmp(pref, "uac") == 0) {
+		names[n++] = FW_UAC;
+	} else if (pref && strcmp(pref, "xbox") == 0) {
+		names[n++] = FW_XBOX;
+	} else {
+#ifdef _WIN32
+		names[n++] = FW_UAC;
+		names[n++] = FW_XBOX;
+#else
+		names[n++] = FW_XBOX;
+		names[n++] = FW_UAC;
+#endif
+	}
+	for (i = 0; i < n; i++) {
+		FILE *fw = open_firmware_file(ctx, names[i]);
+		if (fw)
+			return upload_firmware_file(dev, fw);
+	}
+#ifdef _WIN32
+	FN_ERROR("upload_firmware: no audio firmware found. Run freenect-driver-install --fetch-firmware, or set LIBFREENECT_FIRMWARE_PATH.\n");
+#else
+	FN_ERROR("upload_firmware: no audio firmware found (%s or %s). Run fwfetcher.py, or set LIBFREENECT_FIRMWARE_PATH.\n", FW_XBOX, FW_UAC);
+#endif
+	return -ENOENT;
 }
 
 FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_from_mem, unsigned int fw_size_in_btyes) {
@@ -299,7 +389,7 @@ FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_f
 		res = fnusb_bulk(dev, 1, (unsigned char*)&bootcmd, sizeof(bootcmd), &transferred);
 		if(res != 0 || transferred != sizeof(bootcmd)) {
 			FN_ERROR("upload_firmware(): Error: res: %d\ttransferred: %d (expected %d)\n",res, transferred, (int)(sizeof(bootcmd)));
-			return -1;
+			return abort_upload(dev);
 		}
 		int bytes_sent = 0;
 		while(bytes_sent < read) {
@@ -307,17 +397,21 @@ FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_f
 			res = fnusb_bulk(dev, 1, &page[bytes_sent], to_send, &transferred);
 			if(res != 0 || transferred != to_send) {
 				FN_ERROR("upload_firmware(): Error: res: %d\ttransferred: %d (expected %d)\n",res, transferred, to_send);
-				return -1;
+				return abort_upload(dev);
 			}
 			bytes_sent += to_send;
 			total_bytes_sent += to_send;
 		}
 		res = get_reply(dev);
+		if (res < 0) {
+			FN_ERROR("upload_firmware(): the bootloader rejected the page at 0x%08x\n", addr);
+			return abort_upload(dev);
+		}
 		addr += (uint32_t)read;
 		dev->parent->audio_tag++;
 	} while (read > 0);
 
-	if (total_bytes_sent != fwheader.size) {
+	if (total_bytes_sent < 0 || (uint32_t)total_bytes_sent != fwheader.size) {
 		FN_ERROR("upload_firmware: firmware image declared %d bytes, but file only contained %d bytes\n", fwheader.size, total_bytes_sent);
 		return -1;
 	}
@@ -330,9 +424,13 @@ FN_INTERNAL int upload_firmware_from_memory(fnusb_dev* dev, unsigned char * fw_f
 	res = fnusb_bulk(dev, 1, (unsigned char*)&bootcmd, sizeof(bootcmd), &transferred);
 	if(res != 0 || transferred != sizeof(bootcmd)) {
 		FN_ERROR("upload_firmware(): Error: res: %d\ttransferred: %d (expected %d)\n", res, transferred, (int)sizeof(bootcmd));
-		return -1;
+		return abort_upload(dev);
 	}
 	res = get_reply(dev);
+	if (res < 0) {
+		FN_ERROR("upload_firmware(): the bootloader rejected the execute command\n");
+		return abort_upload(dev);
+	}
 	dev->parent->audio_tag++;
 	FN_INFO("Firmware successfully uploaded and launched.  Device will disconnect and reenumerate.\n");
 	return 0;

@@ -1,0 +1,10 @@
+#!/bin/sh
+# Forget the removed udev rules and systemd unit. Never fails the removal.
+set +e
+if command -v udevadm >/dev/null 2>&1; then
+	udevadm control --reload-rules >/dev/null 2>&1
+fi
+if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+	systemctl daemon-reload >/dev/null 2>&1
+fi
+exit 0

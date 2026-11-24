@@ -1,11 +1,34 @@
-# ATTR{product}=="Xbox NUI Motor"
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02b0", MODE="0666"
-# ATTR{product}=="Xbox NUI Audio"
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02ad", MODE="0666"
-# ATTR{product}=="Xbox NUI Camera"
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02ae", MODE="0666"
+# udev rules for the Kinect for Xbox 360 (models 1414 and 1473) and the
+# Kinect for Windows (model 1517), used by libfreenect.
+#
+# Access without root: the logged-in desktop user gets access through
+# TAG+="uaccess" (systemd-logind), and members of the "plugdev" group get it
+# too, which covers SSH sessions and headless machines such as a Raspberry Pi.
+# The file has to sort before 73-seat-late.rules for "uaccess" to take effect.
+#
+# Audio firmware at plug-in: when the audio controller appears in its
+# bootloader (02ad or 02be), freenect-fwloader.service uploads the firmware,
+# after which the controller comes back as 02bb or 02c3 and snd-usb-audio
+# serves its microphone array to ALSA and PipeWire. Without systemd the
+# SYSTEMD_WANTS line has no effect and applications upload the firmware when
+# they open the Kinect, as before.
 
-# Kinect for Windows
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02c2", MODE="0666"
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02be", MODE="0666"
-SUBSYSTEM=="usb", ATTR{idVendor}=="045e", ATTR{idProduct}=="02bf", MODE="0666"
+ACTION=="remove", GOTO="kinect_end"
+SUBSYSTEM!="usb", GOTO="kinect_end"
+ENV{DEVTYPE}!="usb_device", GOTO="kinect_end"
+ATTR{idVendor}!="045e", GOTO="kinect_end"
+
+# Xbox NUI Camera / Kinect for Windows camera
+ATTR{idProduct}=="02ae|02bf", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+# Xbox NUI Motor (02af on some units)
+ATTR{idProduct}=="02b0|02af", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+# Xbox NUI Audio / Kinect for Windows audio, in its bootloader
+ATTR{idProduct}=="02ad|02be", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+# Audio controller running its firmware (on the 1473 and the Kinect for
+# Windows it also drives the motor and the LED)
+ATTR{idProduct}=="02bb|02c3", TAG+="uaccess", GROUP="plugdev", MODE="0660"
+
+# Upload the audio firmware when the bootloader appears
+ACTION=="add", ATTR{idProduct}=="02ad|02be", TAG+="systemd", ENV{SYSTEMD_WANTS}+="freenect-fwloader.service"
+
+LABEL="kinect_end"

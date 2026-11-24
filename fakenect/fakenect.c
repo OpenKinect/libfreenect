@@ -28,6 +28,7 @@
 #include "platform.h"
 #include "parson.h"
 #include "registration.h"
+#include <errno.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -209,8 +210,11 @@ static void convert_rgb_to_uyvy(uint8_t *rgb_buffer, uint8_t *yuv_buffer,
 	}
 }
 
+static void fakenect_hotplug(freenect_context *ctx);
+
 int freenect_process_events(freenect_context *ctx)
 {
+	fakenect_hotplug(ctx);
 	/* This is where the magic happens. We read 1 update from the index
 	   per call, so this needs to be called in a loop like usual.  If the
 	   index line is a Depth/RGB image the provided callback is called.  If
@@ -308,6 +312,7 @@ int freenect_process_events(freenect_context *ctx)
 
 int freenect_process_events_timeout(freenect_context *ctx, struct timeval *timeout)
 {
+	(void)timeout;
 	return freenect_process_events(ctx);
 }
 
@@ -319,6 +324,7 @@ double freenect_get_tilt_degs(freenect_raw_tilt_state *state)
 
 freenect_raw_tilt_state* freenect_get_tilt_state(freenect_device *dev)
 {
+	(void)dev;
 	return &state;
 }
 
@@ -338,16 +344,19 @@ void freenect_get_mks_accel(freenect_raw_tilt_state *state, double* x, double* y
 
 void freenect_set_depth_callback(freenect_device *dev, freenect_depth_cb cb)
 {
+	(void)dev;
 	cur_depth_cb = cb;
 }
 
 void freenect_set_video_callback(freenect_device *dev, freenect_video_cb cb)
 {
+	(void)dev;
 	cur_video_cb = cb;
 }
 
 int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode)
 {
+        (void)dev;
         // Always say it was successful but continue to pass through the
         // underlying data.  Would be better to check for conflict.
 	video_mode = mode;
@@ -406,6 +415,7 @@ freenect_frame_mode freenect_get_video_mode(int mode_num)
 
 freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 {
+    (void)dev;
     return video_mode;
 }
 
@@ -449,17 +459,20 @@ freenect_frame_mode freenect_get_depth_mode(int mode_num)
 
 freenect_frame_mode freenect_get_current_depth_mode(freenect_device *dev)
 {
+    (void)dev;
     return depth_mode;
 }
 
 int freenect_num_devices(freenect_context *ctx)
 {
+	(void)ctx;
 	// Always 1 device
 	return 1;
 }
 
 int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index)
 {
+	(void)ctx; (void)index;
 	// Set it to some number to allow for NULL checks
 	*dev = fake_dev;
 	return 0;
@@ -467,6 +480,7 @@ int freenect_open_device(freenect_context *ctx, freenect_device **dev, int index
 
 int freenect_open_device_by_camera_serial(freenect_context *ctx, freenect_device **dev, const char* camera_serial)
 {
+    (void)ctx; (void)camera_serial;
     *dev = fake_dev;
     return 0;
 }
@@ -531,6 +545,7 @@ static void read_device_info(freenect_device *dev)
 
 int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 {
+	(void)usb_ctx;
 	input_path = getenv("FAKENECT_PATH");
 	if (!input_path) {
 		printf("Error: Environmental variable FAKENECT_PATH is not set.  Set it to a path that was created using the 'record' utility.\n");
@@ -567,103 +582,188 @@ int freenect_init(freenect_context **ctx, freenect_usb_context *usb_ctx)
 	return 0;
 }
 
+// Hotplug: the recording is one Kinect, which "arrives" at the first
+// freenect_process_events() after the callback is set.
+static freenect_hotplug_cb hotplug_cb = NULL;
+static void *hotplug_user = NULL;
+static int hotplug_pending = 0;
+
+int freenect_set_hotplug_callback(freenect_context *ctx, freenect_hotplug_cb cb, void *user)
+{
+	(void)ctx;
+	hotplug_cb = cb;
+	hotplug_user = user;
+	hotplug_pending = cb != NULL;
+	return 0;
+}
+
+static void fakenect_hotplug(freenect_context *ctx)
+{
+	if (hotplug_pending && hotplug_cb) {
+		hotplug_pending = 0;
+		hotplug_cb(ctx, FREENECT_HOTPLUG_ARRIVED, "fakenect", hotplug_user);
+	}
+}
+
+int freenect_device_connected(freenect_device *dev)
+{
+	(void)dev;
+	return 1;
+}
+
+const char *freenect_get_device_serial(freenect_device *dev)
+{
+	(void)dev;
+	return "fakenect";
+}
+
+int freenect_set_ir_emitter(freenect_device *dev, int on)
+{
+	(void)dev; (void)on;
+	return 0;
+}
+
+// A recording has no colour camera to set.
+int freenect_set_color_setting(freenect_device *dev, freenect_color_setting setting, double value)
+{
+	(void)dev; (void)setting; (void)value;
+	return -ENOTSUP;
+}
+
+int freenect_get_color_setting(freenect_device *dev, freenect_color_setting setting, double *value)
+{
+	(void)dev; (void)setting; (void)value;
+	return -ENOTSUP;
+}
+
+// A recording's frame timing is fixed.
+int freenect_nudge_stream_timing(freenect_device *dev, int depth_nudge_us)
+{
+	(void)dev; (void)depth_nudge_us;
+	return -ENOTSUP;
+}
+
+int freenect_set_stream_timing_auto(freenect_device *dev, int on)
+{
+	(void)dev; (void)on;
+	return -ENOTSUP;
+}
+
 int freenect_supported_subdevices(void)
 {
     return FREENECT_DEVICE_MOTOR | FREENECT_DEVICE_CAMERA;
 }
 
 void freenect_select_subdevices(freenect_context *ctx, freenect_device_flags subdevs) {
+	(void)ctx; (void)subdevs;
 	// Ideally, we'd actually check for MOTOR and CAMERA and AUDIO, but for now
 	// we just ignore them and provide all captured data.
 }
 
 int freenect_set_depth_buffer(freenect_device *dev, void *buf)
 {
+	(void)dev;
 	user_depth_buf = buf;
 	return 0;
 }
 
 int freenect_set_video_buffer(freenect_device *dev, void *buf)
 {
+	(void)dev;
 	user_video_buf = buf;
 	return 0;
 }
 
 void freenect_set_user(freenect_device *dev, void *user)
 {
+	(void)dev;
 	user_ptr = user;
 }
 
 void *freenect_get_user(freenect_device *dev)
 {
+	(void)dev;
 	return user_ptr;
 }
 
 int freenect_start_depth(freenect_device *dev)
 {
+	(void)dev;
 	depth_running = 1;
 	return 0;
 }
 
 int freenect_start_video(freenect_device *dev)
 {
+	(void)dev;
 	rgb_running = 1;
 	return 0;
 }
 
 int freenect_stop_depth(freenect_device *dev)
 {
+	(void)dev;
 	depth_running = 0;
 	return 0;
 }
 
 int freenect_stop_video(freenect_device *dev)
 {
+	(void)dev;
 	rgb_running = 0;
 	return 0;
 }
 
 int freenect_set_video_format(freenect_device *dev, freenect_video_format fmt)
 {
+	(void)dev;
 	assert(fmt == FREENECT_VIDEO_RGB || fmt == FREENECT_VIDEO_YUV_RAW);
 	return 0;
 }
 int freenect_set_depth_format(freenect_device *dev, freenect_depth_format fmt)
 {
+	(void)dev;
 	assert(fmt == FREENECT_DEPTH_11BIT);
 	return 0;
 }
 
-void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb) {}
-void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level) {}
+void freenect_set_log_callback(freenect_context *ctx, freenect_log_cb cb) { (void)ctx; (void)cb;}
+void freenect_set_log_level(freenect_context *ctx, freenect_loglevel level) { (void)level; (void)ctx;}
 int freenect_shutdown(freenect_context *ctx)
 {
+	(void)ctx;
 	free(default_video_back);
 	free(default_depth_back);
 	return 0;
 }
 int freenect_close_device(freenect_device *dev)
 {
+	(void)dev;
 	return 0;
 }
 int freenect_set_tilt_degs(freenect_device *dev, double angle)
 {
+	(void)dev; (void)angle;
 	return 0;
 }
 int freenect_set_led(freenect_device *dev, freenect_led_options option)
 {
+	(void)dev; (void)option;
 	return 0;
 }
 int freenect_update_tilt_state(freenect_device *dev)
 {
+	(void)dev;
 	return 0;
 }
 int freenect_get_ir_brightness(freenect_device *dev)
 {
+	(void)dev;
 	return ir_brightness;
 }
 int freenect_set_ir_brightness(freenect_device *dev, uint16_t brightness)
 {
+	(void)dev;
 	ir_brightness = (brightness % 50);
 	return 0;
 }

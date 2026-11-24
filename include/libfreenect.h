@@ -73,12 +73,17 @@ struct freenect_device_attributes
 /// Enumeration of available resolutions.
 /// Not all available resolutions are actually supported for all video formats.
 /// Frame modes may not perfectly match resolutions.  For instance,
-/// FREENECT_RESOLUTION_MEDIUM is 640x488 for the IR camera.
+/// FREENECT_RESOLUTION_MEDIUM is 640x488 for the IR camera, and
+/// FREENECT_RESOLUTION_HIGH colour is 1280x960 on the Xbox 1473 and Kinect
+/// for Windows (freenect_get_current_video_mode() reports the device's size).
+/// The depth camera always captures 640x480; the LOW and VERY_LOW depth modes
+/// are taken from it in software, as Microsoft's runtime does.
 typedef enum {
-	FREENECT_RESOLUTION_LOW    = 0, /**< QVGA - 320x240 */
-	FREENECT_RESOLUTION_MEDIUM = 1, /**< VGA  - 640x480 */
-	FREENECT_RESOLUTION_HIGH   = 2, /**< SXGA - 1280x1024 */
-	FREENECT_RESOLUTION_DUMMY  = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
+	FREENECT_RESOLUTION_LOW      = 0, /**< QVGA - 320x240 */
+	FREENECT_RESOLUTION_MEDIUM   = 1, /**< VGA  - 640x480 */
+	FREENECT_RESOLUTION_HIGH     = 2, /**< SXGA - 1280x1024 */
+	FREENECT_RESOLUTION_VERY_LOW = 3, /**< 80x60 (depth only) */
+	FREENECT_RESOLUTION_DUMMY    = 2147483647, /**< Dummy value to force enum to be 32 bits wide */
 } freenect_resolution;
 
 /// Enumeration of video frame information states.
@@ -298,6 +303,70 @@ FREENECTAPI int freenect_list_device_attributes(freenect_context *ctx, struct fr
  * @param attribute_list Linked list of attributes to free.
  */
 FREENECTAPI void freenect_free_device_attributes(struct freenect_device_attributes* attribute_list);
+
+/// Events reported by the hotplug callback
+typedef enum {
+	FREENECT_HOTPLUG_ARRIVED = 1, /**< A Kinect was connected (or was already connected when the callback was set) */
+	FREENECT_HOTPLUG_LEFT    = 2  /**< A Kinect was disconnected */
+} freenect_hotplug_event;
+
+/**
+ * Hotplug callback. camera_serial is the serial that
+ * freenect_open_device_by_camera_serial() accepts (for the model 1473 and
+ * the Kinect for Windows, the audio controller's serial); it is an empty
+ * string if the serial could not be read, for example because another
+ * program has the camera open. It is valid only during the call.
+ */
+typedef void (*freenect_hotplug_cb)(freenect_context *ctx, freenect_hotplug_event event, const char *camera_serial, void *user);
+
+/**
+ * Report Kinects being connected and disconnected. The callback is called from
+ * freenect_process_events() / freenect_process_events_timeout(), on the
+ * thread that calls them, after the event handling; it may open and close
+ * devices. When it is set, it first reports FREENECT_HOTPLUG_ARRIVED for each
+ * Kinect that is already connected.
+ *
+ * libusb's hotplug support is used where it is available (Linux, macOS);
+ * elsewhere the USB devices are scanned once a second, and
+ * freenect_process_events_timeout() then waits at most one second.
+ *
+ * When a Kinect that is open leaves, its streams are stopped and
+ * freenect_device_connected() returns 0 for it; close it with
+ * freenect_close_device() and open it again when it arrives. While a hotplug
+ * callback is set, freenect_process_events*() does not return an error
+ * because a device left (without one, it does, as before).
+ *
+ * @param ctx Context
+ * @param cb Callback, or NULL to stop reporting
+ * @param user Passed to the callback
+ *
+ * @return 0 on success, < 0 on error
+ */
+FREENECTAPI int freenect_set_hotplug_callback(freenect_context *ctx, freenect_hotplug_cb cb, void *user);
+
+/**
+ * Whether an open device is still connected. A device counts as disconnected
+ * once a transfer to any of its open subdevices failed because the device is
+ * gone, or the hotplug scan saw its camera leave.
+ *
+ * @param dev Open device
+ *
+ * @return 1 if connected, 0 if it was disconnected
+ */
+FREENECTAPI int freenect_device_connected(freenect_device *dev);
+
+/**
+ * Serial number that identifies an open device: the camera's, or, on the
+ * model 1473 and the Kinect for Windows (whose cameras all report
+ * 0000000000000000), the audio controller's. It is the serial that
+ * freenect_open_device_by_camera_serial() and the hotplug callback use.
+ *
+ * @param dev Open device
+ *
+ * @return The serial (valid until the device is closed), or NULL if it could
+ *         not be read
+ */
+FREENECTAPI const char *freenect_get_device_serial(freenect_device *dev);
 
 /**
  * Answer which subdevices this library supports.  This is most useful for
@@ -671,6 +740,111 @@ FREENECTAPI int freenect_set_depth_mode(freenect_device* dev, const freenect_fra
  */
 FREENECTAPI int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_value value);
 
+/// Distances kept by FREENECT_DEPTH_MM and FREENECT_DEPTH_REGISTERED. A
+/// distance outside the range is delivered as FREENECT_DEPTH_MM_NO_VALUE (0).
+typedef enum {
+	FREENECT_DEPTH_RANGE_DEFAULT = 0, /**< 800-4000 mm, the default, as Microsoft's SDK delivers by default */
+	FREENECT_DEPTH_RANGE_NEAR    = 1, /**< 400-3000 mm, as the SDK in near mode */
+	FREENECT_DEPTH_RANGE_FULL    = 2, /**< unlimited: every distance the sensor reports, also far beyond 4 m, where depth gets noisier. FREENECT_DEPTH_MM saturates at FREENECT_DEPTH_MM_MAX_VALUE */
+} freenect_depth_range;
+
+/**
+ * Sets the range of distances kept in millimetre depth. It takes effect
+ * at once, also while depth is streaming. With FREENECT_DEPTH_RANGE_DEFAULT,
+ * switching FREENECT_NEAR_MODE on selects FREENECT_DEPTH_RANGE_NEAR, and
+ * off again FREENECT_DEPTH_RANGE_DEFAULT, as in the SDK.
+ *
+ * @param range The range to keep. The default is FREENECT_DEPTH_RANGE_DEFAULT.
+ *
+ * @return 0 on success, < 0 if error
+ */
+FREENECTAPI int freenect_set_depth_range(freenect_device *dev, freenect_depth_range range);
+
+/**
+ * @return The range of distances kept in millimetre depth.
+ */
+FREENECTAPI freenect_depth_range freenect_get_depth_range(freenect_device *dev);
+
+/// Colour camera settings of the Kinect for Windows (model 1517), with the
+/// same values, ranges and defaults as the Kinect for Windows SDK's
+/// INuiColorCameraSettings. Other models don't have them.
+typedef enum {
+	FREENECT_COLOR_AUTO_EXPOSURE = 0,       /**< 0 or 1. Default 1 */
+	FREENECT_COLOR_EXPOSURE_TIME,           /**< 1-4000, in the SDK's units. Default 4000. Only with auto exposure off */
+	FREENECT_COLOR_FRAME_INTERVAL,          /**< 0-4000, in the SDK's units. Default 0. Only with auto exposure off */
+	FREENECT_COLOR_GAIN,                    /**< 1.0-16.0. Default 1.0. Only with auto exposure off */
+	FREENECT_COLOR_BRIGHTNESS,              /**< 0.0-1.0. Default 0.2156863. Only with auto exposure on */
+	FREENECT_COLOR_POWER_LINE_FREQUENCY,    /**< 0 off, 1 50 Hz, 2 60 Hz. Default 0. Only with auto exposure on */
+	FREENECT_COLOR_BACKLIGHT_COMPENSATION,  /**< 0 average brightness, 1 centre priority, 2 low lights priority, 4 centre only. Default 0. Only with auto exposure on */
+	FREENECT_COLOR_AUTO_WHITE_BALANCE,      /**< 0 or 1. Default 1 */
+	FREENECT_COLOR_WHITE_BALANCE,           /**< 2700-6500 K. Default 2700. Only with auto white balance off */
+	FREENECT_COLOR_CONTRAST,                /**< 0.5-2.0. Default 1.0 */
+	FREENECT_COLOR_HUE,                     /**< -22.0-22.0. Default 0 */
+	FREENECT_COLOR_SATURATION,              /**< 0.0-2.0. Default 1.0 */
+	FREENECT_COLOR_GAMMA,                   /**< 1.0-2.8. Default 2.2 */
+	FREENECT_COLOR_SHARPNESS,               /**< 0.0-1.0. Default 0.5 */
+	FREENECT_COLOR_SETTING_COUNT,           /**< Number of settings; not a setting */
+} freenect_color_setting;
+
+/**
+ * Sets a colour camera setting of a Kinect for Windows. The value is kept
+ * and sent to the camera once a video stream delivers frames, and again
+ * after every video start. A setting that depends on auto exposure or auto
+ * white balance takes effect when that is in the required state.
+ *
+ * @return 0 on success, -ENOTSUP if this Kinect isn't a Kinect for Windows,
+ *         -EINVAL if the setting or value is out of range, < 0 on other errors
+ */
+FREENECTAPI int freenect_set_color_setting(freenect_device *dev, freenect_color_setting setting, double value);
+
+/**
+ * Gets a colour camera setting of a Kinect for Windows: the value set last,
+ * or the default.
+ *
+ * @return 0 on success, -ENOTSUP if this Kinect isn't a Kinect for Windows,
+ *         -EINVAL if the setting is out of range
+ */
+FREENECTAPI int freenect_get_color_setting(freenect_device *dev, freenect_color_setting setting, double *value);
+
+/**
+ * Shifts the depth stream's frame timing by depth_nudge_us microseconds
+ * (modulo one 30 fps frame period), to bring depth frames into phase with
+ * colour frames, as Microsoft's runtime does. Depth and colour keep their
+ * frame rates; only depth's phase moves.
+ *
+ * @return 0 on success, -ENOTSUP if the camera reported no timing
+ *         parameters, < 0 on other errors
+ */
+FREENECTAPI int freenect_nudge_stream_timing(freenect_device *dev, int depth_nudge_us);
+
+/**
+ * Switches automatic depth/colour phase alignment on or off (default off).
+ * While depth and colour (at 30, 15 or 12 fps, not hi-res) both stream,
+ * libfreenect measures when their frames arrive and nudges depth into
+ * phase with colour, with the estimate Microsoft's runtime uses when stream
+ * sync is enabled. Because libfreenect's frame times jitter more, it nudges
+ * only when the phase is off by at least 1 ms in several estimates in a
+ * row, and at most every 5 s. It runs in freenect_process_events().
+ *
+ * @return 0 on success, -ENOTSUP if the camera reported no timing parameters
+ */
+FREENECTAPI int freenect_set_stream_timing_auto(freenect_device *dev, int on);
+
+/**
+ * Switches the IR projector (laser) on or off.
+ *
+ * The projector is switched on when depth starts and off when it stops. With
+ * on = 0 it is kept off while depth runs (depth then sees nothing), which is
+ * useful for IR-only use or for other depth cameras nearby. The setting holds
+ * for later depth starts until it is changed again.
+ *
+ * @param dev Device
+ * @param on 1 to allow the projector, 0 to keep it off
+ *
+ * @return 0 on success, < 0 if the camera rejected the command
+ */
+FREENECTAPI int freenect_set_ir_emitter(freenect_device *dev, int on);
+
 /**
  * Get the current exposure in microseconds
  *
@@ -700,7 +874,8 @@ FREENECTAPI int freenect_get_exposure(freenect_device *dev, int *time_us);
 FREENECTAPI int freenect_set_exposure(freenect_device *dev, int time_us);
 
 /**
- * Returns the brightness of the IR sensor.
+ * Returns the brightness of the IR sensor. While FREENECT_NEAR_MODE is on,
+ * returns the brightness that switching near mode off restores.
  *
  * @param dev Device to get IR brightness
  *
@@ -711,9 +886,11 @@ FREENECTAPI int freenect_get_ir_brightness(freenect_device *dev);
 /**
  * Sets the brightness of the IR sensor.
  * Note that this does not change the intensity of the IR projector.
+ * Near mode (Kinect for Windows) uses the same camera register: while it is
+ * on, the brightness is kept and applied when near mode is switched off.
  *
  * @param dev Device to set IR brightness
- * @param brighness Brightness value in range 1 - 50
+ * @param brightness Brightness value in range 1 - 50
  *
  * @return 0 on success, < 0 if error
  */

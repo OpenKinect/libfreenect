@@ -1,0 +1,11 @@
+#!/bin/sh
+# Pick up the installed udev rules and systemd unit. Never fails the install.
+set +e
+if command -v udevadm >/dev/null 2>&1; then
+	udevadm control --reload-rules >/dev/null 2>&1
+	udevadm trigger --subsystem-match=usb --attr-match=idVendor=045e --action=add >/dev/null 2>&1
+fi
+if [ -d /run/systemd/system ] && command -v systemctl >/dev/null 2>&1; then
+	systemctl daemon-reload >/dev/null 2>&1
+fi
+exit 0

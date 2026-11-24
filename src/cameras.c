@@ -33,6 +33,9 @@
 #include "registration.h"
 #include "cameras.h"
 #include "flags.h"
+#include "depth_decimate.h"
+
+static freenect_frame_mode video_mode_for_device(freenect_device *dev, freenect_resolution res, freenect_video_format fmt);
 
 #define MAKE_RESERVED(res, fmt) (uint32_t)(((res & 0xff) << 8) | (((fmt & 0xff))))
 #define RESERVED_TO_RESOLUTION(reserved) (freenect_resolution)((reserved >> 8) & 0xff)
@@ -61,7 +64,7 @@ static freenect_frame_mode supported_video_modes[video_mode_count] = {
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_VIDEO_YUV_RAW), FREENECT_RESOLUTION_MEDIUM, {FREENECT_VIDEO_YUV_RAW}, 640*480*2, 640, 480, 16, 0, 15, 1 },
 };
 
-#define depth_mode_count 6
+#define depth_mode_count 14
 static freenect_frame_mode supported_depth_modes[depth_mode_count] = {
 	// reserved, resolution, format, bytes, width, height, data_bits_per_pixel, padding_bits_per_pixel, framerate, is_valid
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_11BIT}, 640*480*2, 640, 480, 11, 5, 30, 1},
@@ -70,227 +73,16 @@ static freenect_frame_mode supported_depth_modes[depth_mode_count] = {
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT_PACKED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_10BIT_PACKED}, 640*480*10/8, 640, 480, 10, 0, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_REGISTERED), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_REGISTERED}, 640*480*2, 640, 480, 16, 0, 30, 1},
 	{MAKE_RESERVED(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_MM), FREENECT_RESOLUTION_MEDIUM, {FREENECT_DEPTH_MM}, 640*480*2, 640, 480, 16, 0, 30, 1},
+	// 320x240 and 80x60: taken from the 640x480 frame in software (§20.2.4)
+	{MAKE_RESERVED(FREENECT_RESOLUTION_LOW, FREENECT_DEPTH_11BIT), FREENECT_RESOLUTION_LOW, {FREENECT_DEPTH_11BIT}, 320*240*2, 320, 240, 11, 5, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_LOW, FREENECT_DEPTH_10BIT), FREENECT_RESOLUTION_LOW, {FREENECT_DEPTH_10BIT}, 320*240*2, 320, 240, 10, 6, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_LOW, FREENECT_DEPTH_REGISTERED), FREENECT_RESOLUTION_LOW, {FREENECT_DEPTH_REGISTERED}, 320*240*2, 320, 240, 16, 0, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_LOW, FREENECT_DEPTH_MM), FREENECT_RESOLUTION_LOW, {FREENECT_DEPTH_MM}, 320*240*2, 320, 240, 16, 0, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_VERY_LOW, FREENECT_DEPTH_11BIT), FREENECT_RESOLUTION_VERY_LOW, {FREENECT_DEPTH_11BIT}, 80*60*2, 80, 60, 11, 5, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_VERY_LOW, FREENECT_DEPTH_10BIT), FREENECT_RESOLUTION_VERY_LOW, {FREENECT_DEPTH_10BIT}, 80*60*2, 80, 60, 10, 6, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_VERY_LOW, FREENECT_DEPTH_REGISTERED), FREENECT_RESOLUTION_VERY_LOW, {FREENECT_DEPTH_REGISTERED}, 80*60*2, 80, 60, 16, 0, 30, 1},
+	{MAKE_RESERVED(FREENECT_RESOLUTION_VERY_LOW, FREENECT_DEPTH_MM), FREENECT_RESOLUTION_VERY_LOW, {FREENECT_DEPTH_MM}, 80*60*2, 80, 60, 16, 0, 30, 1},
 };
-static const freenect_frame_mode invalid_mode = {0, (freenect_resolution)0, {(freenect_video_format)0}, 0, 0, 0, 0, 0, 0, 0};
-
-struct pkt_hdr {
-	uint8_t magic[2];
-	uint8_t pad;
-	uint8_t flag;
-	uint8_t unk1;
-	uint8_t seq;
-	uint8_t unk2;
-	uint8_t unk3;
-	uint32_t timestamp;
-};
-
-static int stream_process(freenect_context *ctx, packet_stream *strm, uint8_t *pkt, int len, freenect_chunk_cb cb, void *user_data)
-{
-	if (len < 12)
-		return 0;
-
-	struct pkt_hdr *hdr = (struct pkt_hdr*)pkt;
-	uint8_t *data = pkt + sizeof(*hdr);
-	int datalen = len - sizeof(*hdr);
-
-	freenect_loglevel l_info = LL_INFO;
-	freenect_loglevel l_notice = LL_NOTICE;
-	freenect_loglevel l_warning = LL_WARNING;
-	if (strm->valid_frames < 2)
-		l_info = l_notice = l_warning = LL_SPEW;
-
-	if (hdr->magic[0] != 'R' || hdr->magic[1] != 'B') {
-		FN_LOG(l_notice, "[Stream %02x] Invalid magic %02x%02x\n",
-		       strm->flag, hdr->magic[0], hdr->magic[1]);
-		return 0;
-	}
-
-	FN_FLOOD("[Stream %02x] Packet with flag: %02x\n", strm->flag, hdr->flag);
-
-	uint8_t sof = strm->flag|1;
-	uint8_t mof = strm->flag|2;
-	uint8_t eof = strm->flag|5;
-
-	// sync if required, dropping packets until SOF
-	if (!strm->synced) {
-		if (hdr->flag != sof) {
-			FN_SPEW("[Stream %02x] Not synced yet...\n", strm->flag);
-			return 0;
-		}
-		strm->synced = 1;
-		strm->seq = hdr->seq;
-		strm->pkt_num = 0;
-		strm->valid_pkts = 0;
-		strm->got_pkts = 0;
-	}
-
-	int got_frame_size = 0;
-
-	// handle lost packets
-	if (strm->seq != hdr->seq) {
-		uint8_t lost = hdr->seq - strm->seq;
-		strm->lost_pkts += lost;
-		FN_LOG(l_info, "[Stream %02x] Lost %d packets\n", strm->flag, lost);
-
-		FN_DEBUG("[Stream %02x] Lost %d total packets in %d frames (%f lppf)\n",
-			strm->flag, strm->lost_pkts, strm->valid_frames, (float)strm->lost_pkts / strm->valid_frames);
-
-		if (lost > 5 || strm->variable_length) {
-			FN_LOG(l_notice, "[Stream %02x] Lost too many packets, resyncing...\n", strm->flag);
-			strm->synced = 0;
-			return 0;
-		}
-		strm->seq = hdr->seq;
-		int left = strm->pkts_per_frame - strm->pkt_num;
-		if (left <= lost) {
-			strm->pkt_num = lost - left;
-			strm->valid_pkts = strm->got_pkts;
-			strm->got_pkts = 0;
-			got_frame_size = strm->frame_size;
-			strm->timestamp = strm->last_timestamp;
-			strm->valid_frames++;
-		} else {
-			strm->pkt_num += lost;
-		}
-	}
-
-	int expected_pkt_size = (strm->pkt_num == strm->pkts_per_frame-1) ? strm->last_pkt_size : strm->pkt_size;
-
-	if (!strm->variable_length) {
-		// check the header to make sure it's what we expect
-		if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
-		    !(strm->pkt_num == strm->pkts_per_frame-1 && hdr->flag == eof) &&
-		    !(strm->pkt_num > 0 && strm->pkt_num < strm->pkts_per_frame-1 && hdr->flag == mof)) {
-			FN_LOG(l_notice, "[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
-			       strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
-			strm->synced = 0;
-			return got_frame_size;
-		}
-		// check data length
-		if (datalen > expected_pkt_size) {
-			FN_LOG(l_warning, "[Stream %02x] Expected max %d data bytes, but got %d. Dropping...\n",
-			       strm->flag, expected_pkt_size, datalen);
-			return got_frame_size;
-		}
-		if (datalen < expected_pkt_size)
-			FN_LOG(l_warning, "[Stream %02x] Expected %d data bytes, but got %d\n",
-			       strm->flag, expected_pkt_size, datalen);
-	} else {
-		// check the header to make sure it's what we expect
-		if (!(strm->pkt_num == 0 && hdr->flag == sof) &&
-		    !(strm->pkt_num < strm->pkts_per_frame && (hdr->flag == eof || hdr->flag == mof))) {
-			FN_LOG(l_notice, "[Stream %02x] Inconsistent flag %02x with %d packets in buf (%d total), resyncing...\n",
-			       strm->flag, hdr->flag, strm->pkt_num, strm->pkts_per_frame);
-			strm->synced = 0;
-			return got_frame_size;
-		}
-		// check data length
-		if (datalen > expected_pkt_size) {
-			FN_LOG(l_warning, "[Stream %02x] Expected max %d data bytes, but got %d. Resyncng...\n",
-			       strm->flag, expected_pkt_size, datalen);
-			strm->synced = 0;
-			return got_frame_size;
-		}
-		if (datalen < expected_pkt_size && hdr->flag != eof) {
-			FN_LOG(l_warning, "[Stream %02x] Expected %d data bytes, but got %d. Resyncing...\n",
-			       strm->flag, expected_pkt_size, datalen);
-			strm->synced = 0;
-			return got_frame_size;
-		}
-	}
-
-	// copy or chunk process the data
-	uint8_t *dbuf = strm->raw_buf + strm->pkt_num * strm->pkt_size;
-	if(cb){
-		cb(strm->raw_buf,data,strm->pkt_num,datalen,user_data);
-	}else{
-		memcpy(dbuf, data, datalen);
-	}
-
-	strm->pkt_num++;
-	strm->seq++;
-	strm->got_pkts++;
-
-	strm->last_timestamp = fn_le32(hdr->timestamp);
-
-	if (hdr->flag == eof) {
-		if (strm->variable_length)
-			got_frame_size = (dbuf - strm->raw_buf) + datalen;
-		else
-			got_frame_size = (dbuf - strm->raw_buf) + strm->last_pkt_size;
-		strm->pkt_num = 0;
-		strm->valid_pkts = strm->got_pkts;
-		strm->got_pkts = 0;
-		strm->timestamp = strm->last_timestamp;
-		strm->valid_frames++;
-	}
-
-	return got_frame_size;
-}
-
-static void stream_init(freenect_context *ctx, packet_stream *strm, int rlen, int plen)
-{
-	strm->valid_frames = 0;
-	strm->synced = 0;
-
-	if (strm->usr_buf) {
-		strm->lib_buf = NULL;
-		strm->proc_buf = strm->usr_buf;
-	} else {
-		strm->lib_buf = malloc(plen);
-		strm->proc_buf = strm->lib_buf;
-	}
-
-	if (rlen == 0) {
-		strm->split_bufs = 0;
-		strm->raw_buf = (uint8_t*)strm->proc_buf;
-		strm->frame_size = plen;
-	} else {
-		strm->split_bufs = 1;
-		strm->raw_buf = (uint8_t*)malloc(rlen);
-		strm->frame_size = rlen;
-	}
-
-	strm->last_pkt_size = strm->frame_size % strm->pkt_size;
-	if (strm->last_pkt_size == 0)
-		strm->last_pkt_size = strm->pkt_size;
-	strm->pkts_per_frame = (strm->frame_size + strm->pkt_size - 1) / strm->pkt_size;
-}
-
-static void stream_freebufs(freenect_context *ctx, packet_stream *strm)
-{
-	if (strm->split_bufs)
-		free(strm->raw_buf);
-	if (strm->lib_buf)
-		free(strm->lib_buf);
-
-	strm->raw_buf = NULL;
-	strm->proc_buf = NULL;
-	strm->lib_buf = NULL;
-}
-
-static int stream_setbuf(freenect_context *ctx, packet_stream *strm, void *pbuf)
-{
-	if (!strm->running) {
-		strm->usr_buf = pbuf;
-		return 0;
-	} else {
-		if (!pbuf && !strm->lib_buf) {
-			FN_ERROR("Attempted to set buffer to NULL but stream was started with no internal buffer\n");
-			return -1;
-		}
-		strm->usr_buf = pbuf;
-
-		if (!pbuf)
-			strm->proc_buf = strm->lib_buf;
-		else
-			strm->proc_buf = pbuf;
-
-		if (!strm->split_bufs)
-			strm->raw_buf = (uint8_t*)strm->proc_buf;
-		return 0;
-	}
-}
 
 /**
  * Convert a packed array of n elements with vw useful bits into array of
@@ -392,18 +184,20 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 	FN_SPEW("Got depth frame of size %d/%d, %d/%d packets arrived, TS %08x\n", got_frame_size,
 	        dev->depth.frame_size, dev->depth.valid_pkts, dev->depth.pkts_per_frame, dev->depth.timestamp);
 
+	// 320x240 and 80x60 are converted at 640x480 into depth_full first.
+	uint16_t *full = dev->depth_full ? dev->depth_full : (uint16_t*)dev->depth.proc_buf;
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_11BIT:
-			convert_packed11_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 640*480);
+			convert_packed11_to_16bit(dev->depth.raw_buf, full, 640*480);
 			break;
 		case FREENECT_DEPTH_REGISTERED:
-			freenect_apply_registration(dev, dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, false);
+			freenect_apply_registration(dev, dev->depth.raw_buf, full, false);
 			break;
 		case FREENECT_DEPTH_MM:
-			freenect_apply_depth_to_mm(dev, dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf );
+			freenect_apply_depth_to_mm(dev, dev->depth.raw_buf, full);
 			break;
 		case FREENECT_DEPTH_10BIT:
-			convert_packed_to_16bit(dev->depth.raw_buf, (uint16_t*)dev->depth.proc_buf, 10, 640*480);
+			convert_packed_to_16bit(dev->depth.raw_buf, full, 10, 640*480);
 			break;
 		case FREENECT_DEPTH_10BIT_PACKED:
 		case FREENECT_DEPTH_11BIT_PACKED:
@@ -412,6 +206,9 @@ static void depth_process(freenect_device *dev, uint8_t *pkt, int len)
 			FN_ERROR("depth_process() was called, but an invalid depth_format is set\n");
 			break;
 	}
+	if (dev->depth_full)
+		fn_decimate_depth(dev->depth_full, (uint16_t*)dev->depth.proc_buf,
+		                  dev->depth_resolution == FREENECT_RESOLUTION_VERY_LOW ? 8 : 2, dev->depth_mirrored);
 	if (dev->depth_cb)
 		dev->depth_cb(dev, dev->depth.proc_buf, dev->depth.timestamp);
 }
@@ -666,11 +463,14 @@ static int freenect_fetch_reg_info(freenect_device *dev)
 	freenect_context *ctx = dev->parent;
 	char reply[0x200];
 	uint16_t cmd[5];
-	freenect_frame_mode mode = freenect_get_current_video_mode(dev);
+	// Read once at open, for 640x480 at 30 fps, as Microsoft's init script
+	// does ([0x40, 0, 1, 30, 0], §20.1.1): the mapping for every colour
+	// resolution uses these values (§20.5.2), and asking with the hi-res
+	// colour mode fails.
 	cmd[0] = fn_le16(0x40); // ParamID - in this scenario, XN_HOST_PROTOCOL_ALGORITHM_REGISTRATION
 	cmd[1] = fn_le16(0); // Format
-	cmd[2] = fn_le16((uint16_t)mode.resolution); // Resolution
-	cmd[3] = fn_le16((uint16_t)mode.framerate); // FPS
+	cmd[2] = fn_le16(1); // Resolution
+	cmd[3] = fn_le16(30); // FPS
 	cmd[4] = fn_le16(0); // Offset
 
 	int res;
@@ -849,15 +649,34 @@ int freenect_start_depth(freenect_device *dev)
 	dev->depth.flag = 0x70;
 	dev->depth.variable_length = 0;
 
+	// The camera always sends 640x480; 320x240 and 80x60 are taken from it
+	// after conversion (§20.2.4), so they need a 640x480 work buffer.
+	freenect_frame_mode out_mode = freenect_find_depth_mode(dev->depth_resolution, dev->depth_format);
+	if (!out_mode.is_valid) {
+		FN_ERROR("freenect_start_depth(): invalid depth format/resolution combination\n");
+		return -1;
+	}
+	free(dev->depth_full);
+	dev->depth_full = NULL;
+	if (dev->depth_resolution != FREENECT_RESOLUTION_MEDIUM) {
+		dev->depth_full = (uint16_t*)malloc(640*480*sizeof(uint16_t));
+		if (!dev->depth_full)
+			return -1;
+	}
+
 	switch (dev->depth_format) {
 		case FREENECT_DEPTH_REGISTERED:
 		case FREENECT_DEPTH_MM:
-			freenect_init_registration(dev);
+			if (freenect_init_registration(dev) < 0) {
+				FN_ERROR("freenect_start_depth(): out of memory for the registration tables\n");
+				return -1;
+			}
+			// fall through - these are computed from the 11-bit stream
 		case FREENECT_DEPTH_11BIT:
-			stream_init(ctx, &dev->depth, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_11BIT_PACKED).bytes, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_11BIT).bytes);
+			stream_init(ctx, &dev->depth, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_11BIT_PACKED).bytes, out_mode.bytes);
 			break;
 		case FREENECT_DEPTH_10BIT:
-			stream_init(ctx, &dev->depth, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_10BIT_PACKED).bytes, freenect_find_depth_mode(dev->depth_resolution, FREENECT_DEPTH_10BIT).bytes);
+			stream_init(ctx, &dev->depth, freenect_find_depth_mode(FREENECT_RESOLUTION_MEDIUM, FREENECT_DEPTH_10BIT_PACKED).bytes, out_mode.bytes);
 			break;
 		case FREENECT_DEPTH_11BIT_PACKED:
 		case FREENECT_DEPTH_10BIT_PACKED:
@@ -867,6 +686,7 @@ int freenect_start_depth(freenect_device *dev)
 			FN_ERROR("freenect_start_depth() called with invalid depth format %d\n", dev->depth_format);
 			return -1;
 	}
+	dev->depth.skip_frames = 0;
 
 	const unsigned char depth_endpoint = 0x82;
 	int packet_size = fnusb_get_max_iso_packet_size(&dev->usb_cam, depth_endpoint, DEPTH_PKTBUF);
@@ -897,6 +717,11 @@ int freenect_start_depth(freenect_device *dev)
 	write_register(dev, 0x14, 0x1e);
 	write_register(dev, 0x06, 0x02); // start depth stream
 	write_register(dev, 0x17, 0x00); // disable depth hflip
+	dev->depth_mirrored = 0;
+
+	// IR projector: on, as Microsoft's runtime does after every depth start,
+	// unless freenect_set_ir_emitter(dev, 0) asked to keep it off.
+	fn_set_ir_emitter(dev, !dev->ir_emitter_forced_off);
 
 	dev->depth.running = 1;
 	return 0;
@@ -994,7 +819,7 @@ int freenect_start_video(freenect_device *dev)
 	freenect_frame_mode frame_mode = freenect_get_current_video_mode(dev);
 	switch (dev->video_format) {
 		case FREENECT_VIDEO_RGB:
-			stream_init(ctx, &dev->video, freenect_find_video_mode(dev->video_resolution, FREENECT_VIDEO_BAYER).bytes, frame_mode.bytes);
+			stream_init(ctx, &dev->video, video_mode_for_device(dev, dev->video_resolution, FREENECT_VIDEO_BAYER).bytes, frame_mode.bytes);
 			break;
 		case FREENECT_VIDEO_BAYER:
 			stream_init(ctx, &dev->video, 0, frame_mode.bytes);
@@ -1017,6 +842,9 @@ int freenect_start_video(freenect_device *dev)
 		case FREENECT_VIDEO_DUMMY: // Silence compiler
 			break;
 	}
+	// As Kinect10 does (§10D.1.3): skip the first two complete frames after a
+	// video start, while the sensor's exposure and colour settle.
+	dev->video.skip_frames = 2;
 
 	const unsigned char video_endpoint = 0x81;
 	int packet_size = fnusb_get_max_iso_packet_size(&dev->usb_cam, video_endpoint, VIDEO_PKTBUF);
@@ -1050,6 +878,7 @@ int freenect_start_video(freenect_device *dev)
 	write_register(dev, hflip_reg, 0x00); // disable Hflip
 
 	dev->video.running = 1;
+	fn_color_on_video_start(dev); // Kinect for Windows colour settings, sent once frames arrive
 	return 0;
 }
 
@@ -1062,7 +891,12 @@ int freenect_stop_depth(freenect_device *dev)
 		return -1;
 
 	dev->depth.running = 0;
-	write_register(dev, 0x06, 0x00); // stop depth stream
+	// A Kinect that was unplugged can't take commands; they would only fail
+	// after their timeouts.
+	if (!dev->usb_cam.device_dead) {
+		write_register(dev, 0x06, 0x00); // stop depth stream
+		fn_set_ir_emitter(dev, 0);       // and switch the IR projector off (#385)
+	}
 
 	res = fnusb_stop_iso(&dev->usb_cam, &dev->depth_isoc);
 	if (res < 0) {
@@ -1072,6 +906,8 @@ int freenect_stop_depth(freenect_device *dev)
 
 	freenect_destroy_registration(&(dev->registration));
 	stream_freebufs(ctx, &dev->depth);
+	free(dev->depth_full);
+	dev->depth_full = NULL;
 	return 0;
 }
 
@@ -1084,7 +920,8 @@ int freenect_stop_video(freenect_device *dev)
 		return -1;
 
 	dev->video.running = 0;
-	write_register(dev, 0x05, 0x00); // stop video stream
+	if (!dev->usb_cam.device_dead)
+		write_register(dev, 0x05, 0x00); // stop video stream
 
 	res = fnusb_stop_iso(&dev->usb_cam, &dev->video_isoc);
 	if (res < 0) {
@@ -1131,9 +968,25 @@ freenect_frame_mode freenect_get_video_mode(int mode_num)
 	return retval;
 }
 
+// The frame mode as this device delivers it. The hi-res colour sensor mode
+// is 1280x1024 only on the Xbox 1414; the 1473 and Kinect for Windows send
+// 1280x960 (§5.8, §10A.5). The mode table keeps 1280x1024, so buffers sized
+// from freenect_find_video_mode() are large enough on every model.
+static freenect_frame_mode video_mode_for_device(freenect_device *dev, freenect_resolution res, freenect_video_format fmt)
+{
+	freenect_frame_mode mode = freenect_find_video_mode(res, fmt);
+	if (mode.is_valid && res == FREENECT_RESOLUTION_HIGH &&
+	    (fmt == FREENECT_VIDEO_RGB || fmt == FREENECT_VIDEO_BAYER) &&
+	    (dev->device_type == FN_KINECT_XBOX_1473 || dev->device_type == FN_KINECT_WINDOWS)) {
+		mode.height = 960;
+		mode.bytes = mode.width * mode.height * (fmt == FREENECT_VIDEO_RGB ? 3 : 1);
+	}
+	return mode;
+}
+
 freenect_frame_mode freenect_get_current_video_mode(freenect_device *dev)
 {
-	return freenect_find_video_mode(dev->video_resolution, dev->video_format);
+	return video_mode_for_device(dev, dev->video_resolution, dev->video_format);
 }
 
 freenect_frame_mode freenect_find_video_mode(freenect_resolution res, freenect_video_format fmt)
@@ -1174,9 +1027,6 @@ int freenect_set_video_mode(freenect_device* dev, const freenect_frame_mode mode
 	freenect_video_format fmt = (freenect_video_format)RESERVED_TO_FORMAT(mode.reserved);
 	dev->video_format = fmt;
 	dev->video_resolution = res;
-	// Now that we've changed video format and resolution, we need to update
-	// registration tables.
-	freenect_fetch_reg_info(dev);
 	return 0;
 }
 
@@ -1269,27 +1119,43 @@ FN_INTERNAL int freenect_camera_init(freenect_device *dev)
 		FN_ERROR("freenect_camera_init(): Failed to fetch const shift for device\n");
 		return res;
 	}
+	// As before, a camera that does not answer still opens; depth to colour
+	// mapping is then off.
+	if (freenect_fetch_reg_info(dev) < 0)
+		FN_WARNING("freenect_camera_init(): no registration info; depth/colour mapping will be wrong\n");
+	// Only for freenect_nudge_stream_timing(); a camera without them streams
+	// as before.
+	if (fn_fetch_timing_params(dev) < 0)
+		FN_INFO("freenect_camera_init(): no stream timing parameters; stream timing alignment unavailable\n");
+	// A program that was killed while depth ran leaves the IR projector on
+	// until the Kinect loses power; switch it off until depth starts.
+	if (fn_set_ir_emitter(dev, 0) < 0)
+		FN_INFO("freenect_camera_init(): could not switch the IR projector off\n");
 	return 0;
 }
 
 FN_INTERNAL int freenect_camera_teardown(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
-	int res = 0;
+	int res = 0, r;
+	// Stop both streams: this used to return after stopping depth, leaving a
+	// running video stream behind.
 	if (dev->depth.running) {
-		res = freenect_stop_depth(dev);
-		if (res < 0) {
+		r = freenect_stop_depth(dev);
+		if (r < 0) {
 			FN_ERROR("freenect_camera_teardown(): Failed to stop depth camera\n");
+			res = r;
 		}
-		return res;
 	}
 	if (dev->video.running) {
-		res = freenect_stop_video(dev);
-		if (res < 0) {
+		r = freenect_stop_video(dev);
+		if (r < 0) {
 			FN_ERROR("freenect_camera_teardown(): Failed to stop video camera\n");
+			res = r;
 		}
-		return res;
 	}
 	freenect_destroy_registration(&(dev->registration));
-	return 0;
+	free(dev->depth_full); // left by a start that failed
+	dev->depth_full = NULL;
+	return res;
 }

@@ -26,9 +26,13 @@
 #include "libfreenect.h"
 #include "libfreenect_audio.h"
 #include "freenect_internal.h"
+#include "mic_geometry.h"
 
 #include <string.h>
 #include <stdlib.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 
 static void prepare_iso_out_data(freenect_device* dev, uint8_t* buffer) {
@@ -66,6 +70,7 @@ static void prepare_iso_out_data(freenect_device* dev, uint8_t* buffer) {
 		case 0x80:
 			stream->out_seq = 0;
 			// TODO: if we're at the beginning of a new outgoing window, save a timestamp
+			// fall through
 		case 0x2b:
 		case 0x56:
 			stream->out_counter_within_window = 0;
@@ -79,6 +84,7 @@ static void prepare_iso_out_data(freenect_device* dev, uint8_t* buffer) {
 }
 
 static void iso_out_callback(freenect_device *dev, uint8_t *pkt, int len) {
+	(void)len;
 	prepare_iso_out_data(dev, pkt);
 }
 
@@ -146,12 +152,84 @@ void freenect_set_audio_out_callback(freenect_device *dev, freenect_audio_out_cb
 	dev->audio_out_cb = callback;
 }
 
+// Safety guard. In a hardware test on Windows 11 (WinUSB, Xbox 1414 with
+// audios.bin), the audio isochronous streams reported stalls, and the
+// outstanding transfers were never completed by the kernel. The process could
+// then not be terminated, and Windows hung during restart, because shutdown
+// waits for that I/O. Until the audio path is understood and verified on
+// Windows, audio streaming is refused unless explicitly requested.
+static int windows_audio_allowed(void)
+{
+#ifdef _WIN32
+	char value[8];
+	DWORD n = GetEnvironmentVariableA("LIBFREENECT_WINDOWS_AUDIO_UNSAFE", value, sizeof(value));
+	return n > 0 && n < sizeof(value) && value[0] == '1';
+#else
+	return 1;
+#endif
+}
+
+int freenect_audio_streaming_available(freenect_device* dev)
+{
+	if (!dev || !dev->usb_audio.dev || dev->usb_audio.device_dead)
+		return 0;
+	// Microsoft's UAC firmware: a standard USB audio device instead
+	if (fnusb_has_audio_class(&dev->usb_audio))
+		return 0;
+	return windows_audio_allowed();
+}
+
+int freenect_get_mic_geometry(freenect_device* dev, freenect_mic_geometry* out)
+{
+	uint8_t buf[FN_MIC_GEOMETRY_SIZE];
+	int res;
+	if (!out)
+		return -1;
+	fn_mic_geometry_default(out);
+	if (!dev || !dev->usb_audio.dev || dev->usb_audio.device_dead)
+		return 0;
+	// GET_MEM (§40.5.3). The operating system asks for it on the audio
+	// streaming interface (entity 1, interface 2), which belongs to its
+	// audio driver; the firmware answers whatever the index, so this asks
+	// through interface 0, which libfreenect has claimed.
+	res = fnusb_control(&dev->usb_audio, FN_MIC_GEOMETRY_REQUEST_TYPE, FN_MIC_GEOMETRY_REQUEST,
+	                    0, (1 << 8) | 0, buf, sizeof(buf));
+	if (res < 0 || fn_mic_geometry_parse(buf, res, out) < 0) {
+		freenect_context *ctx = dev->parent;
+		FN_INFO("freenect_get_mic_geometry(): no microphone array descriptor from the Kinect (%d); "
+		        "using the standard geometry\n", res);
+		fn_mic_geometry_default(out);
+		return 0;
+	}
+	return 1;
+}
+
 int freenect_start_audio(freenect_device* dev) {
 	freenect_context *ctx = dev->parent;
 	int res;
 
 	if (dev->audio.running)
 		return -1;
+
+	// With Microsoft's UAC firmware the microphones are a standard USB Audio
+	// device, owned by the operating system's audio stack; libfreenect's audio
+	// protocol is only spoken by the Xbox audios.bin firmware.
+	if (fnusb_has_audio_class(&dev->usb_audio)) {
+		FN_ERROR("The audio controller runs Microsoft's UAC firmware: its microphones are a standard USB "
+		         "audio device. Record from them with the operating system's audio APIs, or load "
+		         "audios.bin (LIBFREENECT_AUDIO_FIRMWARE=xbox) to use freenect_start_audio().\n");
+		return -1;
+	}
+
+#ifdef _WIN32
+	if (!windows_audio_allowed()) {
+		FN_ERROR("Audio streaming is disabled on Windows: in testing it left USB transfers that never "
+		         "completed, which made the process unkillable and hung Windows shutdown. "
+		         "Set LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1 only on a machine you can hard-reset.\n");
+		return -1;
+	}
+	FN_WARNING("LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1: starting audio streaming on Windows. This can hang the machine.\n");
+#endif
 
 	// Allocate buffers
 	dev->audio.audio_out_ring = (freenect_sample_51*)malloc(256 * sizeof(freenect_sample_51));
@@ -188,6 +266,7 @@ int freenect_start_audio(freenect_device* dev) {
 	res = fnusb_start_iso(&dev->usb_audio, &dev->audio_out_isoc, iso_out_callback, 0x02, NUM_XFERS, PKTS_PER_XFER, 76);
 	if (res < 0) {
 		FN_ERROR("audio: failed to start isochronous OUT stream: %d\n", res);
+		fnusb_stop_iso(&dev->usb_audio, &dev->audio_in_isoc);
 		return res;
 	}
 

@@ -35,11 +35,7 @@
 #endif
 #include <pthread.h>
 
-#if defined(__APPLE__)
-#include <GLUT/glut.h>
-#else
-#include <GL/glut.h>
-#endif
+#include "fn_glut.h" // GLFW, or GLUT with -DFREENECT_GL_VIEWERS=GLUT
 
 #include <math.h>
 
@@ -79,6 +75,7 @@ as the argument to freenect_set_user. You can then access it here as the ud.
 
 void chunk_cb(void *buffer, void *pkt_data, int pkt_num, int pkt_size,void *ud)
 {
+	(void)pkt_size; (void)ud;
 	if(pkt_num == 73 || pkt_num == 146) return;
 	uint8_t *raw = (uint8_t *) pkt_data;
 	uint16_t *frame=(uint16_t *)buffer;
@@ -149,6 +146,7 @@ void DrawGLScene()
 
 void keyPressed(unsigned char key, int x, int y)
 {
+	(void)y; (void)x;
 	if (key == 27) {
 		die = 1;
 		pthread_join(freenect_thread, NULL);
@@ -231,6 +229,7 @@ void InitGL(int Width, int Height)
 
 void *gl_threadfunc(void *arg)
 {
+	(void)arg;
 	printf("GL thread\n");
 
 	glutInit(&g_argc, g_argv);
@@ -258,6 +257,7 @@ uint16_t t_gamma[2048];
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
+	(void)dev; (void)timestamp;
 	int i;
 	uint16_t *depth = (uint16_t*)v_depth;
 	pthread_mutex_lock(&gl_backbuf_mutex);
@@ -309,6 +309,7 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 
 void *freenect_threadfunc(void *arg)
 {
+	(void)arg;
 	int accelCount = 0;
 
 	freenect_set_tilt_degs(f_dev,freenect_angle);

@@ -20,7 +20,7 @@ ELSE(BUILD_REDIST_PACKAGE)
   install (FILES "${CMAKE_CURRENT_BINARY_DIR}/../audios.bin" DESTINATION "${CMAKE_INSTALL_PREFIX}/share/libfreenect")
 ENDIF()
 
-LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c audio.c loader.c)
+LIST(APPEND SRC core.c tilt.c cameras.c flags.c usb_libusb10.c registration.c coordinate_mapper.c audio.c loader.c kinect_type.c hotplug.c iso_diag.c stream.c color.c timing.c)
 
 add_library (freenect SHARED ${SRC})
 set_target_properties ( freenect PROPERTIES
@@ -30,7 +30,12 @@ install (TARGETS freenect
   DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}")
 
 add_library (freenectstatic STATIC ${SRC})
-set_target_properties (freenectstatic PROPERTIES OUTPUT_NAME freenect)
+if (MSVC)
+  # freenect.lib is already the import library of freenect.dll
+  set_target_properties (freenectstatic PROPERTIES OUTPUT_NAME freenect_static)
+else ()
+  set_target_properties (freenectstatic PROPERTIES OUTPUT_NAME freenect)
+endif ()
 IF(UNIX AND NOT APPLE)
   SET_TARGET_PROPERTIES (freenectstatic PROPERTIES COMPILE_FLAGS "-fPIC")
 ENDIF()
@@ -39,9 +44,14 @@ install (TARGETS freenectstatic
 
 target_link_libraries (freenect ${LIBUSB_1_LIBRARIES})
 target_link_libraries (freenectstatic ${LIBUSB_1_LIBRARIES})
+if (UNIX)
+  # libm: lround() in tilt.c, and the math in registration.c
+  target_link_libraries (freenect m)
+  target_link_libraries (freenectstatic m)
+endif ()
 
 # Install the header files
-install (FILES "../include/libfreenect.h" "../include/libfreenect_registration.h" "../include/libfreenect_audio.h"
+install (FILES "../include/libfreenect.h" "../include/libfreenect_registration.h" "../include/libfreenect_coordinate_mapper.h" "../include/libfreenect_audio.h"
   DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
 
 IF(UNIX)
@@ -50,3 +60,43 @@ IF(UNIX)
   install (FILES "${CMAKE_CURRENT_BINARY_DIR}/libfreenect.pc"
     DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}/pkgconfig")
 ENDIF()
+
+# The coordinate mapper reproduces Microsoft's single-precision results to the
+# bit; a fused multiply-add (GCC's default on arm64) would change them.
+if (NOT MSVC)
+  set_source_files_properties (coordinate_mapper.c PROPERTIES COMPILE_OPTIONS "-ffp-contract=off")
+endif ()
+
+# freenect_audio_dsp: beamformer and source localisation for the microphone
+# array (include/libfreenect_audio_dsp.h). Its own library; it needs nothing
+# from libfreenect but its headers.
+if (BUILD_AUDIO_DSP)
+  add_library (freenect_audio_dsp SHARED audio_dsp.c mclt.c)
+  add_library (freenect_audio_dsp_static STATIC audio_dsp.c mclt.c)
+  set_target_properties (freenect_audio_dsp PROPERTIES VERSION ${PROJECT_VER} SOVERSION ${PROJECT_APIVER})
+  if (MSVC)
+    set_target_properties (freenect_audio_dsp_static PROPERTIES OUTPUT_NAME freenect_audio_dsp_s)
+  else ()
+    set_target_properties (freenect_audio_dsp_static PROPERTIES OUTPUT_NAME freenect_audio_dsp POSITION_INDEPENDENT_CODE ON)
+  endif ()
+  if (UNIX)
+    target_link_libraries (freenect_audio_dsp m)
+    target_link_libraries (freenect_audio_dsp_static m)
+  endif ()
+  if (WITH_SPEEXDSP)
+    find_path (SPEEXDSP_INCLUDE_DIR speex/speex_preprocess.h)
+    find_library (SPEEXDSP_LIBRARY NAMES speexdsp libspeexdsp)
+    if (SPEEXDSP_INCLUDE_DIR AND SPEEXDSP_LIBRARY)
+      message (STATUS "freenect_audio_dsp: with SpeexDSP (${SPEEXDSP_LIBRARY})")
+      foreach (t freenect_audio_dsp freenect_audio_dsp_static)
+        target_compile_definitions (${t} PRIVATE HAVE_SPEEXDSP)
+        target_include_directories (${t} PRIVATE ${SPEEXDSP_INCLUDE_DIR})
+        target_link_libraries (${t} ${SPEEXDSP_LIBRARY})
+      endforeach ()
+    else ()
+      message (STATUS "freenect_audio_dsp: without SpeexDSP (no echo cancellation, noise suppression or AGC)")
+    endif ()
+  endif ()
+  install (TARGETS freenect_audio_dsp freenect_audio_dsp_static DESTINATION "${PROJECT_LIBRARY_INSTALL_DIR}")
+  install (FILES "../include/libfreenect_audio_dsp.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+endif ()

@@ -55,6 +55,11 @@ set (PROJECT_APIVER
 
 OPTION(BUILD_REDIST_PACKAGE "Build libfreenect in a legally-redistributable manner (only affects audio)" ON)
 OPTION(BUILD_EXAMPLES "Build example programs" ON)
+OPTION(BUILD_TESTS "Build the unit tests (no Kinect needed; run with ctest)" ON)
+OPTION(BUILD_NUI "Build libfreenect_nui, the optional skeleton tracker (needs Microsoft's models, fetched at install)" OFF)
+OPTION(BUILD_AUDIO_DSP "Build freenect_audio_dsp: beamformer and source localisation for the microphone array" ON)
+OPTION(WITH_SPEEXDSP "freenect_audio_dsp: echo cancellation, noise suppression and AGC with SpeexDSP, if found" ON)
+OPTION(FREENECT_WERROR "GCC/Clang: build with -Wall -Wextra -Werror (CI does)" OFF)
 OPTION(BUILD_FAKENECT "Build fakenect mock library" ON)
 OPTION(BUILD_C_SYNC "Build c synchronous library" ON)
 OPTION(BUILD_CPP "Build C++ Library (currently header only)" ON)
@@ -64,10 +69,15 @@ OPTION(BUILD_PYTHON "Build Python extensions" OFF)
 OPTION(BUILD_PYTHON2 "Build Python 2 extension" OFF)
 OPTION(BUILD_PYTHON3 "Build Python 3 extension" OFF)
 OPTION(BUILD_OPENNI2_DRIVER "Build libfreenect driver for OpenNI2" OFF)
+IF(WIN32)
+	OPTION(BUILD_DRIVER_INSTALLER "Build freenect-driver-install (binds the Kinect to WinUSB)" ON)
+ENDIF(WIN32)
 IF(PROJECT_OS_LINUX)
 	OPTION(BUILD_CPACK_DEB "Build an DEB using CPack" OFF)
 	OPTION(BUILD_CPACK_RPM "Build an RPM using CPack" OFF)
 	OPTION(BUILD_CPACK_TGZ "Build an TGZ using CPack" OFF)
+	OPTION(INSTALL_LINUX_INTEGRATION "Install the udev rules and the firmware-at-plug-in systemd unit" ON)
+	OPTION(BUILD_V4L2_BRIDGE "Build freenect-v4l2 (Kinect depth and colour as V4L2 cameras through v4l2loopback)" ON)
 ENDIF(PROJECT_OS_LINUX)
 
 ######################################################################################
@@ -94,9 +104,9 @@ endif()
 # CMake
 ######################################################################################
 
-SET(EXECUTABLE_OUTPUT_PATH ${CMAKE_BINARY_DIR}/bin)
-SET(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
-SET(DOC_OUTPUT_PATH ${CMAKE_BINARY_DIR}/doc)
+SET(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
+SET(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
+SET(DOC_OUTPUT_PATH ${PROJECT_BINARY_DIR}/doc)
 
 if    (MSVC)
   set(C_FLAGS_WARNING "-W4")
@@ -130,15 +140,45 @@ if(WIN32)
   include_directories("${CMAKE_CURRENT_SOURCE_DIR}/platform/windows")
 endif()
 
+if (FREENECT_WERROR AND (CMAKE_C_COMPILER_ID MATCHES "GNU|Clang"))
+  add_compile_options(-Wall -Wextra -Werror)
+endif ()
+
+# Before any subdirectory that adds tests (nui/ has its own)
+IF(BUILD_TESTS)
+  enable_testing()
+ENDIF()
+
 # Add library project
 add_subdirectory (src)
+if (BUILD_NUI)
+  add_subdirectory (nui)
+endif ()
+
+IF(WIN32 AND BUILD_DRIVER_INSTALLER)
+  add_subdirectory (platform/windows/driver-install)
+ENDIF()
+
+IF(PROJECT_OS_LINUX AND INSTALL_LINUX_INTEGRATION)
+  add_subdirectory (platform/linux)
+ENDIF()
+
+IF(APPLE)
+  add_subdirectory (platform/macos)
+ENDIF()
 
 IF(BUILD_EXAMPLES)
+  # Window library of the OpenGL viewers (examples/ and wrappers/cpp/)
+  include (FreenectGLViewers)
   add_subdirectory (examples)
 ENDIF()
 
 IF(BUILD_FAKENECT)
   add_subdirectory (fakenect)
+ENDIF()
+
+IF(BUILD_TESTS)
+  add_subdirectory (test)
 ENDIF()
 
 IF(BUILD_C_SYNC)
@@ -194,6 +234,17 @@ IF ( BUILD_CPACK_TGZ OR BUILD_CPACK_DEB OR BUILD_CPACK_RPM )
   set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "libfreenect library for using kinect")
   set(CPACK_PACKAGE_NAME "libfreenect-dev")
   set(CPACK_DEBIAN_PACKAGE_DEPENDS "libusb-1.0-0-dev")
+  # Package the files where this build installs them, so that paths built
+  # into installed files (the systemd unit's ExecStart) match. Configure
+  # package builds with -DCMAKE_INSTALL_PREFIX=/usr.
+  set(CPACK_PACKAGING_INSTALL_PREFIX "${CMAKE_INSTALL_PREFIX}")
+  if (PROJECT_OS_LINUX AND INSTALL_LINUX_INTEGRATION)
+    # Reload udev rules and systemd units after installing or removing.
+    set(CPACK_DEBIAN_PACKAGE_CONTROL_EXTRA
+        "${CMAKE_CURRENT_SOURCE_DIR}/platform/linux/debian/postinst;${CMAKE_CURRENT_SOURCE_DIR}/platform/linux/debian/postrm")
+    set(CPACK_RPM_POST_INSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/platform/linux/debian/postinst")
+    set(CPACK_RPM_POST_UNINSTALL_SCRIPT_FILE "${CMAKE_CURRENT_SOURCE_DIR}/platform/linux/debian/postrm")
+  endif ()
 
   set(CPACK_PACKAGE_CONTACT "OpenKinect <openkinect@googlegroups.com>")
   #set(CPACK_PACKAGE_VENDOR "")
@@ -216,9 +267,11 @@ IF ( BUILD_CPACK_TGZ OR BUILD_CPACK_DEB OR BUILD_CPACK_RPM )
 
   include(CPack)
 
-  INSTALL(FILES "${CMAKE_BINARY_DIR}/lib/libfreenect.a" DESTINATION ${PROJECT_LIBRARY_INSTALL_DIR})
+  INSTALL(FILES "${PROJECT_BINARY_DIR}/lib/libfreenect.a" DESTINATION ${PROJECT_LIBRARY_INSTALL_DIR})
   INSTALL(FILES "include/libfreenect.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   INSTALL(FILES "include/libfreenect_registration.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+  INSTALL(FILES "include/libfreenect_coordinate_mapper.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
+  INSTALL(FILES "include/libfreenect_audio_dsp.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   INSTALL(FILES "include/libfreenect_audio.h" DESTINATION ${PROJECT_INCLUDE_INSTALL_DIR})
   INSTALL(FILES "APACHE20" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")
   INSTALL(FILES "GPL2" DESTINATION "share/doc/${CPACK_PACKAGE_NAME}")

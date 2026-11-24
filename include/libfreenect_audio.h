@@ -109,6 +109,64 @@ FREENECTAPI int freenect_start_audio(freenect_device* dev);
  */
 FREENECTAPI int freenect_stop_audio(freenect_device* dev);
 
+/**
+ * Whether freenect_start_audio() can stream from this device.
+ *
+ * libfreenect speaks the audio protocol of the Xbox firmware (audios.bin).
+ * With Microsoft's UAC firmware (UAC.BIN) the microphones are a standard USB
+ * audio device of the operating system (4 channels, 32-bit, 16 kHz): record
+ * from it with ALSA, PipeWire, Core Audio or WASAPI instead. On Windows,
+ * libfreenect's own audio streaming is off unless
+ * LIBFREENECT_WINDOWS_AUDIO_UNSAFE=1, because it hung a test machine.
+ *
+ * @param dev Device to ask
+ *
+ * @return 1 if the audio controller is open and freenect_start_audio() can
+ *         stream from it, 0 otherwise
+ */
+FREENECTAPI int freenect_audio_streaming_available(freenect_device* dev);
+
+#define FREENECT_MAX_MICS 4
+
+/// One microphone of the array. Positions in mm: x forward (away from the
+/// Kinect's front), y along the array, z up. Angles in 1/10000 radian.
+typedef struct {
+	uint16_t type;          ///< 2: cardioid
+	int16_t x_mm;
+	int16_t y_mm;
+	int16_t z_mm;
+	int16_t vertical_angle;
+	int16_t horizontal_angle;
+} freenect_mic;
+
+/// The microphone array, as the Kinect's audio firmware describes it to the
+/// operating system (Microsoft's microphone array descriptor).
+typedef struct {
+	uint16_t array_type;            ///< 0: linear
+	int16_t vertical_angle_begin;   ///< working range, 1/10000 radian
+	int16_t vertical_angle_end;
+	int16_t horizontal_angle_begin;
+	int16_t horizontal_angle_end;
+	uint16_t freq_low_hz;           ///< working frequency band
+	uint16_t freq_high_hz;
+	int num_mics;
+	freenect_mic mics[FREENECT_MAX_MICS]; ///< in the order of the audio channels (mic1..mic4)
+} freenect_mic_geometry;
+
+/**
+ * Read the microphone array geometry from the device's audio controller
+ * (either firmware). Needs FREENECT_DEVICE_AUDIO to be open.
+ *
+ * @param dev Device to ask
+ * @param out Where to write the geometry
+ *
+ * @return 1 if it came from the device; 0 if the device could not be asked
+ *         (audio not open, or no valid answer), in which case *out holds the
+ *         values every Kinect reports (y = -113, 36, 76, 113 mm); -1 if out
+ *         is NULL
+ */
+FREENECTAPI int freenect_get_mic_geometry(freenect_device* dev, freenect_mic_geometry* out);
+
 #ifdef __cplusplus
 }
 #endif

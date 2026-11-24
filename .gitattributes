@@ -1,0 +1,3 @@
+# Files used on Linux must keep LF line endings in every checkout
+platform/linux/** text eol=lf
+*.sh text eol=lf

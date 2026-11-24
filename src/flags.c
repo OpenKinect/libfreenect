@@ -26,6 +26,9 @@
 
 #include <string.h> // for memcpy
 #include <unistd.h> // for usleep
+#ifndef _WIN32
+#include <time.h>   // for clock_gettime
+#endif
 #include "freenect_internal.h"
 #include "flags.h"
 
@@ -49,27 +52,42 @@ int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_va
 
 	if (flag == FREENECT_NEAR_MODE)
 	{
-		if (dev->usb_cam.PID != PID_K4W_CAMERA)
+		// As in Microsoft's runtime: only Kinect for Windows has near mode.
+		if (dev->device_type != FN_KINECT_WINDOWS)
 		{
-			FN_WARNING("Near mode is only supported by K4W");
+			FN_WARNING("Near mode is only supported by Kinect for Windows (this is: %s)\n",
+			           fnusb_kinect_type_name(dev->device_type));
 			return -1;
 		}
 
+		// Register 0x15 is shared with freenect_set_ir_brightness(): near
+		// mode sets it to 7 (§10C.3). Switching near mode off writes back the
+		// brightness the application asked for, or the camera's 30.
 		if (value == FREENECT_ON)
 		{
 			int ret = write_register(dev, 0x0015, 0x0007);
 			if (ret < 0)
 				return ret;
+			dev->near_mode = 1;
 			usleep(100000);
-			return write_register(dev, 0x02EF, 0x0000);
+			ret = write_register(dev, 0x02EF, 0x0000);
+			// As the SDK does in near mode: keep 400-3000 mm (§20.2.2)
+			if (ret >= 0 && dev->depth_range == FREENECT_DEPTH_RANGE_DEFAULT)
+				freenect_set_depth_range(dev, FREENECT_DEPTH_RANGE_NEAR);
+			return ret;
 		}
 		else
 		{
-			int ret = write_register(dev, 0x0015, 0x001E);
+			uint16_t ir = dev->ir_brightness ? dev->ir_brightness : FN_IR_BRIGHTNESS_DEFAULT;
+			int ret = write_register(dev, 0x0015, ir);
 			if (ret < 0)
 				return ret;
+			dev->near_mode = 0;
 			usleep(100000);
-			return write_register(dev, 0x02EF, 0x0190);
+			ret = write_register(dev, 0x02EF, 0x0190);
+			if (ret >= 0 && dev->depth_range == FREENECT_DEPTH_RANGE_NEAR)
+				freenect_set_depth_range(dev, FREENECT_DEPTH_RANGE_DEFAULT);
+			return ret;
 		}
 	}
 
@@ -78,7 +96,10 @@ int freenect_set_flag(freenect_device *dev, freenect_flag flag, freenect_flag_va
         int reg = register_for_flag(flag);
         if (reg < 0)
             return reg;
-        return write_register(dev, reg, value);
+        int ret = write_register(dev, reg, value);
+        if (ret >= 0 && flag == FREENECT_MIRROR_DEPTH)
+            dev->depth_mirrored = value == FREENECT_ON; // the 320x240 and 80x60 depth modes follow it
+        return ret;
     }
 
 	uint16_t cmos_value = read_cmos_register(dev, 0x0106);
@@ -149,6 +170,11 @@ int freenect_get_ir_brightness(freenect_device *dev)
 {
 	freenect_context *ctx = dev->parent;
 
+	// In near mode register 0x15 holds near mode's 7; report the brightness
+	// that switching near mode off brings back.
+	if (dev->near_mode)
+		return dev->ir_brightness ? dev->ir_brightness : FN_IR_BRIGHTNESS_DEFAULT;
+
 	const uint16_t brightness = read_register(dev, 0x15);
 	if (brightness == UINT16_MAX)
 	{
@@ -172,6 +198,15 @@ int freenect_set_ir_brightness(freenect_device *dev, uint16_t brightness)
 		brightness = 50;
 	}
 
+	dev->ir_brightness = brightness;
+	// Register 0x15 belongs to near mode while it's on; the brightness is
+	// written when near mode is switched off.
+	if (dev->near_mode)
+	{
+		FN_INFO("IR brightness %u kept; it applies when near mode is switched off\n", brightness);
+		return 0;
+	}
+
 	const int ret = write_register(dev, 0x15, brightness);
 	if (ret < 0)
 	{
@@ -187,6 +222,24 @@ typedef struct {
 	uint16_t cmd;
 	uint16_t tag;
 } cam_hdr;
+
+// Camera command channel ("GM" commands, "RB" replies on EP0).
+#define SEND_CMD_POLL_US 1000       // poll interval while waiting for a reply
+#define SEND_CMD_TIMEOUT_MS 2000    // give up on a command after 2 s (wall clock)
+#define SEND_CMD_MAX_STALE 8        // most unrelated replies drained/skipped per command
+
+// Monotonic milliseconds. Sleeps are much longer than requested on some
+// systems (about 15 ms on Windows), so the timeout cannot count polls.
+static uint64_t send_cmd_now_ms(void)
+{
+#ifdef _WIN32
+	return GetTickCount64();
+#else
+	struct timespec ts;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	return (uint64_t)ts.tv_sec * 1000 + (uint64_t)(ts.tv_nsec / 1000000);
+#endif
+}
 
 FN_INTERNAL int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsigned int cmd_len, void *replybuf, int reply_len)
 {
@@ -210,6 +263,22 @@ FN_INTERNAL int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsig
 
 	memcpy(obuf+sizeof(*chdr), cmdbuf, cmd_len);
 
+	// Discard replies that are already waiting. They belong to commands whose
+	// reply was never read (an earlier failure, or a process that ended in the
+	// middle of a command). If they stayed, every following command would read
+	// the previous command's reply.
+	int i;
+	for (i = 0; i < SEND_CMD_MAX_STALE; i++) {
+		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
+		if (actual_len <= 0 || actual_len == 0x200)
+			break; // nothing pending
+		if (actual_len >= (int)sizeof(*rhdr))
+			FN_WARNING("send_cmd: discarding stale reply (cmd %04x tag %04x) before cmd %04x\n",
+			           fn_le16(rhdr->cmd), fn_le16(rhdr->tag), cmd);
+		else
+			FN_WARNING("send_cmd: discarding stale %d-byte reply before cmd %04x\n", actual_len, cmd);
+	}
+
 	res = fnusb_control(&dev->usb_cam, 0x40, 0, 0, 0, obuf, cmd_len + sizeof(*chdr));
 	FN_SPEW("send_cmd: cmd=%04x tag=%04x len=%04x: %d\n", cmd, dev->cam_tag, cmd_len, res);
 	if (res < 0) {
@@ -217,30 +286,47 @@ FN_INTERNAL int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsig
 		return res;
 	}
 
-	do {
+	// Wait for the reply to this command: poll until one arrives, skip replies
+	// that belong to other commands, and give up after SEND_CMD_TIMEOUT_US
+	// instead of polling forever.
+	uint64_t start_ms = send_cmd_now_ms();
+	int stale = 0;
+	for (;;) {
 		actual_len = fnusb_control(&dev->usb_cam, 0xc0, 0, 0, 0, ibuf, 0x200);
 		FN_FLOOD("send_cmd: actual length = %d\n", actual_len);
-		usleep(1);
-	} while ((actual_len == 0) || (actual_len == 0x200));
-	FN_SPEW("Control reply: %d\n", res);
-	if (actual_len < (int)sizeof(*rhdr)) {
-		FN_ERROR("send_cmd: Input control transfer failed (%d)\n", res);
-		return res;
+		if (actual_len < 0) {
+			FN_ERROR("send_cmd: Input control transfer failed (%d)\n", actual_len);
+			return actual_len;
+		}
+		if (actual_len == 0 || actual_len == 0x200) { // no reply yet
+			if (send_cmd_now_ms() - start_ms >= SEND_CMD_TIMEOUT_MS) {
+				FN_ERROR("send_cmd: no reply to cmd %04x tag %04x after %d ms\n", cmd, dev->cam_tag, SEND_CMD_TIMEOUT_MS);
+				return -1;
+			}
+			usleep(SEND_CMD_POLL_US);
+			continue;
+		}
+		if (actual_len < (int)sizeof(*rhdr)) {
+			FN_ERROR("send_cmd: Short reply (%d bytes)\n", actual_len);
+			return -1;
+		}
+		if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
+			FN_ERROR("send_cmd: Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
+			return -1;
+		}
+		if (rhdr->cmd != chdr->cmd || rhdr->tag != chdr->tag) {
+			FN_WARNING("send_cmd: skipping reply for cmd %04x tag %04x while waiting for cmd %04x tag %04x\n",
+			           fn_le16(rhdr->cmd), fn_le16(rhdr->tag), cmd, dev->cam_tag);
+			if (++stale > SEND_CMD_MAX_STALE) {
+				FN_ERROR("send_cmd: too many unrelated replies, giving up on cmd %04x\n", cmd);
+				return -1;
+			}
+			continue;
+		}
+		break;
 	}
+	FN_SPEW("Control reply: %d\n", actual_len);
 	actual_len -= sizeof(*rhdr);
-
-	if (rhdr->magic[0] != 0x52 || rhdr->magic[1] != 0x42) {
-		FN_ERROR("send_cmd: Bad magic %02x %02x\n", rhdr->magic[0], rhdr->magic[1]);
-		return -1;
-	}
-	if (rhdr->cmd != chdr->cmd) {
-		FN_ERROR("send_cmd: Bad cmd %02x != %02x\n", rhdr->cmd, chdr->cmd);
-		return -1;
-	}
-	if (rhdr->tag != chdr->tag) {
-		FN_ERROR("send_cmd: Bad tag %04x != %04x\n", rhdr->tag, chdr->tag);
-		return -1;
-	}
 	if (fn_le16(rhdr->len) != (actual_len/2)) {
 		FN_ERROR("send_cmd: Bad len %04x != %04x\n", fn_le16(rhdr->len), (int)(actual_len/2));
 		return -1;
@@ -256,6 +342,30 @@ FN_INTERNAL int send_cmd(freenect_device *dev, uint16_t cmd, void *cmdbuf, unsig
 	dev->cam_tag++;
 
 	return actual_len;
+}
+
+// IR projector (laser diode) on or off: GM command 0x0086 with a 16-bit 1 or 0.
+// Microsoft's runtime sends "on" right after every depth start and "off" after
+// every depth stop, for every Kinect v1 model.
+FN_INTERNAL int fn_set_ir_emitter(freenect_device *dev, int on)
+{
+	freenect_context *ctx = dev->parent;
+	uint16_t cmd = fn_le16(on ? 1 : 0);
+	uint8_t reply[16];
+	int res = send_cmd(dev, 0x0086, &cmd, 2, reply, sizeof(reply));
+	if (res < 0)
+		FN_WARNING("Could not switch the IR projector %s: %d\n", on ? "on" : "off", res);
+	return res < 0 ? res : 0;
+}
+
+int freenect_set_ir_emitter(freenect_device *dev, int on)
+{
+	dev->ir_emitter_forced_off = !on;
+	// Applied now only while depth runs; freenect_start_depth() applies it
+	// after every start, and freenect_stop_depth() switches the projector off.
+	if (!dev->depth.running)
+		return 0;
+	return fn_set_ir_emitter(dev, on);
 }
 
 // returns UINT16_MAX on error

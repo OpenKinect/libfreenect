@@ -64,6 +64,7 @@ void dump_rgb(FILE *fp, void *data, int data_size)
 
 FILE *open_dump(char type, double cur_time, uint32_t timestamp, int data_size, const char *extension)
 {
+	(void)data_size;
 	char *fn = malloc(strlen(out_dir) + 50);
 	sprintf(fn, "%c-%f-%u.%s", type, cur_time, timestamp, extension);
 	fprintf(index_fp, "%s\n", fn);
@@ -129,12 +130,14 @@ void dump(char type, uint32_t timestamp, void *data, int data_size)
 void dump_ffmpeg_24(FILE *stream, uint32_t timestamp, void *data,
 					int data_size)
 {
+	(void)timestamp;
 	fwrite(data, data_size, 1, stream);
 }
 
 void dump_ffmpeg_pad16(FILE *stream, uint32_t timestamp, void *data,
 					   int data_size)
 {
+	(void)timestamp;
 	unsigned int z = 0;
 	uint16_t* data_ptr = (uint16_t*)data;
 	uint16_t* end = data_ptr + data_size;
@@ -169,6 +172,7 @@ void rgb_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 
 void depth_cb_ffmpeg(freenect_device *dev, void *depth, uint32_t timestamp)
 {
+	(void)dev;
 	double cur_time = get_time();
 	fprintf(index_fp, "d-%f-%u\n", cur_time, timestamp);
 
@@ -327,6 +331,7 @@ FILE *open_index(const char *fn)
 
 void signal_cleanup(int num)
 {
+	(void)num;
 	running = 0;
 	printf("Caught signal, cleaning up\n");
 	signal(SIGINT, signal_cleanup);
@@ -406,10 +411,8 @@ int main(int argc, char **argv)
 		sprintf(fn, "%s/INDEX.txt", out_dir);
 		index_fp = open_index(fn);
 		free(fn);
-		if (!index_fp) {
-			fclose(index_fp);
+		if (!index_fp)
 			return 1;
-		}
 
 		init();
 		fclose(index_fp);

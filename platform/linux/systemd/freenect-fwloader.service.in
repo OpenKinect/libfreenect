@@ -1,0 +1,32 @@
+[Unit]
+Description=Upload the audio firmware to a Kinect
+Documentation=https://github.com/OpenKinect/libfreenect/tree/master/platform/linux
+# Started by 51-kinect.rules when a Kinect audio controller appears in its
+# bootloader (USB 045e:02ad or 045e:02be). One instance serves every Kinect
+# that is connected; a start request while it runs joins the running job.
+
+[Service]
+Type=oneshot
+ExecStart=@FWLOADER_PATH@ --wait 10
+TimeoutStartSec=90
+# The firmware is looked for in $LIBFREENECT_FIRMWARE_PATH and in
+# /usr/local/share/libfreenect and /usr/share/libfreenect.
+# Install it there with: sudo fwfetcher.py --uac /usr/local/share/libfreenect
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+# libusb follows device arrival through udev, which uses netlink sockets
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=

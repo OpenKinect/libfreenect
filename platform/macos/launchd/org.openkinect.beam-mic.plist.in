@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Feeds "Kinect Beamformed Microphone" (KinectBeamMic.driver) from the
+  Kinect's microphone array, for as long as you are logged in. Install as your
+  user (see platform/macos/README.md):
+    cp org.openkinect.beam-mic.plist ~/Library/LaunchAgents/
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/org.openkinect.beam-mic.plist
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>org.openkinect.beam-mic</string>
+	<key>ProgramArguments</key>
+	<array>
+		<string>@BEAM_MIC_HELPER_PATH@</string>
+	</array>
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+	<key>ThrottleInterval</key>
+	<integer>30</integer>
+	<!-- audio work: not throttled like a background job -->
+	<key>ProcessType</key>
+	<string>Interactive</string>
+	<key>LimitLoadToSessionType</key>
+	<string>Aqua</string>
+</dict>
+</plist>

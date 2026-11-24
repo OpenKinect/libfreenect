@@ -1,0 +1,504 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A newer push to the same branch cancels the run it supersedes (macOS runners
+# in particular can queue for a long time).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    name: Windows ${{ matrix.arch }} (MSVC)
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            triplet: x64-windows
+          - arch: ARM64
+            triplet: arm64-windows
+    env:
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: "Configure (vcpkg manifest: libusb, freeglut)"
+        shell: pwsh
+        run: >
+          cmake -S . -B build -A ${{ matrix.arch }}
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+          -DVCPKG_MANIFEST_FEATURES=examples
+          -DBUILD_EXAMPLES=ON -DBUILD_C_SYNC=ON -DBUILD_CPP=ON
+          -DBUILD_FAKENECT=OFF -DBUILD_DRIVER_INSTALLER=ON
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      - name: Unit tests
+        if: matrix.arch == 'x64'
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: OpenGL viewers were built (GLFW)
+        shell: pwsh
+        run: |
+          foreach ($v in 'glview','regview','hiview','chunkview','micview','glpclview','cppview','cpp_pcview') {
+            if (-not (Test-Path "build\bin\Release\freenect-$v.exe")) { throw "freenect-$v.exe was not built" }
+          }
+
+      - name: Smoke tests (no Kinect attached)
+        if: matrix.arch == 'x64'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = "$PWD\build\lib\Release;$PWD\build\bin\Release;$env:PATH"
+          $bin = "build\bin\Release"
+
+          & "$bin\freenect-driver-install.exe" --list
+          if ($LASTEXITCODE -ne 0) { throw "--list failed" }
+
+          & "$bin\freenect-driver-install.exe" --package-only pkg
+          if ($LASTEXITCODE -ne 0) { throw "--package-only failed" }
+          $sig = Get-AuthenticodeSignature pkg\libfreenect-kinect.cat
+          Write-Host "catalog signature: $($sig.Status), signer: $($sig.SignerCertificate.Subject)"
+          if ($sig.SignerCertificate.Subject -notlike '*libfreenect Kinect WinUSB*') { throw "catalog is not signed by the package certificate" }
+          if ($sig.SignerCertificate.HasPrivateKey) { throw "signing key was not destroyed" }
+
+          & "$bin\freenect-fwloader.exe"
+          if ($LASTEXITCODE -ne 2) { throw "freenect-fwloader should report no Kinect (exit 2), got $LASTEXITCODE" }
+
+          $t = [Diagnostics.Stopwatch]::StartNew()
+          & "$bin\freenect-hotplug.exe" 2 --no-stream
+          if ($LASTEXITCODE -ne 0 -or $t.Elapsed.TotalSeconds -gt 5) { throw "freenect-hotplug: exit $LASTEXITCODE after $($t.Elapsed.TotalSeconds) s" }
+          $global:LASTEXITCODE = 0
+
+      - name: Collect binaries
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item build\bin\Release\* dist\
+          Copy-Item build\lib\Release\*.dll dist\
+          Copy-Item build\lib\Release\*.lib dist\
+          Copy-Item -Recurse include dist\include
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: libfreenect-windows-${{ matrix.arch }}
+          path: dist
+
+  linux:
+    name: Linux ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, ubuntu-24.04-arm]
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake build-essential pkg-config \
+            libusb-1.0-0-dev libglfw3-dev freeglut3-dev libgl1-mesa-dev libglu1-mesa-dev \
+            xvfb xauth libgl1-mesa-dri libpipewire-0.3-dev
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr
+          -DBUILD_EXAMPLES=ON -DBUILD_C_SYNC=ON -DBUILD_CPP=ON -DBUILD_FAKENECT=ON
+          -DBUILD_CPACK_DEB=ON -DFREENECT_WERROR=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Unit tests
+        # under Xvfb, so that the viewers' window layer is tested too
+        run: xvfb-run -a ctest --test-dir build --output-on-failure
+
+      - uses: astral-sh/setup-uv@v10.4.0 # Node 24 (no moving major tags after v7)
+
+      # The Python package as users build it: uv pip install ./wrappers/python
+      - name: Python package
+        run: |
+          set -e
+          uv venv --python 3.12 .venv
+          .github/report-failure.sh "Python package build" uv pip install -v --python .venv/bin/python ./wrappers/python
+          .github/report-failure.sh "Python tests" .venv/bin/python -m unittest discover -s wrappers/python/tests -v
+
+      - name: OpenGL viewers were built (GLFW), and with GLUT instead
+        run: |
+          set -e
+          for v in glview regview hiview chunkview micview glpclview cppview cpp_pcview; do
+            test -x build/bin/freenect-$v || { echo "freenect-$v was not built"; exit 1; }
+          done
+          cmake -S . -B build-glut -DCMAKE_BUILD_TYPE=Release -DFREENECT_GL_VIEWERS=GLUT \
+            -DBUILD_FAKENECT=OFF -DBUILD_TESTS=OFF -DINSTALL_LINUX_INTEGRATION=OFF
+          cmake --build build-glut --parallel --target freenect-glview freenect-hiview freenect-glpclview freenect-cppview
+
+      - name: Smoke test (no Kinect attached)
+        run: |
+          set +e
+          ./build/bin/freenect-fwloader
+          code=$?
+          test "$code" -eq 2 || { echo "freenect-fwloader should report no Kinect (exit 2), got $code"; exit 1; }
+          start=$(date +%s)
+          ./build/bin/freenect-fwloader --wait 2
+          code=$?
+          took=$(( $(date +%s) - start ))
+          test "$code" -eq 2 || { echo "freenect-fwloader --wait 2 should report no Kinect (exit 2), got $code"; exit 1; }
+          test "$took" -le 5 || { echo "freenect-fwloader --wait 2 took ${took}s"; exit 1; }
+          for mode in native poll; do
+            start=$(date +%s)
+            if [ "$mode" = poll ]; then
+              LIBFREENECT_HOTPLUG_POLL=1 ./build/bin/freenect-hotplug 2 --no-stream
+            else
+              ./build/bin/freenect-hotplug 2 --no-stream
+            fi
+            code=$?
+            took=$(( $(date +%s) - start ))
+            { test "$code" -eq 0 && test "$took" -le 5; } || { echo "freenect-hotplug ($mode): exit $code after ${took}s"; exit 1; }
+          done
+
+      # A private PipeWire and WirePlumber with a fake Kinect source: the
+      # beamformed microphone must favour the talker's direction. Ubuntu
+      # 24.04 has WirePlumber 0.4, so this tests freenect-pipewire-mic; with
+      # WirePlumber 0.5 it also tests the LADSPA plugin and the rule.
+      - name: Beamformed microphone (PipeWire)
+        run: |
+          set +e
+          sudo apt-get install -y --no-install-recommends pipewire pipewire-bin wireplumber dbus python3 >/dev/null
+          .github/report-failure.sh "PipeWire microphone test" dbus-run-session -- bash platform/linux/pipewire/test-pipewire-mic.sh build
+          code=$?
+          if [ "$code" -eq 77 ]; then echo "::notice::PipeWire test skipped"; exit 0; fi
+          exit "$code"
+
+      - name: freenect-v4l2 through v4l2loopback (test pattern)
+        if: matrix.os == 'ubuntu-24.04'
+        run: |
+          set -e
+          sudo apt-get install -y --no-install-recommends v4l-utils ffmpeg
+          loaded=0
+          for try in "linux-modules-extra-$(uname -r)" "v4l2loopback-dkms linux-headers-$(uname -r)"; do
+            if sudo apt-get install -y --no-install-recommends $try >/dev/null 2>&1 &&
+               sudo modprobe v4l2loopback devices=2 video_nr=10,11 card_label="Kinect depth,Kinect video" exclusive_caps=1 2>/dev/null; then
+              loaded=1; break
+            fi
+          done
+          if [ "$loaded" != 1 ]; then
+            echo "::notice::v4l2loopback can't be loaded on this runner; the freenect-v4l2 end-to-end test was skipped"
+            exit 0
+          fi
+          fail() { echo "::error title=freenect-v4l2 end-to-end::$*"; exit 1; }
+          # udev creates the device nodes after modprobe returns and sets them
+          # to root:video 0660; let it finish before opening them up.
+          sudo udevadm settle --timeout=30
+          sudo chmod 666 /dev/video10 /dev/video11
+          for n in 10 11; do
+            [ -r /dev/video$n ] && [ -w /dev/video$n ] || fail "/dev/video$n is not accessible: $(ls -l /dev/video$n 2>&1)"
+          done
+          # The writer runs until this step stops it: with exclusive_caps=1, a
+          # loopback device only accepts readers while something writes to it.
+          timeout 60 ./build/bin/freenect-v4l2 --test-pattern --depth /dev/video10 --video /dev/video11 \
+            > "$RUNNER_TEMP/writer.log" 2>&1 &
+          writer=$!
+          sleep 2
+          kill -0 "$writer" 2>/dev/null || fail "freenect-v4l2 exited early: $(tr '\n' ' ' < "$RUNNER_TEMP/writer.log")"
+          for n in 10 11; do
+            v4l2-ctl -d /dev/video$n --get-fmt-video > "$RUNNER_TEMP/fmt$n.txt" 2>&1 || fail "v4l2-ctl /dev/video$n: $(tr '\n' ' ' < "$RUNNER_TEMP/fmt$n.txt")"
+            cat "$RUNNER_TEMP/fmt$n.txt"
+          done
+          grep -q "640/480" "$RUNNER_TEMP/fmt10.txt" && grep -q "Y16" "$RUNNER_TEMP/fmt10.txt" || fail "depth device format: $(tr '\n' ' ' < "$RUNNER_TEMP/fmt10.txt")"
+          grep -q "640/480" "$RUNNER_TEMP/fmt11.txt" && grep -q "YUYV" "$RUNNER_TEMP/fmt11.txt" || fail "video device format: $(tr '\n' ' ' < "$RUNNER_TEMP/fmt11.txt")"
+          for n in 11 10; do
+            timeout 20 ffmpeg -nostdin -loglevel error -f v4l2 -i /dev/video$n -frames:v 3 -f rawvideo -y "$RUNNER_TEMP/frames$n.raw" \
+              2> "$RUNNER_TEMP/ffmpeg$n.log" || fail "ffmpeg on /dev/video$n: exit $? $(tail -n 3 "$RUNNER_TEMP/ffmpeg$n.log" | tr '\n' ' ')"
+            size=$(stat -c %s "$RUNNER_TEMP/frames$n.raw")
+            echo "/dev/video$n: $size bytes in 3 frames"
+            test "$size" -eq $((3 * 640 * 480 * 2)) || fail "/dev/video$n: $size bytes in 3 frames, expected $((3 * 640 * 480 * 2))"
+          done
+          kill -INT "$writer"
+          wait "$writer" || fail "freenect-v4l2 did not stop cleanly on SIGINT: $(tail -n 3 "$RUNNER_TEMP/writer.log" | tr '\n' ' ')"
+          cat "$RUNNER_TEMP/writer.log"
+
+      - name: Check the udev rules and the systemd unit
+        run: |
+          set -e
+          udevadm verify --no-style platform/linux/udev/51-kinect.rules
+          # every Kinect v1 USB function gets access without root
+          for pid in 02ae 02bf 02b0 02af 02ad 02be 02bb 02c3; do
+            grep -E "^ATTR\{idProduct\}==\"[^\"]*$pid" platform/linux/udev/51-kinect.rules | grep -q 'TAG+="uaccess"' \
+              || { echo "no uaccess rule for 045e:$pid"; exit 1; }
+          done
+          grep -q '^ExecStart=/usr/bin/freenect-fwloader ' build/platform/linux/freenect-fwloader.service
+          grep -q '^TimeoutStartSec=' build/platform/linux/freenect-fwloader.service
+          # systemd-analyze needs the program in ExecStart to exist
+          sed 's#^ExecStart=/usr/bin/freenect-fwloader#ExecStart='"$PWD"'/build/bin/freenect-fwloader#' \
+            build/platform/linux/freenect-fwloader.service > "$RUNNER_TEMP/freenect-fwloader.service"
+          systemd-analyze verify "$RUNNER_TEMP/freenect-fwloader.service"
+
+      - name: Install to a staging directory
+        run: |
+          set -e
+          DESTDIR="$RUNNER_TEMP/stage" cmake --install build
+          cd "$RUNNER_TEMP/stage"
+          find . -type f | sort
+          test -f usr/lib/udev/rules.d/51-kinect.rules
+          test -f usr/lib/systemd/system/freenect-fwloader.service
+          test -x usr/bin/freenect-fwloader
+          test -f usr/share/doc/libfreenect/linux/kinect.conf
+
+      - name: Build the .deb, check its contents, install and remove it
+        run: |
+          set -e
+          (cd build && cpack -G DEB)
+          deb=$(ls build/*.deb)
+          dpkg-deb -c "$deb" | tee "$RUNNER_TEMP/deb.txt"
+          grep -q './usr/lib/udev/rules.d/51-kinect.rules$' "$RUNNER_TEMP/deb.txt"
+          grep -q './usr/lib/systemd/system/freenect-fwloader.service$' "$RUNNER_TEMP/deb.txt"
+          grep -q './usr/bin/freenect-fwloader$' "$RUNNER_TEMP/deb.txt"
+          dpkg-deb --ctrl-tarfile "$deb" | tar -t | grep -q postinst
+          sudo apt-get install -y "./$deb"
+          test -f /usr/lib/udev/rules.d/51-kinect.rules
+          systemctl cat freenect-fwloader.service >/dev/null
+          sudo apt-get remove -y libfreenect-dev
+          test ! -e /usr/lib/udev/rules.d/51-kinect.rules
+
+  macos:
+    name: macOS (${{ matrix.cpu }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            cpu: Apple Silicon
+          - os: macos-15-intel
+            cpu: Intel
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: brew install libusb glfw
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_EXAMPLES=ON -DBUILD_C_SYNC=ON -DBUILD_CPP=ON -DBUILD_FAKENECT=ON
+          -DFREENECT_WERROR=ON
+
+      # With -Werror; compiler diagnostics also become annotations, which can
+      # be read without the job log.
+      - name: Build
+        run: |
+          set +e
+          cmake --build build --parallel 2>&1 | tee "$RUNNER_TEMP/build.log"
+          status=${PIPESTATUS[0]}
+          grep -E '^/[^:]+:[0-9]+:[0-9]+: (warning|error): ' "$RUNNER_TEMP/build.log" | sort -u > "$RUNNER_TEMP/diagnostics.txt"
+          echo "$(wc -l < "$RUNNER_TEMP/diagnostics.txt") compiler diagnostics"
+          head -50 "$RUNNER_TEMP/diagnostics.txt" | while IFS= read -r w; do
+            f=${w%%:*}; rest=${w#*:}; line=${rest%%:*}
+            echo "::error file=${f#$PWD/},line=${line}::${w#*: }"
+          done
+          exit "$status"
+
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
+
+      - uses: astral-sh/setup-uv@v10.4.0 # Node 24 (no moving major tags after v7)
+
+      - name: Python package
+        run: |
+          set -e
+          uv venv --python 3.12 .venv
+          .github/report-failure.sh "Python package build" uv pip install -v --python .venv/bin/python ./wrappers/python
+          .github/report-failure.sh "Python tests" .venv/bin/python -m unittest discover -s wrappers/python/tests -v
+
+      - name: OpenGL viewers were built (GLFW)
+        run: |
+          for v in glview regview hiview chunkview micview glpclview cppview cpp_pcview; do
+            test -x build/bin/freenect-$v || { echo "freenect-$v was not built"; exit 1; }
+          done
+
+      - name: launchd agent
+        run: |
+          plutil -lint build/platform/macos/org.openkinect.fwloader.plist
+          grep -q "<string>/usr/local/bin/freenect-fwloader</string>" build/platform/macos/org.openkinect.fwloader.plist
+
+      # The beamformed microphone: load the plug-in into coreaudiod (the
+      # runners allow sudo), check that its devices appear, and play a tone
+      # through the loop. No Kinect needed. Exit code 3 of the self-test means
+      # all silence, which is what macOS gives a program without microphone
+      # access (the runners may not grant it): a warning, not a failure.
+      - name: Beamformed microphone (Core Audio plug-in)
+        run: |
+          set -e
+          drv=$(find build -maxdepth 4 -name KinectBeamMic.driver -type d | head -1)
+          app=$(find build -maxdepth 4 -name freenect-coreaudio-mic.app -type d | head -1)
+          test -n "$drv" || { echo "::error::KinectBeamMic.driver was not built"; exit 1; }
+          test -n "$app" || { echo "::error::freenect-coreaudio-mic.app was not built"; exit 1; }
+          plutil -lint "$drv/Contents/Info.plist" "$app/Contents/Info.plist" build/platform/macos/org.openkinect.beam-mic.plist
+          codesign --verify --verbose "$drv"
+          codesign --verify --verbose "$app"
+          nm -gU "$drv/Contents/MacOS/KinectBeamMic" | grep -q KinectBeamMic_Create || { echo "::error::the plug-in does not export its factory"; exit 1; }
+          sudo mkdir -p /Library/Audio/Plug-Ins/HAL
+          sudo cp -R "$drv" /Library/Audio/Plug-Ins/HAL/
+          sudo killall coreaudiod || true
+          sleep 10
+          helper="$app/Contents/MacOS/freenect-coreaudio-mic"
+          "$helper" --list | tee "$RUNNER_TEMP/devices.txt"
+          grep -q "Kinect Beamformed Microphone" "$RUNNER_TEMP/devices.txt" || { echo "::error::coreaudiod did not publish Kinect Beamformed Microphone"; log show --last 2m --predicate 'process == "coreaudiod"' | grep -i -E "kinect|plug-?in|error" | tail -30; exit 1; }
+          set +e
+          "$helper" --self-test | tee "$RUNNER_TEMP/selftest.txt"
+          code=${PIPESTATUS[0]}
+          set -e
+          if [ "$code" -eq 3 ]; then
+            echo "::warning::beamformed microphone self-test: silence, probably no microphone access on this runner ($(tail -2 "$RUNNER_TEMP/selftest.txt" | tr '\n' ' '))"
+          elif [ "$code" -ne 0 ]; then
+            echo "::error::beamformed microphone self-test failed ($code): $(tr '\n' ' ' < "$RUNNER_TEMP/selftest.txt")"
+            exit 1
+          fi
+          # the helper with no Kinect: starts, waits, and stops on SIGTERM
+          "$helper" --verbose &
+          pid=$!
+          sleep 3
+          kill -TERM "$pid"
+          wait "$pid" || { echo "::error::freenect-coreaudio-mic did not stop cleanly on SIGTERM"; exit 1; }
+          sudo rm -rf /Library/Audio/Plug-Ins/HAL/KinectBeamMic.driver
+          sudo killall coreaudiod || true
+
+      - name: Smoke test (no Kinect attached)
+        run: |
+          set +e
+          ./build/bin/freenect-fwloader
+          code=$?
+          test "$code" -eq 2 || { echo "freenect-fwloader should report no Kinect (exit 2), got $code"; exit 1; }
+          ./build/bin/freenect-fwloader --launchd
+          code=$?
+          test "$code" -eq 2 || { echo "freenect-fwloader --launchd should report no Kinect (exit 2), got $code"; exit 1; }
+          for mode in native poll; do
+            start=$(date +%s)
+            if [ "$mode" = poll ]; then
+              LIBFREENECT_HOTPLUG_POLL=1 ./build/bin/freenect-hotplug 2 --no-stream
+            else
+              ./build/bin/freenect-hotplug 2 --no-stream
+            fi
+            code=$?
+            took=$(( $(date +%s) - start ))
+            { test "$code" -eq 0 && test "$took" -le 5; } || { echo "freenect-hotplug ($mode): exit $code after ${took}s"; exit 1; }
+          done
+
+  # One library for both Mac CPUs. Homebrew's libusb has only the runner's
+  # architecture, so libusb is built from source as a universal library.
+  # Runs on the Intel runner: Apple's compiler builds both architectures there
+  # too, and GitHub's Apple Silicon runners have often not been available.
+  macos-universal:
+    name: macOS universal (arm64 + x86_64)
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Build libusb as a universal library
+        run: |
+          set -e
+          brew install autoconf automake libtool
+          git clone --depth 1 --branch v1.0.29 https://github.com/libusb/libusb "$RUNNER_TEMP/libusb-src"
+          cd "$RUNNER_TEMP/libusb-src"
+          ./bootstrap.sh
+          ./configure --prefix="$RUNNER_TEMP/libusb" --disable-dependency-tracking \
+            CFLAGS="-arch arm64 -arch x86_64 -mmacosx-version-min=11.0" LDFLAGS="-arch arm64 -arch x86_64"
+          make -j"$(sysctl -n hw.ncpu)"
+          make install
+          lipo -archs "$RUNNER_TEMP/libusb/lib/libusb-1.0.dylib"
+
+      - name: Configure
+        run: >
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_OSX_ARCHITECTURES="arm64;x86_64" -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0
+          -DLIBUSB_1_INCLUDE_DIR="$RUNNER_TEMP/libusb/include/libusb-1.0"
+          -DLIBUSB_1_LIBRARY="$RUNNER_TEMP/libusb/lib/libusb-1.0.dylib"
+          -DFREENECT_GL_VIEWERS=OFF -DBUILD_EXAMPLES=ON -DBUILD_C_SYNC=ON -DBUILD_CPP=ON -DBUILD_FAKENECT=ON
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Both architectures are in every binary
+        run: |
+          set -e
+          for f in build/lib/libfreenect.dylib build/lib/libfreenect_sync.dylib build/bin/freenect-fwloader build/bin/freenect-camtest build/bin/freenect-hotplug; do
+            archs=$(lipo -archs "$f")
+            echo "$f: $archs"
+            case "$archs" in *arm64*x86_64*|*x86_64*arm64*) ;; *) echo "$f is not universal"; exit 1;; esac
+          done
+
+      # The runner's own architecture runs natively; the other one only where
+      # the Mac can run it (arm64 code can't run on an Intel Mac).
+      - name: Unit tests
+        run: |
+          set -e
+          ctest --test-dir build --output-on-failure
+          if [ "$(uname -m)" = arm64 ] && arch -x86_64 /usr/bin/true 2>/dev/null; then
+            for t in build/bin/test_*; do echo "== $t (x86_64, Rosetta)"; arch -x86_64 "$t" > /dev/null; done
+          else
+            echo "Tests ran as $(uname -m); the other architecture is checked with lipo only"
+          fi
+
+  # The supported Linux releases that GitHub has no runners for, in containers.
+  # Raspberry Pi OS is Debian with Raspberry Pi's repository on top
+  # (.github/ci/linux-distro.sh adds it). The armhf job runs Debian's ARMv7
+  # port under QEMU (GitHub's arm64 runners can't run 32-bit ARM code); it
+  # stands in for 32-bit Pi OS on a Pi 2 or newer.
+  linux-distros:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: ${{ matrix.qemu && 120 || 45 }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Ubuntu rolling (x64)
+            image: ubuntu:rolling
+            runner: ubuntu-24.04
+            platform: linux/amd64
+          - name: Ubuntu 26.04 LTS (x64)
+            image: ubuntu:26.04
+            runner: ubuntu-24.04
+            platform: linux/amd64
+          - name: Debian 13 trixie (x64)
+            image: debian:trixie
+            runner: ubuntu-24.04
+            platform: linux/amd64
+          - name: Raspberry Pi OS trixie (arm64)
+            image: debian:trixie
+            runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            rpi: 1
+          - name: Raspberry Pi OS trixie (armhf, QEMU)
+            image: debian:trixie
+            runner: ubuntu-24.04
+            platform: linux/arm/v7
+            rpi: 1
+            qemu: true
+    steps:
+      - uses: actions/checkout@v7
+
+      # Registers QEMU for 32-bit ARM binaries (what docker/setup-qemu-action
+      # does, without its Node 20 runtime).
+      - name: Set up QEMU
+        if: matrix.qemu
+        run: docker run --privileged --rm tonistiigi/binfmt --install arm
+
+      - name: Build, test and package in ${{ matrix.image }} (${{ matrix.platform }})
+        run: >
+          docker run --rm --platform ${{ matrix.platform }}
+          -e RPI=${{ matrix.rpi || 0 }} -v "$PWD:/src" -w /src
+          ${{ matrix.image }} sh .github/ci/linux-distro.sh

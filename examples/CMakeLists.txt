@@ -7,33 +7,41 @@ cmake_minimum_required(VERSION 3.10)
 # These examples have no external dependencies and should always build.
 add_executable(freenect-camtest camtest.c)
 add_executable(freenect-wavrecord wavrecord.c)
+add_executable(freenect-fwloader fwloader.c)
+add_executable(freenect-hotplug hotplug.c)
+add_executable(freenect-maptest maptest.c)
 target_link_libraries(freenect-camtest freenect)
 target_link_libraries(freenect-wavrecord freenect)
-install(TARGETS freenect-camtest freenect-wavrecord
+target_link_libraries(freenect-fwloader freenect)
+target_link_libraries(freenect-hotplug freenect)
+target_link_libraries(freenect-maptest freenect)
+install(TARGETS freenect-camtest freenect-wavrecord freenect-fwloader freenect-hotplug freenect-maptest
         DESTINATION bin)
 
-# Most viewers need pthreads and GLUT.
+# freenect-v4l2 (Linux): depth and colour as V4L2 cameras through v4l2loopback
+if (PROJECT_OS_LINUX AND BUILD_V4L2_BRIDGE)
+  include(CheckIncludeFile)
+  check_include_file(linux/videodev2.h HAVE_LINUX_VIDEODEV2_H)
+  if (HAVE_LINUX_VIDEODEV2_H)
+    add_executable(freenect-v4l2 v4l2bridge.c)
+    target_link_libraries(freenect-v4l2 freenect)
+    install(TARGETS freenect-v4l2 DESTINATION bin)
+  else ()
+    message(STATUS "freenect-v4l2 not built: linux/videodev2.h not found (linux-libc-dev)")
+  endif ()
+endif ()
+
+# The OpenGL viewers need pthreads, OpenGL, and GLFW or GLUT
+# (FREENECT_GL_VIEWERS, cmake_modules/FreenectGLViewers.cmake).
 set(THREADS_USE_PTHREADS_WIN32 true)
 find_package(Threads)
-find_package(OpenGL COMPONENTS OpenGL)
-find_package(GLUT)
 
-if (Threads_FOUND AND OpenGL_OpenGL_FOUND AND GLUT_FOUND)
-  include_directories(${THREADS_PTHREADS_INCLUDE_DIR} ${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
-
-  add_executable(freenect-glview glview.c)
-  add_executable(freenect-regview regview.c)
-  add_executable(freenect-hiview hiview.c)
-  add_executable(freenect-chunkview chunkview.c)
-  add_executable(freenect-micview micview.c)
-
-  include(ChooseOpenGLTarget)
-  target_link_libraries(freenect-glview freenect "${OPENGL_TARGET}" GLUT::GLUT ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
-  target_link_libraries(freenect-regview freenect "${OPENGL_TARGET}" GLUT::GLUT ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
-  target_link_libraries(freenect-hiview freenect "${OPENGL_TARGET}" GLUT::GLUT ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
-  target_link_libraries(freenect-chunkview freenect "${OPENGL_TARGET}" GLUT::GLUT ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
-  target_link_libraries(freenect-micview freenect "${OPENGL_TARGET}" GLUT::GLUT ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
-
+if (Threads_FOUND AND FREENECT_GL_BACKEND)
+  include_directories(${THREADS_PTHREADS_INCLUDE_DIR})
+  foreach (viewer glview regview hiview chunkview micview)
+    freenect_gl_viewer(freenect-${viewer} ${viewer}.c)
+    target_link_libraries(freenect-${viewer} freenect ${CMAKE_THREAD_LIBS_INIT} ${MATH_LIB})
+  endforeach ()
   install(TARGETS freenect-glview freenect-regview freenect-hiview freenect-chunkview freenect-micview
           DESTINATION bin)
 endif ()
@@ -51,12 +59,32 @@ if (BUILD_C_SYNC)
   install(TARGETS freenect-regtest freenect-tiltdemo
           DESTINATION bin)
 
-  if (OpenGL_OpenGL_FOUND AND GLUT_FOUND)
-    include_directories(${OPENGL_INCLUDE_DIR} ${GLUT_INCLUDE_DIR})
-    add_executable(freenect-glpclview glpclview.c)
-    include(ChooseOpenGLTarget)
-    target_link_libraries(freenect-glpclview freenect_sync "${OPENGL_TARGET}" GLUT::GLUT ${MATH_LIB})
+  if (FREENECT_GL_BACKEND AND FREENECT_GL_HAVE_GLU)
+    freenect_gl_viewer(freenect-glpclview glpclview.c)
+    target_link_libraries(freenect-glpclview freenect_sync ${MATH_LIB})
     install(TARGETS freenect-glpclview
             DESTINATION bin)
   endif ()
+endif ()
+
+# freenect-micbeam: the microphone array through freenect_audio_dsp
+if (BUILD_AUDIO_DSP)
+  add_executable(freenect-micbeam micbeam.c)
+  target_link_libraries(freenect-micbeam freenect freenect_audio_dsp)
+  if (WIN32)
+    target_link_libraries(freenect-micbeam ole32)
+  elseif (UNIX)
+    target_link_libraries(freenect-micbeam m)
+  endif ()
+  install(TARGETS freenect-micbeam DESTINATION bin)
+endif ()
+
+# freenect-nuitest: skeleton, hand and finger tracking on a real Kinect
+if (BUILD_NUI)
+  add_executable(freenect-nuitest nuitest.c)
+  target_link_libraries(freenect-nuitest freenect freenect_nui)
+  if (UNIX)
+    target_link_libraries(freenect-nuitest m)
+  endif ()
+  install(TARGETS freenect-nuitest DESTINATION bin)
 endif ()

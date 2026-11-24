@@ -1,0 +1,855 @@
+/*
+ * This file is part of the OpenKinect Project. http://www.openkinect.org
+ *
+ * Copyright (c) 2026 individual OpenKinect contributors. See the CONTRIB file
+ * for details.
+ *
+ * This code is licensed to you under the terms of the Apache License, version
+ * 2.0, or, at your option, the terms of the GNU General Public License,
+ * version 2.0. See the APACHE20 and GPL2 files for the text of the licenses,
+ * or the following URLs:
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.gnu.org/licenses/gpl-2.0.txt
+ *
+ * If you redistribute this file in source form, modified or unmodified, you
+ * may:
+ *   1) Leave this header intact and distribute it under the same terms,
+ *      accompanying it with the APACHE20 and GPL20 files, or
+ *   2) Delete the Apache 2.0 clause and accompany it with the GPL2 file, or
+ *   3) Delete the GPL v2 clause and accompany it with the APACHE20 file
+ * In all cases you must keep the copyright notice intact and include a copy
+ * of the CONTRIB file.
+ *
+ * Binary distributions must follow the binary distribution requirements of
+ * either License.
+ */
+
+/*
+ * User segmentation, libfreenect's own (not Kinect10's BGR stage):
+ *
+ * - The floor: RANSAC on the 80x60 cell points each frame, with Kinect10's
+ *   acceptance rules (normal within 30 degrees of vertical, C <= 0.2588,
+ *   at least 51 inliers, §30.4.5), refined by least squares, kept from frame
+ *   to frame when a new estimate is not better.
+ * - A background model per map pixel: the farthest stable depth seen,
+ *   following slow changes and absorbing objects that stay still for 10 s.
+ * - Connected components of non-floor pixels joined where depth is
+ *   continuous; a component is a user when it continues an existing user
+ *   (pixel overlap with the previous frame), or when it is person-shaped and
+ *   has moved against the background, or when it is person-shaped and the
+ *   body-part forest confirms a body (nui.c), so that someone already there
+ *   at the start is found without moving. Components that join two users are
+ *   split by the nearest previous user centre.
+ */
+
+#include <math.h>
+#include <stdlib.h>
+#include <string.h>
+#include "nui_internal.h"
+
+#define CELLW 80
+#define CELLH 60
+
+#define MIN_USER_PIXELS 600
+#define FLOOR_EXCLUDE_MM 50.0f
+#define FLOOR_MIN_POINTS 120      // 4x4 blocks on a plane before it can be the floor (a seat has fewer)
+#define FLOOR_MIN_DROP_MM 350.0f // the floor is at least this far below the Kinect
+#define FLOOR_BELOW_MM 150.0f  // points this far under a plane make it not the floor
+#define USER_MAX_Z_MM 4500
+#define BG_ABSORB_FRAMES 300
+#define USER_TIMEOUT 10
+#define BG_FARTHER_FRAMES 3   // farther depth must stay this long to become background
+#define BG_CONF_FRAMES 30    // matched the background this long: the room, not a user
+#define FG_CONF_FRAMES 10    // background seen this long: in front of it is motion
+#define NEAR_USER_PX 12      // margin around a user where the room is not learned as empty
+#define MOVING_STEP(d) (30 + 9 * (d) / 1000 * (d) / 1000) // mm nearer than MOVING_REF_FRAMES ago: 30 mm and 3 of the
+                                                       // Kinect's depth steps (about 3 mm x z^2 in m): movement, not noise
+#define MOVING_REF_FRAMES 8   // the depth this many frames ago is what movement is measured against (slow hands)
+#define MOVING_PIXELS 40      // pixels a user gains in a frame when an arm or a hand moves
+#define BG_LEARN_FRAMES 15    // until then, anything person-sized is a candidate
+#define TILT_CAME_IN_FRAMES 90 // after a tilt, this long (3 s) before something new counts as having come in
+#define TWO_PEOPLE_WIDTH 0.9f // m: a component narrower than this is one person
+#define REVEAL_BEHIND_M 0.4f  // after a tilt, what came into view this far behind every user is the room
+#define USER_DEPTH_SPAN 600   // mm: farther than this behind a user's median depth is not the user (the wall)
+#define CLIP_GROW 12          // pixels: a user in a component with the room grows this far a frame (7 cm at 1.8 m)
+#define CLIP_FRONT_MM 1000    // and takes nothing this far in front of its median depth
+#define CLIP_HALF_WIDTH 1.2f  // m, nor farther to the side of its centre
+#define ZBIN 20               // mm per bin of the depth histogram for the median
+
+float fn_nui_v3len(v3 a) { return sqrtf(v3dot(a, a)); }
+v3 fn_nui_v3norm(v3 a)
+{
+	float l = fn_nui_v3len(a);
+	return l > 0.0f ? v3scale(a, 1.0f / l) : a;
+}
+
+int fn_nui_seg_init(fn_nui_seg* s)
+{
+	memset(s, 0, sizeof(*s));
+	s->bg = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	s->bgage = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	s->bgconf = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	s->near_user = (uint8_t*)calloc(NPIX, 1);
+	s->prev_map = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	s->label = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	s->user = (uint8_t*)calloc(NPIX, 1);
+	s->prev_user = (uint8_t*)calloc(NPIX, 1);
+	s->parent = (uint32_t*)calloc(NPIX, sizeof(uint32_t));
+	if (!s->bg || !s->bgage || !s->bgconf || !s->near_user || !s->prev_map || !s->label || !s->user || !s->prev_user || !s->parent) {
+		fn_nui_seg_free(s);
+		return -1;
+	}
+	fn_nui_seg_reset(s);
+	return 0;
+}
+
+void fn_nui_seg_free(fn_nui_seg* s)
+{
+	free(s->bg); free(s->bgage); free(s->bgconf); free(s->near_user); free(s->prev_map); free(s->label); free(s->user); free(s->prev_user); free(s->parent);
+	s->bg = s->bgage = s->bgconf = s->label = NULL;
+	s->near_user = NULL;
+	s->prev_map = NULL;
+	s->user = s->prev_user = NULL;
+	s->parent = NULL;
+}
+
+void fn_nui_seg_reset(fn_nui_seg* s)
+{
+	memset(s->bg, 0, NPIX * sizeof(uint16_t));
+	memset(s->bgage, 0, NPIX * sizeof(uint16_t));
+	memset(s->bgconf, 0, NPIX * sizeof(uint16_t));
+	memset(s->user, 0, NPIX);
+	memset(s->prev_user, 0, NPIX);
+	memset(s->prev_map, 0, NPIX * sizeof(uint16_t));
+	memset(s->u, 0, sizeof(s->u));
+	memset(s->floor, 0, sizeof(s->floor));
+	s->floor_valid = 0;
+	s->rng = 0x12345678u;
+	s->next_id = 1;
+	s->frames = 0;
+	s->tilt_frames = -100000;
+}
+
+// The CDRP stage's map (§30.1.4): mirrored, 2x2 max pool.
+void fn_nui_make_map(const uint16_t* depth, uint16_t* map)
+{
+	int x, y;
+	for (y = 0; y < NH; y++) {
+		const uint16_t* r0 = depth + (2 * y) * 640;
+		const uint16_t* r1 = r0 + 640;
+		for (x = 0; x < NW; x++) {
+			int c = 638 - 2 * x;
+			uint16_t m = r0[c];
+			if (r0[c + 1] > m) m = r0[c + 1];
+			if (r1[c] > m) m = r1[c];
+			if (r1[c + 1] > m) m = r1[c + 1];
+			map[y * NW + x] = m;
+		}
+	}
+}
+
+float fn_nui_floor_dist(const fn_nui_seg* s, v3 p)
+{
+	if (!s->floor_valid)
+		return 1e9f;
+	return s->floor[0] * p.x * 1000.0f + s->floor[1] * p.y * 1000.0f + s->floor[2] * p.z * 1000.0f + s->floor[3];
+}
+
+/* ------------------------------------------------------------ floor */
+
+static uint32_t lcg(fn_nui_seg* s)
+{
+	s->rng = s->rng * 0x343fdu + 0x269ec3u; // the MS CRT generator Kinect10 uses
+	return (s->rng >> 16) & 0x7fff;
+}
+
+static int plane_from(v3 a, v3 b, v3 c, float pl[4])
+{
+	v3 n = v3cross(v3sub(b, a), v3sub(c, a));
+	float l = fn_nui_v3len(n);
+	if (l < 1e-6f)
+		return -1;
+	n = v3scale(n, 1.0f / l);
+	if (n.y < 0)
+		n = v3scale(n, -1.0f);
+	pl[0] = n.x; pl[1] = n.y; pl[2] = n.z;
+	pl[3] = -v3dot(n, a);
+	return 0;
+}
+
+static int plane_ok(const float pl[4])
+{
+	// within 30 degrees of vertical (§30.4.5), and a plausible distance
+	// below the Kinect: not a lap, a seat or a low table seen up close. The
+	// motor tilts the Kinect forward and back only; sideways it stands level
+	// (within 10 degrees), so a plane rolled further is a slope (a bed, a
+	// cushion), not the floor.
+	return pl[1] >= 0.8660f && pl[2] <= 0.2588f && fabsf(pl[0]) <= 0.1736f && pl[3] >= FLOOR_MIN_DROP_MM;
+}
+
+static int count_inliers(const v3* pts, int n, const float pl[4], float tol)
+{
+	int i, c = 0;
+	for (i = 0; i < n; i++)
+		if (fabsf(pl[0] * pts[i].x + pl[1] * pts[i].y + pl[2] * pts[i].z + pl[3]) < tol)
+			c++;
+	return c;
+}
+
+// Nothing is below the floor: a horizontal plane with many points under it
+// is a table or a bed, not the floor (whose legs it would cut off).
+static int below_floor(const v3* pts, int n, const float pl[4])
+{
+	int i, c = 0;
+	for (i = 0; i < n; i++)
+		if (pl[0] * pts[i].x + pl[1] * pts[i].y + pl[2] * pts[i].z + pl[3] < -FLOOR_BELOW_MM)
+			c++;
+	return c > 20 + n / 50;
+}
+
+// least squares y = a x + b z + c over the inliers
+static int refine(const v3* pts, int n, float pl[4], float tol)
+{
+	double S[3][3] = { { 0 } }, r[3] = { 0 }, a, b, c, det;
+	int i, k = 0;
+	for (i = 0; i < n; i++) {
+		const v3* p = &pts[i];
+		if (fabsf(pl[0] * p->x + pl[1] * p->y + pl[2] * p->z + pl[3]) >= tol)
+			continue;
+		S[0][0] += p->x * p->x; S[0][1] += p->x * p->z; S[0][2] += p->x;
+		S[1][1] += p->z * p->z; S[1][2] += p->z; S[2][2] += 1.0;
+		r[0] += p->x * p->y; r[1] += p->z * p->y; r[2] += p->y;
+		k++;
+	}
+	if (k < 10)
+		return -1;
+	S[1][0] = S[0][1]; S[2][0] = S[0][2]; S[2][1] = S[1][2];
+	det = S[0][0] * (S[1][1] * S[2][2] - S[1][2] * S[2][1]) - S[0][1] * (S[1][0] * S[2][2] - S[1][2] * S[2][0]) +
+	      S[0][2] * (S[1][0] * S[2][1] - S[1][1] * S[2][0]);
+	if (fabs(det) < 1e-9)
+		return -1;
+	a = (r[0] * (S[1][1] * S[2][2] - S[1][2] * S[2][1]) - S[0][1] * (r[1] * S[2][2] - S[1][2] * r[2]) +
+	     S[0][2] * (r[1] * S[2][1] - S[1][1] * r[2])) / det;
+	b = (S[0][0] * (r[1] * S[2][2] - S[1][2] * r[2]) - r[0] * (S[1][0] * S[2][2] - S[1][2] * S[2][0]) +
+	     S[0][2] * (S[1][0] * r[2] - r[1] * S[2][0])) / det;
+	c = (S[0][0] * (S[1][1] * r[2] - r[1] * S[2][1]) - S[0][1] * (S[1][0] * r[2] - r[1] * S[2][0]) +
+	     r[0] * (S[1][0] * S[2][1] - S[1][1] * S[2][0])) / det;
+	{
+		// y = a x + b z + c  ->  -a x + y - b z - c = 0
+		double l = sqrt(a * a + 1.0 + b * b);
+		pl[0] = (float)(-a / l); pl[1] = (float)(1.0 / l); pl[2] = (float)(-b / l); pl[3] = (float)(-c / l);
+	}
+	return 0;
+}
+
+static void floor_update(fn_nui_seg* s, const uint16_t* map)
+{
+	static v3 pts[CELLW * CELLH];
+	int n = 0, cx, cy, it, best_in = 0;
+	float best[4], tol = 25.0f;
+	// one point per 4x4 block: its nearest valid depth, not a user's
+	for (cy = 0; cy < CELLH; cy++)
+		for (cx = 0; cx < CELLW; cx++) {
+			int x, y, zmin = 0, user = 0;
+			for (y = 4 * cy; y < 4 * cy + 4; y++)
+				for (x = 4 * cx; x < 4 * cx + 4; x++) {
+					int d = map[y * NW + x];
+					if (s->prev_user[y * NW + x])
+						user = 1;
+					if (d > 0 && d < 8000 && (zmin == 0 || d < zmin))
+						zmin = d;
+				}
+			if (zmin && !user) {
+				v3 p = fn_nui_unproject(4.0f * cx + 1.5f, 4.0f * cy + 1.5f, (float)zmin);
+				pts[n++] = v3scale(p, 1000.0f); // mm
+			}
+		}
+	if (n < 200)
+		return;
+	for (it = 0; it < 32; it++) {
+		float pl[4];
+		int a = (int)(lcg(s) % (uint32_t)n), b = (int)(lcg(s) % (uint32_t)n), c = (int)(lcg(s) % (uint32_t)n), in;
+		if (a == b || b == c || a == c || plane_from(pts[a], pts[b], pts[c], pl) < 0 || !plane_ok(pl))
+			continue;
+		if (below_floor(pts, n, pl))
+			continue;
+		in = count_inliers(pts, n, pl, tol);
+		if (in > best_in) {
+			best_in = in;
+			memcpy(best, pl, sizeof(best));
+		}
+	}
+	if (s->floor_valid && below_floor(pts, n, s->floor))
+		s->floor_valid = 0;
+	if (best_in >= FLOOR_MIN_POINTS && refine(pts, n, best, tol) == 0 && plane_ok(best) && !below_floor(pts, n, best)) {
+		int in = count_inliers(pts, n, best, tol);
+		// the floor so far, unless it turned out to have things under it
+		int prev_in = s->floor_valid && !below_floor(pts, n, s->floor) ? count_inliers(pts, n, s->floor, tol) : 0;
+		if (in >= FLOOR_MIN_POINTS && in >= prev_in) {
+			memcpy(s->floor, best, sizeof(best));
+			s->floor_valid = 1;
+		}
+	}
+}
+
+/* ------------------------------------------------------------ rejection */
+
+// A candidate the forest did not confirm (a chair, a door frame): its pixels
+// become background, so it is not found again until something there moves.
+void fn_nui_seg_reject(fn_nui_seg* s, int k, const uint16_t* map)
+{
+	int i;
+	for (i = 0; i < NPIX; i++)
+		if (s->user[i] == k + 1) {
+			s->user[i] = s->prev_user[i] = 0;
+			if (map[i]) {
+				s->bg[i] = map[i];
+				s->bgage[i] = 0;
+				s->bgconf[i] = BG_CONF_FRAMES;
+			}
+		}
+	memset(&s->u[k], 0, sizeof(s->u[k]));
+}
+
+/* ------------------------------------------------------------ flatness */
+
+// RMS (mm) of the points from the least-squares plane z = a x + b y + c,
+// from the sums q (see fn_nui_segment)
+static float plane_rms(const double* q)
+{
+	// normal equations [xx xy x; xy yy y; x y n] [a b c] = [xz yz z]
+	double A[3][3] = { { q[0], q[1], q[2] }, { q[1], q[3], q[4] }, { q[2], q[4], q[5] } }, r[3] = { q[6], q[7], q[8] };
+	double det, a, b, c, ss;
+	if (q[5] < 10.0)
+		return 0.0f;
+	det = A[0][0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+	      A[0][2] * (A[1][0] * A[2][1] - A[1][1] * A[2][0]);
+	if (fabs(det) < 1e-12)
+		return 0.0f;
+	a = (r[0] * (A[1][1] * A[2][2] - A[1][2] * A[2][1]) - A[0][1] * (r[1] * A[2][2] - A[1][2] * r[2]) +
+	     A[0][2] * (r[1] * A[2][1] - A[1][1] * r[2])) / det;
+	b = (A[0][0] * (r[1] * A[2][2] - A[1][2] * r[2]) - r[0] * (A[1][0] * A[2][2] - A[1][2] * A[2][0]) +
+	     A[0][2] * (A[1][0] * r[2] - r[1] * A[2][0])) / det;
+	c = (A[0][0] * (A[1][1] * r[2] - r[1] * A[2][1]) - A[0][1] * (A[1][0] * r[2] - r[1] * A[2][0]) +
+	     r[0] * (A[1][0] * A[2][1] - A[1][1] * A[2][0])) / det;
+	// sum of (z - a x - b y - c)^2 from the sums
+	ss = q[9] - 2.0 * (a * q[6] + b * q[7] + c * q[8]) + a * a * q[0] + 2.0 * a * b * q[1] + 2.0 * a * c * q[2] +
+	     b * b * q[3] + 2.0 * b * c * q[4] + c * c * q[5];
+	return ss > 0.0 ? (float)(sqrt(ss / q[5]) * 1000.0) : 0.0f;
+}
+
+/* ------------------------------------------------------------ tilt */
+
+// The Kinect tilted (the motor): what the segmentation knows moves with the
+// view. Every pixel of the background and of the users (at its depth in the
+// last frame before the move) is rotated and projected into the new view;
+// pixels nothing lands on are what the move brought into view. The floor
+// plane turns with it.
+void fn_nui_seg_tilt(fn_nui_seg* s, float angle, const uint16_t* map, const uint16_t* now)
+{
+	float c = cosf(angle), sn = sinf(angle);
+	uint16_t* bg = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	uint16_t* conf = (uint16_t*)calloc(NPIX, sizeof(uint16_t));
+	uint8_t* users = (uint8_t*)calloc(NPIX, 1);
+	int i, k, pass;
+	s->tilt_frames = s->frames;
+	if (!bg || !conf || !users) {
+		free(bg); free(conf); free(users);
+		fn_nui_seg_reset(s); // out of memory: start over
+		return;
+	}
+	// two passes: the background, then the users (their depth is the map's)
+	for (pass = 0; pass < 2; pass++)
+		for (i = 0; i < NPIX; i++) {
+			int d = pass ? (s->prev_user[i] ? map[i] : 0) : s->bg[i];
+			float u2, v2;
+			v3 p;
+			int x, y, dy;
+			if (!d)
+				continue;
+			p = fn_nui_tilt_point(fn_nui_unproject((float)(i % NW), (float)(i / NW), (float)d), c, sn);
+			if (p.z <= 0.1f)
+				continue;
+			fn_nui_project(p, &u2, &v2);
+			x = (int)lrintf(u2);
+			y = (int)lrintf(v2);
+			// and the pixel below, so that the rows a tilt stretches apart
+			// leave no gaps
+			for (dy = 0; dy < 2; dy++) {
+				int j;
+				if (x < 0 || x >= NW || y + dy < 0 || y + dy >= NH)
+					continue;
+				j = (y + dy) * NW + x;
+				if (pass) {
+					if (!users[j] || dy == 0)
+						users[j] = s->prev_user[i];
+				} else if (!bg[j] || dy == 0) {
+					bg[j] = (uint16_t)(p.z * 1000.0f + 0.5f);
+					conf[j] = s->bgconf[i];
+				}
+			}
+		}
+	// What the move brought into view: well behind every user it is the
+	// room (a wall, the ceiling), known at once. Otherwise it would not be
+	// learned for as long as a user stands next to it, and the first arm
+	// that touches it (or an edge where the depth flickers) would join it to
+	// the user for good. Nearer it may be a user's head the move was made
+	// to see, so it stays to be learned.
+	{
+		float behind = 0.0f;
+		for (k = 0; k < NU; k++)
+			if (s->u[k].active && s->u[k].pixels) {
+				float z = fn_nui_tilt_point(s->u[k].centre, c, sn).z;
+				if (z > behind)
+					behind = z;
+			}
+		behind = behind > 0.0f ? (behind + REVEAL_BEHIND_M) * 1000.0f : 0.0f;
+		for (i = 0; i < NPIX; i++)
+			if (!bg[i] && now[i]) {
+				bg[i] = now[i];
+				conf[i] = (float)now[i] > behind ? BG_CONF_FRAMES : 0;
+			}
+	}
+	memcpy(s->bg, bg, NPIX * sizeof(uint16_t));
+	memcpy(s->bgconf, conf, NPIX * sizeof(uint16_t));
+	memcpy(s->prev_user, users, NPIX);
+	memcpy(s->user, users, NPIX);
+	memset(s->bgage, 0, NPIX * sizeof(uint16_t));
+	memset(s->prev_map, 0, NPIX * sizeof(uint16_t)); // movement is measured from the new view on
+	free(bg);
+	free(conf);
+	free(users);
+	if (s->floor_valid) {
+		v3 nrm = fn_nui_tilt_point(v3make(s->floor[0], s->floor[1], s->floor[2]), c, sn);
+		s->floor[0] = nrm.x;
+		s->floor[1] = nrm.y;
+		s->floor[2] = nrm.z; // D: the distance from the Kinect stays
+	}
+	for (k = 0; k < NU; k++)
+		if (s->u[k].active) {
+			v3 was = s->u[k].centre;
+			s->u[k].centre = fn_nui_tilt_point(was, c, sn);
+			if (was.z > 0.1f)
+				s->u[k].zmed = (int)((float)s->u[k].zmed * s->u[k].centre.z / was.z);
+		}
+}
+
+/* ------------------------------------------------------------ components */
+
+static uint32_t find(uint32_t* p, uint32_t i)
+{
+	while (p[i] != i) {
+		p[i] = p[p[i]];
+		i = p[i];
+	}
+	return i;
+}
+
+static void unite(uint32_t* p, uint32_t a, uint32_t b)
+{
+	a = find(p, a);
+	b = find(p, b);
+	if (a != b) {
+		if (a < b) p[b] = a;
+		else p[a] = b;
+	}
+}
+
+static int joined(int a, int b)
+{
+	int lo = a < b ? a : b, diff = a > b ? a - b : b - a;
+	return a > 0 && b > 0 && diff < 40 + lo * 3 / 100;
+}
+
+typedef struct {
+	int count, fg, fgsure, nearer, overlap[NU];
+	double sx, sy, sz;
+	float ymin, ymax, xmin, xmax, zmin, zmax;
+	int umin, umax, vmin, vmax;
+	int user;               // assigned user slot + 1 (-1: split)
+	unsigned choosers;      // users that continue in this component (bit k)
+	unsigned clipped;       // of them, users that take only the part of it where they were (bit k)
+} comp;
+
+#define MAXCOMP 4096
+
+void fn_nui_segment(fn_nui_seg* s, const uint16_t* map, int seated)
+{
+	static comp cs[MAXCOMP];
+	uint8_t* valid = s->user; // reused as a scratch flag before it is rebuilt
+	int i, k, ncomp = 0;
+	(void)seated;
+
+	floor_update(s, map);
+
+	// pixels that can belong to a user: valid, near enough, not floor
+	for (i = 0; i < NPIX; i++) {
+		int d = map[i];
+		valid[i] = 0;
+		if (d > 0 && d < USER_MAX_Z_MM) {
+			v3 p = fn_nui_unproject((float)(i % NW), (float)(i / NW), (float)d);
+			valid[i] = fn_nui_floor_dist(s, p) > FLOOR_EXCLUDE_MM;
+		}
+		s->parent[i] = (uint32_t)i;
+	}
+	for (i = 0; i < NPIX; i++) {
+		int x = i % NW;
+		if (!valid[i])
+			continue;
+		if (x + 1 < NW && valid[i + 1] && joined(map[i], map[i + 1]))
+			unite(s->parent, (uint32_t)i, (uint32_t)i + 1);
+		if (i + NW < NPIX && valid[i + NW] && joined(map[i], map[i + NW]))
+			unite(s->parent, (uint32_t)i, (uint32_t)(i + NW));
+	}
+
+	// component numbers: roots first (in pixel order), then every pixel
+	// gets its root's (roots always come before their members' later
+	// look-ups, since find() only reads parent[])
+	for (i = 0; i < NPIX; i++) {
+		s->label[i] = 0;
+		if (!valid[i] || find(s->parent, (uint32_t)i) != (uint32_t)i || ncomp >= MAXCOMP - 1)
+			continue;
+		ncomp++;
+		memset(&cs[ncomp], 0, sizeof(comp));
+		cs[ncomp].ymin = cs[ncomp].xmin = cs[ncomp].zmin = 1e9f;
+		cs[ncomp].ymax = cs[ncomp].xmax = cs[ncomp].zmax = -1e9f;
+		cs[ncomp].umin = cs[ncomp].vmin = 100000;
+		cs[ncomp].umax = cs[ncomp].vmax = -1;
+		s->label[i] = (uint16_t)ncomp;
+	}
+	for (i = 0; i < NPIX; i++) {
+		int c, d, u = i % NW, v = i / NW;
+		v3 p;
+		comp* C;
+		if (!valid[i])
+			continue;
+		c = s->label[find(s->parent, (uint32_t)i)];
+		if (!c)
+			continue; // more components than the table holds
+		s->label[i] = (uint16_t)c;
+		C = &cs[c];
+		d = map[i];
+		p = fn_nui_unproject((float)u, (float)v, (float)d);
+		C->count++;
+		C->sx += p.x; C->sy += p.y; C->sz += p.z;
+		if (p.y < C->ymin) C->ymin = p.y;
+		if (p.y > C->ymax) C->ymax = p.y;
+		if (p.x < C->xmin) C->xmin = p.x;
+		if (p.x > C->xmax) C->xmax = p.x;
+		if (p.z < C->zmin) C->zmin = p.z;
+		if (p.z > C->zmax) C->zmax = p.z;
+		if (u < C->umin) C->umin = u;
+		if (u > C->umax) C->umax = u;
+		if (v < C->vmin) C->vmin = v;
+		if (v > C->vmax) C->vmax = v;
+		if (s->bg[i] && d < s->bg[i] - (60 + d / 50)) {
+			C->fg++;
+			if (s->bgconf[i] >= FG_CONF_FRAMES)
+				C->fgsure++; // in front of a background seen empty for a while
+		}
+		if (s->prev_map[i] && d + MOVING_STEP(d) < s->prev_map[i])
+			C->nearer++; // came nearer since the frame before: something moves
+		if (s->prev_user[i])
+			C->overlap[s->prev_user[i] - 1]++;
+	}
+
+	// Continue existing users: each user takes the one component it overlaps
+	// most, at a plausible depth (u[k].pixels is still last frame's count).
+	// A component two users take is split between them; other components
+	// (a strip of wall a moving user uncovers, say) are new candidates.
+	memset(s->user, 0, NPIX);
+	for (i = 1; i <= ncomp; i++) {
+		cs[i].user = 0;
+		cs[i].choosers = cs[i].clipped = 0;
+	}
+	for (k = 0; k < NU; k++) {
+		int best = 0, bo = 0, most = 0, mo = 0;
+		if (!s->u[k].active)
+			continue;
+		for (i = 1; i <= ncomp; i++) {
+			float zc;
+			if (cs[i].overlap[k] > mo) {
+				mo = cs[i].overlap[k];
+				most = i;
+			}
+			if (cs[i].overlap[k] <= bo || cs[i].count < MIN_USER_PIXELS / 4)
+				continue;
+			zc = (float)(cs[i].sz / cs[i].count);
+			if (s->u[k].pixels && fabsf(zc - s->u[k].centre.z) > 0.6f)
+				continue;
+			bo = cs[i].overlap[k];
+			best = i;
+		}
+		if (best && (bo * 5 >= cs[best].count || bo * 3 >= s->u[k].pixels + 1))
+			cs[best].choosers |= 1u << k;
+		else if (most && s->u[k].verified && (s->u[k].moving >= 2 || s->u[k].came_in) && s->u[k].pixels && mo * 2 >= s->u[k].pixels) {
+			// Most of a verified user that moved (a person: furniture taken for
+			// one after a tilt never did) is now in a component that also holds much of
+			// the room (joined through the mixed depths along its outline, or
+			// its feet on the floor): it keeps the part of it where it was.
+			cs[most].choosers |= 1u << k;
+			cs[most].clipped |= 1u << k;
+		}
+	}
+	for (i = 1; i <= ncomp; i++) {
+		comp* C = &cs[i];
+		if (C->choosers) {
+			int n2 = 0;
+			for (k = 0; k < NU; k++)
+				if (C->choosers & (1u << k)) {
+					n2++;
+					C->user = k + 1;
+				}
+			if (n2 > 1) {
+				// Two users in one component: two people touching, or one person
+				// that came in as two candidates (an arm and the body, say). Only
+				// a component wide enough for two keeps both; otherwise it goes to
+				// one user (verified first, then the oldest), and the other loses
+				// its pixels and times out.
+				if (C->xmax - C->xmin > TWO_PEOPLE_WIDTH) {
+					C->user = -1; // split among its choosers
+				} else {
+					int keep = -1;
+					for (k = 0; k < NU; k++) {
+						if (!(C->choosers & (1u << k)))
+							continue;
+						if (keep < 0 || (s->u[k].verified && !s->u[keep].verified) ||
+						    (s->u[k].verified == s->u[keep].verified && s->u[k].age > s->u[keep].age))
+							keep = k;
+					}
+					C->user = keep + 1;
+					C->choosers = 1u << keep;
+				}
+			}
+			continue;
+		}
+		if (C->count < MIN_USER_PIXELS / 4)
+			continue;
+		{
+			float h = C->ymax - C->ymin, w = C->xmax - C->xmin, dz = C->zmax - C->zmin;
+			float zc = (float)(C->sz / C->count);
+			int person = C->count >= MIN_USER_PIXELS && h > 0.4f && h < 2.4f && w > 0.15f && w < 1.6f &&
+			             dz < 1.5f && zc < USER_MAX_Z_MM * 0.001f;
+			// once the background is known, only something that moved can be a
+			// new user: furniture, walls and rejected candidates never did
+			if (s->frames > BG_LEARN_FRAMES && C->fg * 3 < C->count && C->nearer < MOVING_PIXELS + C->count / 400)
+				person = 0; // (or moves inside: a person stored as room after standing still at the start)
+			if (!person)
+				continue;
+			for (k = 0; k < NU && s->u[k].active; k++)
+				;
+			if (k == NU)
+				continue;
+			memset(&s->u[k], 0, sizeof(s->u[k]));
+			s->u[k].active = 1;
+			s->u[k].id = s->next_id++;
+			if (s->next_id == 0)
+				s->next_id = 1;
+			s->u[k].index = k + 1;
+			// mostly in front of a background seen empty for a while: it
+			// came in, a user at once (even if the forest cannot see a body,
+			// cut off at the edge of the view, say). Otherwise the forest has
+			// to confirm a body first (nui.c), and if it does not, the
+			// candidate becomes background (a chair, a door frame).
+			// For a while after a tilt the room carried over into the new view is
+			// a few degrees off (the measured angle), and what stands in it seems
+			// to stand in front of it: then the forest has to confirm a body.
+			s->u[k].verified = s->u[k].came_in = C->fgsure * 2 >= C->count && s->frames - s->tilt_frames > TILT_CAME_IN_FRAMES;
+			// (fgsure needs FG_CONF_FRAMES of background)
+			C->user = k + 1;
+			// what was learned as the room where the new user is may have been
+			// the user (sitting there from the start, say): forget it
+			{
+				int u2, v2;
+				for (v2 = C->vmin; v2 <= C->vmax; v2++)
+					for (u2 = C->umin; u2 <= C->umax; u2++)
+						s->bgconf[v2 * NW + u2] = 0;
+			}
+		}
+	}
+
+	// pixels to users
+	for (i = 0; i < NPIX; i++) {
+		int c = s->label[i], k2 = 0;
+		if (!c || !cs[c].user)
+			continue;
+		// the empty room, as seen for a while: never a user, even where a
+		// user touches it (a hand on the wall, an arm against a cupboard)
+		if (s->bgconf[i] >= BG_CONF_FRAMES && abs((int)map[i] - (int)s->bg[i]) < 60 + map[i] / 50)
+			continue;
+		if (cs[c].user > 0) {
+			k2 = cs[c].user - 1;
+		} else {
+			// merged component: the nearest previous centre in x and z
+			v3 p = fn_nui_unproject((float)(i % NW), (float)(i / NW), (float)map[i]);
+			float bd = 1e9f;
+			for (k = 0; k < NU; k++) {
+				float dx, dz2, dd;
+				if (!s->u[k].active || !(cs[c].choosers & (1u << k)))
+					continue;
+				dx = p.x - s->u[k].centre.x;
+				dz2 = p.z - s->u[k].centre.z;
+				dd = dx * dx + dz2 * dz2;
+				if (dd < bd) {
+					bd = dd;
+					k2 = k;
+				}
+			}
+		}
+		// far behind the user's body: the wall or the furniture behind it,
+		// joined through the mixed depths along its outline or a chair (where
+		// the room is not known yet: what a tilt brought into view, or where
+		// the user stood from the start)
+		if (s->u[k2].zmed && map[i] > s->u[k2].zmed + USER_DEPTH_SPAN)
+			continue;
+		if (cs[c].clipped & (1u << k2)) {
+			// in a component with the room: near where the user was in the
+			// last frame (its box, u/vmin/max, is still last frame's here)
+			const fn_nui_user_seg* U = &s->u[k2];
+			int u = i % NW, v = i / NW;
+			if (u < U->umin - CLIP_GROW || u > U->umax + CLIP_GROW || v < U->vmin - CLIP_GROW || v > U->vmax + CLIP_GROW ||
+			    (U->zmed && map[i] + CLIP_FRONT_MM < U->zmed) ||
+			    fabsf(fn_nui_unproject((float)u, (float)v, (float)map[i]).x - U->centre.x) > CLIP_HALF_WIDTH)
+				continue;
+		}
+		s->user[i] = (uint8_t)(k2 + 1);
+	}
+
+	// per-user statistics
+	{
+		double sx[NU] = { 0 }, sy[NU] = { 0 }, sz[NU] = { 0 };
+		int gained[NU] = { 0 };
+		static int hist[NU][USER_MAX_Z_MM / ZBIN + 1];
+		double m[NU][10]; // sums for the plane z = a x + b y + c: xx xy x yy y n xz yz z zz (m, about the centre of the view)
+		memset(hist, 0, sizeof(hist));
+		memset(m, 0, sizeof(m));
+		for (k = 0; k < NU; k++) {
+			s->u[k].pixels = 0;
+			s->u[k].umin = s->u[k].vmin = 100000;
+			s->u[k].umax = s->u[k].vmax = -1;
+		}
+		for (i = 0; i < NPIX; i++) {
+			int u = i % NW, v = i / NW;
+			v3 p;
+			fn_nui_user_seg* U;
+			if (!s->user[i])
+				continue;
+			U = &s->u[s->user[i] - 1];
+			p = fn_nui_unproject((float)u, (float)v, (float)map[i]);
+			sx[s->user[i] - 1] += p.x;
+			sy[s->user[i] - 1] += p.y;
+			sz[s->user[i] - 1] += p.z;
+			U->pixels++;
+			hist[s->user[i] - 1][map[i] < USER_MAX_Z_MM ? map[i] / ZBIN : USER_MAX_Z_MM / ZBIN]++;
+			{
+				double* q = m[s->user[i] - 1];
+				q[0] += (double)p.x * p.x; q[1] += (double)p.x * p.y; q[2] += p.x;
+				q[3] += (double)p.y * p.y; q[4] += p.y; q[5] += 1.0;
+				q[6] += (double)p.x * p.z; q[7] += (double)p.y * p.z; q[8] += p.z; q[9] += (double)p.z * p.z;
+			}
+			// moving: its pixels that came nearer since the frame before (a
+			// hand moving forward, in front of the body or of the wall).
+			// Furniture never comes nearer by itself, and a wall only gets
+			// farther where an arm leaves it.
+			// (inside it, two pixels from its outline: along an outline
+			// the depth flickers between the user and what is behind)
+			if (s->prev_map[i] && map[i] + MOVING_STEP(map[i]) < s->prev_map[i] && u >= 2 && u < NW - 2 && v >= 2 &&
+			    v < NH - 2 && s->user[i - 2] == s->user[i] && s->user[i + 2] == s->user[i] &&
+			    s->user[i - 2 * NW] == s->user[i] && s->user[i + 2 * NW] == s->user[i])
+				gained[s->user[i] - 1]++;
+			if (u < U->umin) U->umin = u;
+			if (u > U->umax) U->umax = u;
+			if (v < U->vmin) U->vmin = v;
+			if (v > U->vmax) U->vmax = v;
+		}
+		for (k = 0; k < NU; k++) {
+			fn_nui_user_seg* U = &s->u[k];
+			if (!U->active)
+				continue;
+			if (U->pixels < MIN_USER_PIXELS / 4) {
+				if (++U->missing > USER_TIMEOUT)
+					memset(U, 0, sizeof(*U));
+				continue;
+			}
+			U->missing = 0;
+			U->age++;
+			if (U->age > 1 && gained[k] >= MOVING_PIXELS + U->pixels / 100) {
+				U->moving++;
+				U->still = 0;
+			} else
+				U->still++;
+			U->flat_mm = plane_rms(m[k]);
+			U->centre = v3make((float)(sx[k] / U->pixels), (float)(sy[k] / U->pixels), (float)(sz[k] / U->pixels));
+			{
+				int b, acc = 0;
+				for (b = 0; b <= USER_MAX_Z_MM / ZBIN && acc * 2 < U->pixels; b++)
+					acc += hist[k][b];
+				U->zmed = b * ZBIN;
+			}
+			// Kinect10's size factor for new players (§30.4.7): area from the
+			// pixel count at the user's depth, at 320x240
+			{
+				float z = U->centre.z * 1000.0f, px = z * 0.0017144f * 2.0f;
+				float area = px * px * (float)U->pixels * 1e-6f;
+				float sc = 0.36392f + 1.41271f * area;
+				U->scale = sc < 0.7f ? 0.7f : sc > 1.0f ? 1.0f : sc;
+			}
+		}
+	}
+
+	// near a user (a margin around the box of each) moving limbs come and
+	// go: the room seen there is not trusted as empty
+	memset(s->near_user, 0, NPIX);
+	for (k = 0; k < NU; k++) {
+		const fn_nui_user_seg* U = &s->u[k];
+		int u0, u1, v0, v1, v2;
+		if (!U->active || U->pixels == 0)
+			continue;
+		u0 = U->umin - NEAR_USER_PX; u1 = U->umax + NEAR_USER_PX;
+		v0 = U->vmin - NEAR_USER_PX; v1 = U->vmax + NEAR_USER_PX;
+		if (u0 < 0) u0 = 0;
+		if (v0 < 0) v0 = 0;
+		if (u1 >= NW) u1 = NW - 1;
+		if (v1 >= NH) v1 = NH - 1;
+		for (v2 = v0; v2 <= v1; v2++)
+			memset(s->near_user + v2 * NW + u0, 1, (size_t)(u1 - u0 + 1));
+	}
+	// background: farthest stable depth; user pixels never enter it
+	for (i = 0; i < NPIX; i++) {
+		int d = map[i], b = s->bg[i];
+		if (!d)
+			continue;
+		if (s->user[i]) {
+			s->bgage[i] = 0;
+			continue;
+		}
+		if (!b) {
+			s->bg[i] = (uint16_t)d;
+			s->bgage[i] = 0;
+			s->bgconf[i] = 0;
+		} else if (d > b + 30) {
+			if (++s->bgage[i] > BG_FARTHER_FRAMES) { // stays farther: what was in front left
+				s->bg[i] = (uint16_t)d;
+				s->bgage[i] = 0;
+				s->bgconf[i] = 0;
+			}
+		} else if (d + 100 < b) {
+			if (++s->bgage[i] > BG_ABSORB_FRAMES) {
+				s->bg[i] = (uint16_t)d; // something that stays put becomes background
+				s->bgage[i] = 0;
+				s->bgconf[i] = 0;
+			}
+		} else {
+			s->bg[i] = (uint16_t)(b + (d - b) / 32);
+			s->bgage[i] = 0;
+			// next to a user nothing new is learned, but what was seen of the
+			// room before the user came stays (the wall a user steps up to)
+			if (!s->near_user[i] && s->bgconf[i] < 65535)
+				s->bgconf[i]++;
+		}
+	}
+	memcpy(s->prev_user, s->user, NPIX);
+	if (s->frames % MOVING_REF_FRAMES == 0)
+		memcpy(s->prev_map, map, NPIX * sizeof(uint16_t)); // the reference for movement
+	s->frames++;
+}

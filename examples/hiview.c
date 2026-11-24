@@ -36,11 +36,7 @@
 #endif
 #include <pthread.h>
 
-#if defined(__APPLE__)
-#include <GLUT/glut.h>
-#else
-#include <GL/glut.h>
-#endif
+#include "fn_glut.h" // GLFW, or GLUT with -DFREENECT_GL_VIEWERS=GLUT
 
 #include <math.h>
 
@@ -167,6 +163,7 @@ void DrawVideoScene()
 
 void keyPressed(unsigned char key, int x, int y)
 {
+	(void)y; (void)x;
 	if (key == 27) {
 		die = 1;
 		pthread_join(freenect_thread, NULL);
@@ -258,6 +255,7 @@ void InitGL(int Width, int Height)
 
 void *gl_threadfunc(void *arg)
 {
+	(void)arg;
 	printf("GL thread\n");
 
 	glutInit(&g_argc, g_argv);
@@ -294,6 +292,7 @@ uint16_t t_gamma[2048];
 
 void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 {
+	(void)dev; (void)timestamp;
 	int i;
 	uint16_t *depth = (uint16_t*)v_depth;
 
@@ -345,6 +344,7 @@ void depth_cb(freenect_device *dev, void *v_depth, uint32_t timestamp)
 
 void video_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 {
+	(void)timestamp;
 	pthread_mutex_lock(&video_mutex);
 
 	// swap buffers
@@ -359,6 +359,7 @@ void video_cb(freenect_device *dev, void *rgb, uint32_t timestamp)
 
 void *freenect_threadfunc(void *arg)
 {
+	(void)arg;
 	freenect_set_led(f_dev,LED_RED);
 	freenect_set_depth_callback(f_dev, depth_cb);
 	freenect_set_video_callback(f_dev, video_cb);

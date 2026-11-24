@@ -35,11 +35,7 @@
 #endif
 #include <pthread.h>
 
-#if defined(__APPLE__)
-#include <GLUT/glut.h>
-#else
-#include <GL/glut.h>
-#endif
+#include "fn_glut.h" // GLFW, or GLUT with -DFREENECT_GL_VIEWERS=GLUT
 
 pthread_t freenect_thread;
 volatile int die = 0;
@@ -69,6 +65,7 @@ void in_callback(freenect_device* dev, int num_samples,
                  int32_t* mic1, int32_t* mic2,
                  int32_t* mic3, int32_t* mic4,
                  int16_t* cancelled, void *unknown) {
+	(void)unknown; (void)cancelled;
 	pthread_mutex_lock(&audiobuf_mutex);
 	capture* c = (capture*)freenect_get_user(dev);
 	if(num_samples < c->max_samples - c->current_idx) {
@@ -95,6 +92,7 @@ void in_callback(freenect_device* dev, int num_samples,
 }
 
 void* freenect_threadfunc(void* arg) {
+	(void)arg;
 	while(!die && freenect_process_events(f_ctx) >= 0) {
 		// If we did anything else in the freenect thread, it might go here.
 	}
@@ -153,6 +151,7 @@ void Reshape(int w, int h) {
 }
 
 void Keyboard(unsigned char key, int x, int y) {
+	(void)y; (void)x;
 	if(key == 'q') {
 		die = 1;
 		pthread_join(freenect_thread, NULL);
@@ -198,7 +197,12 @@ int main(int argc, char** argv) {
 	freenect_set_user(f_dev, &state);
 
 	freenect_set_audio_in_callback(f_dev, in_callback);
-	freenect_start_audio(f_dev);
+	if (freenect_start_audio(f_dev) < 0) {
+		printf("Could not start audio\n");
+		freenect_close_device(f_dev);
+		freenect_shutdown(f_ctx);
+		return 1;
+	}
 
 	int res = pthread_create(&freenect_thread, NULL, freenect_threadfunc, NULL);
 	if (res) {

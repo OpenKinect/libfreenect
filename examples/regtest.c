@@ -32,7 +32,7 @@
 
 FILE *open_dump(const char *filename)
 {
-	FILE* fp = fopen(filename, "w");
+	FILE* fp = fopen(filename, "wb"); // binary: on Windows "w" turns every 0x0A byte into 0x0D 0x0A
 	if (fp == NULL) {
 		fprintf(stderr, "Error: Cannot open file [%s]\n", filename);
 		exit(1);

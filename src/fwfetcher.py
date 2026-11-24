@@ -571,6 +571,494 @@ def extractPirsFromZip(systemupdate):
     print("done.")
     return pirs
 
+###############################################################################
+# --uac: Microsoft's audio firmware (UAC.BIN, installed as UACFirmware.bin)
+#
+# It is fetched from Microsoft's own Kinect for Windows Runtime v1.8 installer
+# on the user's machine; libfreenect does not redistribute it. The installer
+# is a WiX Burn bundle: its payload is the second cabinet in the file, which
+# holds the MSI packages; the x64 drivers MSI ("a0") holds a cabinet with the
+# file "UACFirmware". All cabinets use MSZIP (deflate), so only the standard
+# library is needed. The installer is never run.
+
+UAC_RUNTIME_URL = ("https://download.microsoft.com/download/e/c/5/"
+                   "ec50686b-82f4-4dbf-a922-980183b214e6/KinectRuntime-v1.8-Setup.exe")
+UAC_RUNTIME_SHA256 = "f4d4143fb0f0a8d276889c077bfc8af42bfe99c128cadab5e316bf015a9858e9"
+UAC_FIRMWARE_SIZE = 145920
+UAC_FIRMWARE_SHA256 = "4467ae36ad378c58477432729d74eed0f9d45d35213f4430a781d90f64cea3f9"
+
+
+def cab_extract(cab, wanted):
+    """Return the contents of file `wanted` from cabinet bytes `cab` (MSZIP or stored)."""
+    import zlib
+    if cab[:4] != b"MSCF":
+        raise ValueError("not a cabinet")
+    coff_files, = struct.unpack_from("<I", cab, 16)
+    n_folders, n_files, flags = struct.unpack_from("<HHH", cab, 26)
+    pos = 36
+    cb_folder_res = cb_data_res = 0
+    if flags & 4:  # reserve fields present
+        cb_header_res, cb_folder_res, cb_data_res = struct.unpack_from("<HBB", cab, pos)
+        pos += 4 + cb_header_res
+    for flag in (1, 2):  # previous / next cabinet names: two strings each
+        if flags & flag:
+            for _ in range(2):
+                pos = cab.index(b"\0", pos) + 1
+    folders = []
+    for _ in range(n_folders):
+        start, n_data, comp = struct.unpack_from("<IHH", cab, pos)
+        folders.append((start, n_data, comp & 0x0F))
+        pos += 8 + cb_folder_res
+    entry = None
+    pos = coff_files
+    for _ in range(n_files):
+        size, offset, ifolder = struct.unpack_from("<IIH", cab, pos)
+        end = cab.index(b"\0", pos + 16)
+        name = cab[pos + 16:end].decode("latin-1")
+        if name.lower() == wanted.lower():
+            entry = (size, offset, ifolder)
+        pos = end + 1
+    if entry is None:
+        raise KeyError(wanted)
+    size, offset, ifolder = entry
+    start, n_data, comp = folders[ifolder]
+    if comp not in (0, 1):
+        raise ValueError("unsupported cabinet compression %d" % comp)
+    out = bytearray()
+    pos = start
+    for _ in range(n_data):
+        cb_data, cb_uncomp = struct.unpack_from("<HH", cab, pos + 4)
+        block = cab[pos + 8 + cb_data_res:pos + 8 + cb_data_res + cb_data]
+        pos += 8 + cb_data_res + cb_data
+        if comp == 0:
+            out += block
+        else:
+            # MSZIP: "CK" + a raw deflate block whose window is the folder's previous output
+            if block[:2] != b"CK":
+                raise ValueError("bad MSZIP block")
+            d = zlib.decompressobj(-15, zdict=bytes(out[-32768:]))
+            out += d.decompress(block[2:]) + d.flush()
+        if len(out) >= offset + size:
+            break
+    return bytes(out[offset:offset + size])
+
+
+def cfb_cabinet_streams(data):
+    """Yield the streams of an OLE compound file (an MSI) that are cabinets."""
+    if data[:8] != b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1":
+        raise ValueError("not an MSI")
+    ssz = 1 << struct.unpack_from("<H", data, 30)[0]
+    n_fat, dir_start = struct.unpack_from("<II", data, 44)
+    cutoff, = struct.unpack_from("<I", data, 56)
+    difat_start, n_difat = struct.unpack_from("<II", data, 68)
+
+    def sector(s):
+        return data[(s + 1) * ssz:(s + 2) * ssz]
+
+    difat = list(struct.unpack_from("<109I", data, 76))
+    s = difat_start
+    for _ in range(n_difat):
+        words = struct.unpack("<%dI" % (ssz // 4), sector(s))
+        difat += words[:-1]
+        s = words[-1]
+    fat = []
+    for s in difat[:n_fat]:
+        fat += struct.unpack("<%dI" % (ssz // 4), sector(s))
+
+    def chain(s, size=None):
+        out = bytearray()
+        for _ in range(len(fat)):
+            if s >= 0xFFFFFFFA:
+                break
+            out += sector(s)
+            s = fat[s]
+        return bytes(out if size is None else out[:size])
+
+    directory = chain(dir_start)
+    for i in range(0, len(directory), 128):
+        e = directory[i:i + 128]
+        if e[66:67] == b"\x02":  # stream
+            start, size = struct.unpack_from("<IQ", e, 116)
+            if size >= cutoff:
+                stream = chain(start, size)
+                if stream[:4] == b"MSCF":
+                    yield stream
+
+
+def find_bundle_cabinet(installer):
+    """The Burn bundle's payload: the second cabinet in the file."""
+    offsets = []
+    i = installer.find(b"MSCF\0\0\0\0")
+    while i >= 0 and len(offsets) < 2:
+        offsets.append(i)
+        i = installer.find(b"MSCF\0\0\0\0", i + 1)
+    if len(offsets) < 2:
+        raise ValueError("the installer has no payload cabinet")
+    start = offsets[1]
+    size, = struct.unpack_from("<I", installer, start + 8)
+    return installer[start:start + size]
+
+
+def read_runtime_installer(installer_path, what):
+    """The Runtime installer's bytes: read from INSTALLER, or downloaded from Microsoft."""
+    if sys.version_info < (3, 3):
+        sys.exit("this needs Python 3.3 or newer")
+    if installer_path:
+        print("Reading", installer_path)
+        with open(installer_path, "rb") as f:
+            installer = f.read()
+    else:
+        print("Microsoft's licence terms for the Kinect for Windows Runtime apply to %s." % what)
+        print("Downloading Microsoft's Kinect for Windows Runtime v1.8 (111 MB) from download.microsoft.com")
+        response = urlopen_timeout_retry(Request(UAC_RUNTIME_URL, headers={"User-Agent": "libfreenect-fwfetcher"}))
+        installer = response.read()
+    if hashlib.sha256(installer).hexdigest() != UAC_RUNTIME_SHA256:
+        print("Note: the installer differs from the known one (Microsoft re-signs its downloads);"
+              " what is extracted from it is checked instead.")
+    return installer
+
+
+def runtime_file(installer, msi_name, file_name):
+    """File `file_name` of MSI `msi_name` in the Runtime bundle, or None."""
+    msi = cab_extract(find_bundle_cabinet(installer), msi_name)
+    for cab in cfb_cabinet_streams(msi):
+        try:
+            return cab_extract(cab, file_name)
+        except KeyError:
+            pass
+    return None
+
+
+def fetch_uac_firmware(target, installer_path=None):
+    installer = read_runtime_installer(installer_path, "this firmware")
+    import zlib
+    firmware = None
+    try:
+        firmware = runtime_file(installer, "a0", "UACFirmware")
+    except (ValueError, KeyError, IndexError, struct.error, zlib.error) as e:
+        sys.exit("error: the installer could not be unpacked (%s: %s); not installing anything"
+                 % (type(e).__name__, e))
+    if firmware is None:
+        sys.exit("error: the installer does not contain UACFirmware")
+    if len(firmware) != UAC_FIRMWARE_SIZE or hashlib.sha256(firmware).hexdigest() != UAC_FIRMWARE_SHA256:
+        sys.exit("error: the extracted firmware does not match the known UAC.BIN; not installing it")
+    with open(target, "wb") as f:
+        f.write(firmware)
+    print("Wrote", target, "(%d bytes, SHA-256 verified)" % len(firmware))
+
+
+###############################################################################
+# --audio-weights: Microsoft's beamformer weights for libfreenect's audio DSP
+#
+# KinectAudio10.dll (x64, in the Runtime's MSI "a1") holds, for the Kinect's
+# array, 11 beams x 256 frequencies x 4 microphones of complex weights and
+# steering vectors (reference §40.6.3). They are read from the user's own
+# download and written to kinect_beam_weights.bin, the file
+# freenect_dsp_load_sdk_weights() loads; libfreenect does not contain them.
+
+AUDIO_WEIGHTS_FILE = "kinect_beam_weights.bin"
+KA10_WEIGHTSET_VA = 0x180070098   # the "Kinect" beam set in KinectAudio10.dll v1.8 x64
+AUDIO_WEIGHTS_SIZE = 24 + 11 * 8 + 2 * 11 * 256 * 4 * 8 + 4   # 180340
+AUDIO_WEIGHTS_SHA256 = "a56ddba443684ba9588dc44e21cc499fd4b51bafc592fff086e4b40d4250e5e7"
+
+
+class PE(object):
+    """Just enough of a PE32+ image to read data at virtual addresses."""
+
+    def __init__(self, data):
+        self.d = data
+        if data[:2] != b"MZ":
+            raise ValueError("not a PE image")
+        pe, = struct.unpack_from("<I", data, 0x3C)
+        if data[pe:pe + 4] != b"PE\0\0":
+            raise ValueError("not a PE image")
+        machine, nsec = struct.unpack_from("<HH", data, pe + 4)
+        optsize, = struct.unpack_from("<H", data, pe + 20)
+        opt = pe + 24
+        if machine != 0x8664 or struct.unpack_from("<H", data, opt)[0] != 0x20B:
+            raise ValueError("not an x64 image")
+        self.base, = struct.unpack_from("<Q", data, opt + 24)
+        self.sections = []
+        for i in range(nsec):
+            s = opt + optsize + 40 * i
+            vsize, va, rawsize, rawptr = struct.unpack_from("<IIII", data, s + 8)
+            self.sections.append((va, max(vsize, rawsize), rawptr, rawsize))
+
+    def read(self, va, n):
+        rva = va - self.base
+        for sva, size, ptr, raw in self.sections:
+            if sva <= rva and rva + n <= sva + size:
+                o = rva - sva
+                if o + n > raw:
+                    raise ValueError("data outside the file")
+                return self.d[ptr + o:ptr + o + n]
+        raise ValueError("address 0x%x not in the image" % va)
+
+
+def beam_weights_file(dll):
+    """kinect_beam_weights.bin (layout in src/audio_dsp.c) from KinectAudio10.dll."""
+    import math
+    import zlib
+    pe = PE(dll)
+    w = KA10_WEIGHTSET_VA
+    nm, nf, nb = struct.unpack("<iii", pe.read(w + 8, 12))
+    if (nm, nf, nb) != (4, 256, 11):
+        raise ValueError("unexpected beam set shape %r" % ((nm, nf, nb),))
+    beams_va, freqs_va, weights_va, steer_va = struct.unpack("<QQQQ", pe.read(w + 0x18, 32))
+    angles = []
+    for b in range(nb):
+        az, el, rng = struct.unpack("<ddd", pe.read(beams_va + 24 * b, 24))
+        if abs(az - math.radians(-50 + 10 * b)) > 0.01 or el != 0.0 or abs(rng - 1.0) > 1e-6:
+            raise ValueError("unexpected beam %d (%g, %g, %g)" % (b, az, el, rng))
+        angles.append(az)
+    freqs = struct.unpack("<%df" % nf, pe.read(freqs_va, 4 * nf))
+    if any(abs(freqs[k] - 31.25 * k) > 1e-3 for k in range(nf)):
+        raise ValueError("unexpected frequency grid")
+    table = nb * nf * nm * 8
+    out = b"FNBW" + struct.pack("<IIIII", 1, nm, nf, nb, 0) + struct.pack("<%dd" % nb, *angles)
+    out += pe.read(weights_va, table) + pe.read(steer_va, table)
+    out += struct.pack("<I", zlib.crc32(out) & 0xFFFFFFFF)
+    return out
+
+
+def fetch_audio_weights(target, installer_path=None, dll_path=None):
+    import zlib
+    try:
+        if dll_path:
+            print("Reading", dll_path)
+            with open(dll_path, "rb") as f:
+                dll = f.read()
+        else:
+            installer = read_runtime_installer(installer_path, "these beamformer weights")
+            dll = runtime_file(installer, "a1", "FILE_x64_KinectAudio10.dll")
+            if dll is None:
+                sys.exit("error: the installer does not contain KinectAudio10.dll")
+        data = beam_weights_file(dll)
+    except (ValueError, KeyError, IndexError, struct.error, zlib.error) as e:
+        sys.exit("error: the weights could not be extracted (%s: %s); not installing anything"
+                 % (type(e).__name__, e))
+    if len(data) != AUDIO_WEIGHTS_SIZE or (AUDIO_WEIGHTS_SHA256 and
+                                          hashlib.sha256(data).hexdigest() != AUDIO_WEIGHTS_SHA256):
+        sys.exit("error: the extracted weights do not match the known ones; not installing them")
+    with open(target, "wb") as f:
+        f.write(data)
+    print("Wrote", target, "(%d bytes, SHA-256 verified)" % len(data))
+
+
+def data_target(output, user, filename):
+    """Where a fetched file goes. OUTPUT is a file if it ends in .bin and a
+    directory otherwise (created if needed); --user means
+    $XDG_DATA_HOME/libfreenect (~/.local/share/libfreenect), or on macOS
+    ~/Library/Application Support/libfreenect."""
+    if user:
+        if sys.platform == "darwin":
+            base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
+        else:
+            base = os.environ.get("XDG_DATA_HOME", "")
+            if not base.startswith("/"):
+                base = os.path.join(os.path.expanduser("~"), ".local", "share")
+        output = os.path.join(base, "libfreenect")
+    if output is None:
+        return filename
+    if output.lower().endswith(".bin"):
+        return output
+    if not os.path.isdir(output):
+        os.makedirs(output)
+    return os.path.join(output, filename)
+
+
+###############################################################################
+# --nui: the skeleton tracker's models for the optional libfreenect_nui addon
+#
+# Kinect10.dll (x64, in the Runtime's MSI "a1") carries the body-part forest
+# and the seated-mode head forest as zlib-compressed resources of type BINARY
+# (reference §30.2, §30.3). They are copied out unchanged into a "nui"
+# folder next to the firmware; libfreenect does not contain them.
+
+NUI_MODELS = {
+    # name: (size, SHA-256) of the resource as stored in Kinect10.dll v1.8 x64
+    "DATABASE.WSDF": (13795880, "b3d084bd5848ef76de4219f592922c3b1e5379e5ccc975ff8d1f68c426b41164"),
+    "HEADPOSITION.MSHDF": (246487, "343e3c2a23d4c5baf73af05f232131c9d13a9264f5dacde182106121750535cf"),
+}
+
+
+def pe_resource(dll, type_name, name):
+    """Resource `name` of type `type_name` (both strings) in a PE32+ image."""
+    pe = PE(dll)
+    p, = struct.unpack_from("<I", dll, 0x3C)
+    opt = p + 24
+    rva, size = struct.unpack_from("<II", dll, opt + 112 + 2 * 8)  # data directory 2
+    if not rva:
+        raise ValueError("no resources")
+    root = pe.base + rva
+
+    def entries(dir_va):
+        named, ids = struct.unpack("<HH", pe.read(dir_va + 12, 4))
+        for i in range(named + ids):
+            n, off = struct.unpack("<II", pe.read(dir_va + 16 + 8 * i, 8))
+            label = None
+            if n & 0x80000000:
+                s = root + (n & 0x7FFFFFFF)
+                ln, = struct.unpack("<H", pe.read(s, 2))
+                label = pe.read(s + 2, 2 * ln).decode("utf-16-le")
+            yield label, off
+
+    def find(dir_va, want):
+        for label, off in entries(dir_va):
+            if label is not None and label.upper() == want.upper():
+                return off
+        raise KeyError(want)
+
+    off = find(root, type_name)
+    off = find(root + (off & 0x7FFFFFFF), name)
+    lang_dir = root + (off & 0x7FFFFFFF)
+    _, off = next(entries(lang_dir))       # first language
+    data_rva, data_size = struct.unpack("<II", pe.read(root + off, 8))
+    return pe.read(pe.base + data_rva, data_size)
+
+
+def fetch_nui_models(target_dir, installer_path=None, dll_path=None):
+    import zlib
+    try:
+        if dll_path:
+            print("Reading", dll_path)
+            with open(dll_path, "rb") as f:
+                dll = f.read()
+        else:
+            installer = read_runtime_installer(installer_path, "these skeleton tracking models")
+            dll = runtime_file(installer, "a1", "FILE_x64_Kinect10.dll")
+            if dll is None:
+                sys.exit("error: the installer does not contain Kinect10.dll")
+        models = {}
+        for name, (size, sha) in NUI_MODELS.items():
+            data = pe_resource(dll, "BINARY", name)
+            if len(data) != size or hashlib.sha256(data).hexdigest() != sha:
+                sys.exit("error: %s in Kinect10.dll is not the known model; not installing anything" % name)
+            models[name] = data
+    except (ValueError, KeyError, IndexError, struct.error, zlib.error) as e:
+        sys.exit("error: the models could not be extracted (%s: %s); not installing anything"
+                 % (type(e).__name__, e))
+    if not os.path.isdir(target_dir):
+        os.makedirs(target_dir)
+    for name, data in models.items():
+        path = os.path.join(target_dir, name)
+        with open(path, "wb") as f:
+            f.write(data)
+        print("Wrote", path, "(%d bytes, SHA-256 verified)" % len(data))
+
+
+if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--nui":
+    # fwfetcher.py --nui [--from INSTALLER | --dll Kinect10.dll] [--user | DIR]
+    #   DIR: where the models go (default ./nui); --user: the user's libfreenect/nui
+    args = sys.argv[2:]
+    installer_path = dll_path = output = None
+    user = False
+    while args:
+        if args[0] in ("--from", "--dll") and len(args) >= 2:
+            if args[0] == "--from":
+                installer_path = args[1]
+            else:
+                dll_path = args[1]
+            args = args[2:]
+        elif args[0] == "--user":
+            user = True
+            args = args[1:]
+        elif not args[0].startswith("-") and output is None:
+            output = args[0]
+            args = args[1:]
+        else:
+            sys.exit("usage: fwfetcher.py --nui [--from INSTALLER | --dll Kinect10.dll] [--user | DIR]")
+    if user and output is not None:
+        sys.exit("error: give either --user or DIR, not both")
+    if user:
+        target = os.path.join(os.path.dirname(data_target(None, True, "x")), "nui")
+    else:
+        target = output or "nui"
+    fetch_nui_models(target, installer_path, dll_path)
+    sys.exit(0)
+
+
+if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--audio-weights":
+    # fwfetcher.py --audio-weights [--from INSTALLER | --dll KinectAudio10.dll] [--user | OUTPUT]
+    args = sys.argv[2:]
+    installer_path = dll_path = output = None
+    user = False
+    while args:
+        if args[0] in ("--from", "--dll") and len(args) >= 2:
+            if args[0] == "--from":
+                installer_path = args[1]
+            else:
+                dll_path = args[1]
+            args = args[2:]
+        elif args[0] == "--user":
+            user = True
+            args = args[1:]
+        elif not args[0].startswith("-") and output is None:
+            output = args[0]
+            args = args[1:]
+        else:
+            sys.exit("usage: fwfetcher.py --audio-weights [--from INSTALLER | --dll KinectAudio10.dll] [--user | OUTPUT]")
+    if user and output is not None:
+        sys.exit("error: give either --user or OUTPUT, not both")
+    try:
+        target = data_target(output, user, AUDIO_WEIGHTS_FILE)
+    except OSError as e:
+        sys.exit("error: cannot create the output directory: %s" % e)
+    fetch_audio_weights(target, installer_path, dll_path)
+    sys.exit(0)
+
+
+def uac_target(output, user):
+    """Where --uac writes the firmware. OUTPUT is a file if it ends in .bin and
+    a directory otherwise (created if needed, firmware named UACFirmware.bin);
+    --user means $XDG_DATA_HOME/libfreenect (~/.local/share/libfreenect), or on
+    macOS ~/Library/Application Support/libfreenect."""
+    if user:
+        if sys.platform == "darwin":
+            base = os.path.join(os.path.expanduser("~"), "Library", "Application Support")
+        else:
+            base = os.environ.get("XDG_DATA_HOME", "")
+            if not base.startswith("/"):
+                base = os.path.join(os.path.expanduser("~"), ".local", "share")
+        output = os.path.join(base, "libfreenect")
+    if output is None:
+        return "UACFirmware.bin"
+    if output.lower().endswith(".bin"):
+        return output
+    if not os.path.isdir(output):
+        os.makedirs(output)
+    return os.path.join(output, "UACFirmware.bin")
+
+
+if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--uac":
+    # fwfetcher.py --uac [--from INSTALLER] [--user | OUTPUT]
+    #   OUTPUT: a .bin file, or a directory to put UACFirmware.bin in
+    #   (default: UACFirmware.bin in the current directory)
+    args = sys.argv[2:]
+    installer_path = None
+    user = False
+    output = None
+    while args:
+        if args[0] == "--from" and len(args) >= 2:
+            installer_path = args[1]
+            args = args[2:]
+        elif args[0] == "--user":
+            user = True
+            args = args[1:]
+        elif not args[0].startswith("-") and output is None:
+            output = args[0]
+            args = args[1:]
+        else:
+            sys.exit("usage: fwfetcher.py --uac [--from INSTALLER] [--user | OUTPUT]")
+    if user and output is not None:
+        sys.exit("error: give either --user or OUTPUT, not both")
+    try:
+        target = uac_target(output, user)
+    except OSError as e:
+        sys.exit("error: cannot create the output directory: %s" % e)
+    fetch_uac_firmware(target, installer_path)
+    sys.exit(0)
+
 if __name__ == "__main__":
     target = "audios.bin"
     if len(sys.argv) == 2:
